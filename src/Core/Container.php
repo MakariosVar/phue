@@ -12,17 +12,17 @@ use ReflectionNamedType;
  */
 class Container
 {
-    /** 
+    /**
      * Registered service factories indexed by ID/Class name.
-     * 
-     * @var array<string, callable> 
+     *
+     * @var array<string, callable>
      */
     private array $factories = [];
 
-    /** 
+    /**
      * Cached resolved service instances (singletons).
-     * 
-     * @var array<string, mixed> 
+     *
+     * @var array<string, mixed>
      */
     private array $instances = [];
 
@@ -35,9 +35,9 @@ class Container
     public function set(string $id, callable $factory): void
     {
         $this->factories[$id] = $factory;
-        
+
         // Bust any previously cached instance if a factory is redefined
-        unset($this->instances[$id]); 
+        unset($this->instances[$id]);
     }
 
     /**
@@ -93,7 +93,9 @@ class Container
 
         // Interfaces, Abstract Classes, and private constructors cannot be instantiated directly
         if (!$reflection->isInstantiable()) {
-            throw new Exception("Class '{$id}' is not instantiable (interface, abstract class, or private constructor).");
+            throw new Exception(
+                "Class '{$id}' is not instantiable (interface, abstract class, or private constructor).",
+            );
         }
 
         $constructor = $reflection->getConstructor();
@@ -118,7 +120,7 @@ class Container
                 }
 
                 throw new Exception(
-                    "Cannot autowire parameter '{$parameter->getName()}' in '{$id}': Missing class type hint or default value."
+                    "Cannot autowire parameter '{$parameter->getName()}' in '{$id}': Missing class type hint or default value.",
                 );
             }
 
