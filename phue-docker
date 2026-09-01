@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+COMPOSE_FILE="docker/dev/docker-compose.yml"
+SERVICE_NAME="app"
+
+# Usage helper
+usage() {
+    echo "Phue - Docker Compose Wrapper"
+    echo ""
+    echo "Usage: phue {up|down|build|restart|shell|logs|status|clean}"
+    echo ""
+    echo "Commands:"
+    echo "  up      : Safely start containers in detached mode"
+    echo "  down    : Safely stop and remove containers"
+    echo "  build   : Rebuild images without cache and recreate containers"
+    echo "  restart : Safely restart all running services"
+    echo "  shell   : Attach to interactive bash shell inside '$SERVICE_NAME' container"
+    echo "  logs    : Stream live logs (tail 100)"
+    echo "  status  : View current container states"
+    echo "  clean   : Stop containers AND purge associated volumes (destructive)"
+    exit 0
+}
+
+# Show help if no arguments are provided or if -h/--help is passed
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    usage
+fi
+
+# Pre-flight checks
+if ! docker info > /dev/null 2>&1; then
+    echo "❌ Error: Docker daemon is not running or permission denied."
+    exit 1
+fi
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "❌ Error: $COMPOSE_FILE not found at $COMPOSE_FILE"
+    exit 1
+fi
+
+ACTION="$1"
+
+case "$ACTION" in
+    up)
+        echo "🚀 Starting containers..."
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+        echo "✅ Containers started successfully."
+        ;;
+
+    down)
+        echo "🛑 Stopping containers..."
+        docker compose -f "$COMPOSE_FILE" down --remove-orphans
+        echo "✅ Containers stopped safely."
+        ;;
+
+    build)
+        echo "🛠️ Rebuilding images and starting..."
+        docker compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans
+        echo "✅ Rebuild complete."
+        ;;
+
+    restart)
+        echo "🔄 Restarting containers..."
+        docker compose -f "$COMPOSE_FILE" restart
+        echo "✅ Containers restarted."
+        ;;
+
+    shell)
+        echo "💻 Connecting to shell in '$SERVICE_NAME' container..."
+        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" bash
+        ;;
+
+    logs)
+        echo "📜 Streaming logs (Press Ctrl+C to exit)..."
+        docker compose -f "$COMPOSE_FILE" logs -f --tail=100
+        ;;
+
+    status)
+        docker compose -f "$COMPOSE_FILE" ps
+        ;;
+
+    clean)
+        read -p "⚠️ Are you sure you want to delete containers AND volumes? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "🧹 Cleaning up containers, networks, and volumes..."
+            docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+            echo "✅ Cleanup complete."
+        else
+            echo "❌ Action cancelled."
+        fi
+        ;;
+
+    *)
+        echo "❌ Unknown command: $ACTION"
+        echo ""
+        usage
+        ;;
+esac

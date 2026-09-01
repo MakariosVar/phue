@@ -1,0 +1,7 @@
+.opencode
+AGENTS.md
+
+vendor/
+.phpunit.cache
+
+composer.lock
