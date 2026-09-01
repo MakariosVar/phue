@@ -2,9 +2,10 @@
 
 namespace Phue\Tests;
 
-use Exception;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Container;
+use Phue\Core\ContainerException;
+use Phue\Core\NotFoundException;
 
 final class ContainerTest extends TestCase
 {
@@ -65,12 +66,11 @@ final class ContainerTest extends TestCase
 
     /**
      * Tests error handling.
-     * Expects an exception when attempting to resolve an unregistered service.
+     * Expects a NotFoundException when attempting to resolve an unregistered service.
      */
     public function testGetThrowsExceptionWhenServiceNotFound(): void
     {
-        // Updated exception message to match Container::missingFactory()
-        $this->expectException(Exception::class);
+        $this->expectException(NotFoundException::class);
         $this->expectExceptionMessage(
             "Missing factory or class for service: 'unknown_service'",
         );
@@ -158,20 +158,20 @@ final class ContainerTest extends TestCase
     }
 
     /**
-     * Test 4: Failure case — Unbound interface without factory throws exception.
+     * Test 4: Failure case — Unbound interface without factory throws NotFoundException.
      */
     public function testThrowsExceptionForUnboundInterface(): void
     {
-        $this->expectException(Exception::class);
+        $this->expectException(NotFoundException::class);
         $this->container->get(LoggerInterface::class);
     }
 
     /**
-     * Test 5: Failure case — Missing scalar default value throws exception.
+     * Test 5: Failure case — Missing scalar default value throws ContainerException.
      */
     public function testThrowsExceptionForMissingScalarDefault(): void
     {
-        $this->expectException(Exception::class);
+        $this->expectException(ContainerException::class);
         $this->container->get(ServiceWithMissingScalarDefault::class);
     }
 }

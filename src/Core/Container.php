@@ -6,6 +6,13 @@ use Exception;
 use ReflectionClass;
 use ReflectionNamedType;
 
+/* =====================================================================
+ * CUSTOM EXCEPTIONS
+ * ===================================================================== */
+
+class ContainerException extends Exception {}
+class NotFoundException extends ContainerException {}
+
 /**
  * Main application Container handling dependency injection,
  * singleton instance caching, and Reflection-based autowiring.
@@ -45,7 +52,7 @@ class Container
      *
      * @param string $id Service identifier or target class name
      * @return mixed Resolved instance or object
-     * @throws Exception If service cannot be resolved or autowired
+     * @throws NotFoundException|ContainerException If service cannot be resolved or autowired
      */
     public function get(string $id): mixed
     {
@@ -85,7 +92,7 @@ class Container
      *
      * @param string $id FQCN of the target class
      * @return object Instantiated class instance
-     * @throws Exception If class cannot be instantiated or dependencies are unresolvable
+     * @throws ContainerException If class cannot be instantiated or dependencies are unresolvable
      */
     private function autowire(string $id): object
     {
@@ -93,7 +100,7 @@ class Container
 
         // Interfaces, Abstract Classes, and private constructors cannot be instantiated directly
         if (!$reflection->isInstantiable()) {
-            throw new Exception(
+            throw new ContainerException(
                 "Class '{$id}' is not instantiable (interface, abstract class, or private constructor).",
             );
         }
@@ -119,7 +126,7 @@ class Container
                     continue;
                 }
 
-                throw new Exception(
+                throw new ContainerException(
                     "Cannot autowire parameter '{$parameter->getName()}' in '{$id}': Missing class type hint or default value.",
                 );
             }
@@ -136,10 +143,12 @@ class Container
      * Exception helper thrown when a requested service ID is unresolvable.
      *
      * @param string $id Requested service ID
-     * @throws Exception
+     * @throws NotFoundException
      */
     private function missingFactory(string $id): never
     {
-        throw new Exception("Missing factory or class for service: '{$id}'");
+        throw new NotFoundException(
+            "Missing factory or class for service: '{$id}'",
+        );
     }
 }
