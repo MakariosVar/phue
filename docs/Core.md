@@ -38,6 +38,11 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `Schii\ModelEndpoint` | `Schii/Endpoint/ModelEndpoint.php` | Zero-Controller REST CRUD Endpoint & JSON Schema Protocol handler |
 | `Schii\AutoMigrator` | `Schii/Migration/AutoMigrator.php` | Inspects database tables and auto-migrates missing columns and tables based on Schii Schema |
 | `Schii\SchemaToSqlConverter` | `Schii/Migration/SchemaToSqlConverter.php` | Converts Schii ModelSchema definitions into dialect-specific SQL DDL statements |
+| `IdentityInterface` | `Auth/IdentityInterface.php` | Contract representing an authenticated user identity |
+| `AuthManager` | `Auth/AuthManager.php` | Chain-of-responsibility request authenticator & state manager |
+| `RbacManager` | `Auth/RbacManager.php` | Role-Based Access Control manager supporting role inheritance & cycle detection |
+| `AccessControlMiddleware` | `Auth/Middleware/AccessControlMiddleware.php` | Middleware enforcing permission checks on HTTP requests |
+| `AuthorizedModelEndpoint` | `Schii/Endpoint/AuthorizedModelEndpoint.php` | Schii REST CRUD endpoint decorator enforcing dynamic RBAC permissions |
 
 ---
 
@@ -698,6 +703,22 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
   - **Multi-tiered Driver Detection**: Resolves driver names via `getName()` interface contract, `instanceof` class checks, or string fallback.
 - **`SchemaToSqlConverter` (`src/Schii/Migration/SchemaToSqlConverter.php`)**: Generates dialect-aware SQL DDL queries tailored for SQLite, MySQL, or PostgreSQL (`AUTOINCREMENT` vs `AUTO_INCREMENT` vs `SERIAL`, `TINYINT(1)` vs `BOOLEAN`).
 - **`SqlIdentifier` (`src/Core/Database/SqlIdentifier.php`)**: Sanitizes SQL identifiers with regex whitelist validation (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) and provides dialect-aware identifier quoting (backticks for MySQL/SQLite, double-quotes for PostgreSQL).
+
+---
+
+## 13. Auth & RBAC Subsystem (`Phue\Auth`)
+
+Phue provides a modular Authentication and Role-Based Access Control (RBAC) subsystem designed for stateless API and traditional web applications.
+
+### Core Contracts & Management
+- **`IdentityInterface` (`src/Auth/IdentityInterface.php`)**: Contract for authenticated identities (`getId()`, `findIdentity()`, `getAuthKey()`).
+- **Authenticators (`src/Auth/Authenticator/`)**: Chain-of-responsibility drivers:
+  - `SessionAuthenticator`: Web and Admin session-based user authentication.
+  - `BearerTokenAuthenticator`: REST API and Schii Bearer token / JWT authentication.
+- **`AuthManager` (`src/Auth/AuthManager.php`)**: Evaluates authentication drivers in sequence, tracks state (`getUser()`, `login()`, `logout()`, `check()`).
+- **`RbacManager` (`src/Auth/RbacManager.php`)**: Handles role assignments, permissions (`addRole()`, `assign()`), and recursive role inheritance (`addChild()`) with visited set cycle detection to prevent infinite loops.
+- **`AccessControlMiddleware` (`src/Auth/Middleware/AccessControlMiddleware.php`)**: Enforces required permissions on routes, returning `401 Unauthorized` for unauthenticated requests or `403 Forbidden` for insufficient privileges.
+- **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata.
 
 ---
 

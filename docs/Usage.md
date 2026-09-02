@@ -706,6 +706,49 @@ final class M2026_09_03_014500_Create_Orders_Table extends Migration
 ./bin/phue migrate:rollback
 ```
 
+### 11. Authentication & RBAC Subsystem
+
+#### Configuring AuthManager & Authenticators
+
+```php
+use Phue\Auth\AuthManager;
+use Phue\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Auth\Authenticator\SessionAuthenticator;
+
+$authManager = new AuthManager([
+    new SessionAuthenticator(App\Models\User::class),
+    new BearerTokenAuthenticator(fn($token) => App\Models\User::findByToken($token)),
+]);
+
+// Authenticate incoming request
+$user = $authManager->authenticate($request);
+```
+
+#### Configuring RBAC Roles & Inheritance
+
+```php
+use Phue\Auth\RbacManager;
+
+$rbac = new RbacManager();
+
+// Register roles and permissions
+$rbac->addRole('author', ['posts.create']);
+$rbac->addRole('editor', ['posts.update', 'posts.delete']);
+$rbac->addRole('admin', ['admin.dashboard']);
+
+// Define role inheritance: admin -> editor -> author
+$rbac->addChild('admin', 'editor');
+$rbac->addChild('editor', 'author');
+
+// Assign role to user ID
+$rbac->assign(10, 'admin');
+
+// Check access (evaluates full inheritance tree safely)
+if ($rbac->checkAccess(10, 'posts.create')) {
+    // Access granted
+}
+```
+
 ---
 
 ## 11. Running & Testing Locally
