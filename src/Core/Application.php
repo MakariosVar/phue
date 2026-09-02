@@ -2,6 +2,8 @@
 
 namespace Phue\Core;
 
+use Phue\Core\Routing\Router;
+
 class Application {
     private Container $container;
     private Router $router;
