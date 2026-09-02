@@ -178,4 +178,32 @@ class Request
     {
         return $this->serverParams;
     }
+
+    /**
+     * Factory to instantiate a Phue Request from any PSR-7 ServerRequest.
+     */
+    public static function fromPsr7(ServerRequestInterface $psr7): self
+    {
+        $headers = [];
+        foreach ($psr7->getHeaders() as $name => $values) {
+            $headers[$name] = implode(', ', $values);
+        }
+
+        $query = $psr7->getQueryParams();
+        $parsedBody = $psr7->getParsedBody();
+        $bodyParams = is_array($parsedBody) ? $parsedBody : [];
+
+        $server = $psr7->getServerParams();
+        $uri = $psr7->getUri()->getPath();
+        $method = $psr7->getMethod();
+
+        return new self(
+            uri: $uri,
+            method: $method,
+            queryParams: $query,
+            bodyParams: $bodyParams,
+            headers: $headers,
+            serverParams: $server
+        );
+    }
 }

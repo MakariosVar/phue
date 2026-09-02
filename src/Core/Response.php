@@ -170,4 +170,17 @@ class Response
         // Echo response content payload
         echo $this->content;
     }
+
+    /**
+     * Converts native Phue Response to PSR-7 Response (e.g. Nyholm/Psr7).
+     */
+    public function toPsr7(): ResponseInterface
+    {
+        return new Psr7Response(
+            status: $this->statusCode,
+            headers: $this->headers,
+            body: $this->body,
+            version: '1.1'
+        );
+    }
 }

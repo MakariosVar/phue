@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Phue\Tests\Database;
+namespace Phue\Tests\Core\Database;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Connection;
