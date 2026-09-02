@@ -43,6 +43,13 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `RbacManager` | `Auth/RbacManager.php` | Role-Based Access Control manager supporting role inheritance & cycle detection |
 | `AccessControlMiddleware` | `Auth/Middleware/AccessControlMiddleware.php` | Middleware enforcing permission checks on HTTP requests |
 | `AuthorizedModelEndpoint` | `Schii/Endpoint/AuthorizedModelEndpoint.php` | Schii REST CRUD endpoint decorator enforcing dynamic RBAC permissions |
+| `ServerAdapterInterface` | `Server/ServerAdapterInterface.php` | Universal contract for web server runtimes (FPM, RoadRunner, Swoole, FrankenPHP) |
+| `FpmAdapter` | `Server/FpmAdapter.php` | Standard PHP-FPM / CGI adapter for stateless request execution |
+| `RoadRunnerAdapter` | `Server/RoadRunnerAdapter.php` | Persistent RoadRunner Go application server adapter |
+| `SwooleAdapter` | `Server/SwooleAdapter.php` | Async Coroutine-based Swoole HTTP Server adapter |
+| `WiringGenerator` | `Compiler/WiringGenerator.php` | Static Build-Phase Wiring Generator emitting `build/wiring.php` and `build/wiring.cpp` |
+| `AotCompatibilityChecker` | `Compiler/AotCompatibilityChecker.php` | Evaluates PHP classes for TypePHP AOT compilation compliance |
+| `FallbackStrategy` | `Compiler/FallbackStrategy.php` | Resolves execution mode (`AOT_NATIVE`, `PHP_JIT`, `PHP_INTERPRETER`) |
 
 ---
 
@@ -719,6 +726,26 @@ Phue provides a modular Authentication and Role-Based Access Control (RBAC) subs
 - **`RbacManager` (`src/Auth/RbacManager.php`)**: Handles role assignments, permissions (`addRole()`, `assign()`), and recursive role inheritance (`addChild()`) with visited set cycle detection to prevent infinite loops.
 - **`AccessControlMiddleware` (`src/Auth/Middleware/AccessControlMiddleware.php`)**: Enforces required permissions on routes, returning `401 Unauthorized` for unauthenticated requests or `403 Forbidden` for insufficient privileges.
 - **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata.
+
+---
+
+## 14. Server Adapters & TypePHP AOT Engine (`Phue\Server` & `Phue\Compiler`)
+
+Phue supports persistent high-performance runtimes and ahead-of-time (AOT) static compilation for native C++ translation.
+
+### Persistent Server Adapters (`src/Server/`)
+- **`ServerAdapterInterface` (`src/Server/ServerAdapterInterface.php`)**: Universal lifecycle contract (`boot()`, `handleRequest()`, `run()`, `shutdown()`).
+- **`FpmAdapter` (`src/Server/FpmAdapter.php`)**: Standard CGI/FPM adapter for stateless single-request execution.
+- **`RoadRunnerAdapter` (`src/Server/RoadRunnerAdapter.php`)**: Persistent Go server worker loop using PSR-7 conversion helpers (`Request::fromPsr7()`, `$response->toPsr7()`).
+- **`SwooleAdapter` (`src/Server/SwooleAdapter.php`)**: Async Coroutine HTTP Server adapter (`Swoole\Http\Server`).
+- **Zero State Leakage**: All persistent worker adapters run `$container->flushScope()` inside `finally` blocks to purge request-scoped singletons between request iterations.
+
+### TypePHP AOT Engine (`src/Compiler/`)
+- **`WiringGenerator` (`src/Compiler/WiringGenerator.php`)**: Build-phase scanner emitting zero-reflection static dependency and routing maps:
+  - `build/wiring.php`: Optimized PHP return array.
+  - `build/wiring.cpp`: Native C++ struct array for TypePHP native compilation.
+- **`AotCompatibilityChecker` (`src/Compiler/AotCompatibilityChecker.php`)**: Regex inspection for forbidden dynamic constructs (`eval()`, `extract()`, `$$var`, dynamic `call_user_func_array`).
+- **`FallbackStrategy` (`src/Compiler/FallbackStrategy.php`)**: Resolves execution mode (`AOT_NATIVE`, `PHP_JIT`, `PHP_INTERPRETER`) with graceful JIT fallback.
 
 ---
 

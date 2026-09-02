@@ -749,6 +749,37 @@ if ($rbac->checkAccess(10, 'posts.create')) {
 }
 ```
 
+### 12. Server Adapters & TypePHP AOT Engine
+
+#### Running Persistent Server Adapters (RoadRunner & Swoole)
+
+```php
+use Phue\Core\Application;
+use Phue\Server\RoadRunnerAdapter;
+
+$app = new Application(require 'config/app.php');
+
+// Boot RoadRunner persistent adapter
+$adapter = new RoadRunnerAdapter();
+$adapter->boot($app);
+$adapter->run();
+```
+
+#### Generating Static Wiring Artifacts for TypePHP AOT
+
+```php
+use Phue\Compiler\WiringGenerator;
+
+$generator = new WiringGenerator(
+    scanDirectories: ['src', 'App'],
+    outputDir: 'build'
+);
+
+// Emits build/wiring.php and build/wiring.cpp
+$result = $generator->generate();
+echo "Generated static wiring for {$result['count']} classes.\n";
+```
+
 ---
 
 ## 11. Running & Testing Locally
