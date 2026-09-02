@@ -1,6 +1,6 @@
 <?php
 
-namespace Phue\Tests;
+namespace Phue\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Request;
