@@ -51,6 +51,8 @@ class Container
 
     /**
      * Register a general factory binding (compatibility with set()).
+     * @param $id string | factory_id
+     * @param $factory callable | factory callable
      */
     public function set(string $id, callable $factory): void
     {
