@@ -780,6 +780,42 @@ $result = $generator->generate();
 echo "Generated static wiring for {$result['count']} classes.\n";
 ```
 
+### 13. Edge / WASM Infrastructure & Serverless Database Drivers
+
+#### Using Turso & Neon Serverless HTTP Drivers
+
+```php
+use Phue\Core\Database\Drivers\TursoDriver;
+use Phue\Core\Database\Drivers\NeonDriver;
+
+// Turso libSQL at the Edge over HTTP
+$turso = new TursoDriver('https://db-org.turso.io', 'your_auth_token');
+$users = $turso->query('SELECT * FROM users WHERE active = ?', [1]);
+
+// Neon Serverless Postgres over HTTP
+$neon = new NeonDriver('https://ep-proj-1234.neon.tech/sql', 'your_auth_token');
+$affected = $neon->execute('UPDATE users SET status = ? WHERE id = ?', ['active', 42]);
+```
+
+#### Executing inside WebAssembly (WASM) Micro-VMs
+
+```php
+use Phue\Server\WasmAdapter;
+use Phue\Cache\EdgeKvCache;
+
+// Memory-backed KV cache for Read-Only Edge filesystems
+$cache = new EdgeKvCache();
+
+$adapter = new WasmAdapter($container);
+
+// Handle WASM execution context
+$result = $adapter->handleWasmRequest([
+    'REQUEST_METHOD' => 'GET',
+    'REQUEST_URI' => '/api/edge',
+    'HEADERS' => ['Accept' => 'application/json'],
+], fn($request) => $app->handle($request));
+```
+
 ---
 
 ## 11. Running & Testing Locally

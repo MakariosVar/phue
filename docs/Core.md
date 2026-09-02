@@ -50,6 +50,12 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `WiringGenerator` | `Compiler/WiringGenerator.php` | Static Build-Phase Wiring Generator emitting `build/wiring.php` and `build/wiring.cpp` |
 | `AotCompatibilityChecker` | `Compiler/AotCompatibilityChecker.php` | Evaluates PHP classes for TypePHP AOT compilation compliance |
 | `FallbackStrategy` | `Compiler/FallbackStrategy.php` | Resolves execution mode (`AOT_NATIVE`, `PHP_JIT`, `PHP_INTERPRETER`) |
+| `HttpDriverInterface` | `Database/Drivers/Abstract/HttpDriverInterface.php` | Contract for Serverless/Edge HTTP Database Drivers |
+| `TursoDriver` | `Database/Drivers/TursoDriver.php` | Serverless libSQL/SQLite HTTP driver for Turso REST pipeline |
+| `NeonDriver` | `Database/Drivers/NeonDriver.php` | Serverless PostgreSQL HTTP driver for Neon REST API |
+| `WasmAdapter` | `Server/WasmAdapter.php` | Server Adapter for WebAssembly (WASM) & Cloudflare Edge Runtimes |
+| `CacheInterface` | `Cache/CacheInterface.php` | Contract for Phue framework caching engines |
+| `EdgeKvCache` | `Cache/EdgeKvCache.php` | In-Memory & Key-Value Cache Driver for Read-Only Edge Filesystems |
 
 ---
 
@@ -746,6 +752,22 @@ Phue supports persistent high-performance runtimes and ahead-of-time (AOT) stati
   - `build/wiring.cpp`: Native C++ struct array for TypePHP native compilation.
 - **`AotCompatibilityChecker` (`src/Compiler/AotCompatibilityChecker.php`)**: Regex inspection for forbidden dynamic constructs (`eval()`, `extract()`, `$$var`, dynamic `call_user_func_array`).
 - **`FallbackStrategy` (`src/Compiler/FallbackStrategy.php`)**: Resolves execution mode (`AOT_NATIVE`, `PHP_JIT`, `PHP_INTERPRETER`) with graceful JIT fallback.
+
+---
+
+## 15. Edge/WASM Infrastructure & Serverless DB Drivers (`Phue\Server` & `Phue\Core\Database\Drivers`)
+
+Phue supports execution inside WebAssembly (WASM) micro-VMs, Cloudflare Workers, and serverless environments without requiring traditional PDO sockets or local disk access.
+
+### Serverless HTTP Database Drivers (`src/Core/Database/Drivers/`)
+- **`HttpDriverInterface` (`src/Core/Database/Drivers/Abstract/HttpDriverInterface.php`)**: Contract for REST API database drivers (`setEndpoint()`, `setAuthToken()`, `query()`, `execute()`, `getName()`).
+- **`TursoDriver` (`src/Core/Database/Drivers/TursoDriver.php`)**: Serverless libSQL/SQLite HTTP driver for Turso REST pipeline (`/v2/pipeline`), returning dialect name `'sqlite'`.
+- **`NeonDriver` (`src/Core/Database/Drivers/NeonDriver.php`)**: Serverless PostgreSQL HTTP driver for Neon REST API (`/sql`), returning dialect name `'pgsql'`.
+
+### WASM Server Adapter & Edge Storage (`src/Server/` & `src/Cache/`)
+- **`WasmAdapter` (`src/Server/WasmAdapter.php`)**: Adapter for executing Phue inside WebAssembly contexts. Transmutes WASM environment arrays into `Phue\Core\Request` objects, flushes container scopes via `$container->flushScope()`, and returns standard status/headers/body arrays.
+- **`CacheInterface` (`src/Cache/CacheInterface.php`)**: Framework caching interface.
+- **`EdgeKvCache` (`src/Cache/EdgeKvCache.php`)**: Memory-backed key-value cache driver for read-only Edge filesystems.
 
 ---
 
