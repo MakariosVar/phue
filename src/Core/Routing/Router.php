@@ -80,7 +80,7 @@ class Router
     }
 
     /**
-     * Registers all routes from a controller using AttributeRouteLoader.
+     * Registers all routes from a single controller using AttributeRouteLoader.
      *
      * @param class-string $controllerClass
      * @return $this
@@ -90,17 +90,24 @@ class Router
         $loader = new AttributeRouteLoader();
         $routes = $loader->load($controllerClass);
 
-        foreach ($routes as $route) {
-            foreach ($route['methods'] as $method) {
-                $this->addRoute(
-                    $method,
-                    $route['path'],
-                    $route['handler'],
-                    $route['where'],
-                    $route['middleware']
-                );
-            }
-        }
+        $this->registerLoadedRoutes($routes);
+
+        return $this;
+    }
+
+    /**
+     * Automatically scans a directory for controllers and registers all discovered routes.
+     *
+     * @param string $directory       Absolute path to controllers directory.
+     * @param string $namespacePrefix Root namespace corresponding to the directory.
+     * @return $this
+     */
+    public function scanControllers(string $directory, string $namespacePrefix): self
+    {
+        $loader = new AttributeRouteLoader();
+        $routes = $loader->scanDirectory($directory, $namespacePrefix);
+
+        $this->registerLoadedRoutes($routes);
 
         return $this;
     }
@@ -184,6 +191,34 @@ class Router
         }
 
         throw new RouteNotFoundException("No route found for URI [{$path}]");
+    }
+
+    /**
+     * Registers an array of normalized route arrays loaded from AttributeRouteLoader.
+     *
+     * @param array<int, array{
+     *     path: string,
+     *     methods: array<string>,
+     *     handler: array{class-string, string},
+     *     name: string|null,
+     *     where: array<string, string>,
+     *     middleware: array<string>
+     * }> $routes
+     * @return void
+     */
+    protected function registerLoadedRoutes(array $routes): void
+    {
+        foreach ($routes as $route) {
+            foreach ($route['methods'] as $method) {
+                $this->addRoute(
+                    $method,
+                    $route['path'],
+                    $route['handler'],
+                    $route['where'],
+                    $route['middleware']
+                );
+            }
+        }
     }
 
     /**

@@ -4,8 +4,11 @@ namespace Phue\Core\Routing\Loader;
 
 use Phue\Core\Routing\Attribute\Middleware;
 use Phue\Core\Routing\Attribute\Route;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionMethod;
+use RegexIterator;
 
 /**
  * Parses controller classes using PHP Reflection to extract routes and assigned middleware.
@@ -33,6 +36,11 @@ class AttributeRouteLoader
     {
         $routes = [];
         $reflectionClass = new ReflectionClass($controllerClass);
+
+        // Skip non-instantiable classes (abstract classes, interfaces, traits)
+        if (!$reflectionClass->isInstantiable()) {
+            return [];
+        }
 
         // 1. Resolve Class-Level Attributes
         $classAttributes = $reflectionClass->getAttributes(Route::class);
@@ -78,6 +86,61 @@ class AttributeRouteLoader
                     'where'      => $routeAttr->where,
                     'middleware' => $mergedMiddleware,
                 ];
+            }
+        }
+
+        return $routes;
+    }
+
+    /**
+     * Recursively scans a directory for PHP classes and extracts all defined routes.
+     *
+     * @param string $directory       Absolute path to controller directory.
+     * @param string $namespacePrefix Root namespace corresponding to the scanned directory.
+     * @return array<int, array{
+     *     path: string,
+     *     methods: array<string>,
+     *     handler: array{class-string, string},
+     *     name: string|null,
+     *     where: array<string, string>,
+     *     middleware: array<string>
+     * }>
+     */
+    public function scanDirectory(string $directory, string $namespacePrefix): array
+    {
+        $routes = [];
+
+        if (!is_dir($directory)) {
+            return $routes;
+        }
+
+        $directoryIterator = new RecursiveDirectoryIterator($directory);
+        $iterator = new RecursiveIteratorIterator($directoryIterator);
+        $phpFiles = new RegexIterator($iterator, '/^.+\.php$/i', RegexIterator::GET_MATCH);
+
+        $realDirectory = realpath($directory);
+        $namespacePrefix = rtrim($namespacePrefix, '\\') . '\\';
+
+        foreach ($phpFiles as $file) {
+            $filePath = realpath($file[0]);
+
+            // Extract path relative to scanned directory
+            $relativePath = substr($filePath, strlen($realDirectory));
+            $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR); // Αφαιρεί το αρχικό / ή \
+            
+            // Convert directory separators to namespace separators
+            $classWithExtension = str_replace(DIRECTORY_SEPARATOR, '\\', $relativePath);
+            $className = $namespacePrefix . substr($classWithExtension, 0, -4);
+
+            if (!class_exists($className)) {
+                continue;
+            }
+
+            try {
+                $classRoutes = $this->load($className);
+                $routes = array_merge($routes, $classRoutes);
+            } catch (\ReflectionException) {
+                continue;
             }
         }
 

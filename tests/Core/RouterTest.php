@@ -3,11 +3,12 @@
 namespace Phue\Tests\Core\Routing;
 
 use PHPUnit\Framework\TestCase;
+use Phue\Core\Routing\Attribute\Route;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\RouteMatch;
 use Phue\Core\Routing\Router;
-use Phue\Core\Routing\Attribute\Route;
+use Phue\Tests\Core\Stubs\DummyScanController;
 
 /**
  * Unit tests for Router class.
@@ -102,7 +103,7 @@ class RouterTest extends TestCase
         $this->assertSame($handler, $match->getHandler());
     }
 
-    public function testMatchesInlineTypeConstraints(): void
+    public function testMatchesInlineTypeConstraintsSuccessfully(): void
     {
         $handler = fn () => 'user_by_int_id';
         $this->router->get('/users/{id:int}', $handler);
@@ -111,13 +112,18 @@ class RouterTest extends TestCase
         $match = $this->router->dispatch('GET', '/users/123');
         $this->assertSame($handler, $match->getHandler());
         $this->assertSame(['id' => '123'], $match->getParams());
+    }
+
+    public function testMatchesInlineTypeConstraintsFailsForInvalidType(): void
+    {
+        $this->router->get('/users/{id:int}', fn () => 'user_by_int_id');
 
         // Non-integer ID should fail matching
         $this->expectException(RouteNotFoundException::class);
         $this->router->dispatch('GET', '/users/abc');
     }
 
-    public function testMatchesWhereConstraints(): void
+    public function testMatchesWhereConstraintsSuccessfully(): void
     {
         $handler = fn () => 'user_custom_regex';
         $this->router->get('/users/{id}', $handler, ['id' => '[0-9]{3}']);
@@ -125,6 +131,11 @@ class RouterTest extends TestCase
         // 3-digit ID matches
         $match = $this->router->dispatch('GET', '/users/999');
         $this->assertSame($handler, $match->getHandler());
+    }
+
+    public function testMatchesWhereConstraintsFailsForInvalidRegex(): void
+    {
+        $this->router->get('/users/{id}', fn () => 'user_custom_regex', ['id' => '[0-9]{3}']);
 
         // Non-matching regex fails
         $this->expectException(RouteNotFoundException::class);
@@ -159,6 +170,17 @@ class RouterTest extends TestCase
         $showMatch = $this->router->dispatch('GET', '/api/v2/products/456');
         $this->assertSame([RouterTestStubController::class, 'show'], $showMatch->getHandler());
         $this->assertSame(['id' => '456'], $showMatch->getParams());
+    }
+
+    public function testScanControllersRegistersRoutesFromDirectory(): void
+    {
+        // Scans the dedicated Stubs directory for PSR-4 matching controller files
+        $this->router->scanControllers(__DIR__ . '/Stubs', 'Phue\\Tests\\Core\\Stubs');
+
+        $match = $this->router->dispatch('GET', '/api/v3/scanned');
+
+        $this->assertInstanceOf(RouteMatch::class, $match);
+        $this->assertSame([DummyScanController::class, 'index'], $match->getHandler());
     }
 }
 

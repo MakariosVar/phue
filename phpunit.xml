@@ -8,6 +8,7 @@
     <testsuites>
         <testsuite name="Phue Test Suite">
             <directory suffix=".php">tests</directory>
+            <exclude>tests/Core/Stubs</exclude>
         </testsuite>
     </testsuites>
 
