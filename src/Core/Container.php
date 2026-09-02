@@ -2,16 +2,11 @@
 
 namespace Phue\Core;
 
-use Exception;
 use ReflectionClass;
 use ReflectionNamedType;
-
-/* =====================================================================
- * CUSTOM EXCEPTIONS
- * ===================================================================== */
-
-class ContainerException extends Exception {}
-class NotFoundException extends ContainerException {}
+use Phue\Core\Exceptions\ContainerException;
+use Phue\Core\Exceptions\NotFoundException;
+use Phue\Core\Exceptions\CircularDependencyException;
 
 /**
  * Main application Container handling dependency injection,
@@ -34,6 +29,13 @@ class Container
     private array $instances = [];
 
     /**
+     * Active dependency resolution stack used for circular reference detection.
+     *
+     * @var array<string, bool>
+     */
+    private array $resolving = [];
+
+    /**
      * Bind a service factory closure to the container.
      *
      * @param string $id Unique identifier or FQCN (Fully Qualified Class Name)
@@ -52,7 +54,7 @@ class Container
      *
      * @param string $id Service identifier or target class name
      * @return mixed Resolved instance or object
-     * @throws NotFoundException|ContainerException If service cannot be resolved or autowired
+     * @throws NotFoundException|CircularDependencyException|ContainerException If service cannot be resolved
      */
     public function get(string $id): mixed
     {
@@ -61,36 +63,60 @@ class Container
             return $this->instances[$id];
         }
 
-        // 2. Resolve instance via explicitly bound factory closure
-        if (isset($this->factories[$id])) {
-            $this->instances[$id] = $this->factories[$id]($this);
-            return $this->instances[$id];
+        // 2. Resolve fresh instance and store in cache
+        $this->instances[$id] = $this->make($id);
+        return $this->instances[$id];
+    }
+
+    /**
+     * Force resolution of a new, un-cached service instance.
+     *
+     * @param string $id Service identifier or target class name
+     * @return mixed Fresh resolved instance
+     * @throws NotFoundException|CircularDependencyException|ContainerException
+     */
+    public function make(string $id): mixed
+    {
+        // Check for cyclic dependency loops during dependency tree traversal
+        if (isset($this->resolving[$id])) {
+            $chain = implode(' -> ', array_keys($this->resolving)) . " -> {$id}";
+            throw new CircularDependencyException("Circular dependency detected: {$chain}");
         }
 
-        // 3. Fallback: Attempt zero-config resolution via Reflection Autowiring
-        if (class_exists($id)) {
-            $this->instances[$id] = $this->autowire($id);
-            return $this->instances[$id];
+        $this->resolving[$id] = true;
+
+        try {
+            // Resolve instance via explicitly bound factory closure
+            if (isset($this->factories[$id])) {
+                return $this->factories[$id]($this);
+            }
+
+            // Fallback: Attempt zero-config resolution via Reflection Autowiring for existing classes/interfaces
+            if (class_exists($id) || interface_exists($id)) {
+                return $this->autowire($id);
+            }
+        } finally {
+            unset($this->resolving[$id]);
         }
 
-        // 4. Trigger failure handler if resolution path yields nothing
+        // Trigger failure handler if resolution path yields nothing
         $this->missingFactory($id);
     }
 
     /**
-     * Check whether a service factory exists or if a class can be autowired.
+     * Check whether a service factory exists or if a class/interface exists.
      *
-     * @param string $id Service identifier or class name
+     * @param string $id Service identifier or class/interface name
      */
     public function has(string $id): bool
     {
-        return isset($this->factories[$id]) || class_exists($id);
+        return isset($this->factories[$id]) || class_exists($id) || interface_exists($id);
     }
 
     /**
      * Instantiate a target class using PHP Reflection to resolve its constructor arguments.
      *
-     * @param string $id FQCN of the target class
+     * @param string $id FQCN of the target class or interface
      * @return object Instantiated class instance
      * @throws ContainerException If class cannot be instantiated or dependencies are unresolvable
      */
@@ -147,8 +173,6 @@ class Container
      */
     private function missingFactory(string $id): never
     {
-        throw new NotFoundException(
-            "Missing factory or class for service: '{$id}'",
-        );
+        throw new NotFoundException("Missing factory or class for service: '{$id}'");
     }
 }

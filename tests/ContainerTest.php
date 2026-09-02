@@ -4,8 +4,9 @@ namespace Phue\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Container;
-use Phue\Core\ContainerException;
-use Phue\Core\NotFoundException;
+use Phue\Core\Exceptions\ContainerException;
+use Phue\Core\Exceptions\NotFoundException;
+use Phue\Core\Exceptions\CircularDependencyException;
 
 final class ContainerTest extends TestCase
 {
@@ -62,6 +63,21 @@ final class ContainerTest extends TestCase
 
         // assertSame checks for strict identity (===) in memory
         $this->assertSame($instance1, $instance2);
+    }
+
+    /**
+     * Tests make() method to ensure fresh non-singleton instance resolution.
+     */
+    public function testMakeReturnsNewInstanceEveryTime(): void
+    {
+        $this->container->set("db", function () {
+            return new \stdClass();
+        });
+
+        $instance1 = $this->container->make("db");
+        $instance2 = $this->container->make("db");
+
+        $this->assertNotSame($instance1, $instance2);
     }
 
     /**
@@ -158,11 +174,11 @@ final class ContainerTest extends TestCase
     }
 
     /**
-     * Test 4: Failure case — Unbound interface without factory throws NotFoundException.
+     * Test 4: Failure case — Unbound interface throws ContainerException because it is not instantiable.
      */
     public function testThrowsExceptionForUnboundInterface(): void
     {
-        $this->expectException(NotFoundException::class);
+        $this->expectException(ContainerException::class);
         $this->container->get(LoggerInterface::class);
     }
 
@@ -173,6 +189,15 @@ final class ContainerTest extends TestCase
     {
         $this->expectException(ContainerException::class);
         $this->container->get(ServiceWithMissingScalarDefault::class);
+    }
+
+    /**
+     * Test 6: Failure case — Circular dependency loop detection.
+     */
+    public function testDetectsCircularDependencies(): void
+    {
+        $this->expectException(CircularDependencyException::class);
+        $this->container->get(CircularClassA::class);
     }
 }
 
@@ -188,7 +213,7 @@ class ServiceWithScalarDefault
 {
     public function __construct(
         public NoConstructorService $dependency,
-        public string $host = 'localhost'
+        public string $host = "localhost",
     ) {}
 }
 
@@ -209,4 +234,14 @@ class ServiceWithMissingScalarDefault
 class PhueAutowireTarget
 {
     public function __construct(public PhueAutowireDependency $dependency) {}
+}
+
+class CircularClassA
+{
+    public function __construct(public CircularClassB $b) {}
+}
+
+class CircularClassB
+{
+    public function __construct(public CircularClassA $a) {}
 }
