@@ -816,6 +816,54 @@ $result = $adapter->handleWasmRequest([
 ], fn($request) => $app->handle($request));
 ```
 
+### 14. Real-Time Event Bus & Live SSE Streaming
+
+#### Publishing & Subscribing via Redis Streams Driver
+
+```php
+use Phue\Events\Bus\RedisStreamDriver;
+
+$redis = new Redis();
+$redis->connect('127.0.0.1', 6379);
+
+$bus = new RedisStreamDriver($redis, consumerGroup: 'web_workers');
+
+// Publish event to channel
+$bus->publish('orders', ['order_id' => 101, 'status' => 'paid']);
+
+// Subscribe worker loop
+$bus->subscribe('orders', function(array $event) {
+    echo "Processing order #{$event['order_id']} ({$event['status']})\n";
+});
+```
+
+#### Streaming Server-Sent Events (SSE) to Web Browsers
+
+```php
+use Phue\Events\Sse\SseResponse;
+use Phue\Events\Sse\SseStreamer;
+
+$streamer = new SseStreamer();
+
+// Format event stream block
+$payload = $streamer->formatEvent('order.updated', ['id' => 101, 'status' => 'shipped'], '1001');
+
+// Return SSE HTTP Streaming Response
+return new SseResponse($payload);
+```
+
+#### Marking Models for Real-Time Broadcasting
+
+```php
+use Phue\Events\Attribute\Broadcastable;
+
+#[Broadcastable(channel: 'orders', broadcastCreate: true, broadcastUpdate: true)]
+class Order extends ActiveRecord
+{
+    // Model CRUD mutations will automatically broadcast events to 'orders' channel
+}
+```
+
 ---
 
 ## 11. Running & Testing Locally

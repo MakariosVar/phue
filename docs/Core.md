@@ -56,6 +56,12 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `WasmAdapter` | `Server/WasmAdapter.php` | Server Adapter for WebAssembly (WASM) & Cloudflare Edge Runtimes |
 | `CacheInterface` | `Cache/CacheInterface.php` | Contract for Phue framework caching engines |
 | `EdgeKvCache` | `Cache/EdgeKvCache.php` | In-Memory & Key-Value Cache Driver for Read-Only Edge Filesystems |
+| `EventBusInterface` | `Events/Bus/EventBusInterface.php` | Contract for Phue Real-Time Event Bus Subsystem |
+| `InMemoryBusDriver` | `Events/Bus/InMemoryBusDriver.php` | In-Memory Event Bus Driver for testing and local development |
+| `RedisStreamDriver` | `Events/Bus/RedisStreamDriver.php` | High-Throughput Redis Streams Event Bus Driver with Consumer Groups |
+| `SseResponse` | `Events/Sse/SseResponse.php` | Specialized HTTP Response for Server-Sent Events (SSE) Streaming |
+| `SseStreamer` | `Events/Sse/SseStreamer.php` | Server-Sent Events (SSE) Protocol Formatter and Streamer |
+| `Broadcastable` | `Events/Attribute/Broadcastable.php` | Attribute marking models for automatic real-time event broadcasting |
 
 ---
 
@@ -768,6 +774,22 @@ Phue supports execution inside WebAssembly (WASM) micro-VMs, Cloudflare Workers,
 - **`WasmAdapter` (`src/Server/WasmAdapter.php`)**: Adapter for executing Phue inside WebAssembly contexts. Transmutes WASM environment arrays into `Phue\Core\Request` objects, flushes container scopes via `$container->flushScope()`, and returns standard status/headers/body arrays.
 - **`CacheInterface` (`src/Cache/CacheInterface.php`)**: Framework caching interface.
 - **`EdgeKvCache` (`src/Cache/EdgeKvCache.php`)**: Memory-backed key-value cache driver for read-only Edge filesystems.
+
+---
+
+## 16. Real-Time Event Bus & Live SSE Streaming (`Phue\Events`)
+
+Phue includes a pub/sub Event Bus subsystem supporting distributed messaging and Server-Sent Events (SSE) streaming for real-time applications and UI updates.
+
+### Event Bus Drivers (`src/Events/Bus/`)
+- **`EventBusInterface` (`src/Events/Bus/EventBusInterface.php`)**: Interface for message publishing and subscription (`publish()`, `subscribe()`).
+- **`InMemoryBusDriver` (`src/Events/Bus/InMemoryBusDriver.php`)**: Synchronous in-memory listener repository for testing and local dev.
+- **`RedisStreamDriver` (`src/Events/Bus/RedisStreamDriver.php`)**: High-throughput Redis Streams driver (`XADD`, `XREADGROUP`, `XACK`) with consumer groups and at-least-once delivery semantics.
+
+### Server-Sent Events (SSE) & Broadcasting (`src/Events/Sse/` & `src/Events/Attribute/`)
+- **`SseResponse` (`src/Events/Sse/SseResponse.php`)**: Specialized HTTP Response pre-configured with streaming headers (`text/event-stream`, `no-cache`, `keep-alive`, `X-Accel-Buffering: no`).
+- **`SseStreamer` (`src/Events/Sse/SseStreamer.php`)**: Formatter producing standard SSE event stream text blocks (`id`, `event`, `data`).
+- **`Broadcastable` (`src/Events/Attribute/Broadcastable.php`)**: Attribute for marking Active Record Models for real-time event broadcasting on CRUD mutations.
 
 ---
 
