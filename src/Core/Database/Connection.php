@@ -58,4 +58,15 @@ class Connection
     {
         return call_user_func_array([$this->driver, $method], $arguments);
     }
+
+    /**
+     * Begins a fluent query builder instance against a specific database table.
+     *
+     * @param string $table The name of the table to query.
+     * @return QueryBuilder
+     */
+    public function table(string $table): QueryBuilder
+    {
+        return (new QueryBuilder($this))->table($table);
+    }
 }

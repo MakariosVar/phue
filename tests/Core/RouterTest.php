@@ -1,6 +1,6 @@
 <?php
 
-namespace Phue\Tests\Core\Routing;
+namespace Phue\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Routing\Attribute\Route;
