@@ -488,7 +488,72 @@ try {
 
 ---
 
-## 8. Running & Testing Locally
+## 8. Active Record ORM Usage
+
+Phue includes a full-featured Active Record ORM mapping database rows directly to PHP Model classes.
+
+### Defining a Model
+
+```php
+namespace App\Models;
+
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+
+class User extends BaseActiveRecord
+{
+    // Table name is inferred as 'users' automatically if omitted.
+    protected string $table = 'users';
+
+    // Primary key defaults to 'id' if omitted.
+    protected string $primaryKey = 'id';
+}
+```
+
+### Initializing Database Connection for Models
+
+```php
+use Phue\Core\Database\Connection;
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+
+$db = new Connection(['driver' => 'sqlite', 'database' => 'app.sqlite']);
+BaseActiveRecord::setConnection($db);
+```
+
+### Model Operations (CRUD)
+
+```php
+use App\Models\User;
+
+// 1. Create & Persist Model
+$user = User::create([
+    'name'   => 'Alice',
+    'email'  => 'alice@example.com',
+    'status' => 'active',
+]);
+// $user->id is automatically assigned after insert!
+
+// 2. Find Single Record by Primary Key
+$user = User::find(1); // Returns User instance or null
+
+// 3. Update Model (Selective Dirty Attributes UPDATE)
+$user->name = 'Alice Updated';
+$user->save(); // Executes UPDATE only for modified fields
+
+// 4. Querying Models with Fluent ActiveQuery
+$activeUsers = User::where('status', 'active')
+    ->orderBy('name', 'ASC')
+    ->limit(10)
+    ->get(); // Returns array<User>
+
+$singlePending = User::where('status', 'pending')->first(); // Returns User instance or null
+
+// 5. Delete Model
+$user->delete();
+```
+
+---
+
+## 9. Running & Testing Locally
 
 ### Using Docker Wrapper (`phue-docker`)
 

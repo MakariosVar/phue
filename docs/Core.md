@@ -27,6 +27,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `Connection` | `Database/Connection.php` | Connection Manager & Driver Factory |
 | `DriverInterface` | `Database/Drivers/Abstract/DriverInterface.php` | Universal database contract for PDO and HTTP Edge drivers |
 | `QueryBuilder` | `Database/QueryBuilder.php` | Fluent SQL query builder with parameter binding |
+| `BaseActiveRecord` | `Database/ActiveRecord/BaseActiveRecord.php` | Abstract Active Record model with persistence & dirty state tracking |
+| `ActiveQuery` | `Database/ActiveRecord/ActiveQuery.php` | Model-aware QueryBuilder returning hydrated model instances |
 
 ---
 
@@ -611,11 +613,34 @@ $connection->table('users')->where('status', 'expired')->delete();
 ```
 
 - **Parameter Binding**: All `where()`, `orWhere()`, `insert()`, and `update()` values use positional `?` placeholders for parameter binding.
-- **`toSql()` & `getBindings()`**: Inspect compiled SQL strings and parameter bindings for debugging.
+---
+
+## 9. Active Record ORM Architecture
+
+The Active Record layer (`Phue\Core\Database\ActiveRecord`) maps database rows directly to PHP Model classes.
+
+### Model Hydration & Querying (`ActiveQuery.php`)
+
+`ActiveQuery` extends `QueryBuilder`. When queries are executed through a Model (e.g., `User::where(...)`), `ActiveQuery` automatically converts raw database rows into hydrated Model instances via `newFromBuilder()`:
+
+```php
+use App\Models\User;
+
+// Static call forwarding to ActiveQuery
+$users = User::where('status', 'active')->get(); // Returns array of User instances
+$singleUser = User::where('id', 1)->first();    // Returns User instance or null
+$allUsers   = User::all();                       // Returns array of User instances
+```
+
+### Change Tracking & Persistence (`BaseActiveRecord.php`)
+
+- **Dirty Attributes (`getDirty()`)**: Tracks modified properties compared to `$original`. `save()` executes `UPDATE` **only** on modified attributes.
+- **Persistence (`save()`)**: Determines automatically whether to perform `INSERT` (when `$exists` is `false`) or `UPDATE` (when `$exists` is `true`).
+- **Primary Key Assignment**: Automatically assigns the newly generated ID from `$connection->lastInsertId()` to the model upon insertion.
 
 ---
 
-## 9. Intentional design decisions (why it's built this way)
+## 10. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:
 
