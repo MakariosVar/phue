@@ -589,7 +589,59 @@ Phue provides a terminal executable `./bin/phue` for managing dev servers and ge
 
 ---
 
-## 10. Running & Testing Locally
+## 10. Schii Server-Driven UI & Zero-Controller REST
+
+Schii allows building full REST APIs and admin screens directly from model attribute declarations.
+
+### Annotating a Model
+
+```php
+namespace App\Models;
+
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Schii\Attribute\UI;
+use Phue\Schii\Attribute\Field;
+
+#[UI(label: 'Products', icon: 'box', layout: 'grid')]
+class Product extends BaseActiveRecord
+{
+    protected string $table = 'products';
+
+    #[Field(type: 'text', label: 'Product Name', searchable: true, sortable: true, required: true)]
+    public string $name;
+
+    #[Field(type: 'number', label: 'Price ($)', filterable: true, sortable: true)]
+    public float $price;
+
+    #[Field(type: 'select', filterable: true, options: ['active', 'inactive'])]
+    public string $status;
+}
+```
+
+### Registering Entity & Serving Zero-Controller REST API
+
+```php
+use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Schii\Endpoint\ModelEndpoint;
+
+$registry = new SchemaRegistry();
+$endpoint = new ModelEndpoint($registry);
+
+// Register entity mapping
+$endpoint->registerEntity('products', App\Models\Product::class);
+
+// Handled Endpoints:
+// GET    /schii/schema/products      -> Returns JSON Schema protocol for Vue Admin
+// GET    /schii/products?q=Lap&page=1 -> List with search, filter, sort & pagination
+// GET    /schii/products/1            -> Show record
+// POST   /schii/products              -> Create record
+// PUT    /schii/products/1            -> Update record
+// DELETE /schii/products/1            -> Delete record
+```
+
+---
+
+## 11. Running & Testing Locally
 
 ### Using Docker Wrapper (`phue-docker`)
 

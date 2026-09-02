@@ -31,6 +31,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `ActiveQuery` | `Database/ActiveRecord/ActiveQuery.php` | Model-aware QueryBuilder returning hydrated model instances |
 | `Console\Application` | `Console/Application.php` | CLI Application runner, command registry, and ANSI help menu |
 | `CommandInterface` | `Console/CommandInterface.php` | Interface contract for all CLI commands |
+| `Schii\SchemaRegistry` | `Schii/Schema/SchemaRegistry.php` | Reflection parser & cache for `#[UI]` and `#[Field]` attributes |
+| `Schii\ModelEndpoint` | `Schii/Endpoint/ModelEndpoint.php` | Zero-Controller REST CRUD Endpoint & JSON Schema Protocol handler |
 
 ---
 
@@ -660,7 +662,33 @@ The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/p
 
 ---
 
-## 11. Intentional design decisions (why it's built this way)
+## 11. Schii Server-Driven UI & Zero-Controller REST Architecture
+
+Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP attributes on Active Record models to generate both REST API CRUD endpoints and JSON Schema protocols for the Vue Admin renderer with **zero controller boilerplate**.
+
+### Attribute Declaration
+
+- **`#[UI]` (`src/Schii/Attribute/UI.php`)**: Target class attribute defining entity label, icon, layout, and description.
+- **`#[Field]` (`src/Schii/Attribute/Field.php`)**: Target property/method attribute declaring widget type, label, `searchable`, `filterable`, `sortable`, `column` visibility, `options`, and validation `rules`.
+
+### Schema Protocol Engine (`src/Schii/Schema/`)
+
+1. **`FieldSchema` & `ModelSchema`**: Immutable value objects exposing `toArray()` for standard JSON schema rendering.
+2. **`SchemaRegistry`**: Reflection parser with dual-layer caching (L1 In-Memory & L2 PSR-16 cache), `humanize()` fallback string transformation, and automatic RBAC permission generation (`admin.entity.create`).
+
+### Zero-Controller REST Endpoint (`src/Schii/Endpoint/ModelEndpoint.php`)
+
+- **`schema($entity)`**: `GET /schii/schema/{entity}` returning complete JSON schema.
+- **`index($entity, $request)`**: `GET /schii/{entity}` featuring:
+  - Global Search across `searchable` fields.
+  - Dynamic Filtering across `filterable` fields.
+  - Sorting across `sortable` fields (`ASC`/`DESC`).
+  - Pagination metadata (`total`, `page`, `limit`, `last_page`).
+- **`show()`, `store()`, `update()`, `delete()`**: Full REST CRUD handlers for registered entities.
+
+---
+
+## 12. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:
 
