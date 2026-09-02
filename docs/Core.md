@@ -26,6 +26,7 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `Application` | `Application.php` | Composes everything: global & route middleware pipeline → router → handler → response |
 | `Connection` | `Database/Connection.php` | Connection Manager & Driver Factory |
 | `DriverInterface` | `Database/Drivers/Abstract/DriverInterface.php` | Universal database contract for PDO and HTTP Edge drivers |
+| `QueryBuilder` | `Database/QueryBuilder.php` | Fluent SQL query builder with parameter binding |
 
 ---
 
@@ -586,14 +587,31 @@ $stmt = $connection->query('SELECT * FROM users WHERE id = ?', [1]);
 $user = $stmt->fetch();
 ```
 
-### StatementInterface Abstraction
+### Fluent Query Builder (`QueryBuilder.php`)
 
-Results returned from `query()` implement `StatementInterface` (`src/Core/Database/Drivers/Abstract/StatementInterface.php`):
+The `QueryBuilder` class provides an expressive, SQL-injection safe API for building and executing queries:
 
-- **`fetch(): array|false`**: Returns the next row as an associative array.
-- **`fetchAll(): array`**: Returns all remaining rows.
-- **`fetchColumn(int $index = 0): mixed`**: Returns a single column from the next row.
-- **`rowCount(): int`**: Returns number of affected rows.
+```php
+$users = $connection->table('users')
+    ->select('id', 'name', 'email')
+    ->where('status', '=', 'active')
+    ->where('age', '>=', 18)
+    ->orWhere('role', 'admin')
+    ->orderBy('name', 'DESC')
+    ->limit(10)
+    ->get();
+
+$singleUser = $connection->table('users')->where('id', 1)->first();
+$totalCount = $connection->table('users')->where('status', 'active')->count();
+
+// DML Operations
+$connection->table('users')->insert(['name' => 'Charlie', 'email' => 'charlie@example.com']);
+$connection->table('users')->where('id', 1)->update(['status' => 'suspended']);
+$connection->table('users')->where('status', 'expired')->delete();
+```
+
+- **Parameter Binding**: All `where()`, `orWhere()`, `insert()`, and `update()` values use positional `?` placeholders for parameter binding.
+- **`toSql()` & `getBindings()`**: Inspect compiled SQL strings and parameter bindings for debugging.
 
 ---
 

@@ -431,8 +431,43 @@ $stmt = $db->query('SELECT * FROM users WHERE email = ?', ['alice@example.com'])
 // Fetch single row
 $user = $stmt->fetch();
 
-// Fetch all rows
-$allUsers = $db->query('SELECT * FROM users')->fetchAll();
+### Using the Fluent Query Builder
+
+Instead of writing raw SQL strings, use `$db->table()` to construct safe, fluent queries:
+
+```php
+// SELECT with WHERE, ORDER BY, LIMIT, and OFFSET
+$users = $db->table('users')
+    ->select('id', 'name', 'email')
+    ->where('status', 'active')
+    ->where('age', '>=', 18)
+    ->orWhere('role', 'admin')
+    ->orderBy('name', 'ASC')
+    ->limit(15)
+    ->get();
+
+// Fetch single record or null
+$user = $db->table('users')->where('id', 42)->first();
+
+// Retrieve aggregate count
+$count = $db->table('users')->where('status', 'pending')->count();
+
+// Insert record
+$success = $db->table('users')->insert([
+    'name'   => 'Makarios',
+    'email'  => 'makarios@example.com',
+    'status' => 'active'
+]);
+
+// Update records (returns affected rows count)
+$updatedRows = $db->table('users')
+    ->where('email', 'makarios@example.com')
+    ->update(['status' => 'verified']);
+
+// Delete records (returns affected rows count)
+$deletedRows = $db->table('users')
+    ->where('status', 'expired')
+    ->delete();
 ```
 
 ### Transaction Control
