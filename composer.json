@@ -18,7 +18,8 @@
     },
     "autoload": {
         "psr-4": {
-            "Phue\\": "src/"
+            "Phue\\": "src/",
+            "App\\": "App/"
         }
     },
     "autoload-dev": {
