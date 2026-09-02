@@ -155,7 +155,7 @@ class QueryBuilder
     /**
      * Executes the query and returns all matching records.
      *
-     * @return array<int, array<string, mixed>>
+     * @return array<int, mixed>
      */
     public function get(): array
     {
@@ -166,9 +166,9 @@ class QueryBuilder
     /**
      * Executes the query and returns the first matching record or null.
      *
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>|object|null
      */
-    public function first(): ?array
+    public function first(): array|object|null
     {
         $this->limit(1);
         $stmt = $this->connection->query($this->toSql(), $this->getBindings());
