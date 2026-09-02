@@ -62,6 +62,10 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `SseResponse` | `Events/Sse/SseResponse.php` | Specialized HTTP Response for Server-Sent Events (SSE) Streaming |
 | `SseStreamer` | `Events/Sse/SseStreamer.php` | Server-Sent Events (SSE) Protocol Formatter and Streamer |
 | `Broadcastable` | `Events/Attribute/Broadcastable.php` | Attribute marking models for automatic real-time event broadcasting |
+| `HealthChecker` | `Core/Health/HealthChecker.php` | Diagnostic health checker evaluating database, Redis, memory, and disk probes |
+| `SecurityMiddleware` | `Core/Security/SecurityMiddleware.php` | Production Security Hardening Middleware injecting OWASP defense headers |
+| `DeployCommand` | `Core/Console/Commands/DeployCommand.php` | Zero-Downtime Atomic Release Deployment Handler |
+| `BenchmarkRunner` | `tests/Benchmark/BenchmarkRunner.php` | Automated Benchmark Suite measuring container latency & HTTP throughput |
 
 ---
 
@@ -790,6 +794,28 @@ Phue includes a pub/sub Event Bus subsystem supporting distributed messaging and
 - **`SseResponse` (`src/Events/Sse/SseResponse.php`)**: Specialized HTTP Response pre-configured with streaming headers (`text/event-stream`, `no-cache`, `keep-alive`, `X-Accel-Buffering: no`).
 - **`SseStreamer` (`src/Events/Sse/SseStreamer.php`)**: Formatter producing standard SSE event stream text blocks (`id`, `event`, `data`).
 - **`Broadcastable` (`src/Events/Attribute/Broadcastable.php`)**: Attribute for marking Active Record Models for real-time event broadcasting on CRUD mutations.
+
+---
+
+## 17. Production Hardening, Health Monitoring & Zero-Downtime Deployment (`Phue\Core\Health`, `Phue\Core\Security`, `Phue\Core\Console\Commands`)
+
+Enterprise-grade production readiness features ensuring high availability, security defense, and zero-downtime releases.
+
+### Health Probes (`src/Core/Health/`)
+- **`HealthChecker` (`src/Core/Health/HealthChecker.php`)**: Evaluates real-time health metrics for Kubernetes/AWS ALB probes:
+  - Database connectivity (`SELECT 1`).
+  - Redis server PING response.
+  - Memory consumption limits.
+  - Filesystem disk space availability.
+
+### Security Hardening (`src/Core/Security/`)
+- **`SecurityMiddleware` (`src/Core/Security/SecurityMiddleware.php`)**: Production defense middleware injecting strict OWASP HTTP headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, HSTS `Strict-Transport-Security`, `Content-Security-Policy`).
+
+### Zero-Downtime Deployment (`src/Core/Console/Commands/`)
+- **`DeployCommand` (`src/Core/Console/Commands/DeployCommand.php`)**: Atomic release manager executing build creation, static AOT compilation, database migrations, and symlink swapping (`current_temp` -> `current`) without dropped requests.
+
+### Automated Benchmark Suite (`tests/Benchmark/`)
+- **`BenchmarkRunner` (`tests/Benchmark/BenchmarkRunner.php`)**: Measures container DI latency (nanoseconds per operation) and HTTP throughput (Requests Per Second).
 
 ---
 

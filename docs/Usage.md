@@ -864,6 +864,42 @@ class Order extends ActiveRecord
 }
 ```
 
+### 15. Production Hardening, Health Probes & Zero-Downtime Deployment
+
+#### Running Diagnostic Health Probes
+
+```php
+use Phue\Core\Health\HealthChecker;
+
+$checker = new HealthChecker(
+    pdo: $db->getPdo(),
+    redis: $redis,
+    maxMemoryThresholdMb: 128.0
+);
+
+// Evaluate probes for Kubernetes / ALB (/health/ready)
+$report = $checker->check();
+if (!$report['healthy']) {
+    return new Response(json_encode($report), 503, ['Content-Type' => 'application/json']);
+}
+```
+
+#### Enforcing Security Hardening Middleware
+
+```php
+use Phue\Core\Security\SecurityMiddleware;
+
+$middleware = new SecurityMiddleware();
+$hardenedResponse = $middleware->handle($response);
+```
+
+#### Triggering Zero-Downtime Atomic Deployment
+
+```bash
+# Execute zero-downtime deployment script
+./bin/phue deploy
+```
+
 ---
 
 ## 11. Running & Testing Locally
