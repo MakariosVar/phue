@@ -17,4 +17,11 @@ interface PdoDriverInterface extends DriverInterface
      * @return PDO
      */
     public function getPdo(): PDO;
+
+    /**
+     * Returns the driver name identifier (e.g. 'sqlite', 'mysql', 'pgsql').
+     *
+     * @return string
+     */
+    public function getName(): string;
 }

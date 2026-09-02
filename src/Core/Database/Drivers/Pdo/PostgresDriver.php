@@ -43,4 +43,12 @@ class PostgresDriver extends AbstractPdoDriver
             throw new RuntimeException("PostgreSQL Connection Error: " . $e->getMessage(), (int) $e->getCode());
         }
     }
+
+    /**
+     * Returns the driver name.
+     */
+    public function getName(): string
+    {
+        return 'pgsql';
+    }
 }

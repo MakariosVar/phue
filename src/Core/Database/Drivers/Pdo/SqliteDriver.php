@@ -37,4 +37,12 @@ class SqliteDriver extends AbstractPdoDriver
             throw new RuntimeException("SQLite Connection Error: " . $e->getMessage(), (int) $e->getCode(), $e);
         }
     }
+
+    /**
+     * Returns the driver name.
+     */
+    public function getName(): string
+    {
+        return 'sqlite';
+    }
 }

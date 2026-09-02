@@ -68,4 +68,9 @@ interface DriverInterface
      * Checks if a transaction is currently active.
      */
     public function inTransaction(): bool;
+
+    /**
+     * Returns the lowercased identifier of the driver (e.g. 'sqlite', 'mysql', 'pgsql').
+     */
+    public function getName(): string;
 }

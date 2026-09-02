@@ -43,4 +43,12 @@ class MysqlDriver extends AbstractPdoDriver
             throw new RuntimeException("MySQL Connection Error: " . $e->getMessage(), (int) $e->getCode());
         }
     }
+
+    /**
+     * Returns the driver name.
+     */
+    public function getName(): string
+    {
+        return 'mysql';
+    }
 }
