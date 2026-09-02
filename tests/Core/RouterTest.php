@@ -1,23 +1,30 @@
 <?php
 
-namespace Phue\Tests\Core;
+namespace Phue\Tests\Core\Routing;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Core\Routing\Router;
-use Phue\Core\Routing\RouteMatch;
-use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
+use Phue\Core\Routing\Exceptions\RouteNotFoundException;
+use Phue\Core\Routing\RouteMatch;
+use Phue\Core\Routing\Router;
+use Phue\Core\Routing\Attribute\Route;
 
+/**
+ * Unit tests for Router class.
+ *
+ * @package Phue\Tests\Core\Routing
+ */
 class RouterTest extends TestCase
 {
     private Router $router;
 
     protected function setUp(): void
     {
+        parent::setUp();
         $this->router = new Router();
     }
 
-    public function test_matches_exact_static_route(): void
+    public function testMatchesExactStaticRoute(): void
     {
         $handler = fn () => 'index';
         $this->router->get('/users', $handler);
@@ -29,7 +36,7 @@ class RouterTest extends TestCase
         $this->assertEmpty($match->getParams());
     }
 
-    public function test_extracts_named_route_parameters(): void
+    public function testExtractsNamedRouteParameters(): void
     {
         $handler = fn () => 'show';
         $this->router->get('/users/{id}', $handler);
@@ -40,7 +47,7 @@ class RouterTest extends TestCase
         $this->assertEquals(['id' => '42'], $match->getParams());
     }
 
-    public function test_extracts_multiple_route_parameters(): void
+    public function testExtractsMultipleRouteParameters(): void
     {
         $handler = fn () => 'post_comment';
         $this->router->post('/posts/{postId}/comments/{commentId}', $handler);
@@ -53,7 +60,7 @@ class RouterTest extends TestCase
         ], $match->getParams());
     }
 
-    public function test_throws_route_not_found_exception_for_unknown_uri(): void
+    public function testThrowsRouteNotFoundExceptionForUnknownUri(): void
     {
         $this->router->get('/users', fn () => 'users');
 
@@ -61,7 +68,7 @@ class RouterTest extends TestCase
         $this->router->dispatch('GET', '/non-existent-path');
     }
 
-    public function test_throws_method_not_allowed_exception_when_path_matches_but_method_fails(): void
+    public function testThrowsMethodNotAllowedExceptionWhenPathMatchesButMethodFails(): void
     {
         $this->router->get('/users', fn () => 'get_users');
         $this->router->post('/users', fn () => 'post_users');
@@ -75,7 +82,7 @@ class RouterTest extends TestCase
         }
     }
 
-    public function test_normalizes_trailing_and_leading_slashes(): void
+    public function testNormalizesTrailingAndLeadingSlashes(): void
     {
         $handler = fn () => 'profile';
         $this->router->get('/user/profile/', $handler);
@@ -85,7 +92,7 @@ class RouterTest extends TestCase
         $this->assertSame($handler, $match->getHandler());
     }
 
-    public function test_ignores_query_strings_during_dispatch(): void
+    public function testIgnoresQueryStringsDuringDispatch(): void
     {
         $handler = fn () => 'search';
         $this->router->get('/search', $handler);
@@ -93,5 +100,81 @@ class RouterTest extends TestCase
         $match = $this->router->dispatch('GET', '/search?q=phue&page=1');
 
         $this->assertSame($handler, $match->getHandler());
+    }
+
+    public function testMatchesInlineTypeConstraints(): void
+    {
+        $handler = fn () => 'user_by_int_id';
+        $this->router->get('/users/{id:int}', $handler);
+
+        // Valid integer ID should match
+        $match = $this->router->dispatch('GET', '/users/123');
+        $this->assertSame($handler, $match->getHandler());
+        $this->assertSame(['id' => '123'], $match->getParams());
+
+        // Non-integer ID should fail matching
+        $this->expectException(RouteNotFoundException::class);
+        $this->router->dispatch('GET', '/users/abc');
+    }
+
+    public function testMatchesWhereConstraints(): void
+    {
+        $handler = fn () => 'user_custom_regex';
+        $this->router->get('/users/{id}', $handler, ['id' => '[0-9]{3}']);
+
+        // 3-digit ID matches
+        $match = $this->router->dispatch('GET', '/users/999');
+        $this->assertSame($handler, $match->getHandler());
+
+        // Non-matching regex fails
+        $this->expectException(RouteNotFoundException::class);
+        $this->router->dispatch('GET', '/users/12');
+    }
+
+    public function testStaticRoutesTakePrecedenceOverDynamicRoutes(): void
+    {
+        $dynamicHandler = fn () => 'dynamic';
+        $staticHandler = fn () => 'static';
+
+        // Register dynamic route FIRST to verify sorting works
+        $this->router->get('/users/{id}', $dynamicHandler);
+        $this->router->get('/users/new', $staticHandler);
+
+        $match = $this->router->dispatch('GET', '/users/new');
+
+        // Should resolve to staticHandler instead of dynamicHandler with id='new'
+        $this->assertSame($staticHandler, $match->getHandler());
+        $this->assertEmpty($match->getParams());
+    }
+
+    public function testRegistersRoutesFromControllerAttributes(): void
+    {
+        $this->router->registerController(RouterTestStubController::class);
+
+        // 1. Dispatch class-prefix + method route
+        $indexMatch = $this->router->dispatch('GET', '/api/v2/products');
+        $this->assertSame([RouterTestStubController::class, 'index'], $indexMatch->getHandler());
+
+        // 2. Dispatch dynamic route with constraint registered via attribute
+        $showMatch = $this->router->dispatch('GET', '/api/v2/products/456');
+        $this->assertSame([RouterTestStubController::class, 'show'], $showMatch->getHandler());
+        $this->assertSame(['id' => '456'], $showMatch->getParams());
+    }
+}
+
+/**
+ * Stub Controller used exclusively for Router integration testing.
+ */
+#[Route('/api/v2/products')]
+class RouterTestStubController
+{
+    #[Route('', methods: 'GET')]
+    public function index(): void
+    {
+    }
+
+    #[Route('/{id:int}', methods: 'GET')]
+    public function show(): void
+    {
     }
 }

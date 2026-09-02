@@ -4,36 +4,103 @@ namespace Phue\Core\Routing;
 
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
+use Phue\Core\Routing\Loader\AttributeRouteLoader;
 
 /**
- * Handles route registration and matching incoming HTTP requests against patterns.
+ * Handles route registration, attribute compilation, and matching HTTP requests against patterns.
+ *
+ * @package Phue\Core\Routing
  */
 class Router
 {
     /**
+     * Preset regex mapping for inline parameter types.
+     */
+    protected const INLINE_TYPES = [
+        'int'   => '\d+',
+        'alpha' => '[a-zA-Z]+',
+        'slug'  => '[a-zA-Z0-9_-]+',
+        'uuid'  => '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}',
+    ];
+
+    /**
      * Registered routes array.
      *
-     * @var array<int, array{method: string, path: string, regex: string, handler: mixed}>
+     * @var array<int, array{
+     *     method: string,
+     *     path: string,
+     *     regex: string,
+     *     handler: mixed,
+     *     paramCount: int,
+     *     middleware: array<string>
+     * }>
      */
     protected array $routes = [];
 
     /**
-     * Register a new route.
-     *
-     * @param string $method HTTP method (GET, POST, PUT, DELETE, etc.)
-     * @param string $path Path pattern (e.g., '/users/{id}')
-     * @param mixed $handler Controller callable or [Controller::class, 'method']
+     * Flag indicating whether routes have been sorted by priority.
      */
-    public function addRoute(string $method, string $path, mixed $handler): self
-    {
+    protected bool $isSorted = false;
+
+    /**
+     * Register a new route manually.
+     *
+     * @param string                $method     HTTP method (GET, POST, PUT, DELETE, etc.)
+     * @param string                $path       Path pattern (e.g., '/users/{id:int}')
+     * @param mixed                 $handler    Controller callable or [Controller::class, 'method']
+     * @param array<string, string> $where      Custom parameter regex constraints
+     * @param array<string>         $middleware Optional route-specific middleware list
+     * @return $this
+     */
+    public function addRoute(
+        string $method,
+        string $path,
+        mixed $handler,
+        array $where = [],
+        array $middleware = []
+    ): self {
         $normalizedPath = $this->normalizePath($path);
+        
+        // Extract inline types and compile final route regex
+        [$cleanPath, $mergedWhere] = $this->parseInlineTypes($normalizedPath, $where);
+        $regex = $this->compileRouteRegex($cleanPath, $mergedWhere);
 
         $this->routes[] = [
-            'method' => strtoupper($method),
-            'path' => $normalizedPath,
-            'regex' => $this->compileRouteRegex($normalizedPath),
-            'handler' => $handler,
+            'method'     => strtoupper($method),
+            'path'       => $normalizedPath,
+            'regex'      => $regex,
+            'handler'    => $handler,
+            'paramCount' => substr_count($cleanPath, '{'),
+            'middleware' => $middleware,
         ];
+
+        $this->isSorted = false;
+
+        return $this;
+    }
+
+    /**
+     * Registers all routes from a controller using AttributeRouteLoader.
+     *
+     * @param class-string $controllerClass
+     * @return $this
+     */
+    public function registerController(string $controllerClass): self
+    {
+        $loader = new AttributeRouteLoader();
+        $routes = $loader->load($controllerClass);
+
+        foreach ($routes as $route) {
+            foreach ($route['methods'] as $method) {
+                $this->addRoute(
+                    $method,
+                    $route['path'],
+                    $route['handler'],
+                    $route['where'],
+                    $route['middleware']
+                );
+            }
+        }
 
         return $this;
     }
@@ -41,40 +108,40 @@ class Router
     /**
      * Helper shorthand to register a GET route.
      */
-    public function get(string $path, mixed $handler): self
+    public function get(string $path, mixed $handler, array $where = [], array $middleware = []): self
     {
-        return $this->addRoute('GET', $path, $handler);
+        return $this->addRoute('GET', $path, $handler, $where, $middleware);
     }
 
     /**
      * Helper shorthand to register a POST route.
      */
-    public function post(string $path, mixed $handler): self
+    public function post(string $path, mixed $handler, array $where = [], array $middleware = []): self
     {
-        return $this->addRoute('POST', $path, $handler);
+        return $this->addRoute('POST', $path, $handler, $where, $middleware);
     }
 
     /**
      * Helper shorthand to register a PUT route.
      */
-    public function put(string $path, mixed $handler): self
+    public function put(string $path, mixed $handler, array $where = [], array $middleware = []): self
     {
-        return $this->addRoute('PUT', $path, $handler);
+        return $this->addRoute('PUT', $path, $handler, $where, $middleware);
     }
 
     /**
      * Helper shorthand to register a DELETE route.
      */
-    public function delete(string $path, mixed $handler): self
+    public function delete(string $path, mixed $handler, array $where = [], array $middleware = []): self
     {
-        return $this->addRoute('DELETE', $path, $handler);
+        return $this->addRoute('DELETE', $path, $handler, $where, $middleware);
     }
 
     /**
      * Dispatch the request matching algorithm against registered routes.
      *
      * @param string $method Incoming HTTP Method
-     * @param string $uri Incoming Request URI
+     * @param string $uri    Incoming Request URI
      * @return RouteMatch
      *
      * @throws RouteNotFoundException
@@ -82,6 +149,10 @@ class Router
      */
     public function dispatch(string $method, string $uri): RouteMatch
     {
+        if (!$this->isSorted) {
+            $this->sortRoutes();
+        }
+
         $path = $this->normalizePath(parse_url($uri, PHP_URL_PATH) ?? '/');
         $method = strtoupper($method);
 
@@ -97,14 +168,14 @@ class Router
             $allowedMethods[] = $route['method'];
 
             if ($route['method'] === $method) {
-                // Filter out integer keys from preg_match results to keep named parameter bindings
+                // Filter out integer keys from preg_match results
                 $params = array_filter(
                     $matches,
                     fn ($key) => is_string($key),
                     ARRAY_FILTER_USE_KEY
                 );
 
-                return new RouteMatch($route['handler'], $params);
+                return new RouteMatch($route['handler'], $params, $route['middleware']);
             }
         }
 
@@ -124,13 +195,71 @@ class Router
     }
 
     /**
-     * Convert standard route pattern into named-capture regular expression.
-     * Example: '/users/{id}' -> '#^/users/(?P<id>[^/]+)$#s'
+     * Parses inline param constraints (e.g. {id:int}) and merges them into the $where constraints array.
+     *
+     * @param string                $path  Raw path pattern.
+     * @param array<string, string> $where Existing parameter constraints.
+     * @return array{0: string, 1: array<string, string>}
      */
-    protected function compileRouteRegex(string $path): string
+    protected function parseInlineTypes(string $path, array $where): array
     {
-        $pattern = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $path);
+        $cleanPath = preg_replace_callback(
+            '/\{([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\}/',
+            function ($matches) use (&$where) {
+                $param = $matches[1];
+                $type = $matches[2];
+
+                if (isset(self::INLINE_TYPES[$type]) && !isset($where[$param])) {
+                    $where[$param] = self::INLINE_TYPES[$type];
+                }
+
+                return '{' . $param . '}';
+            },
+            $path
+        );
+
+        return [$cleanPath, $where];
+    }
+
+    /**
+     * Convert route pattern into named-capture regular expression with constraint support.
+     *
+     * @param string                $path  Clean path pattern with simple {param} placeholders.
+     * @param array<string, string> $where Regex rules per parameter.
+     * @return string Compiled PCRE Regex pattern.
+     */
+    protected function compileRouteRegex(string $path, array $where): string
+    {
+        $pattern = preg_replace_callback(
+            '/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/',
+            function ($matches) use ($where) {
+                $param = $matches[1];
+                $constraint = $where[$param] ?? '[^/]+';
+
+                return '(?P<' . $param . '>' . $constraint . ')';
+            },
+            $path
+        );
 
         return '#^' . $pattern . '$#s';
+    }
+
+    /**
+     * Sorts routes so static routes are matched before dynamic routes.
+     */
+    protected function sortRoutes(): void
+    {
+        usort($this->routes, function ($a, $b) {
+            if ($a['paramCount'] !== $b['paramCount']) {
+                return $a['paramCount'] <=> $b['paramCount'];
+            }
+
+            $prefixLengthA = strpos($a['path'], '{') ?: strlen($a['path']);
+            $prefixLengthB = strpos($b['path'], '{') ?: strlen($b['path']);
+
+            return $prefixLengthB <=> $prefixLengthA;
+        });
+
+        $this->isSorted = true;
     }
 }

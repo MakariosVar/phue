@@ -9,6 +9,8 @@ use Throwable;
 
 /**
  * Main application entry point and dependency coordinator.
+ *
+ * @package Phue\Core
  */
 class Application
 {
@@ -57,13 +59,14 @@ class Application
     }
 
     /**
-     * Handle incoming HTTP Request through middleware pipeline and router.
+     * Handle incoming HTTP Request through global middleware pipeline and router.
      *
      * @param Request $request
      * @return Response
      */
     public function handle(Request $request): Response
     {
+        // Build the global middleware pipeline
         $pipeline = array_reduce(
             array_reverse($this->middlewareStack),
             fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
@@ -87,13 +90,13 @@ class Application
             $message = $this->debug ? $e->getMessage() : 'Internal Server Error';
             return new Response($message, 500);
         } finally {
-            // Clean the request-scoped services automaticaly at the end of the circle!
+            // Clean request-scoped services automatically at the end of the lifecycle
             $this->container->flushScope();
         }
     }
 
     /**
-     * Dispatch request to router and resolve handler execution.
+     * Dispatch request to router, wrap route-level middlewares, and resolve handler execution.
      *
      * @param Request $request
      * @return Response
@@ -107,17 +110,43 @@ class Application
 
         $handler = $routeMatch->getHandler();
         $params = $routeMatch->getParams();
+        $routeMiddlewares = $routeMatch->getMiddleware();
 
-        if (is_string($handler) && str_contains($handler, '@')) {
-            [$class, $method] = explode('@', $handler, 2);
-            $handler = [$this->container->get($class), $method];
-        } elseif (is_array($handler) && is_string($handler[0])) {
-            $handler[0] = $this->container->get($handler[0]);
+        // Core controller execution (Innermost layer of the onion)
+        $coreHandler = function (Request $req) use ($handler, $params): Response {
+            $resolvedHandler = $handler;
+
+            if (is_string($resolvedHandler) && str_contains($resolvedHandler, '@')) {
+                [$class, $method] = explode('@', $resolvedHandler, 2);
+                $resolvedHandler = [$this->container->get($class), $method];
+            } elseif (is_array($resolvedHandler) && is_string($resolvedHandler[0])) {
+                $resolvedHandler[0] = $this->container->get($resolvedHandler[0]);
+            }
+
+            $result = call_user_func($resolvedHandler, $req, $params);
+
+            return $this->normalizeResponse($result);
+        };
+
+        // If no route-specific middlewares exist, invoke core handler directly
+        if (empty($routeMiddlewares)) {
+            return $coreHandler($request);
         }
 
-        $result = call_user_func($handler, $request, $params);
+        // Build route-specific middleware pipeline (Class-level -> Method-level)
+        $routePipeline = array_reduce(
+            array_reverse($routeMiddlewares),
+            fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
+                if (is_string($middleware)) {
+                    $middleware = $this->container->get($middleware);
+                }
 
-        return $this->normalizeResponse($result);
+                return $middleware($req, $next);
+            },
+            $coreHandler
+        );
+
+        return $routePipeline($request);
     }
 
     /**
