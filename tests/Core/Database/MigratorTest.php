@@ -57,16 +57,20 @@ class MigratorTest extends TestCase
      */
     public function testRunExecutesPendingMigrationsInBatch(): void
     {
+        // $m1 created first (timestamp +0s)
         $m1 = $this->createUniqueDummyMigrationFile(
             'create_users_table',
             "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "DROP TABLE users;"
+            "DROP TABLE users;",
+            0
         );
 
+        // $m2 created second (timestamp +1s) ensuring deterministic chronological sorting
         $m2 = $this->createUniqueDummyMigrationFile(
             'create_posts_table',
             "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT);",
-            "DROP TABLE posts;"
+            "DROP TABLE posts;",
+            1
         );
 
         $migrator = new Migrator($this->db, $this->tempMigrationsDir);
@@ -169,13 +173,19 @@ class MigratorTest extends TestCase
     /**
      * Helper method to generate unique migration filenames and class names dynamically per test run.
      *
+     * @param int $offsetSeconds Allows artificial timestamp offset to guarantee chronological order.
      * @return array{filename: string, class: string, path: string}
      */
-    private function createUniqueDummyMigrationFile(string $actionName, string $upSql, string $downSql): array
-    {
+    private function createUniqueDummyMigrationFile(
+        string $actionName,
+        string $upSql,
+        string $downSql,
+        int $offsetSeconds = 0
+    ): array {
         $uniqueId = substr(md5(uniqid((string) mt_rand(), true)), 0, 8);
-        $timestamp = date('Y_m_d_His');
-        $filename = "m{$timestamp}_{$uniqueId}_{$actionName}";
+        $timestamp = date('Y_m_d_His', time() + $offsetSeconds);
+        
+        $filename = "m{$timestamp}_{$actionName}_{$uniqueId}";
         
         $className = implode('', array_map('ucfirst', explode('_', $filename)));
         $filePath = $this->tempMigrationsDir . '/' . $filename . '.php';
