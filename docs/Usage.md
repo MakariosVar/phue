@@ -666,6 +666,46 @@ foreach ($actions as $action) {
 ./bin/phue schii:migrate "App\Models\Product"
 ```
 
+### Explicit Database Migrations
+
+For complex schema refactorings, column renames, or type changes, use explicit migration files:
+
+#### Generating Migration Files
+
+```bash
+./bin/phue make:migration create_orders_table
+# Generates: database/migrations/m2026_09_03_014500_create_orders_table.php
+```
+
+#### Writing Migration Logic
+
+```php
+use Phue\Core\Database\Migration;
+
+final class M2026_09_03_014500_Create_Orders_Table extends Migration
+{
+    public function up(): void
+    {
+        $this->execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, total REAL);");
+    }
+
+    public function down(): void
+    {
+        $this->dropTable('orders');
+    }
+}
+```
+
+#### Running & Rolling Back Migrations
+
+```bash
+# Run all pending migrations
+./bin/phue migrate
+
+# Rollback the last batch of executed migrations
+./bin/phue migrate:rollback
+```
+
 ---
 
 ## 11. Running & Testing Locally

@@ -31,6 +31,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `ActiveQuery` | `Database/ActiveRecord/ActiveQuery.php` | Model-aware QueryBuilder returning hydrated model instances |
 | `Console\Application` | `Console/Application.php` | CLI Application runner, command registry, and ANSI help menu |
 | `CommandInterface` | `Console/CommandInterface.php` | Interface contract for all CLI commands |
+| `Migration` | `Database/Migration.php` | Abstract base class for explicit database migrations (`up`/`down`) |
+| `Migrator` | `Database/Migrator.php` | Migration engine managing tracking table, batching, and transaction isolation |
 | `SqlIdentifier` | `Database/SqlIdentifier.php` | SQL identifier validation & dialect-aware quoting utility |
 | `Schii\SchemaRegistry` | `Schii/Schema/SchemaRegistry.php` | Reflection parser & cache for `#[UI]` and `#[Field]` attributes |
 | `Schii\ModelEndpoint` | `Schii/Endpoint/ModelEndpoint.php` | Zero-Controller REST CRUD Endpoint & JSON Schema Protocol handler |
