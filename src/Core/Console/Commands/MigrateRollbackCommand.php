@@ -1,0 +1,84 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Phue\Core\Console\Commands;
+
+use Phue\Core\Console\CommandInterface;
+use Phue\Core\Database\Connection;
+use Phue\Core\Database\Migrator;
+
+/**
+ * CLI Command to rollback the last batch of executed migrations.
+ *
+ * @package Phue\Core\Console\Commands
+ */
+final class MigrateRollbackCommand implements CommandInterface
+{
+    /**
+     * Retrieves command identifier name.
+     *
+     * @return string Command name.
+     */
+    public function getName(): string
+    {
+        return 'migrate:rollback';
+    }
+
+    /**
+     * Retrieves command description.
+     *
+     * @return string Command description.
+     */
+    public function getDescription(): string
+    {
+        return 'Rolls back the last batch of executed migrations.';
+    }
+
+    /**
+     * Executes migration batch rollback.
+     *
+     * @param array<int, string> $args Command arguments.
+     * @return int Exit code (0 for success, 1 for failure).
+     */
+    public function execute(array $args): int
+    {
+        $db = $this->resolveConnection();
+        $path = getcwd() . '/database/migrations';
+
+        $migrator = new Migrator($db, $path);
+
+        fwrite(STDOUT, "Rolling back last migration batch...\n");
+
+        try {
+            $rolledBack = $migrator->rollback();
+
+            if (empty($rolledBack)) {
+                fwrite(STDOUT, "Nothing to rollback.\n");
+                return 0;
+            }
+
+            foreach ($rolledBack as $migration) {
+                fwrite(STDOUT, "Rolled back: {$migration}\n");
+            }
+
+            return 0;
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "Rollback error: " . $e->getMessage() . "\n");
+            return 1;
+        }
+    }
+
+    /**
+     * Resolves connection instance.
+     *
+     * @return Connection
+     */
+    private function resolveConnection(): Connection
+    {
+        return new Connection([
+            'driver' => 'sqlite',
+            'database' => getcwd() . '/database/database.sqlite',
+        ]);
+    }
+}

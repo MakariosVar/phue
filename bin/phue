@@ -1,18 +1,34 @@
 #!/usr/bin/env php
 <?php
 
+declare(strict_types=1);
+
+/**
+ * Phue Framework CLI Launcher
+ */
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Console\Application;
-use Phue\Core\Console\Commands\ServeCommand;
 use Phue\Core\Console\Commands\MakeControllerCommand;
+use Phue\Core\Console\Commands\MakeMigrationCommand;
 use Phue\Core\Console\Commands\MakeModelCommand;
+use Phue\Core\Console\Commands\MigrateCommand;
+use Phue\Core\Console\Commands\MigrateRollbackCommand;
+use Phue\Core\Console\Commands\SchiiMigrateCommand;
+use Phue\Core\Console\Commands\ServeCommand;
 
 $app = new Application('1.0.0');
 
-// Register Framework Commands
+/**
+ * Register framework CLI commands into application engine container.
+ */
 $app->add(new ServeCommand())
     ->add(new MakeControllerCommand())
-    ->add(new MakeModelCommand());
+    ->add(new MakeModelCommand())
+    ->add(new SchiiMigrateCommand())
+    ->add(new MakeMigrationCommand())
+    ->add(new MigrateCommand())
+    ->add(new MigrateRollbackCommand());
 
 exit($app->run($_SERVER['argv']));

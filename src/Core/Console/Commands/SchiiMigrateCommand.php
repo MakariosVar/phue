@@ -4,54 +4,91 @@ declare(strict_types=1);
 
 namespace Phue\Core\Console\Commands;
 
-use Phue\Core\Console\Command;
-use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Console\CommandInterface;
+use Phue\Core\Database\Connection;
 use Phue\Schii\Migration\AutoMigrator;
 use Phue\Schii\Schema\SchemaRegistry;
 
 /**
- * CLI Command to auto-migrate database schema directly from Schii attributes.
- * Usage: ./bin/phue schii:migrate App\Models\Product
+ * CLI Command to run Schii declarative auto-migration for a target model class.
+ *
+ * @package Phue\Core\Console\Commands
  */
-final class SchiiMigrateCommand extends Command
+final class SchiiMigrateCommand implements CommandInterface
 {
-    protected string $signature = 'schii:migrate {model : The fully qualified class name of the Model}';
-    protected string $description = 'Auto-migrate database table based on Schii Model attributes';
-
-    public function handle(SchemaRegistry $schemaRegistry): int
+    /**
+     * Retrieves command identifier name.
+     *
+     * @return string Command name.
+     */
+    public function getName(): string
     {
-        $modelClass = $this->argument('model');
+        return 'schii:migrate';
+    }
+
+    /**
+     * Retrieves command description.
+     *
+     * @return string Command description.
+     */
+    public function getDescription(): string
+    {
+        return 'Runs declarative Schii auto-migration for a specific ActiveRecord model class.';
+    }
+
+    /**
+     * Executes declarative auto-migration on the requested model class.
+     *
+     * @param array<int, string> $args Command arguments containing model class.
+     * @return int Exit code (0 for success, 1 for failure).
+     */
+    public function execute(array $args): int
+    {
+        $modelClass = $args[0] ?? null;
+
+        if (!$modelClass) {
+            fwrite(STDERR, "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n");
+            return 1;
+        }
 
         if (!class_exists($modelClass)) {
-            $this->error("Model class '{$modelClass}' not found!");
+            fwrite(STDERR, "Error: Model class '{$modelClass}' not found.\n");
             return 1;
         }
-
-        if (!is_subclass_of($modelClass, BaseActiveRecord::class)) {
-            $this->error("Class '{$modelClass}' must extend BaseActiveRecord.");
-            return 1;
-        }
-
-        $this->info("Scanning Schii schema for '{$modelClass}'...");
 
         try {
-            $migrator = new AutoMigrator($schemaRegistry, BaseActiveRecord::getConnection());
+            $connection = $this->resolveConnection();
+            $registry = new SchemaRegistry();
+            $migrator = new AutoMigrator($registry, $connection);
+
             $actions = $migrator->migrate($modelClass);
 
             if (empty($actions)) {
-                $this->success("Database schema is already up to date!");
+                fwrite(STDOUT, "Schema up to date for '{$modelClass}'. No changes applied.\n");
                 return 0;
             }
 
             foreach ($actions as $action) {
-                $this->line(" - {$action}");
+                fwrite(STDOUT, "[Schii] {$action}\n");
             }
 
-            $this->success("Schii Auto-Migration completed successfully!");
             return 0;
         } catch (\Throwable $e) {
-            $this->error("Migration failed: " . $e->getMessage());
+            fwrite(STDERR, "Schii Migration Error: " . $e->getMessage() . "\n");
             return 1;
         }
+    }
+
+    /**
+     * Resolves database connection instance.
+     *
+     * @return Connection
+     */
+    private function resolveConnection(): Connection
+    {
+        return new Connection([
+            'driver' => 'sqlite',
+            'database' => getcwd() . '/database/database.sqlite',
+        ]);
     }
 }
