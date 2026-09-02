@@ -86,6 +86,9 @@ class Application
         } catch (Throwable $e) {
             $message = $this->debug ? $e->getMessage() : 'Internal Server Error';
             return new Response($message, 500);
+        } finally {
+            // Clean the request-scoped services automaticaly at the end of the circle!
+            $this->container->flushScope();
         }
     }
 
