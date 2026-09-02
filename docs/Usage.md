@@ -553,7 +553,43 @@ $user->delete();
 
 ---
 
-## 9. Running & Testing Locally
+## 9. CLI Console Tool (`bin/phue`)
+
+Phue provides a terminal executable `./bin/phue` for managing dev servers and generating code.
+
+### Available Commands List
+
+```bash
+./bin/phue list
+```
+
+### Launch Development Web Server (`serve`)
+
+```bash
+# Starts server on 127.0.0.1:8000
+./bin/phue serve
+
+# Override port or host
+./bin/phue serve --port=8080 --host=0.0.0.0
+```
+
+### Generate Controller Class (`make:controller`)
+
+```bash
+./bin/phue make:controller UserController
+# Creates App/Controllers/UserController.php with pre-configured #[Route] attribute
+```
+
+### Generate Model Class (`make:model`)
+
+```bash
+./bin/phue make:model Product
+# Creates App/Models/Product.php extending BaseActiveRecord
+```
+
+---
+
+## 10. Running & Testing Locally
 
 ### Using Docker Wrapper (`phue-docker`)
 

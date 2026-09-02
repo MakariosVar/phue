@@ -29,6 +29,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `QueryBuilder` | `Database/QueryBuilder.php` | Fluent SQL query builder with parameter binding |
 | `BaseActiveRecord` | `Database/ActiveRecord/BaseActiveRecord.php` | Abstract Active Record model with persistence & dirty state tracking |
 | `ActiveQuery` | `Database/ActiveRecord/ActiveQuery.php` | Model-aware QueryBuilder returning hydrated model instances |
+| `Console\Application` | `Console/Application.php` | CLI Application runner, command registry, and ANSI help menu |
+| `CommandInterface` | `Console/CommandInterface.php` | Interface contract for all CLI commands |
 
 ---
 
@@ -640,7 +642,25 @@ $allUsers   = User::all();                       // Returns array of User instan
 
 ---
 
-## 10. Intentional design decisions (why it's built this way)
+## 10. CLI Console Subsystem Architecture
+
+The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/phue`.
+
+### Core Components
+
+1. **`CommandInterface` (`CommandInterface.php`)**: Contract for all executable CLI commands requiring `getName()`, `getDescription()`, and `execute(array $args): int`.
+2. **`Console\Application` (`Application.php`)**: Entry point registry. Handles argument extraction (`$argv`), ANSI colorized help menu rendering, error formatting via `STDERR`, and command execution dispatching.
+3. **`bin/phue`**: Shebang script (`#!/usr/bin/env php`) initializing the autoloader and running `Console\Application`.
+
+### Built-in Commands (`src/Core/Console/Commands/`)
+
+- **`ServeCommand` (`serve`)**: Launches local development HTTP server (`php -S 127.0.0.1:8000`).
+- **`MakeControllerCommand` (`make:controller`)**: Generates controller classes with pre-filled `#[Route]` attributes.
+- **`MakeModelCommand` (`make:model`)**: Generates Active Record model classes extending `BaseActiveRecord`.
+
+---
+
+## 11. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:
 
