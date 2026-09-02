@@ -24,6 +24,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `Middleware` | `Routing/Attribute/Middleware.php` | Attribute for attaching middleware to classes or methods |
 | `AttributeRouteLoader` | `Routing/Loader/AttributeRouteLoader.php` | Reflection loader & directory scanner for controller attributes |
 | `Application` | `Application.php` | Composes everything: global & route middleware pipeline → router → handler → response |
+| `Connection` | `Database/Connection.php` | Connection Manager & Driver Factory |
+| `DriverInterface` | `Database/Drivers/Abstract/DriverInterface.php` | Universal database contract for PDO and HTTP Edge drivers |
 
 ---
 
@@ -549,7 +551,53 @@ try {
 
 ---
 
-## 8. Intentional design decisions (why it's built this way)
+## 8. Database Connection & Driver Architecture
+
+The Database Layer provides a unified, driver-agnostic abstraction for executing queries, handling transactions, and fetching results.
+
+### Abstraction Hierarchy
+
+```
+DriverInterface (Universal Contract)
+├── PdoDriverInterface → AbstractPdoDriver
+│   ├── SqliteDriver  (sqlite::memory: or file-based)
+│   ├── MysqlDriver   (mysql:host=...;charset=utf8mb4)
+│   └── PostgresDriver (pgsql:host=...;sslmode=...)
+└── HttpDriverInterface (Serverless Edge Drivers: Neon, Turso, PlanetScale)
+```
+
+### Connection Manager (`Connection.php`)
+
+The `Connection` class acts as the unified factory and driver manager. It resolves the concrete driver implementation from the configuration array:
+
+```php
+use Phue\Core\Database\Connection;
+
+$connection = new Connection([
+    'driver'   => 'sqlite',
+    'database' => ':memory:',
+]);
+
+// Proxy calls directly to active driver
+$connection->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+$connection->execute('INSERT INTO users (name) VALUES (?)', ['Makarios']);
+
+$stmt = $connection->query('SELECT * FROM users WHERE id = ?', [1]);
+$user = $stmt->fetch();
+```
+
+### StatementInterface Abstraction
+
+Results returned from `query()` implement `StatementInterface` (`src/Core/Database/Drivers/Abstract/StatementInterface.php`):
+
+- **`fetch(): array|false`**: Returns the next row as an associative array.
+- **`fetchAll(): array`**: Returns all remaining rows.
+- **`fetchColumn(int $index = 0): mixed`**: Returns a single column from the next row.
+- **`rowCount(): int`**: Returns number of affected rows.
+
+---
+
+## 9. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:
 

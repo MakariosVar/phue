@@ -376,7 +376,84 @@ return (new Response())
 
 ---
 
-## 7. Running & Testing Locally
+## 7. Database Connections & Drivers
+
+Phue provides a unified `Connection` manager supporting SQLite, MySQL, PostgreSQL, and Serverless HTTP drivers.
+
+### Instantiating a Connection
+
+```php
+use Phue\Core\Database\Connection;
+
+// 1. SQLite Connection
+$db = new Connection([
+    'driver'   => 'sqlite',
+    'database' => __DIR__ . '/../storage/database.sqlite', // or ':memory:'
+]);
+
+// 2. MySQL Connection
+$db = new Connection([
+    'driver'   => 'mysql',
+    'host'     => '127.0.0.1',
+    'port'     => 3306,
+    'database' => 'phue_db',
+    'username' => 'root',
+    'password' => 'secret',
+    'charset'  => 'utf8mb4',
+]);
+
+// 3. PostgreSQL Connection
+$db = new Connection([
+    'driver'   => 'pgsql',
+    'host'     => '127.0.0.1',
+    'port'     => 5432,
+    'database' => 'phue_db',
+    'username' => 'postgres',
+    'password' => 'secret',
+    'sslmode'  => 'prefer',
+]);
+```
+
+### Executing Queries & Statements
+
+```php
+// Execute DDL or DML statements (returns affected rows count)
+$affected = $db->execute(
+    'INSERT INTO users (name, email) VALUES (?, ?)',
+    ['Alice', 'alice@example.com']
+);
+
+$newId = $db->lastInsertId();
+
+// Prepared Query Execution (returns StatementInterface)
+$stmt = $db->query('SELECT * FROM users WHERE email = ?', ['alice@example.com']);
+
+// Fetch single row
+$user = $stmt->fetch();
+
+// Fetch all rows
+$allUsers = $db->query('SELECT * FROM users')->fetchAll();
+```
+
+### Transaction Control
+
+```php
+$db->beginTransaction();
+
+try {
+    $db->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [1]);
+    $db->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [2]);
+
+    $db->commit();
+} catch (\Throwable $e) {
+    $db->rollBack();
+    throw $e;
+}
+```
+
+---
+
+## 8. Running & Testing Locally
 
 ### Using Docker Wrapper (`phue-docker`)
 
