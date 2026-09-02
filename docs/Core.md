@@ -31,8 +31,11 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `ActiveQuery` | `Database/ActiveRecord/ActiveQuery.php` | Model-aware QueryBuilder returning hydrated model instances |
 | `Console\Application` | `Console/Application.php` | CLI Application runner, command registry, and ANSI help menu |
 | `CommandInterface` | `Console/CommandInterface.php` | Interface contract for all CLI commands |
+| `SqlIdentifier` | `Database/SqlIdentifier.php` | SQL identifier validation & dialect-aware quoting utility |
 | `Schii\SchemaRegistry` | `Schii/Schema/SchemaRegistry.php` | Reflection parser & cache for `#[UI]` and `#[Field]` attributes |
 | `Schii\ModelEndpoint` | `Schii/Endpoint/ModelEndpoint.php` | Zero-Controller REST CRUD Endpoint & JSON Schema Protocol handler |
+| `Schii\AutoMigrator` | `Schii/Migration/AutoMigrator.php` | Inspects database tables and auto-migrates missing columns and tables based on Schii Schema |
+| `Schii\SchemaToSqlConverter` | `Schii/Migration/SchemaToSqlConverter.php` | Converts Schii ModelSchema definitions into dialect-specific SQL DDL statements |
 
 ---
 
@@ -685,6 +688,14 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
   - Sorting across `sortable` fields (`ASC`/`DESC`).
   - Pagination metadata (`total`, `page`, `limit`, `last_page`).
 - **`show()`, `store()`, `update()`, `delete()`**: Full REST CRUD handlers for registered entities.
+
+### Auto-Migration Engine (`src/Schii/Migration/`)
+
+- **`AutoMigrator` (`src/Schii/Migration/AutoMigrator.php`)**: Inspects active database tables (`tableExists`, `getExistingColumns`) and auto-migrates missing tables (`CREATE TABLE`) or missing fields (`ALTER TABLE ADD COLUMN`) based on model `ModelSchema`.
+  - **Transaction Wrapping**: All migration steps run inside a database transaction (`beginTransaction()` / `commit()`) with automatic `rollBack()` on error.
+  - **Multi-tiered Driver Detection**: Resolves driver names via `getName()` interface contract, `instanceof` class checks, or string fallback.
+- **`SchemaToSqlConverter` (`src/Schii/Migration/SchemaToSqlConverter.php`)**: Generates dialect-aware SQL DDL queries tailored for SQLite, MySQL, or PostgreSQL (`AUTOINCREMENT` vs `AUTO_INCREMENT` vs `SERIAL`, `TINYINT(1)` vs `BOOLEAN`).
+- **`SqlIdentifier` (`src/Core/Database/SqlIdentifier.php`)**: Sanitizes SQL identifiers with regex whitelist validation (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) and provides dialect-aware identifier quoting (backticks for MySQL/SQLite, double-quotes for PostgreSQL).
 
 ---
 

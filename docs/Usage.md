@@ -639,6 +639,33 @@ $endpoint->registerEntity('products', App\Models\Product::class);
 // DELETE /schii/products/1            -> Delete record
 ```
 
+### Auto-Migrating Database Tables from Schii Schemas
+
+You can auto-migrate missing tables or new columns directly from model schema declarations programmatically or via CLI:
+
+#### Programmatic Auto-Migration
+
+```php
+use Phue\Schii\Migration\AutoMigrator;
+use Phue\Schii\Schema\SchemaRegistry;
+
+$migrator = new AutoMigrator(new SchemaRegistry(), $dbConnection);
+
+// Automatically creates table or ALTERs columns based on Product model attributes
+$actions = $migrator->migrate(App\Models\Product::class);
+
+foreach ($actions as $action) {
+    echo "Migrated: {$action}\n";
+}
+```
+
+#### CLI Command
+
+```bash
+# Run auto-migration for a model
+./bin/phue schii:migrate "App\Models\Product"
+```
+
 ---
 
 ## 11. Running & Testing Locally
