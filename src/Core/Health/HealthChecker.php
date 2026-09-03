@@ -11,28 +11,29 @@ use Throwable;
 /**
  * Diagnostic Health Checker for Cloud-Native Production Monitoring.
  *
- * Performs real-time checks on Database connectivity, Redis availability,
- * system memory consumption, and disk space usage for Kubernetes/Load Balancer probes.
+ * Performs real-time readiness and liveness checks for Database, Redis, Memory, and Storage.
  *
  * @package Phue\Core\Health
  */
 final class HealthChecker
 {
     /**
-     * Initializes the HealthChecker instance with optional services.
+     * Initializes the HealthChecker instance with optional services and configurations.
      *
-     * @param PDO|null $pdo Connected PDO database instance.
-     * @param Redis|null $redis Connected Redis instance.
-     * @param float $maxMemoryThresholdMb Maximum allowable memory limit in MB (default: 128 MB).
+     * @param PDO|null $pdo Connected PDO instance for database probes.
+     * @param Redis|null $redis Connected Redis instance for cache probes.
+     * @param float $maxMemoryThresholdMb Maximum allowable memory threshold in MB (default: 128 MB).
+     * @param string|null $basePath Custom filesystem path for disk free space checks (useful for mounts).
      */
     public function __construct(
         private readonly ?PDO $pdo = null,
         private readonly ?Redis $redis = null,
-        private readonly float $maxMemoryThresholdMb = 128.0
+        private readonly float $maxMemoryThresholdMb = 128.0,
+        private readonly ?string $basePath = null
     ) {}
 
     /**
-     * Evaluates all operational health checks and returns a detailed diagnostics payload.
+     * Evaluates all operational health checks and returns a detailed diagnostics report.
      *
      * @return array{healthy: bool, checks: array<string, array{status: string, message: string}>}
      */
@@ -53,21 +54,18 @@ final class HealthChecker
             }
         }
 
-        return [
-            'healthy' => $isHealthy,
-            'checks' => $checks,
-        ];
+        return ['healthy' => $isHealthy, 'checks' => $checks];
     }
 
     /**
-     * Verifies database connectivity using a lightweight probe query.
+     * Verifies database connectivity using a lightweight query ping.
      *
      * @return array{status: string, message: string}
      */
     private function checkDatabase(): array
     {
         if ($this->pdo === null) {
-            return ['status' => 'UP', 'message' => 'Database connection skipped (null)'];
+            return ['status' => 'UP', 'message' => 'Database check skipped (null)'];
         }
 
         try {
@@ -90,7 +88,7 @@ final class HealthChecker
     private function checkRedis(): array
     {
         if ($this->redis === null) {
-            return ['status' => 'UP', 'message' => 'Redis connection skipped (null)'];
+            return ['status' => 'UP', 'message' => 'Redis check skipped (null)'];
         }
 
         try {
@@ -105,7 +103,7 @@ final class HealthChecker
     }
 
     /**
-     * Checks PHP memory consumption against the maximum configured threshold.
+     * Checks current PHP memory consumption against the maximum configured threshold.
      *
      * @return array{status: string, message: string}
      */
@@ -126,13 +124,15 @@ final class HealthChecker
     }
 
     /**
-     * Checks free disk space in the current filesystem directory.
+     * Checks free disk space at the specified basePath or fallback local directory.
      *
      * @return array{status: string, message: string}
      */
     private function checkDiskSpace(): array
     {
-        $freeSpaceBytes = disk_free_space(__DIR__);
+        $targetPath = $this->basePath ?? __DIR__;
+        $freeSpaceBytes = @disk_free_space($targetPath);
+
         if ($freeSpaceBytes === false || $freeSpaceBytes < 50 * 1024 * 1024) {
             return ['status' => 'DOWN', 'message' => 'Disk space critically low (< 50MB free)'];
         }

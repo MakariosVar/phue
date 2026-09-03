@@ -4,26 +4,34 @@ declare(strict_types=1);
 
 namespace Phue\Core\Security;
 
+use Phue\Core\Request;
 use Phue\Core\Response;
 
 /**
- * Enterprise Production Security Hardening Middleware.
+ * Enterprise Production Security Hardening Middleware (Onion Compliant).
  *
- * Automatically injects essential OWASP HTTP defense headers into all outgoing responses,
- * guarding against Clickjacking, MIME sniffing, XSS attacks, and unencrypted traffic.
+ * Automatically injects essential OWASP HTTP defense headers into outgoing responses
+ * within the HTTP execution pipeline.
  *
  * @package Phue\Core\Security
  */
 final class SecurityMiddleware
 {
     /**
-     * Injects strict production security headers into the HTTP Response object.
+     * Executes the middleware layer within the Onion pipeline.
      *
-     * @param Response $response Incoming HTTP Response.
-     * @return Response Hardened HTTP Response.
+     * Intercepts the HTTP request, delegates execution down the pipeline,
+     * and attaches OWASP security headers to the resulting response.
+     *
+     * @param Request $request Incoming HTTP Request object.
+     * @param callable $next Next middleware closure in the pipeline: fn(Request): Response
+     * @return Response Hardened HTTP Response object containing security headers.
      */
-    public function handle(Response $response): Response
+    public function __invoke(Request $request, callable $next): Response
     {
+        /** @var Response $response */
+        $response = $next($request);
+
         $securityHeaders = [
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'SAMEORIGIN',

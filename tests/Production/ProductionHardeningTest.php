@@ -5,26 +5,28 @@ declare(strict_types=1);
 namespace Phue\Tests\Production;
 
 use PHPUnit\Framework\TestCase;
+use Phue\Core\Application;
 use Phue\Core\Health\HealthChecker;
-use Phue\Core\Security\SecurityMiddleware;
+use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Core\Security\SecurityMiddleware;
 use Phue\Tests\Benchmark\BenchmarkRunner;
 
 /**
- * Unit tests for Phase 12 Health Checks, Security Middleware, and Benchmark Suite.
+ * Unit tests covering Health Checking, Security Hardening, and Benchmark execution.
  *
  * @package Phue\Tests\Production
  */
 final class ProductionHardeningTest extends TestCase
 {
     /**
-     * Tests HealthChecker execution when no external services are attached.
+     * Verifies that HealthChecker baseline checks pass with valid environment options.
      *
      * @return void
      */
     public function testHealthCheckerBaseline(): void
     {
-        $checker = new HealthChecker();
+        $checker = new HealthChecker(basePath: sys_get_temp_dir());
         $report = $checker->check();
 
         $this->assertTrue($report['healthy']);
@@ -33,17 +35,19 @@ final class ProductionHardeningTest extends TestCase
     }
 
     /**
-     * Tests application of OWASP security headers by SecurityMiddleware.
+     * Tests that SecurityMiddleware operates correctly within the Onion callable pipeline.
      *
      * @return void
      */
-    public function testSecurityMiddlewareHeaders(): void
+    public function testSecurityMiddlewareInOnionPipeline(): void
     {
         $middleware = new SecurityMiddleware();
-        $response = new Response('OK', 200, []);
+        $request = new Request('/test', 'GET');
 
-        $hardened = $middleware->handle($response);
-        $headers = $hardened->getHeaders();
+        $next = static fn(Request $req): Response => new Response('OK', 200);
+
+        $response = $middleware($request, $next);
+        $headers = $response->getHeaders();
 
         $this->assertSame('nosniff', $headers['X-Content-Type-Options']);
         $this->assertSame('SAMEORIGIN', $headers['X-Frame-Options']);
@@ -52,20 +56,19 @@ final class ProductionHardeningTest extends TestCase
     }
 
     /**
-     * Tests BenchmarkRunner Container and HTTP execution without exceptions.
+     * Tests full End-to-End Kernel throughput metrics generation using BenchmarkRunner.
      *
      * @return void
      */
-    public function testBenchmarkRunner(): void
+    public function testKernelBenchmark(): void
     {
+        $app = new Application();
+        $app->getRouter()->get('/health/live', static fn(): Response => new Response('OK', 200));
+
         $runner = new BenchmarkRunner();
+        $metrics = $runner->benchmarkKernelThroughput($app, 100);
 
-        $containerMetrics = $runner->benchmarkContainerResolution(100);
-        $this->assertSame(100, $containerMetrics['iterations']);
-        $this->assertGreaterThan(0, $containerMetrics['ns_per_op']);
-
-        $httpMetrics = $runner->benchmarkHttpThroughput(100);
-        $this->assertSame(100, $httpMetrics['iterations']);
-        $this->assertGreaterThan(0, $httpMetrics['rps']);
+        $this->assertSame(100, $metrics['iterations']);
+        $this->assertGreaterThan(0, $metrics['rps']);
     }
 }
