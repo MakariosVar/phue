@@ -199,6 +199,26 @@ final class ContainerTest extends TestCase
         $this->expectException(CircularDependencyException::class);
         $this->container->get(CircularClassA::class);
     }
+
+    /**
+     * Test 7: Nullable unbound interface falls back to null.
+     */
+    public function testAutowireResolvesUnboundNullableInterfaceToNull(): void
+    {
+        $service = $this->container->get(ServiceWithUnboundNullableInterface::class);
+        $this->assertInstanceOf(ServiceWithUnboundNullableInterface::class, $service);
+        $this->assertNull($service->logger);
+    }
+
+    /**
+     * Test 8: Nullable scalar falls back to null.
+     */
+    public function testAutowireResolvesNullableScalarToNull(): void
+    {
+        $service = $this->container->get(ServiceWithNullableScalar::class);
+        $this->assertInstanceOf(ServiceWithNullableScalar::class, $service);
+        $this->assertNull($service->name);
+    }
 }
 
 /* =====================================================================
@@ -231,6 +251,16 @@ class ServiceWithMissingScalarDefault
     public function __construct(public string $unboundApiKey) {}
 }
 
+class ServiceWithUnboundNullableInterface
+{
+    public function __construct(public ?LoggerInterface $logger) {}
+}
+
+class ServiceWithNullableScalar
+{
+    public function __construct(public ?string $name) {}
+}
+
 class PhueAutowireTarget
 {
     public function __construct(public PhueAutowireDependency $dependency) {}
@@ -245,3 +275,4 @@ class CircularClassB
 {
     public function __construct(public CircularClassA $a) {}
 }
+

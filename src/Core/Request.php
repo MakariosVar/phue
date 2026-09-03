@@ -57,14 +57,26 @@ class Request
             }
         }
 
+        // Explicitly add CONTENT_TYPE and CONTENT_LENGTH (PHP FPM / CGI do not prefix them with HTTP_)
+        if (isset($_SERVER['CONTENT_TYPE'])) {
+            $headers['Content-Type'] = $_SERVER['CONTENT_TYPE'];
+        }
+
+        if (isset($_SERVER['CONTENT_LENGTH'])) {
+            $headers['Content-Length'] = $_SERVER['CONTENT_LENGTH'];
+        }
+
         // Parse JSON body payload when Content-Type matches application/json
         $parsedBody = $_POST;
-        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $contentType = $headers['Content-Type'] ?? '';
+        
         if (str_contains($contentType, 'application/json')) {
             $rawInput = file_get_contents('php://input');
-            $decoded = json_decode($rawInput, true);
-            if (is_array($decoded)) {
-                $parsedBody = $decoded;
+            if ($rawInput !== false && $rawInput !== '') {
+                $decoded = json_decode($rawInput, true);
+                if (is_array($decoded)) {
+                    $parsedBody = $decoded;
+                }
             }
         }
 

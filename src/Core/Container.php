@@ -176,7 +176,7 @@ class Container
         $this->scopedInstances = [];
     }
 
-    private function autowire(string $id): object
+   private function autowire(string $id): object
     {
         $reflection = new ReflectionClass($id);
 
@@ -197,18 +197,42 @@ class Container
         foreach ($constructor->getParameters() as $parameter) {
             $type = $parameter->getType();
 
+            // 1. Handling Scalar/Built-in Types or Missing Type-hints
             if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
                 if ($parameter->isDefaultValueAvailable()) {
                     $dependencies[] = $parameter->getDefaultValue();
                     continue;
                 }
 
+                if ($parameter->allowsNull()) {
+                    $dependencies[] = null;
+                    continue;
+                }
+
                 throw new ContainerException(
-                    "Cannot autowire parameter '{$parameter->getName()}' in '{$id}': Missing class type hint or default value.",
+                    "Cannot autowire parameter '{$parameter->getName()}' in '{$id}': Missing class type hint, default value, or nullable declaration.",
                 );
             }
 
-            $dependencies[] = $this->get($type->getName());
+            // 2. Handling Class / Interface Type-hints
+            try {
+                $dependencies[] = $this->get($type->getName());
+            } catch (ContainerException $e) {
+                // Fallback to default value if available
+                if ($parameter->isDefaultValueAvailable()) {
+                    $dependencies[] = $parameter->getDefaultValue();
+                    continue;
+                }
+
+                // Fallback to null if the parameter explicitly allows null
+                if ($parameter->allowsNull()) {
+                    $dependencies[] = null;
+                    continue;
+                }
+
+                // Re-throw if resolution failed and no fallback is possible
+                throw $e;
+            }
         }
 
         return $reflection->newInstanceArgs($dependencies);

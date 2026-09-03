@@ -271,7 +271,10 @@ class Router
                 $param = $matches[1];
                 $constraint = $where[$param] ?? '[^/]+';
 
-                return '(?P<' . $param . '>' . $constraint . ')';
+                // Escape unescaped '#' characters to prevent breaking the PCRE '#' delimiter
+                $escapedConstraint = preg_replace('/(?<!\\\\)#/', '\#', $constraint);
+
+                return '(?P<' . $param . '>' . $escapedConstraint . ')';
             },
             $path
         );

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
@@ -9,7 +11,7 @@ use Phue\Core\Console\CommandInterface;
  *
  * @package Phue\Core\Console\Commands
  */
-class ServeCommand implements CommandInterface
+final class ServeCommand implements CommandInterface
 {
     /**
      * Gets the unique command identifier name.
@@ -35,7 +37,9 @@ class ServeCommand implements CommandInterface
      * Executes the built-in development server process with optional --host and --port overrides.
      *
      * @param array<int, string> $args Command options (e.g. ['--host=0.0.0.0', '--port=8080']).
-     * @return int Status code (0 for success).
+     * @param resource $outputStream Standard output stream resource.
+     * @param resource $errorStream Standard error stream resource.
+     * @return int Status code (0 for success, non-zero for failure).
      */
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
@@ -50,14 +54,21 @@ class ServeCommand implements CommandInterface
             }
         }
 
-        $docRoot = is_dir(getcwd() . '/public') ? 'public' : '.';
-        $command = sprintf('php -S %s:%s -t %s', $host, $port, $docRoot);
+        $baseDir = getcwd();
+        if ($baseDir === false) {
+            fwrite($errorStream, "Error: Unable to determine current working directory.\n");
+            return 1;
+        }
+
+        $docRoot = is_dir($baseDir . '/public') ? 'public' : '.';
+        $command = sprintf('php -S %s:%s -t %s', escapeshellarg($host), escapeshellarg($port), escapeshellarg($docRoot));
 
         fwrite($outputStream, sprintf("\033[32mPhue Development Server started:\033[0m http://%s:%s\n", $host, $port));
         fwrite($outputStream, "Press Ctrl+C to stop the server.\n\n");
 
-        passthru($command);
+        $exitCode = 0;
+        passthru($command, $exitCode);
 
-        return 0;
+        return $exitCode;
     }
 }

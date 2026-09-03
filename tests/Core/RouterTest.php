@@ -182,7 +182,21 @@ class RouterTest extends TestCase
         $this->assertInstanceOf(RouteMatch::class, $match);
         $this->assertSame([DummyScanController::class, 'index'], $match->getHandler());
     }
+
+    /**
+     * Test Router compileRouteRegex handles custom regex constraint containing '#' delimiter without PCRE error.
+     */
+    public function testRouterHandlesCustomRegexWithHashCharacter(): void
+    {
+        $this->router->get('/tag/{tag:tag}', fn () => 'matched', ['tag' => '[a-zA-Z0-9#]+']);
+
+        $match = $this->router->dispatch('GET', '/tag/php85');
+
+        $this->assertSame(['tag' => 'php85'], $match->getParams());
+    }
 }
+
+
 
 /**
  * Stub Controller used exclusively for Router integration testing.

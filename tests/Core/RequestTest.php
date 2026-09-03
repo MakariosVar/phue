@@ -56,4 +56,28 @@ final class RequestTest extends TestCase
         // Default used if absent everywhere
         $this->assertEquals('default_val', $request->input('missing', 'default_val'));
     }
+
+    /**
+     * Tests that Request::capture() handles CONTENT_TYPE and CONTENT_LENGTH without HTTP_ prefix in $_SERVER.
+     */
+    public function testCaptureNormalizesContentTypeAndLengthWithoutHttpPrefix(): void
+    {
+        $backupServer = $_SERVER;
+
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'POST';
+            $_SERVER['REQUEST_URI'] = '/api/data';
+            $_SERVER['CONTENT_TYPE'] = 'application/json';
+            $_SERVER['CONTENT_LENGTH'] = '42';
+            $_SERVER['HTTP_ACCEPT'] = 'application/json';
+
+            $request = Request::capture();
+
+            $this->assertEquals('application/json', $request->getHeader('Content-Type'));
+            $this->assertEquals('42', $request->getHeader('Content-Length'));
+            $this->assertEquals('application/json', $request->getHeader('Accept'));
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
 }
