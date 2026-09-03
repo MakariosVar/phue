@@ -41,30 +41,30 @@ final class MigrateCommand implements CommandInterface
      * @param array<int, string> $args Command arguments.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $db = $this->resolveConnection();
         $path = getcwd() . '/database/migrations';
 
         $migrator = new Migrator($db, $path);
 
-        fwrite(STDOUT, "Running pending migrations...\n");
+        fwrite($outputStream, "Running pending migrations...\n");
 
         try {
             $applied = $migrator->run();
 
             if (empty($applied)) {
-                fwrite(STDOUT, "Nothing to migrate.\n");
+                fwrite($outputStream, "Nothing to migrate.\n");
                 return 0;
             }
 
             foreach ($applied as $migration) {
-                fwrite(STDOUT, "Migrated: {$migration}\n");
+                fwrite($outputStream, "Migrated: {$migration}\n");
             }
 
             return 0;
         } catch (\Throwable $e) {
-            fwrite(STDERR, "Migration error: " . $e->getMessage() . "\n");
+            fwrite($errorStream, "Migration error: " . $e->getMessage() . "\n");
             return 1;
         }
     }

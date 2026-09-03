@@ -25,5 +25,5 @@ interface CommandInterface
      * @param array<int, string> $args Command line arguments (excluding script and command name).
      * @return int Exit status code (0 for success, non-zero for error).
      */
-    public function execute(array $args): int;
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int;
 }

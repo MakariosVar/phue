@@ -39,12 +39,12 @@ final class MakeMigrationCommand implements CommandInterface
      * @param array<int, string> $args Command line arguments.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $name = $args[0] ?? null;
 
         if (!$name) {
-            fwrite(STDERR, "Error: Migration name is required. Usage: ./bin/phue make:migration <name>\n");
+            fwrite($errorStream, "Error: Migration name is required. Usage: ./bin/phue make:migration <name>\n");
             return 1;
         }
 
@@ -94,7 +94,7 @@ PHP;
 
         file_put_contents($targetPath, $template);
 
-        fwrite(STDOUT, "Created Migration: {$targetPath}\n");
+        fwrite($outputStream, "Created Migration: {$targetPath}\n");
         return 0;
     }
 }

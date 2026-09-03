@@ -42,17 +42,17 @@ final class SchiiMigrateCommand implements CommandInterface
      * @param array<int, string> $args Command arguments containing model class.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $modelClass = $args[0] ?? null;
 
         if (!$modelClass) {
-            fwrite(STDERR, "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n");
+            fwrite($errorStream, "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n");
             return 1;
         }
 
         if (!class_exists($modelClass)) {
-            fwrite(STDERR, "Error: Model class '{$modelClass}' not found.\n");
+            fwrite($errorStream, "Error: Model class '{$modelClass}' not found.\n");
             return 1;
         }
 
@@ -64,17 +64,17 @@ final class SchiiMigrateCommand implements CommandInterface
             $actions = $migrator->migrate($modelClass);
 
             if (empty($actions)) {
-                fwrite(STDOUT, "Schema up to date for '{$modelClass}'. No changes applied.\n");
+                fwrite($outputStream, "Schema up to date for '{$modelClass}'. No changes applied.\n");
                 return 0;
             }
 
             foreach ($actions as $action) {
-                fwrite(STDOUT, "[Schii] {$action}\n");
+                fwrite($outputStream, "[Schii] {$action}\n");
             }
 
             return 0;
         } catch (\Throwable $e) {
-            fwrite(STDERR, "Schii Migration Error: " . $e->getMessage() . "\n");
+            fwrite($errorStream, "Schii Migration Error: " . $e->getMessage() . "\n");
             return 1;
         }
     }

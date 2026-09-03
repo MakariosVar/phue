@@ -37,7 +37,7 @@ class ServeCommand implements CommandInterface
      * @param array<int, string> $args Command options (e.g. ['--host=0.0.0.0', '--port=8080']).
      * @return int Status code (0 for success).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $host = '127.0.0.1';
         $port = '8000';
@@ -53,8 +53,8 @@ class ServeCommand implements CommandInterface
         $docRoot = is_dir(getcwd() . '/public') ? 'public' : '.';
         $command = sprintf('php -S %s:%s -t %s', $host, $port, $docRoot);
 
-        echo sprintf("\033[32mPhue Development Server started:\033[0m http://%s:%s\n", $host, $port);
-        echo "Press Ctrl+C to stop the server.\n\n";
+        fwrite($outputStream, sprintf("\033[32mPhue Development Server started:\033[0m http://%s:%s\n", $host, $port));
+        fwrite($outputStream, "Press Ctrl+C to stop the server.\n\n");
 
         passthru($command);
 

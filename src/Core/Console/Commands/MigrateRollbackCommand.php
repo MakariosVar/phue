@@ -41,30 +41,30 @@ final class MigrateRollbackCommand implements CommandInterface
      * @param array<int, string> $args Command arguments.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $db = $this->resolveConnection();
         $path = getcwd() . '/database/migrations';
 
         $migrator = new Migrator($db, $path);
 
-        fwrite(STDOUT, "Rolling back last migration batch...\n");
+        fwrite($outputStream, "Rolling back last migration batch...\n");
 
         try {
             $rolledBack = $migrator->rollback();
 
             if (empty($rolledBack)) {
-                fwrite(STDOUT, "Nothing to rollback.\n");
+                fwrite($outputStream, "Nothing to rollback.\n");
                 return 0;
             }
 
             foreach ($rolledBack as $migration) {
-                fwrite(STDOUT, "Rolled back: {$migration}\n");
+                fwrite($outputStream, "Rolled back: {$migration}\n");
             }
 
             return 0;
         } catch (\Throwable $e) {
-            fwrite(STDERR, "Rollback error: " . $e->getMessage() . "\n");
+            fwrite($errorStream, "Rollback error: " . $e->getMessage() . "\n");
             return 1;
         }
     }

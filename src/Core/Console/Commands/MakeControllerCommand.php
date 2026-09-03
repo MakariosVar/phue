@@ -37,10 +37,10 @@ class MakeControllerCommand implements CommandInterface
      * @param array<int, string> $args Command line arguments (expects controller name as first index).
      * @return int Status code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         if (empty($args[0])) {
-            fwrite(STDERR, "\033[31mError: Controller name is required. Usage: ./bin/phue make:controller <Name>\033[0m\n");
+            fwrite($errorStream, "\033[31mError: Controller name is required. Usage: ./bin/phue make:controller <Name>\033[0m\n");
             return 1;
         }
 
@@ -57,7 +57,7 @@ class MakeControllerCommand implements CommandInterface
         $filePath = $dir . '/' . $name . '.php';
 
         if (file_exists($filePath)) {
-            fwrite(STDERR, sprintf("\033[31mError: Controller %s already exists!\033[0m\n", $name));
+            fwrite($errorStream, sprintf("\033[31mError: Controller %s already exists!\033[0m\n", $name));
             return 1;
         }
 

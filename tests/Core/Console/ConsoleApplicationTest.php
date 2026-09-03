@@ -18,9 +18,9 @@ class DummyCommand implements CommandInterface
         return 'Runs a dummy test command.';
     }
 
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
-        echo "Executed dummy command";
+        fwrite($outputStream, "Executed dummy command");
         return 0;
     }
 }
@@ -32,9 +32,12 @@ class ConsoleApplicationTest extends TestCase
         $app = new Application('1.0.0');
         $app->add(new DummyCommand());
 
-        ob_start();
-        $exitCode = $app->run(['bin/phue', 'test:dummy']);
-        $output = ob_get_clean();
+        $outStream = fopen('php://memory', 'w+');
+        $exitCode = $app->run(['bin/phue', 'test:dummy'], $outStream);
+
+        rewind($outStream);
+        $output = stream_get_contents($outStream);
+        fclose($outStream);
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('Executed dummy command', $output);
@@ -45,9 +48,12 @@ class ConsoleApplicationTest extends TestCase
         $app = new Application('1.0.0');
         $app->add(new DummyCommand());
 
-        ob_start();
-        $exitCode = $app->run(['bin/phue', 'list']);
-        $output = ob_get_clean();
+        $outStream = fopen('php://memory', 'w+');
+        $exitCode = $app->run(['bin/phue', 'list'], $outStream);
+
+        rewind($outStream);
+        $output = stream_get_contents($outStream);
+        fclose($outStream);
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('Phue Framework CLI Tool', $output);
@@ -56,15 +62,20 @@ class ConsoleApplicationTest extends TestCase
         $this->assertStringContainsString('Runs a dummy test command.', $output);
     }
 
+
     public function testReturnsErrorForUnknownCommand(): void
     {
         $app = new Application();
 
-        // Silence STDERR output during tests
-        ob_start();
-        $exitCode = $app->run(['bin/phue', 'unknown:command']);
-        ob_end_clean();
+        $outStream = fopen('php://memory', 'w+');
+        $errStream = fopen('php://memory', 'w+');
+
+        $exitCode = $app->run(['bin/phue', 'unknown:command'], $outStream, $errStream);
+
+        fclose($outStream);
+        fclose($errStream);
 
         $this->assertSame(1, $exitCode);
     }
+
 }

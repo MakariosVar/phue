@@ -42,48 +42,61 @@ class Application
      *
      * @param array<int, string> $argv
      */
-    public function run(array $argv = []): int
+    public function run(array $argv = [], $outputStream = null, $errorStream = null): int
     {
         if (empty($argv)) {
             $argv = $_SERVER['argv'] ?? [];
+        }
+
+        if (empty($outputStream)) {
+            $outputStream = \STDOUT;        
+        }
+
+        if (empty($errorStream)) {
+            $errorStream = \STDERR;
         }
 
         $commandName = $argv[1] ?? 'list';
         $args = array_slice($argv, 2);
 
         if ($commandName === 'list' || $commandName === '--help' || $commandName === '-h') {
-            return $this->renderHelp();
+            return $this->renderHelp($outputStream, $errorStream);
         }
 
         if (!isset($this->commands[$commandName])) {
-            fwrite(STDERR, sprintf("\033[31mError: Command \"%s\" is not defined.\033[0m\n\n", $commandName));
-            $this->renderHelp();
+            fwrite($errorStream, sprintf("\033[31mError: Command \"%s\" is not defined.\033[0m\n\n", $commandName));
+            $this->renderHelp($outputStream, $errorStream);
             return 1;
         }
 
         try {
-            return $this->commands[$commandName]->execute($args);
+            return $this->commands[$commandName]->execute($args, $outputStream, $errorStream);
         } catch (\Throwable $e) {
-            fwrite(STDERR, sprintf("\033[31mCommand failed: %s\033[0m\n", $e->getMessage()));
+            fwrite($errorStream, sprintf("\033[31mCommand failed: %s\033[0m\n", $e->getMessage()));
             return 1;
         }
     }
 
     /**
      * Renders available commands and help menu.
+     *
+     * @param resource $outputStream
+     * @param resource $errorStream
+     * @return int
      */
-    protected function renderHelp(): int
+    protected function renderHelp($outputStream = \STDOUT, $errorStream = \STDERR): int
     {
-        echo sprintf("\033[32mPhue Framework CLI Tool\033[0m v%s\n\n", $this->version);
-        echo "\033[33mUsage:\033[0m\n";
-        echo "  ./bin/phue <command> [options] [arguments]\n\n";
-        echo "\033[33mAvailable Commands:\033[0m\n";
+        fwrite($outputStream, sprintf("\033[32mPhue Framework CLI Tool\033[0m v%s\n\n", $this->version));
+        fwrite($outputStream, "\033[33mUsage:\033[0m\n");
+        fwrite($outputStream, "  ./bin/phue <command> [options] [arguments]\n\n");
+        fwrite($outputStream, "\033[33mAvailable Commands:\033[0m\n");
 
         foreach ($this->commands as $name => $command) {
-            echo sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription());
+            fwrite($outputStream, sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription()));
         }
 
-        echo "\n";
+        fwrite($outputStream, "\n");
         return 0;
     }
+
 }

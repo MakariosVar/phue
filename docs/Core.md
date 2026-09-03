@@ -709,7 +709,7 @@ The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/p
 ### Core Components
 
 1. **`CommandInterface` (`CommandInterface.php`)**: Contract for all executable CLI commands requiring `getName()`, `getDescription()`, and `execute(array $args): int`.
-2. **`Console\Application` (`Application.php`)**: Entry point registry. Handles argument extraction (`$argv`), ANSI colorized help menu rendering, error formatting via `STDERR`, and command execution dispatching.
+2. **`Console\Application` (`Application.php`)**: Entry point registry. Handles argument extraction (`$argv`), ANSI colorized help menu rendering, error formatting via `\STDERR`, and command execution dispatching.
 3. **`bin/phue`**: Shebang script (`#!/usr/bin/env php`) initializing the autoloader and running `Console\Application`.
 
 ### Built-in Commands (`src/Core/Console/Commands/`)

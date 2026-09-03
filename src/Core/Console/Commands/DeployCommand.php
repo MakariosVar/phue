@@ -42,7 +42,7 @@ final class DeployCommand implements CommandInterface
      * @param array<int, string> $args Command line arguments.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args): int
+    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $baseDir = getcwd();
         $keepReleases = 5;
@@ -56,21 +56,21 @@ final class DeployCommand implements CommandInterface
             }
         }
 
-        if ($baseDir === false || !is_dir($baseDir)) {
-            fwrite(STDERR, "Error: Invalid base directory specified.\n");
+        if ($baseDir === false || ! is_dir($baseDir)) {
+            fwrite($errorStream, "Error: Invalid base directory specified.\n");
             return 1;
         }
 
-        fwrite(STDOUT, "Starting deployment for directory: {$baseDir}\n");
+        fwrite($outputStream, "Starting deployment for directory: {$baseDir}\n");
 
         $success = $this->runDeployment($baseDir, $keepReleases);
 
         if ($success) {
-            fwrite(STDOUT, "Deployment completed successfully!\n");
+            fwrite($outputStream, "Deployment completed successfully!\n");
             return 0;
         }
 
-        fwrite(STDERR, "Deployment failed.\n");
+        fwrite($errorStream, "Deployment failed.\n");
         return 1;
     }
 

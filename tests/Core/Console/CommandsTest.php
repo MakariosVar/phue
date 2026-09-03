@@ -48,13 +48,14 @@ class CommandsTest extends TestCase
     public function testMakeControllerFailsWhenNameMissing(): void
     {
         $cmd = new MakeControllerCommand();
+        $errStream = fopen('php://memory', 'w+');
 
-        ob_start();
-        $code = $cmd->execute([]);
-        ob_end_clean();
+        $code = $cmd->execute([], \STDOUT, $errStream);
 
+        fclose($errStream);
         $this->assertSame(1, $code);
     }
+
 
     public function testMakeControllerFailsIfAlreadyExists(): void
     {
