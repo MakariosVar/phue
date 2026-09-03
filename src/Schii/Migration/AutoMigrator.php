@@ -66,6 +66,11 @@ final class AutoMigrator
             foreach ($schema->fields as $field) {
                 $fieldName = SqlIdentifier::validate($field->name);
 
+                // Skip primary key column 'id' as it should already exist in the table
+                if ($fieldName === 'id') {
+                    continue;
+                }
+
                 if (!in_array($fieldName, $existingColumns, true)) {
                     $columnSql = $this->converter->buildColumnSql($field);
                     $quotedTable = SqlIdentifier::quote($tableName, $driverName);
