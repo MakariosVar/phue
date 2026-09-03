@@ -219,7 +219,30 @@ final class ContainerTest extends TestCase
         $this->assertInstanceOf(ServiceWithNullableScalar::class, $service);
         $this->assertNull($service->name);
     }
+
+    /**
+     * Test 9: Re-binding a singleton service as scoped clears application cache and changes scope.
+     */
+    public function testRebindingClearsCacheAndOverridesScope(): void
+    {
+        $this->container->singleton('service.key', fn () => new NoConstructorService());
+        $instance1 = $this->container->get('service.key');
+
+        // Rebind as scoped
+        $this->container->scoped('service.key', fn () => new NoConstructorService());
+        $instance2 = $this->container->get('service.key');
+
+        // Verify fresh instance was created
+        $this->assertNotSame($instance1, $instance2);
+
+        // Verify instance2 is cleared on flushScope
+        $this->container->flushScope();
+        $instance3 = $this->container->get('service.key');
+
+        $this->assertNotSame($instance2, $instance3);
+    }
 }
+
 
 /* =====================================================================
  * HELPER CLASSES FOR AUTOWIRING TESTS

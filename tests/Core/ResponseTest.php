@@ -76,4 +76,20 @@ final class ResponseTest extends TestCase
         $this->assertCount(1, $headers);
         $this->assertArrayHasKey("content-type", $headers);
     }
+
+    /**
+     * Tests JSON response fallback when data cannot be JSON encoded (e.g. malformed UTF-8 sequence).
+     */
+    public function testJsonResponseHandlesUnserializableDataFallback(): void
+    {
+        // Malformed non-UTF8 binary payload cause json_encode to return false
+        $invalidUtf8 = ["data" => "\xB1\x31"];
+
+        $response = Response::json($invalidUtf8);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals("{}", $response->getContent());
+        $this->assertEquals("application/json", $response->getHeader("Content-Type"));
+    }
 }
+

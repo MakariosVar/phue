@@ -194,7 +194,29 @@ class RouterTest extends TestCase
 
         $this->assertSame(['tag' => 'php85'], $match->getParams());
     }
+
+    /**
+     * Test MethodNotAllowedException returns deduplicated list of allowed methods for matching path.
+     */
+    public function testMethodNotAllowedExceptionReturnsUniqueAllowedMethods(): void
+    {
+        $this->router->get('/users', fn () => 'list');
+        $this->router->post('/users', fn () => 'create');
+        $this->router->put('/users', fn () => 'update');
+
+        try {
+            $this->router->dispatch('DELETE', '/users');
+            $this->fail('Expected MethodNotAllowedException was not thrown.');
+        } catch (MethodNotAllowedException $e) {
+            $allowed = $e->getAllowedMethods();
+            $this->assertCount(3, $allowed);
+            $this->assertContains('GET', $allowed);
+            $this->assertContains('POST', $allowed);
+            $this->assertContains('PUT', $allowed);
+        }
+    }
 }
+
 
 
 
