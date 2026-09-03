@@ -17,6 +17,7 @@ use Phue\Core\Console\Commands\MigrateCommand;
 use Phue\Core\Console\Commands\MigrateRollbackCommand;
 use Phue\Core\Console\Commands\SchiiMigrateCommand;
 use Phue\Core\Console\Commands\ServeCommand;
+use Phue\Core\Console\Commands\DeployCommand;
 
 $app = new Application('1.0.0');
 
@@ -29,6 +30,7 @@ $app->add(new ServeCommand())
     ->add(new SchiiMigrateCommand())
     ->add(new MakeMigrationCommand())
     ->add(new MigrateCommand())
+    ->add(new DeployCommand())
     ->add(new MigrateRollbackCommand());
 
 exit($app->run($_SERVER['argv']));

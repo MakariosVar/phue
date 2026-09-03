@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Core\Console\Commands;
 
+use Phue\Core\Console\CommandInterface;
+
 /**
  * Zero-Downtime Atomic Release Deployment Handler.
  *
@@ -12,8 +14,66 @@ namespace Phue\Core\Console\Commands;
  *
  * @package Phue\Core\Console\Commands
  */
-final class DeployCommand
+final class DeployCommand implements CommandInterface
 {
+    /**
+     * Retrieves command identifier name.
+     *
+     * @return string Command name.
+     */
+    public function getName(): string
+    {
+        return 'deploy';
+    }
+
+    /**
+     * Retrieves command description.
+     *
+     * @return string Command description.
+     */
+    public function getDescription(): string
+    {
+        return 'Synchronizes code, builds dependencies, executes migrations, and performs atomic symlink flips with release retention cleanup';
+    }
+
+    /**
+     * Executes the deployment command via CLI arguments.
+     *
+     * @param array<int, string> $args Command line arguments.
+     * @return int Exit code (0 for success, 1 for failure).
+     */
+    public function execute(array $args): int
+    {
+        $baseDir = getcwd();
+        $keepReleases = 5;
+
+        // Parse command flags: --dir=/path/to/project --keep=5
+        foreach ($args as $arg) {
+            if (str_starts_with($arg, '--dir=')) {
+                $baseDir = substr($arg, 6);
+            } elseif (str_starts_with($arg, '--keep=')) {
+                $keepReleases = (int) substr($arg, 7);
+            }
+        }
+
+        if ($baseDir === false || !is_dir($baseDir)) {
+            fwrite(STDERR, "Error: Invalid base directory specified.\n");
+            return 1;
+        }
+
+        fwrite(STDOUT, "Starting deployment for directory: {$baseDir}\n");
+
+        $success = $this->runDeployment($baseDir, $keepReleases);
+
+        if ($success) {
+            fwrite(STDOUT, "Deployment completed successfully!\n");
+            return 0;
+        }
+
+        fwrite(STDERR, "Deployment failed.\n");
+        return 1;
+    }
+
     /**
      * Executes the complete zero-downtime deployment sequence.
      *
@@ -21,7 +81,7 @@ final class DeployCommand
      * @param int $keepReleases Number of historical releases to retain for rollback (default: 5).
      * @return bool True if deployment completed successfully, false otherwise.
      */
-    public function run(string $baseDir, int $keepReleases = 5): bool
+    private function runDeployment(string $baseDir, int $keepReleases = 5): bool
     {
         $baseDir = rtrim($baseDir, '/');
         $releaseId = date('Y_m_d_His');
