@@ -31,7 +31,7 @@ class QueryBuilder
      */
     public function table(string $table): static
     {
-        $this->fromTable = $table;
+        $this->fromTable = $this->quoteIdentifier($table);
         return $this;
     }
 
@@ -40,15 +40,13 @@ class QueryBuilder
      */
     public function select(string ...$columns): static
     {
-        $this->columns = !empty($columns) ? $columns : ['*'];
+        $columns = !empty($columns) ? $columns : ['*'];
+        $this->columns = array_map([$this, 'quoteIdentifier'], $columns);
         return $this;
     }
 
     /**
      * Adds a WHERE condition to the query (AND).
-     *
-     * Supports 2 parameters: where('status', 'active') -> status = 'active'
-     * Supports 3 parameters: where('age', '>=', 18)    -> age >= 18
      */
     public function where(string $column, mixed $operator = null, mixed $value = null): static
     {
@@ -73,8 +71,13 @@ class QueryBuilder
             $operator = '=';
         }
 
-        $type = empty($this->whereClauses) ? '' : "{$boolean} ";
-        $this->whereClauses[] = "{$type}{$column} {$operator} ?";
+        $quotedColumn = $this->quoteIdentifier($column);
+
+        $this->whereClauses[] = [
+            'boolean' => $boolean,
+            'sql'     => "{$quotedColumn} {$operator} ?",
+        ];
+        
         $this->bindings[] = $value;
 
         return $this;
@@ -90,7 +93,8 @@ class QueryBuilder
             throw new InvalidArgumentException("Invalid ORDER BY direction [{$direction}]. Allowed: ASC, DESC.");
         }
 
-        $this->orderByClauses[] = "{$column} {$direction}";
+        $quotedColumn = $this->quoteIdentifier($column);
+        $this->orderByClauses[] = "{$quotedColumn} {$direction}";
         return $this;
     }
 
@@ -124,7 +128,12 @@ class QueryBuilder
         $sql = 'SELECT ' . implode(', ', $this->columns) . ' FROM ' . $this->fromTable;
 
         if (!empty($this->whereClauses)) {
-            $sql .= ' WHERE ' . implode(' ', $this->whereClauses);
+            $whereParts = [];
+            foreach ($this->whereClauses as $index => $clause) {
+                $prefix = ($index === 0) ? '' : $clause['boolean'] . ' ';
+                $whereParts[] = $prefix . $clause['sql'];
+            }
+            $sql .= ' WHERE ' . implode(' ', $whereParts);
         }
 
         if (!empty($this->orderByClauses)) {
@@ -183,14 +192,30 @@ class QueryBuilder
     public function count(): int
     {
         $previousColumns = $this->columns;
-        $this->columns = ['COUNT(*) as aggregate'];
+        $previousLimit   = $this->limitValue;
+        $previousOffset  = $this->offsetValue;
 
-        $stmt = $this->connection->query($this->toSql(), $this->getBindings());
+        $this->columns    = ['COUNT(*) as aggregate'];
+        $this->limitValue  = null;
+        $this->offsetValue = null;
+
+        $stmt   = $this->connection->query($this->toSql(), $this->getBindings());
         $result = $stmt->fetch();
 
-        $this->columns = $previousColumns;
+        // Restore query state
+        $this->columns    = $previousColumns;
+        $this->limitValue  = $previousLimit;
+        $this->offsetValue = $previousOffset;
 
-        return isset($result['aggregate']) ? (int) $result['aggregate'] : 0;
+        if (is_array($result)) {
+            return (int) ($result['aggregate'] ?? 0);
+        }
+
+        if (is_object($result)) {
+            return (int) ($result->aggregate ?? 0);
+        }
+
+        return 0;
     }
 
     /**
@@ -204,7 +229,7 @@ class QueryBuilder
             throw new InvalidArgumentException('No table specified for QueryBuilder. Call table() first.');
         }
 
-        $columns = array_keys($values);
+        $columns = array_map([$this, 'quoteIdentifier'], array_keys($values));
         $placeholders = array_fill(0, count($columns), '?');
 
         $sql = sprintf(
@@ -233,14 +258,20 @@ class QueryBuilder
         $bindings = [];
 
         foreach ($values as $column => $value) {
-            $sets[] = "{$column} = ?";
+            $quotedColumn = $this->quoteIdentifier($column);
+            $sets[] = "{$quotedColumn} = ?";
             $bindings[] = $value;
         }
 
         $sql = sprintf('UPDATE %s SET %s', $this->fromTable, implode(', ', $sets));
 
         if (!empty($this->whereClauses)) {
-            $sql .= ' WHERE ' . implode(' ', $this->whereClauses);
+            $whereParts = [];
+            foreach ($this->whereClauses as $index => $clause) {
+                $prefix = ($index === 0) ? '' : $clause['boolean'] . ' ';
+                $whereParts[] = $prefix . $clause['sql'];
+            }
+            $sql .= ' WHERE ' . implode(' ', $whereParts);
             $bindings = array_merge($bindings, $this->getBindings());
         }
 
@@ -261,9 +292,42 @@ class QueryBuilder
         $sql = "DELETE FROM {$this->fromTable}";
 
         if (!empty($this->whereClauses)) {
-            $sql .= ' WHERE ' . implode(' ', $this->whereClauses);
+            $whereParts = [];
+            foreach ($this->whereClauses as $index => $clause) {
+                $prefix = ($index === 0) ? '' : $clause['boolean'] . ' ';
+                $whereParts[] = $prefix . $clause['sql'];
+            }
+            $sql .= ' WHERE ' . implode(' ', $whereParts);
         }
 
         return $this->connection->execute($sql, $this->getBindings());
+    }
+
+    /**
+     * Safely quotes a database identifier (table or column name), bypassing wildcards and aggregates.
+     */
+    protected function quoteIdentifier(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '*' || empty($value)) {
+            return $value;
+        }
+
+        // 1. Process column aliases first (e.g., 'table.column AS alias')
+        if (preg_match('/\s+as\s+/i', $value)) {
+            [$column, $alias] = preg_split('/\s+as\s+/i', $value);
+            return $this->quoteIdentifier($column) . ' AS ' . $this->quoteIdentifier($alias);
+        }
+
+        // 2. Process qualified identifiers second (e.g., 'table.column')
+        if (str_contains($value, '.')) {
+            $parts = explode('.', $value);
+            return implode('.', array_map([$this, 'quoteIdentifier'], $parts));
+        }
+
+        // 3. Quote pure identifier name via driver-specific rules
+        $driverName = $this->connection->getDriver()->getName();
+        return SqlIdentifier::quote($value, $driverName);
     }
 }

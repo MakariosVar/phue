@@ -29,7 +29,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /**
-     * Tests SQL string generation and parameter binding extraction.
+     * Tests SQL string generation with quoted identifiers and parameter binding extraction.
      */
     public function testToSqlCompilation(): void
     {
@@ -42,10 +42,40 @@ class QueryBuilderTest extends TestCase
             ->limit(10)
             ->offset(5);
 
-        $expectedSql = 'SELECT id, name, email FROM users WHERE status = ? AND age >= ? OR status = ? ORDER BY name DESC LIMIT 10 OFFSET 5';
+        $expectedSql = 'SELECT `id`, `name`, `email` FROM `users` WHERE `status` = ? AND `age` >= ? OR `status` = ? ORDER BY `name` DESC LIMIT 10 OFFSET 5';
 
         $this->assertSame($expectedSql, $builder->toSql());
         $this->assertSame(['active', 18, 'pending'], $builder->getBindings());
+    }
+
+    /**
+     * Tests special identifier cases: table.column, AS alias, and wildcard (*).
+     */
+    public function testIdentifierQuotingEdgeCases(): void
+    {
+        $builder = $this->connection->table('users')
+            ->select('users.id', 'users.name AS full_name', '*')
+            ->where('users.status', 'active');
+
+        $expectedSql = 'SELECT `users`.`id`, `users`.`name` AS `full_name`, * FROM `users` WHERE `users`.`status` = ?';
+
+        $this->assertSame($expectedSql, $builder->toSql());
+    }
+
+    /**
+     * Tests count behavior when limit/offset are defined (ensures they are temporarily reset).
+     */
+    public function testCountResetsLimitAndOffset(): void
+    {
+        $builder = $this->connection->table('users');
+        $builder->insert(['name' => 'Alice', 'email' => 'alice@example.com', 'age' => 25, 'status' => 'active']);
+        $builder->insert(['name' => 'Bob', 'email' => 'bob@example.com', 'age' => 17, 'status' => 'active']);
+
+        $query = $this->connection->table('users')->where('status', 'active')->limit(1)->offset(1);
+
+        $this->assertSame(2, $query->count());
+        // Verify state restoration after count()
+        $this->assertSame(1, count($query->get()));
     }
 
     /**
