@@ -2,6 +2,9 @@
 
 namespace Phue\Core;
 
+use Nyholm\Psr7\Response as Psr7Response;
+use Psr\Http\Message\ResponseInterface;
+
 /**
  * Representation of an outgoing HTTP response.
  *
@@ -179,7 +182,7 @@ class Response
         return new Psr7Response(
             status: $this->statusCode,
             headers: $this->headers,
-            body: $this->body,
+            body: $this->content,
             version: '1.1'
         );
     }

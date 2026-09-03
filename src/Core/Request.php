@@ -2,6 +2,8 @@
 
 namespace Phue\Core;
 
+use Psr\Http\Message\ServerRequestInterface;
+
 /**
  * Representation of an incoming HTTP request.
  *
@@ -201,7 +203,7 @@ class Request
             uri: $uri,
             method: $method,
             queryParams: $query,
-            bodyParams: $bodyParams,
+            parsedBody: $bodyParams,
             headers: $headers,
             serverParams: $server
         );
