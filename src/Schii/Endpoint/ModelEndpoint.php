@@ -39,10 +39,14 @@ final class ModelEndpoint
     /**
      * GET /schii/schema/{entity}
      * Returns the Schii JSON Schema Protocol for UI consumption.
+     *
+     * @param Request $request
+     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
-    public function schema(string $entity): Response
+    public function schema(Request $request, array|string $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
+        $modelClass = $this->resolveModelClass((string)$entity);
         $schema = $this->schemaRegistry->get($modelClass);
 
         return Response::json($schema->toArray());
@@ -51,10 +55,14 @@ final class ModelEndpoint
     /**
      * GET /schii/{entity}
      * Smart List Endpoint supporting search, filtering, sorting, and pagination.
+     *
+     * @param Request $request
+     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
-    public function index(string $entity, Request $request): Response
+    public function index(Request $request, array|string $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
+        $modelClass = $this->resolveModelClass((string)$entity);
         $schema = $this->schemaRegistry->get($modelClass);
 
         /** @var ActiveQuery $query */
@@ -118,10 +126,16 @@ final class ModelEndpoint
     /**
      * GET /schii/{entity}/{id}
      * Retrieve a single record by primary key.
+     *
+     * @param Request $request
+     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
-    public function show(string $entity, mixed $id): Response
+    public function show(Request $request, array $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = $params['entity'] ?? null;
+        $id = $params['id'] ?? null;
+
+        $modelClass = $this->resolveModelClass((string)$entity);
         $model = $modelClass::find($id);
 
         if (!$model) {
@@ -134,14 +148,49 @@ final class ModelEndpoint
     /**
      * POST /schii/{entity}
      * Create a new record.
+     *
+     * @param Request $request
+     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
-    public function store(string $entity, Request $request): Response
+    public function store(Request $request, array|string $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
+        $modelClass = $this->resolveModelClass((string)$entity);
         
         /** @var BaseActiveRecord $model */
         $model = new $modelClass();
-        $model->fill($this->extractInputData($request));
+        $inputData = $this->extractInputData($request);
+        
+        // Basic validation for required fields
+        $modelClassReflection = new \ReflectionClass($modelClass);
+        $properties = $modelClassReflection->getProperties();
+        
+        foreach ($properties as $property) {
+            if ($property->isPublic() && !$property->isStatic()) {
+                $propertyName = $property->getName();
+                $propertyType = $property->getType();
+                
+                // Check if property is required (has no default value or is explicitly required)
+                if ($propertyType && !$propertyType->allowsNull()) {
+                    if (!array_key_exists($propertyName, $inputData)) {
+                        return Response::json([
+                            'error' => 'Validation failed',
+                            'message' => "Required field '{$propertyName}' is missing"
+                        ], 422);
+                    }
+                    
+                    // Check for empty values that would cause SQL errors
+                    if ($inputData[$propertyName] === null || $inputData[$propertyName] === '') {
+                        return Response::json([
+                            'error' => 'Validation failed',
+                            'message' => "Required field '{$propertyName}' cannot be empty"
+                        ], 422);
+                    }
+                }
+            }
+        }
+        
+        $model->fill($inputData);
 
         if (!$model->save()) {
             return Response::json([
@@ -156,10 +205,16 @@ final class ModelEndpoint
     /**
      * PUT /schii/{entity}/{id}
      * Update an existing record.
+     *
+     * @param Request $request
+     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
-    public function update(string $entity, mixed $id, Request $request): Response
+    public function update(Request $request, array $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = $params['entity'] ?? null;
+        $id = $params['id'] ?? null;
+
+        $modelClass = $this->resolveModelClass((string)$entity);
         $model = $modelClass::find($id);
 
         if (!$model) {
@@ -181,10 +236,16 @@ final class ModelEndpoint
     /**
      * DELETE /schii/{entity}/{id}
      * Delete a record by primary key.
+     *
+     * @param Request $request
+     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
-    public function delete(string $entity, mixed $id): Response
+    public function delete(Request $request, array $params): Response
     {
-        $modelClass = $this->resolveModelClass($entity);
+        $entity = $params['entity'] ?? null;
+        $id = $params['id'] ?? null;
+
+        $modelClass = $this->resolveModelClass((string)$entity);
         $model = $modelClass::find($id);
 
         if (!$model) {

@@ -88,7 +88,8 @@ class SchiiTest extends TestCase
         $endpoint = new ModelEndpoint($registry);
         $endpoint->registerEntity('products', StubProduct::class);
 
-        $response = $endpoint->schema('products');
+        $request = new Request('GET', '/schii/schema/products');
+        $response = $endpoint->schema($request, 'products');
         $data = json_decode($response->getContent(), true);
 
         $this->assertSame(200, $response->getStatusCode());
@@ -104,7 +105,7 @@ class SchiiTest extends TestCase
 
         // 1. STORE Request
         $storeReq = new Request('POST', '/schii/products', [], ['name' => 'Laptop', 'price' => 1200.00, 'status' => 'active']);
-        $storeRes = $endpoint->store('products', $storeReq);
+        $storeRes = $endpoint->store($storeReq, 'products');
         $storeData = json_decode($storeRes->getContent(), true);
 
         $this->assertSame(201, $storeRes->getStatusCode());
@@ -112,13 +113,13 @@ class SchiiTest extends TestCase
         $id = $storeData['data']['id'];
 
         // 2. SHOW Request
-        $showRes = $endpoint->show('products', $id);
+        $showRes = $endpoint->show($storeReq, ['entity' => 'products', 'id' => $id]);
         $showData = json_decode($showRes->getContent(), true);
         $this->assertSame('Laptop', $showData['data']['name']);
 
         // 3. INDEX Request with search query
         $indexReq = new Request('GET', '/schii/products', ['q' => 'Lap']);
-        $indexRes = $endpoint->index('products', $indexReq);
+        $indexRes = $endpoint->index($indexReq, 'products');
         $indexData = json_decode($indexRes->getContent(), true);
 
         $this->assertSame(200, $indexRes->getStatusCode());
@@ -127,18 +128,18 @@ class SchiiTest extends TestCase
 
         // 4. UPDATE Request
         $updateReq = new Request('PUT', "/schii/products/{$id}", [], ['name' => 'Pro Laptop', 'price' => 1500.00]);
-        $updateRes = $endpoint->update('products', $id, $updateReq);
+        $updateRes = $endpoint->update($updateReq, ['entity' => 'products', 'id' => $id]);
         $updateData = json_decode($updateRes->getContent(), true);
 
         $this->assertSame(200, $updateRes->getStatusCode());
         $this->assertSame('Pro Laptop', $updateData['data']['name']);
 
         // 5. DELETE Request
-        $deleteRes = $endpoint->delete('products', $id);
+        $deleteRes = $endpoint->delete($storeReq, ['entity' => 'products', 'id' => $id]);
         $this->assertSame(200, $deleteRes->getStatusCode());
 
         // Verify Deletion
-        $showAfterDelete = $endpoint->show('products', $id);
+        $showAfterDelete = $endpoint->show($storeReq, ['entity' => 'products', 'id' => $id]);
         $this->assertSame(404, $showAfterDelete->getStatusCode());
     }
 }
