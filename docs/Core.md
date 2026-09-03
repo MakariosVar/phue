@@ -806,16 +806,17 @@ Enterprise-grade production readiness features ensuring high availability, secur
   - Database connectivity (`SELECT 1`).
   - Redis server PING response.
   - Memory consumption limits.
-  - Filesystem disk space availability.
+  - Filesystem disk space availability (supports custom `$basePath` for mounts).
 
 ### Security Hardening (`src/Core/Security/`)
-- **`SecurityMiddleware` (`src/Core/Security/SecurityMiddleware.php`)**: Production defense middleware injecting strict OWASP HTTP headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, HSTS `Strict-Transport-Security`, `Content-Security-Policy`).
+- **`SecurityMiddleware` (`src/Core/Security/SecurityMiddleware.php`)**: Production defense middleware implementing the invokable Onion pipeline (`__invoke(Request $request, callable $next): Response`) and injecting strict OWASP HTTP headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, HSTS `Strict-Transport-Security`, `Content-Security-Policy`).
 
 ### Zero-Downtime Deployment (`src/Core/Console/Commands/`)
-- **`DeployCommand` (`src/Core/Console/Commands/DeployCommand.php`)**: Atomic release manager executing build creation, static AOT compilation, database migrations, and symlink swapping (`current_temp` -> `current`) without dropped requests.
+- **`DeployCommand` (`src/Core/Console/Commands/DeployCommand.php`)**: Atomic release manager executing codebase synchronization, dependency builds (`composer install --no-dev --optimize-autoloader`), database migrations, atomic symlink swapping (`current_temp` -> `current`), and historical release retention cleanup (`pruneOldReleases`).
 
 ### Automated Benchmark Suite (`tests/Benchmark/`)
-- **`BenchmarkRunner` (`tests/Benchmark/BenchmarkRunner.php`)**: Measures container DI latency (nanoseconds per operation) and HTTP throughput (Requests Per Second).
+- **`BenchmarkRunner` (`tests/Benchmark/BenchmarkRunner.php`)**: Measures container DI resolution latency (nanoseconds per operation) and full End-to-End Kernel throughput (`benchmarkKernelThroughput($app)` in Requests Per Second).
+
 
 ---
 
