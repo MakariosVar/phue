@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Core;
 
+use Phue\Core\Database\Connection;
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
@@ -16,6 +18,8 @@ use Throwable;
  */
 class Application
 {
+    private string $basePath;
+    private Config $config;
     private Container $container;
     private Router $router;
     private EventDispatcher $events;
@@ -33,21 +37,28 @@ class Application
     private bool $debug = false;
 
     /**
-     * Initialize core components, register container bindings, and load modules.
+     * Initialize application with root directory path, load configs, and bootstrap infrastructure.
      *
-     * @param array<string, mixed> $config Configuration map containing debug flag and module classes.
+     * @param string $basePath Application root directory.
      */
-    public function __construct(array $config = [])
+    public function __construct(string $basePath)
     {
+        $this->basePath = rtrim($basePath, '/\\');
+
         $this->container = new Container();
+        $this->config = new Config($this->basePath . '/config');
         $this->router = new Router();
         $this->events = new EventDispatcher();
-        $this->debug = (bool) ($config['debug'] ?? false);
+        $this->debug = (bool) $this->config->get('app.debug', false);
 
         // Register core framework singletons into DI container
         $this->registerCoreBindings();
 
-        $this->loadModules($config['modules'] ?? []);
+        // Boot active database connection if defined in config
+        $this->bootstrapDatabase();
+
+        // Load configured module classes
+        $this->loadModules($this->config->get('app.modules', []));
     }
 
     /**
@@ -57,10 +68,53 @@ class Application
      */
     private function registerCoreBindings(): void
     {
+        $this->container->singleton(Config::class, fn (): Config => $this->config);
         $this->container->singleton(Container::class, fn (): Container => $this->container);
         $this->container->singleton(Router::class, fn (): Router => $this->router);
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
+    }
+
+    /**
+     * Automatically bootstrap Active Record and Database Connection using config values.
+     *
+     * @return void
+     */
+    private function bootstrapDatabase(): void
+    {
+        $defaultConnection = $this->config->get('database.default');
+
+        if (!$defaultConnection) {
+            return;
+        }
+
+        $dbConfig = $this->config->get("database.connections.{$defaultConnection}");
+
+        if (is_array($dbConfig)) {
+            $connection = new Connection($dbConfig);
+            $this->container->singleton(Connection::class, fn (): Connection => $connection);
+            BaseActiveRecord::setConnection($connection);
+        }
+    }
+
+    /**
+     * Retrieve the root application directory path.
+     *
+     * @return string
+     */
+    public function getBasePath(): string
+    {
+        return $this->basePath;
+    }
+
+    /**
+     * Retrieve the application configuration instance.
+     *
+     * @return Config
+     */
+    public function getConfig(): Config
+    {
+        return $this->config;
     }
 
     /**

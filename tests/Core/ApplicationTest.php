@@ -25,7 +25,7 @@ class ApplicationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->app = new Application(['debug' => true]);
+        $this->app = new Application(dirname(__DIR__, 2));
         
         // Reset static tracker before each test run
         ExecutionTracker::$log = [];
@@ -171,6 +171,28 @@ class ApplicationTest extends TestCase
         $this->assertSame($container, $container->get(Container::class));
         $this->assertSame($this->app->getRouter(), $container->get(Router::class));
         $this->assertSame($this->app->getEvents(), $container->get(EventDispatcher::class));
+    }
+
+    /**
+     * Test Application loads Config and supports dot-notation lookup and dynamic setter.
+     */
+    public function testApplicationLoadsConfigAndProvidesDotNotationAccess(): void
+    {
+        $config = $this->app->getConfig();
+        $this->assertEquals(dirname(__DIR__, 2), $this->app->getBasePath());
+
+        // Test dot-notation get & has
+        $this->assertTrue($config->has('app.name'));
+        $this->assertEquals('Phue App', $config->get('app.name'));
+        $this->assertTrue($config->get('app.debug'));
+        $this->assertEquals('sqlite', $config->get('database.default'));
+
+        // Test fallback default value
+        $this->assertEquals('fallback_val', $config->get('non.existent.key', 'fallback_val'));
+
+        // Test dynamic setter
+        $config->set('custom.nested.setting', 'active');
+        $this->assertEquals('active', $config->get('custom.nested.setting'));
     }
 }
 

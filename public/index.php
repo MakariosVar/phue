@@ -1,17 +1,16 @@
 <?php
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Application;
 use Phue\Core\Request;
 
-$app = new Application(['debug' => true]);
+// Initialize Application Kernel with Root Directory
+$app = new Application(dirname(__DIR__));
 
-// Register controller routes
-$app->getRouter()->scanControllers(dirname(__DIR__) . '/App/Controllers', 'App\\Controllers');
+// Register application controllers
+$app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
 
-// Capture incoming HTTP request and handle it
-$request = Request::capture();
-$response = $app->handle($request);
-
-// Send HTTP headers and body back to browser/curl
+// Capture HTTP Request & Handle
+$response = $app->handle(Request::capture());
 $response->send();

@@ -62,7 +62,7 @@ final class ProductionHardeningTest extends TestCase
      */
     public function testKernelBenchmark(): void
     {
-        $app = new Application();
+        $app = new Application(dirname(__DIR__, 2));
         $app->getRouter()->get('/health/live', static fn(): Response => new Response('OK', 200));
 
         $runner = new BenchmarkRunner();

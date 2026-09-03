@@ -25,7 +25,7 @@ class DemoAppIntegrationTest extends TestCase
     {
         parent::setUp();
 
-        $this->app = new Application(['debug' => true]);
+        $this->app = new Application(dirname(__DIR__, 2));
 
         // Register Demo controllers from App/Controllers directory
         $controllersDir = dirname(__DIR__, 2) . '/App/Controllers';
@@ -69,16 +69,35 @@ class DemoAppIntegrationTest extends TestCase
     }
 
     /**
-     * Test Product ActiveRecord model properties and fillable configuration.
+     * Test Product ActiveRecord model properties and Schii-annotated public fields.
      */
     public function testProductModelConfiguration(): void
     {
         $product = new Product();
         $product->name = 'Phue T-Shirt';
-        $product->price = '29.99';
+        $product->price = 29.99;
+        $product->description = 'Official Phue Framework merch';
 
         $this->assertEquals('products', $product->getTable());
         $this->assertEquals('Phue T-Shirt', $product->name);
-        $this->assertEquals('29.99', $product->price);
+        $this->assertSame(29.99, $product->price);
+        $this->assertEquals('Official Phue Framework merch', $product->description);
+        $this->assertNull($product->id);
+        $this->assertNull($product->created_at);
+    }
+
+    /**
+     * Test Application automatically bootstraps Config and Database Connection from config directory.
+     */
+    public function testApplicationBootstrapsConfigAndDatabaseConnection(): void
+    {
+        $container = $this->app->getContainer();
+
+        $this->assertTrue($container->has(\Phue\Core\Config::class));
+        $this->assertTrue($container->has(\Phue\Core\Database\Connection::class));
+
+        $config = $container->get(\Phue\Core\Config::class);
+        $this->assertEquals('sqlite', $config->get('database.default'));
     }
 }
+
