@@ -3,12 +3,11 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Application;
 use Phue\Core\Request;
-use App\Controllers\UserController;
 
 $app = new Application(['debug' => true]);
 
 // Register controller routes
-$app->getRouter()->scanControllers(__DIR__ . '/Controllers', 'App\\Controllers');
+$app->getRouter()->scanControllers(dirname(__DIR__) . '/App/Controllers', 'App\\Controllers');
 
 // Capture incoming HTTP request and handle it
 $request = Request::capture();

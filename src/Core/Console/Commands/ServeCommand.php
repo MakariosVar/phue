@@ -43,7 +43,7 @@ final class ServeCommand implements CommandInterface
      */
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
-        $host = '127.0.0.1';
+        $host = '0.0.0.0';
         $port = '8000';
 
         foreach ($args as $arg) {
