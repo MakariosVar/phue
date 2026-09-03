@@ -257,6 +257,31 @@ $response = Response::html('<h1>Hello</h1>');
 - **`send()`** sends the response: guards with `headers_sent()`, then sets the
   status line, each header, and echoes the body.
 
+### PSR-7 interop (conversion)
+
+Phue provides **conversion** (not inheritance) between its native `Request`/`Response`
+and PSR-7 objects, powered by [`nyholm/psr7`](https://github.com/Nyholm/psr7). This
+is what lets the persistent server adapters (e.g. `RoadRunnerAdapter`) talk to
+PSR-7 runtimes while the core classes stay lean.
+
+```php
+// From a PSR-7 ServerRequest (e.g. from RoadRunner) into a native Phue Request
+$request = Phue\Core\Request::fromPsr7($psr7ServerRequest);
+
+// From a native Phue Response into a PSR-7 Response (e.g. sent back to the worker)
+$psr7Response = $response->toPsr7(); // Psr\Http\Message\ResponseInterface
+```
+
+Notes:
+
+- `Request::fromPsr7()` accepts any `Psr\Http\Message\ServerRequestInterface` and
+  maps headers (joined with `, `), query params, parsed body, server params, method,
+  and URI path onto a native `Request`.
+- `Response::toPsr7()` returns a `Nyholm\Psr7\Response` with the same status code,
+  headers, and body (`$content`).
+- This requires the `nyholm/psr7` package (a runtime dependency declared in
+  `composer.json`).
+
 ---
 
 ## 4. EventDispatcher
