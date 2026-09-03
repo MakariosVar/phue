@@ -4,10 +4,14 @@ namespace Phue\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
+use Phue\Core\Container;
+use Phue\Core\EventDispatcher;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Middleware;
 use Phue\Core\Routing\Attribute\Route;
+use Phue\Core\Routing\Router;
+
 
 /**
  * Unit and integration tests for Application core lifecycle, router dispatching, and middleware pipeline.
@@ -155,7 +159,21 @@ class ApplicationTest extends TestCase
         $this->assertNotContains('Action', ExecutionTracker::$log);
         $this->assertSame(['ClassMiddleware:Blocked'], ExecutionTracker::$log);
     }
+
+    /**
+     * Tests that Application registers its core infrastructure singletons in the Container.
+     */
+    public function testApplicationRegistersCoreBindingsInContainer(): void
+    {
+        $container = $this->app->getContainer();
+
+        $this->assertSame($this->app, $container->get(Application::class));
+        $this->assertSame($container, $container->get(Container::class));
+        $this->assertSame($this->app->getRouter(), $container->get(Router::class));
+        $this->assertSame($this->app->getEvents(), $container->get(EventDispatcher::class));
+    }
 }
+
 
 /**
  * Dummy Controller for Container Resolution test.

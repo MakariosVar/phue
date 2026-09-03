@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core;
 
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
@@ -31,9 +33,9 @@ class Application
     private bool $debug = false;
 
     /**
-     * Initialize core components and modules.
+     * Initialize core components, register container bindings, and load modules.
      *
-     * @param array<string, mixed> $config
+     * @param array<string, mixed> $config Configuration map containing debug flag and module classes.
      */
     public function __construct(array $config = [])
     {
@@ -42,14 +44,30 @@ class Application
         $this->events = new EventDispatcher();
         $this->debug = (bool) ($config['debug'] ?? false);
 
+        // Register core framework singletons into DI container
+        $this->registerCoreBindings();
+
         $this->loadModules($config['modules'] ?? []);
     }
 
     /**
-     * Register a global HTTP middleware.
+     * Bind core infrastructure instances into the dependency injection container.
      *
-     * @param callable|string $middleware
-     * @return self
+     * @return void
+     */
+    private function registerCoreBindings(): void
+    {
+        $this->container->singleton(Container::class, fn (): Container => $this->container);
+        $this->container->singleton(Router::class, fn (): Router => $this->router);
+        $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
+        $this->container->singleton(self::class, fn (): self => $this);
+    }
+
+    /**
+     * Register a global HTTP middleware callable or class name to the stack.
+     *
+     * @param callable|string $middleware Callable implementation or class FQCN to be resolved via DI container.
+     * @return self Fluent instance reference.
      */
     public function use(callable|string $middleware): self
     {
@@ -61,8 +79,8 @@ class Application
     /**
      * Handle incoming HTTP Request through global middleware pipeline and router.
      *
-     * @param Request $request
-     * @return Response
+     * @param Request $request Incoming HTTP request object.
+     * @return Response Standardized HTTP response object.
      */
     public function handle(Request $request): Response
     {
@@ -98,8 +116,8 @@ class Application
     /**
      * Dispatch request to router, wrap route-level middlewares, and resolve handler execution.
      *
-     * @param Request $request
-     * @return Response
+     * @param Request $request Request instance to match against registered routes.
+     * @return Response Evaluated controller or middleware response.
      */
     protected function dispatchToRouter(Request $request): Response
     {
@@ -152,8 +170,8 @@ class Application
     /**
      * Convert handler return value into a valid Response object.
      *
-     * @param mixed $result
-     * @return Response
+     * @param mixed $result Raw output returned from a route action or controller.
+     * @return Response Formatted response instance.
      */
     protected function normalizeResponse(mixed $result): Response
     {
@@ -169,9 +187,9 @@ class Application
     }
 
     /**
-     * Load application modules.
+     * Instantiate and register application module extensions.
      *
-     * @param array<int, string> $modules
+     * @param array<int, string> $modules List of FQCNs representing application modules.
      * @return void
      */
     protected function loadModules(array $modules): void
@@ -189,16 +207,31 @@ class Application
         }
     }
 
+    /**
+     * Retrieve the primary dependency injection container.
+     *
+     * @return Container Application DI container instance.
+     */
     public function getContainer(): Container
     {
         return $this->container;
     }
 
+    /**
+     * Retrieve the primary HTTP request router instance.
+     *
+     * @return Router Application routing dispatcher instance.
+     */
     public function getRouter(): Router
     {
         return $this->router;
     }
 
+    /**
+     * Retrieve the core event dispatcher instance.
+     *
+     * @return EventDispatcher Central event publisher and listener manager.
+     */
     public function getEvents(): EventDispatcher
     {
         return $this->events;
