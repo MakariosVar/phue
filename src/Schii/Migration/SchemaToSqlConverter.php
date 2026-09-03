@@ -33,6 +33,10 @@ final class SchemaToSqlConverter
         ];
 
         foreach ($schema->fields as $field) {
+            // Skip 'id' field as primary key is already defined above
+            if ($field->name === 'id') {
+                continue;
+            }
             $columns[] = $this->buildColumnSql($field);
         }
 
