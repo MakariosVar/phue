@@ -110,4 +110,190 @@ class AuthTest extends TestCase
         $res200 = $middleware->handle($request, $next);
         $this->assertEquals(200, $res200->getStatusCode());
     }
+
+    // --- AuthManager Extended Tests ---
+
+    public function testLogoutClearsIdentity(): void
+    {
+        $auth = new AuthManager([]);
+        $user = new DummyUser(1);
+
+        $auth->login($user);
+        $this->assertTrue($auth->check());
+        $this->assertNotNull($auth->getUser());
+
+        $auth->logout();
+        $this->assertFalse($auth->check());
+        $this->assertNull($auth->getUser());
+    }
+
+    public function testGetUserReturnsNullWhenNotAuthenticated(): void
+    {
+        $auth = new AuthManager([]);
+        $this->assertNull($auth->getUser());
+    }
+
+    public function testAuthenticateReturnsNullWhenAllAuthenticatorsFail(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->willReturn(null);
+
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $tokenAuth = new BearerTokenAuthenticator(fn(string $token) => null);
+
+        $auth = new AuthManager([$sessionAuth, $tokenAuth]);
+        $result = $auth->authenticate($request);
+
+        $this->assertNull($result);
+        $this->assertFalse($auth->check());
+    }
+
+    public function testLoginOverwritesPreviousIdentity(): void
+    {
+        $auth = new AuthManager([]);
+
+        $auth->login(new DummyUser(1));
+        $this->assertSame(1, $auth->getUser()->getId());
+
+        $auth->login(new DummyUser(2));
+        $this->assertSame(2, $auth->getUser()->getId());
+    }
+
+    // --- BearerTokenAuthenticator Extended Tests ---
+
+    public function testBearerTokenAuthenticatorWithNoAuthHeader(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => new DummyUser(1));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn(null);
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorWithEmptyAuthHeader(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => new DummyUser(1));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('');
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorWithNonBearerHeader(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => new DummyUser(1));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('Basic abc123');
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorWithEmptyToken(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => new DummyUser(1));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('Bearer ');
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorWithWhitespaceToken(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => new DummyUser(1));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('Bearer   ');
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorResolverReturnsNull(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(fn(string $t) => null);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('Bearer invalid-token');
+
+        $this->assertNull($authenticator->authenticate($request));
+    }
+
+    public function testBearerTokenAuthenticatorResolverReturnsIdentity(): void
+    {
+        $authenticator = new BearerTokenAuthenticator(function (string $token) {
+            return $token === 'valid' ? new DummyUser(99) : null;
+        });
+
+        $request = $this->createMock(Request::class);
+        $request->method('getHeader')->with('Authorization')->willReturn('Bearer valid');
+
+        $identity = $authenticator->authenticate($request);
+        $this->assertNotNull($identity);
+        $this->assertSame(99, $identity->getId());
+    }
+
+    // --- RbacManager Extended Tests ---
+
+    public function testRbacCheckAccessReturnsFalseForUnassignedUser(): void
+    {
+        $rbac = new RbacManager();
+        $rbac->addRole('admin', ['everything']);
+
+        $this->assertFalse($rbac->checkAccess(999, 'everything'));
+    }
+
+    public function testRbacMultipleRoleAssignments(): void
+    {
+        $rbac = new RbacManager();
+        $rbac->addRole('editor', ['posts.update']);
+        $rbac->addRole('moderator', ['comments.delete']);
+
+        $rbac->assign(5, 'editor');
+        $rbac->assign(5, 'moderator');
+
+        $this->assertTrue($rbac->checkAccess(5, 'posts.update'));
+        $this->assertTrue($rbac->checkAccess(5, 'comments.delete'));
+        $this->assertFalse($rbac->checkAccess(5, 'admin.access'));
+    }
+
+    public function testRbacRoleWithNoPermissions(): void
+    {
+        $rbac = new RbacManager();
+        $rbac->addRole('guest', []);
+        $rbac->assign(1, 'guest');
+
+        $this->assertFalse($rbac->checkAccess(1, 'anything'));
+    }
+
+    public function testRbacAddRoleOverwritesExistingPermissions(): void
+    {
+        $rbac = new RbacManager();
+        $rbac->addRole('admin', ['old.permission']);
+        $rbac->addRole('admin', ['new.permission']);
+
+        $rbac->assign(1, 'admin');
+
+        $this->assertFalse($rbac->checkAccess(1, 'old.permission'));
+        $this->assertTrue($rbac->checkAccess(1, 'new.permission'));
+    }
+
+    public function testRbacDeepInheritanceChain(): void
+    {
+        $rbac = new RbacManager();
+        $rbac->addRole('viewer', ['posts.read']);
+        $rbac->addRole('editor', ['posts.write']);
+        $rbac->addRole('admin', ['system.manage']);
+
+        $rbac->addChild('admin', 'editor');
+        $rbac->addChild('editor', 'viewer');
+
+        $rbac->assign(1, 'admin');
+
+        $this->assertTrue($rbac->checkAccess(1, 'posts.read'));
+        $this->assertTrue($rbac->checkAccess(1, 'posts.write'));
+        $this->assertTrue($rbac->checkAccess(1, 'system.manage'));
+    }
 }

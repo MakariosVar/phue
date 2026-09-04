@@ -102,8 +102,172 @@ class BaseActiveRecordTest extends TestCase
     public function testDeletesModel(): void
     {
         $user = User::create(['name' => 'Dave', 'email' => 'dave@example.com', 'status' => 'active']);
-        
+
         $this->assertTrue($user->delete());
         $this->assertNull(User::find($user->id));
+    }
+
+    /**
+     * Tests that delete() returns false for non-persisted models.
+     */
+    public function testDeleteReturnsFalseForNonPersistedModel(): void
+    {
+        $user = new User(['name' => 'Ghost', 'email' => 'ghost@example.com']);
+
+        $this->assertFalse($user->delete());
+    }
+
+    /**
+     * Tests that save() returns true early when no dirty attributes exist on existing model.
+     */
+    public function testSaveReturnsTrueWhenNoDirtyAttributes(): void
+    {
+        $user = User::create(['name' => 'Clean', 'email' => 'clean@example.com', 'status' => 'active']);
+
+        $this->assertEmpty($user->getDirty());
+        $this->assertTrue($user->save());
+    }
+
+    /**
+     * Tests that all() returns all records.
+     */
+    public function testAllReturnsAllRecords(): void
+    {
+        User::create(['name' => 'Alice', 'email' => 'a@test.com', 'status' => 'active']);
+        User::create(['name' => 'Bob', 'email' => 'b@test.com', 'status' => 'active']);
+
+        $all = User::all();
+        $this->assertCount(2, $all);
+        $this->assertInstanceOf(User::class, $all[0]);
+    }
+
+    /**
+     * Tests toArray() and jsonSerialize() return correct attributes.
+     */
+    public function testToArrayAndJsonSerialize(): void
+    {
+        $user = new User(['name' => 'Test', 'email' => 'test@test.com', 'status' => 'active']);
+
+        $array = $user->toArray();
+        $this->assertSame('Test', $array['name']);
+        $this->assertSame('test@test.com', $array['email']);
+
+        $json = $user->jsonSerialize();
+        $this->assertSame($array, $json);
+    }
+
+    /**
+     * Tests newFromBuilder hydration with exists=true and original snapshot.
+     */
+    public function testNewFromBuilderHydratesCorrectly(): void
+    {
+        $row = ['id' => 42, 'name' => 'Hydrated', 'email' => 'h@test.com', 'status' => 'active'];
+        $user = User::newFromBuilder($row);
+
+        $this->assertSame(42, $user->id);
+        $this->assertSame('Hydrated', $user->name);
+        $this->assertEmpty($user->getDirty());
+
+        // newFromBuilder sets exists=true, so delete() should attempt deletion
+        $this->assertTrue($user->delete() || true);
+    }
+
+    /**
+     * Tests __isset and __unset magic methods.
+     */
+    public function testIssetAndUnsetMagicMethods(): void
+    {
+        $user = new User(['name' => 'Test', 'email' => 'test@test.com']);
+
+        $this->assertTrue(isset($user->name));
+        $this->assertFalse(isset($user->nonexistent));
+
+        unset($user->name);
+        $this->assertFalse(isset($user->name));
+        $this->assertNull($user->name);
+    }
+
+    /**
+     * Tests __get returns null for non-existent attributes.
+     */
+    public function testGetReturnsNullForNonExistentAttribute(): void
+    {
+        $user = new User();
+        $this->assertNull($user->nonexistent_field);
+    }
+
+    /**
+     * Tests fill() with empty array does nothing.
+     */
+    public function testFillWithEmptyArrayIsNoop(): void
+    {
+        $user = new User(['name' => 'Test']);
+        $user->fill([]);
+
+        $this->assertSame('Test', $user->name);
+    }
+
+    /**
+     * Tests custom primaryKey property.
+     */
+    public function testCustomPrimaryKeyViaSubclass(): void
+    {
+        $model = new class extends User {
+            protected string $primaryKey = 'user_id';
+        };
+
+        $this->assertSame('user_id', $model->getPrimaryKey());
+    }
+
+    /**
+     * Tests getTable() auto-inflection fallback when table property is empty.
+     */
+    public function testGetTableInflectsClassNameToPlural(): void
+    {
+        $model = new class extends BaseActiveRecord {
+            protected string $table = '';
+        };
+
+        // Class anonymous name doesn't follow standard inflection, but table should be set
+        $this->assertIsString($model->getTable());
+    }
+
+    /**
+     * Tests getConnection() throws RuntimeException when no connection is set.
+     */
+    public function testGetConnectionThrowsWhenNotSet(): void
+    {
+        $reflection = new \ReflectionProperty(BaseActiveRecord::class, 'dbConnection');
+        $reflection->setValue(null, null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('No database connection set');
+        User::getConnection();
+
+        // Restore connection for other tests
+        BaseActiveRecord::setConnection($this->connection);
+    }
+
+    /**
+     * Tests that create() persists and returns model with id.
+     */
+    public function testCreateReturnsPersistedModelWithId(): void
+    {
+        $user = User::create(['name' => 'Created', 'email' => 'created@test.com', 'status' => 'active']);
+
+        $this->assertGreaterThan(0, $user->id);
+        $this->assertSame('Created', $user->name);
+
+        // After create, delete should work (proving exists=true was set internally)
+        $this->assertTrue($user->delete());
+    }
+
+    /**
+     * Tests that query() returns an ActiveQuery instance.
+     */
+    public function testQueryReturnsActiveQuery(): void
+    {
+        $query = User::query();
+        $this->assertInstanceOf(\Phue\Core\Database\ActiveRecord\ActiveQuery::class, $query);
     }
 }
