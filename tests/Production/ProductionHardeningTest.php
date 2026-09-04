@@ -190,6 +190,26 @@ final class ProductionHardeningTest extends TestCase
         $this->assertSame('UP', $report['checks']['disk']['status']);
     }
 
+    public function testHealthCheckerMemoryDownWhenThresholdExceeded(): void
+    {
+        $checker = new HealthChecker(maxMemoryThresholdMb: 0.0001, basePath: sys_get_temp_dir());
+        $report = $checker->check();
+
+        $this->assertFalse($report['healthy']);
+        $this->assertSame('DOWN', $report['checks']['memory']['status']);
+        $this->assertStringContainsString('exceeds threshold', $report['checks']['memory']['message']);
+    }
+
+    public function testHealthCheckerDiskDownWhenSpaceProbeFails(): void
+    {
+        $checker = new HealthChecker(basePath: '/nonexistent-phue-dir-xyz');
+        $report = $checker->check();
+
+        $this->assertFalse($report['healthy']);
+        $this->assertSame('DOWN', $report['checks']['disk']['status']);
+        $this->assertStringContainsString('critically low', $report['checks']['disk']['message']);
+    }
+
     public function testHealthCheckerReturnsAllFourCheckCategories(): void
     {
         $checker = new HealthChecker(basePath: sys_get_temp_dir());
