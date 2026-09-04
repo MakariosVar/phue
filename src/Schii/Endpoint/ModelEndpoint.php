@@ -21,7 +21,7 @@ final class ModelEndpoint
      */
     public function __construct(
         private readonly SchemaRegistry $schemaRegistry,
-        private array $entityMapping = []
+        private array $entityMapping = [],
     ) {}
 
     /**
@@ -45,8 +45,10 @@ final class ModelEndpoint
      */
     public function schema(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
-        $modelClass = $this->resolveModelClass((string)$entity);
+        $entity = is_array($params)
+            ? $params["entity"] ?? reset($params)
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
         $schema = $this->schemaRegistry->get($modelClass);
 
         return Response::json($schema->toArray());
@@ -61,26 +63,30 @@ final class ModelEndpoint
      */
     public function index(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
-        $modelClass = $this->resolveModelClass((string)$entity);
+        $entity = is_array($params)
+            ? $params["entity"] ?? reset($params)
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
         $schema = $this->schemaRegistry->get($modelClass);
 
         /** @var ActiveQuery $query */
         $query = $modelClass::query();
 
         // 1. Global Search across searchable fields
-        $searchQuery = $request->input('q') ?? $request->getQuery('q');
+        $searchQuery = $request->input("q") ?? $request->getQuery("q");
         if (!empty($searchQuery)) {
-            $searchableFields = array_values(array_filter(
-                $schema->fields,
-                static fn ($field) => $field->searchable
-            ));
+            $searchableFields = array_values(
+                array_filter(
+                    $schema->fields,
+                    static fn($field) => $field->searchable,
+                ),
+            );
 
             foreach ($searchableFields as $index => $field) {
                 if ($index === 0) {
-                    $query->where($field->name, 'LIKE', "%{$searchQuery}%");
+                    $query->where($field->name, "LIKE", "%{$searchQuery}%");
                 } else {
-                    $query->orWhere($field->name, 'LIKE', "%{$searchQuery}%");
+                    $query->orWhere($field->name, "LIKE", "%{$searchQuery}%");
                 }
             }
         }
@@ -88,37 +94,64 @@ final class ModelEndpoint
         // 2. Dynamic Filtering across filterable fields
         foreach ($schema->fields as $field) {
             if ($field->filterable) {
-                $value = $request->input($field->name) ?? $request->getQuery($field->name);
-                if ($value !== '' && $value !== null) {
-                    $query->where($field->name, '=', $value);
+                $value =
+                    $request->input($field->name) ??
+                    $request->getQuery($field->name);
+                if ($value !== "" && $value !== null) {
+                    $query->where($field->name, "=", $value);
                 }
             }
         }
 
         // 3. Dynamic Sorting across sortable fields
-        $sort = $request->input('sort') ?? $request->getQuery('sort');
-        $direction = strtoupper((string) ($request->input('direction') ?? $request->getQuery('direction') ?? 'ASC')) === 'DESC' ? 'DESC' : 'ASC';
+        $sort = $request->input("sort") ?? $request->getQuery("sort");
+        $direction =
+            strtoupper(
+                (string) ($request->input("direction") ??
+                    ($request->getQuery("direction") ?? "ASC")),
+            ) === "DESC"
+                ? "DESC"
+                : "ASC";
 
-        if ($sort && isset($schema->fields[$sort]) && $schema->fields[$sort]->sortable) {
+        if (
+            $sort &&
+            isset($schema->fields[$sort]) &&
+            $schema->fields[$sort]->sortable
+        ) {
             $query->orderBy($sort, $direction);
         }
 
         // 4. Pagination
-        $page = max(1, (int) ($request->input('page') ?? $request->getQuery('page') ?? 1));
-        $limit = max(1, min(100, (int) ($request->input('limit') ?? $request->getQuery('limit') ?? 25)));
+        $page = max(
+            1,
+            (int) ($request->input("page") ??
+                ($request->getQuery("page") ?? 1)),
+        );
+        $limit = max(
+            1,
+            min(
+                100,
+                (int) ($request->input("limit") ??
+                    ($request->getQuery("limit") ?? 25)),
+            ),
+        );
         $total = (int) (clone $query)->count();
 
-        $items = $query->offset(($page - 1) * $limit)
+        $items = $query
+            ->offset(($page - 1) * $limit)
             ->limit($limit)
             ->get();
 
         return Response::json([
-            'data' => array_map(static fn (BaseActiveRecord $item) => $item->toArray(), $items),
-            'meta' => [
-                'total' => $total,
-                'page' => $page,
-                'limit' => $limit,
-                'last_page' => (int) ceil($total / $limit),
+            "data" => array_map(
+                static fn(BaseActiveRecord $item) => $item->toArray(),
+                $items,
+            ),
+            "meta" => [
+                "total" => $total,
+                "page" => $page,
+                "limit" => $limit,
+                "last_page" => (int) ceil($total / $limit),
             ],
         ]);
     }
@@ -132,17 +165,17 @@ final class ModelEndpoint
      */
     public function show(Request $request, array $params): Response
     {
-        $entity = $params['entity'] ?? null;
-        $id = $params['id'] ?? null;
+        $entity = $params["entity"] ?? null;
+        $id = $params["id"] ?? null;
 
-        $modelClass = $this->resolveModelClass((string)$entity);
+        $modelClass = $this->resolveModelClass((string) $entity);
         $model = $modelClass::find($id);
 
         if (!$model) {
-            return Response::json(['error' => 'Resource not found'], 404);
+            return Response::json(["error" => "Resource not found"], 404);
         }
 
-        return Response::json(['data' => $model->toArray()]);
+        return Response::json(["data" => $model->toArray()]);
     }
 
     /**
@@ -154,52 +187,66 @@ final class ModelEndpoint
      */
     public function store(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? ($params['entity'] ?? reset($params)) : $params;
-        $modelClass = $this->resolveModelClass((string)$entity);
-        
+        $entity = is_array($params)
+            ? $params["entity"] ?? reset($params)
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
+
         /** @var BaseActiveRecord $model */
         $model = new $modelClass();
         $inputData = $this->extractInputData($request);
-        
+
         // Basic validation for required fields
         $modelClassReflection = new \ReflectionClass($modelClass);
         $properties = $modelClassReflection->getProperties();
-        
+
         foreach ($properties as $property) {
             if ($property->isPublic() && !$property->isStatic()) {
                 $propertyName = $property->getName();
                 $propertyType = $property->getType();
-                
+
                 // Check if property is required (has no default value or is explicitly required)
                 if ($propertyType && !$propertyType->allowsNull()) {
                     if (!array_key_exists($propertyName, $inputData)) {
-                        return Response::json([
-                            'error' => 'Validation failed',
-                            'message' => "Required field '{$propertyName}' is missing"
-                        ], 422);
+                        return Response::json(
+                            [
+                                "error" => "Validation failed",
+                                "message" => "Required field '{$propertyName}' is missing",
+                            ],
+                            422,
+                        );
                     }
-                    
+
                     // Check for empty values that would cause SQL errors
-                    if ($inputData[$propertyName] === null || $inputData[$propertyName] === '') {
-                        return Response::json([
-                            'error' => 'Validation failed',
-                            'message' => "Required field '{$propertyName}' cannot be empty"
-                        ], 422);
+                    if (
+                        $inputData[$propertyName] === null ||
+                        $inputData[$propertyName] === ""
+                    ) {
+                        return Response::json(
+                            [
+                                "error" => "Validation failed",
+                                "message" => "Required field '{$propertyName}' cannot be empty",
+                            ],
+                            422,
+                        );
                     }
                 }
             }
         }
-        
+
         $model->fill($inputData);
 
         if (!$model->save()) {
-            return Response::json([
-                'error' => 'Validation failed',
-                'errors' => $model->getErrors(),
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $model->getErrors(),
+                ],
+                422,
+            );
         }
 
-        return Response::json(['data' => $model->toArray()], 201);
+        return Response::json(["data" => $model->toArray()], 201);
     }
 
     /**
@@ -211,26 +258,29 @@ final class ModelEndpoint
      */
     public function update(Request $request, array $params): Response
     {
-        $entity = $params['entity'] ?? null;
-        $id = $params['id'] ?? null;
+        $entity = $params["entity"] ?? null;
+        $id = $params["id"] ?? null;
 
-        $modelClass = $this->resolveModelClass((string)$entity);
+        $modelClass = $this->resolveModelClass((string) $entity);
         $model = $modelClass::find($id);
 
         if (!$model) {
-            return Response::json(['error' => 'Resource not found'], 404);
+            return Response::json(["error" => "Resource not found"], 404);
         }
 
         $model->fill($this->extractInputData($request));
 
         if (!$model->save()) {
-            return Response::json([
-                'error' => 'Validation failed',
-                'errors' => $model->getErrors(),
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $model->getErrors(),
+                ],
+                422,
+            );
         }
 
-        return Response::json(['data' => $model->toArray()]);
+        return Response::json(["data" => $model->toArray()]);
     }
 
     /**
@@ -242,21 +292,24 @@ final class ModelEndpoint
      */
     public function delete(Request $request, array $params): Response
     {
-        $entity = $params['entity'] ?? null;
-        $id = $params['id'] ?? null;
+        $entity = $params["entity"] ?? null;
+        $id = $params["id"] ?? null;
 
-        $modelClass = $this->resolveModelClass((string)$entity);
+        $modelClass = $this->resolveModelClass((string) $entity);
         $model = $modelClass::find($id);
 
         if (!$model) {
-            return Response::json(['error' => 'Resource not found'], 404);
+            return Response::json(["error" => "Resource not found"], 404);
         }
 
         if (!$model->delete()) {
-            return Response::json(['error' => 'Failed to delete resource'], 500);
+            return Response::json(
+                ["error" => "Failed to delete resource"],
+                500,
+            );
         }
 
-        return Response::json(['message' => 'Resource deleted successfully']);
+        return Response::json(["message" => "Resource deleted successfully"]);
     }
 
     /**
@@ -266,8 +319,11 @@ final class ModelEndpoint
      */
     private function extractInputData(Request $request): array
     {
-        if (method_exists($request, 'getParsedBody')) {
-            return array_merge($request->getQueryParams(), $request->getParsedBody());
+        if (method_exists($request, "getParsedBody")) {
+            return array_merge(
+                $request->getQueryParams(),
+                $request->getParsedBody(),
+            );
         }
 
         return array_merge($request->getQueryParams(), $request->input());
@@ -283,7 +339,9 @@ final class ModelEndpoint
         $key = strtolower($entity);
 
         if (!isset($this->entityMapping[$key])) {
-            throw new \InvalidArgumentException("Unregistered Schii Entity: {$entity}");
+            throw new \InvalidArgumentException(
+                "Unregistered Schii Entity: {$entity}",
+            );
         }
 
         return $this->entityMapping[$key];
