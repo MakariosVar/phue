@@ -1,0 +1,100 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Resolve Composer Autoloader
+$autoloadPaths = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+];
+
+$autoloaderFound = false;
+foreach ($autoloadPaths as $autoloadPath) {
+    if (file_exists($autoloadPath)) {
+        require_once $autoloadPath;
+        $autoloaderFound = true;
+        break;
+    }
+}
+
+if (!$autoloaderFound) {
+    fwrite(STDERR, "Error: Vendor autoload.php not found. Please run 'composer install'." . PHP_EOL);
+    exit(1);
+}
+
+$rawArgs = array_slice($_SERVER['argv'] ?? [], 1);
+
+// Handle --help or -h
+if (in_array('--help', $rawArgs, true) || in_array('-h', $rawArgs, true)) {
+    echo <<<HELP
+Phue Test Runner (PHPUnit Wrapper)
+
+Usage:
+  ./bin/phue_test [options] [phpunit-arguments]
+
+Shortcuts:
+  --unit         Runs unit tests suite (--group unit)
+  --integration  Runs integration tests suite (--group integration)
+  --coverage     Enables code coverage report (--coverage-text)
+
+Examples:
+  ./bin/phue_test --unit
+  ./bin/phue_test --integration --coverage
+  ./bin/phue_test --unit --filter=UserTest
+HELP;
+    echo PHP_EOL;
+    exit(0);
+}
+
+$groups = [];
+$transformedArgs = [$_SERVER['argv'][0] ?? 'phue_test']; // Script name as first PHPUnit argument
+$checkCoverageDriver = false;
+
+for ($i = 0; $i < count($rawArgs); $i++) {
+    $arg = $rawArgs[$i];
+
+    if ($arg === '--unit') {
+        $groups[] = 'unit';
+    } elseif ($arg === '--integration') {
+        $groups[] = 'integration';
+    } elseif ($arg === '--coverage') {
+        $checkCoverageDriver = true;
+        $transformedArgs[] = '--coverage-text';
+    } elseif (str_starts_with($arg, '--group=')) {
+        $parsedGroups = explode(',', substr($arg, 8));
+        foreach ($parsedGroups as $g) {
+            $g = trim($g);
+            if ($g !== '') {
+                $groups[] = $g;
+            }
+        }
+    } elseif ($arg === '--group' && isset($rawArgs[$i + 1])) {
+        $parsedGroups = explode(',', $rawArgs[++$i]);
+        foreach ($parsedGroups as $g) {
+            $g = trim($g);
+            if ($g !== '') {
+                $groups[] = $g;
+            }
+        }
+    } else {
+        // Pass-through any other flag/argument as-is
+        $transformedArgs[] = $arg;
+    }
+}
+
+// 1. Check coverage requirements
+if ($checkCoverageDriver && !extension_loaded('pcov') && !extension_loaded('xdebug')) {
+    fwrite(STDERR, "Error: Code coverage requires 'pcov' or 'xdebug' extension to be enabled." . PHP_EOL);
+    exit(1);
+}
+
+// 2. Safely merge groups without collisions
+if (!empty($groups)) {
+    $uniqueGroups = array_unique($groups);
+    $transformedArgs[] = '--group';
+    $transformedArgs[] = implode(',', $uniqueGroups);
+}
+
+// Execute PHPUnit in-process
+exit((new PHPUnit\TextUI\Application())->run($transformedArgs));
