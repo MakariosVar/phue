@@ -15,7 +15,8 @@
         "nyholm/psr7": "^1.8"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.0",
+        "spiral/roadrunner-http": "^2.0"
     },
     "autoload": {
         "psr-4": {

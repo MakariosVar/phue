@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libcurl4-openssl-dev \
     curl \
-    && docker-php-ext-install zip curl \
+    && docker-php-ext-install zip curl sockets \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -18,3 +18,7 @@ RUN pecl install redis \
 
 RUN pecl install pcov \
     && docker-php-ext-enable pcov
+
+RUN pecl install swoole \
+    && docker-php-ext-enable swoole \
+    && echo "swoole.use_shortname=0" >> /usr/local/etc/php/conf.d/docker-php-ext-swoole.ini
