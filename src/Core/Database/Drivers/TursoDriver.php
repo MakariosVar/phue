@@ -155,7 +155,9 @@ final class TursoDriver implements HttpDriverInterface
 
         $rawResponse = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+
+        // Reset channel, like curl_close
+        $ch = null;
 
         if ($rawResponse === false || $httpCode >= 400) {
             throw new RuntimeException("Turso HTTP request failed with code {$httpCode}: {$rawResponse}");
