@@ -297,4 +297,31 @@ class AuthTest extends TestCase
         $this->assertTrue($rbac->checkAccess(1, 'posts.write'));
         $this->assertTrue($rbac->checkAccess(1, 'system.manage'));
     }
+
+    // --- SessionAuthenticator Active Session Tests ---
+
+    public function testSessionAuthenticatorReturnsIdentityWhenSessionHasUserId(): void
+    {
+        $_SESSION['user_id'] = 7;
+
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $request = $this->createMock(Request::class);
+
+        $identity = $sessionAuth->authenticate($request);
+
+        $this->assertNotNull($identity);
+        $this->assertSame(7, $identity->getId());
+    }
+
+    public function testSessionAuthenticatorReturnsNullWhenSessionHasNoUserId(): void
+    {
+        $_SESSION = [];
+
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $request = $this->createMock(Request::class);
+
+        $result = $sessionAuth->authenticate($request);
+
+        $this->assertNull($result);
+    }
 }

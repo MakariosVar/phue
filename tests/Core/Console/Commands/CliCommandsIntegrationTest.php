@@ -159,14 +159,21 @@ PHP
         $this->assertSame(1, $this->countTableRows($this->openFileDb(), 'users'));
     }
 
-    public function testMigrateCommandReportsNothingToDo(): void
+    public function testMigrateCommandHandlesMigrationError(): void
     {
         chdir($this->baseDir);
 
+        $brokenClass = 'BrokenMigration' . uniqid();
+        file_put_contents(
+            $this->baseDir . '/database/migrations/' . $brokenClass . '.php',
+            '<?php use Phue\Core\Database\Migration; final class ' . $brokenClass . ' extends Migration { public function up(): void { throw new \RuntimeException("migration boom"); } public function down(): void {} }'
+        );
+
         $result = $this->runCommand(new MigrateCommand(), []);
 
-        $this->assertSame(0, $result['code']);
-        $this->assertStringContainsString('Nothing to migrate.', $result['out']);
+        $this->assertSame(1, $result['code']);
+        $this->assertStringContainsString('Migration error:', $result['err']);
+        @unlink($this->baseDir . '/database/migrations/' . $brokenClass . '.php');
     }
 
     // ------------------------------------------------------------------

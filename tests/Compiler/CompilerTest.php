@@ -237,4 +237,18 @@ final class CompilerTest extends TestCase
         $this->assertStringContainsString('namespace PhueAot', $cppContent);
         $this->assertStringContainsString('ValidAotTargetClass', $cppContent);
     }
+
+    public function testCompatibilityCheckerClassWithNoFileNameIsCompatible(): void
+    {
+        $suffix = uniqid();
+        $className = "Phue\\Tests\\Compiler\\EvalDefined_{$suffix}";
+        eval("namespace Phue\\Tests\\Compiler { class EvalDefined_{$suffix} {} }");
+
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass($className);
+
+        // No file → file_get_contents branch skipped → fully compatible
+        $this->assertTrue($report->isFullyCompatible());
+        $this->assertFalse($report->isPartiallyCompatible());
+    }
 }
