@@ -1,15 +1,20 @@
 version: '3.8'
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: phue_app
-    ports:
-      - "8000:8000"
-    volumes:
-      - ../..:/app
-    working_dir: /app
-    stdin_open: true # keeping interactive terminal alive
-    tty: true        # keeping interactive terminal alive
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: phue_app
+        ports:
+            - "8000:8000"
+        volumes:
+            - ../..:/app
+        working_dir: /app
+        stdin_open: true # keeping interactive terminal alive
+        tty: true        # keeping interactive terminal alive
+    redis:
+        image: redis:7-alpine
+        container_name: phue_redis
+        ports:
+            - "6379:6379"
