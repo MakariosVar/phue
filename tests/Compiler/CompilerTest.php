@@ -17,6 +17,7 @@ use Phue\Tests\Compiler\Fixtures\ValidAotTargetClass;
  *
  * @package Phue\Tests\Compiler
  */
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class CompilerTest extends TestCase
 {
     private string $tempBuildDir;

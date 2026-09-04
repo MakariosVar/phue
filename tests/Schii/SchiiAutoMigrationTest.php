@@ -61,6 +61,7 @@ class InvalidTableProduct extends BaseActiveRecord
 /**
  * Integration and Unit tests for Schii Auto-Migration system.
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class SchiiAutoMigrationTest extends TestCase
 {
     private Connection $db;

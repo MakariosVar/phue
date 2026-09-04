@@ -7,6 +7,7 @@ use Phue\Core\Console\Commands\MakeControllerCommand;
 use Phue\Core\Console\Commands\MakeModelCommand;
 use Phue\Core\Console\Commands\ServeCommand;
 
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class CommandsTest extends TestCase
 {
     private string $appDir;

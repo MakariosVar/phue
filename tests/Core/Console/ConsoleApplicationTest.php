@@ -25,6 +25,7 @@ class DummyCommand implements CommandInterface
     }
 }
 
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class ConsoleApplicationTest extends TestCase
 {
     public function testRegistersAndExecutesCommand(): void

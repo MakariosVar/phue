@@ -15,6 +15,7 @@ use Phue\Core\Database\Drivers\Abstract\StatementInterface;
  *
  * @package Phue\Tests\Core\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class ConnectionTest extends TestCase
 {
     /**

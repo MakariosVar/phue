@@ -18,6 +18,7 @@ use Phue\Server\WasmAdapter;
  *
  * @package Phue\Tests\Core\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 final class EdgeDriverTest extends TestCase
 {
     /**

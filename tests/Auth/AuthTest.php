@@ -37,6 +37,7 @@ class DummyUser implements IdentityInterface
     }
 }
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class AuthTest extends TestCase
 {
     public function testAuthManagerAuthenticatesViaChain(): void

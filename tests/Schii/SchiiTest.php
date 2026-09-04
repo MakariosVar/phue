@@ -40,6 +40,7 @@ class StubProduct extends BaseActiveRecord
     }
 }
 
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class SchiiTest extends TestCase
 {
     private Connection $db;

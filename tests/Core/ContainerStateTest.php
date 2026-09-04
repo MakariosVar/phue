@@ -21,6 +21,7 @@ class ApplicationSingleton
     public int $counter = 0;
 }
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class ContainerStateTest extends TestCase
 {
     private Container $container;

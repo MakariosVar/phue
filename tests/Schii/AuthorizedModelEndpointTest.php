@@ -40,6 +40,7 @@ class AuthorizedAdminUser implements IdentityInterface
  * Note: The permission string is built as "{entity}.{action}" where {entity} is the
  * schema entity (class short name, e.g. "StubProduct"), NOT the lowercased table name.
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 final class AuthorizedModelEndpointTest extends TestCase
 {
     private SchemaRegistry $registry;

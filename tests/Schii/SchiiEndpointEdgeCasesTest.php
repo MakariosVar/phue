@@ -45,6 +45,7 @@ class EdgeProduct extends BaseActiveRecord
     }
 }
 
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchiiEndpointEdgeCasesTest extends TestCase
 {
     private Connection $db;

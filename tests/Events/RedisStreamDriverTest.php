@@ -18,6 +18,7 @@ use RuntimeException;
  *
  * These tests are skipped when Redis is not available so the core suite stays portable.
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 final class RedisStreamDriverTest extends TestCase
 {
     private const STREAM_PREFIX = 'phue_test_';
@@ -120,8 +121,10 @@ final class RedisStreamDriverTest extends TestCase
     {
         $driver = $this->createDriver();
 
-        // Publish first, then subscribe - consumer group reads from the '>' (new messages only)
-        // To verify handling we publish then subscribe reading via consumer.
+        // Establish the consumer group first (deterministic: '>' only reads messages after group creation)
+        $driver->subscribe($this->streamName, function (array $data) {});
+
+        // Publish after the group exists, then read it back through the same group
         $driver->publish($this->streamName, ['order_id' => 101, 'status' => 'pending']);
 
         $received = null;
@@ -129,15 +132,7 @@ final class RedisStreamDriverTest extends TestCase
             $received = $data;
         });
 
-        // Note: consumer group semantics may deliver pending unacknowledged messages.
-        // If handler captured nothing due to '>' only reading new messages since group creation,
-        // fall back: this test focuses on publish->subscribe roundtrip which should deliver.
-        if ($received === null) {
-            // Handler may not run if group created after publish. Verify stream is intact.
-            $this->assertGreaterThanOrEqual(1, count($this->redis->xRange($this->streamName, '-', '+')));
-            $this->markTestSkipped('XREADGROUP \'>\' reads only messages published after group creation.');
-        }
-
+        $this->assertNotNull($received);
         $this->assertSame(101, $received['order_id']);
         $this->assertSame('pending', $received['status']);
     }
@@ -202,7 +197,10 @@ final class RedisStreamDriverTest extends TestCase
         $driver->subscribe($this->streamName, function (array $data) {});
         $driver->subscribe($this->streamName, function (array $data) {});
 
-        $this->assertTrue(true);
+        // Group must still exist and remain usable after the BUSYGROUP collision
+        $groups = $this->redis->xInfo('GROUPS', $this->streamName);
+        $this->assertIsArray($groups);
+        $this->assertSame('persistent_group', $groups[0]['name']);
     }
 
     public function testPublishDeliversExactEventCountToConsumerGroup(): void

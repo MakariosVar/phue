@@ -15,6 +15,7 @@ use Phue\Tests\Core\Stubs\DummyScanController;
  *
  * @package Phue\Tests\Core\Routing
  */
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class RouterTest extends TestCase
 {
     private Router $router;

@@ -11,6 +11,7 @@ use Phue\Core\Database\Drivers\Pdo\SqliteDriver;
  *
  * @package Phue\Tests\Core\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class SqliteDriverTest extends TestCase
 {
     private SqliteDriver $driver;

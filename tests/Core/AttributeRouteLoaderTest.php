@@ -11,6 +11,7 @@ use Phue\Core\Routing\Loader\AttributeRouteLoader;
  *
  * @package Phue\Tests\Core\Routing
  */
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class AttributeRouteLoaderTest extends TestCase
 {
     private AttributeRouteLoader $loader;

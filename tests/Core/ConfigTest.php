@@ -7,6 +7,7 @@ namespace Phue\Tests\Core;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Config;
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class ConfigTest extends TestCase
 {
     private string $configPath;

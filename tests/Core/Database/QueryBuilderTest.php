@@ -11,6 +11,7 @@ use Phue\Core\Database\QueryBuilder;
  *
  * @package Phue\Tests\Core\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class QueryBuilderTest extends TestCase
 {
     private Connection $connection;

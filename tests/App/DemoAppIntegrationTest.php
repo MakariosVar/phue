@@ -17,6 +17,7 @@ use App\Models\Product;
  * Verifies Front Controller bootstrapping, directory controller scanning,
  * route attribute matching, controller execution, and response normalization.
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class DemoAppIntegrationTest extends TestCase
 {
     private Application $app;

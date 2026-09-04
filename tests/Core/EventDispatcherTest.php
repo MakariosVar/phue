@@ -31,6 +31,7 @@ class UserCreatedEvent extends BaseEvent implements
 
 // --- Tests ---
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class EventDispatcherTest extends TestCase
 {
     private EventDispatcher $dispatcher;

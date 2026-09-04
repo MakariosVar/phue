@@ -20,6 +20,7 @@ use App\Models\Product;
  * - Error handling and edge cases
  * - Database integration and data persistence
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class SchiiIntegrationTest extends TestCase
 {
     private Application $app;
@@ -349,8 +350,8 @@ class SchiiIntegrationTest extends TestCase
         $response = $this->app->handle($request);
 
         $this->assertInstanceOf(Response::class, $response);
-        // For now, accept either 422 or 201 since validation might not be fully implemented
-        $this->assertTrue($response->getStatusCode() === 422 || $response->getStatusCode() === 201);
+        // Strict validation must reject empty required fields / out-of-range values
+        $this->assertSame(422, $response->getStatusCode());
     }
 
     /**
@@ -492,8 +493,8 @@ class SchiiIntegrationTest extends TestCase
         $response = $this->app->handle($request);
 
         $this->assertInstanceOf(Response::class, $response);
-        // For now, accept either 422 or 500 since validation might not be fully implemented
-        $this->assertTrue($response->getStatusCode() === 422 || $response->getStatusCode() === 500);
+        // Missing required fields must be rejected with strict validation
+        $this->assertSame(422, $response->getStatusCode());
     }
 
     /**

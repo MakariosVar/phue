@@ -17,6 +17,7 @@ use Phue\Tests\Benchmark\BenchmarkRunner;
  *
  * @package Phue\Tests\Production
  */
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class ProductionHardeningTest extends TestCase
 {
     /**

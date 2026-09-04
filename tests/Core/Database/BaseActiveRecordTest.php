@@ -19,6 +19,7 @@ class User extends BaseActiveRecord
  *
  * @package Phue\Tests\Core\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class BaseActiveRecordTest extends TestCase
 {
     private Connection $connection;
@@ -168,8 +169,9 @@ class BaseActiveRecordTest extends TestCase
         $this->assertSame('Hydrated', $user->name);
         $this->assertEmpty($user->getDirty());
 
-        // newFromBuilder sets exists=true, so delete() should attempt deletion
-        $this->assertTrue($user->delete() || true);
+        // newFromBuilder sets exists=true, so delete() issues a DELETE for id=42
+        // that row was never persisted, so delete() must report zero affected rows
+        $this->assertFalse($user->delete());
     }
 
     /**

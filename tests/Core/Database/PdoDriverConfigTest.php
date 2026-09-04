@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Drivers\Pdo\MysqlDriver;
 use Phue\Core\Database\Drivers\Pdo\PostgresDriver;
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PdoDriverConfigTest extends TestCase
 {
     public function testMysqlDriverGetName(): void

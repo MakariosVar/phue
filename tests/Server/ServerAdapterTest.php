@@ -12,6 +12,7 @@ use Phue\Core\Response;
 use Phue\Server\FpmAdapter;
 use Phue\Server\RoadRunnerAdapter;
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 class ServerAdapterTest extends TestCase
 {
     public function testFpmAdapterHandlesRequestAndDelegatesToApp(): void
@@ -45,19 +46,16 @@ class ServerAdapterTest extends TestCase
         $adapter->handleRequest($request);
     }
 
-    public function testFlushScopeIsCalledToPreventStateLeakage(): void
+    public function testRoadRunnerAdapterBootStoresContainer(): void
     {
         $container = $this->createMock(Container::class);
-        $container->expects($this->once())->method('flushScope');
+        $container->expects($this->never())->method('flushScope');
 
         $app = $this->createMock(Application::class);
-        $app->method('getContainer')->willReturn($container);
+        $app->expects($this->once())->method('getContainer')->willReturn($container);
 
         $adapter = new RoadRunnerAdapter();
         $adapter->boot($app);
-
-        // Simulate scope flush access verification
-        $container->flushScope();
     }
 
     public function testSwooleAdapterHandlesRequestAndDelegatesToApp(): void
@@ -144,7 +142,7 @@ class ServerAdapterTest extends TestCase
     {
         $adapter = new RoadRunnerAdapter();
         $adapter->shutdown();
-        $this->assertTrue(true);
+        $this->expectNotToPerformAssertions();
     }
 
     public function testSwooleAdapterDefaultConstructorValues(): void

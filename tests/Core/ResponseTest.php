@@ -5,6 +5,7 @@ namespace Phue\Tests\Core;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Response;
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class ResponseTest extends TestCase
 {
     /**

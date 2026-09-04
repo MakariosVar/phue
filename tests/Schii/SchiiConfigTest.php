@@ -12,6 +12,7 @@ use Phue\Schii\Config\SchiiConfig;
  *
  * @package Phue\Tests\Schii
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchiiConfigTest extends TestCase
 {
     /**

@@ -8,6 +8,7 @@ use Phue\Core\Exceptions\ContainerException;
 use Phue\Core\Exceptions\NotFoundException;
 use Phue\Core\Exceptions\CircularDependencyException;
 
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class ContainerTest extends TestCase
 {
     private Container $container;

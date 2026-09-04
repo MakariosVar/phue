@@ -18,6 +18,7 @@ use Phue\Core\Routing\Router;
  *
  * @package Phue\Tests\Core
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class ApplicationTest extends TestCase
 {
     private Application $app;

@@ -16,6 +16,7 @@ use Phue\Core\Console\Commands\MakeMigrationCommand;
  *
  * @package Phue\Tests\Database
  */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class MigratorTest extends TestCase
 {
     private Connection $db;

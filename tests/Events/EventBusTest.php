@@ -18,6 +18,7 @@ final class DummyBroadcastModel {}
  *
  * @package Phue\Tests\Events
  */
+#[\PHPUnit\Framework\Attributes\Group('unit')]
 final class EventBusTest extends TestCase
 {
     /**
