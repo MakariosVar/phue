@@ -6,7 +6,7 @@ namespace Phue\Schii\Endpoint;
 
 use Phue\Auth\AuthManager;
 use Phue\Auth\RbacManager;
-use Phue\Core\Http\Response;
+use Phue\Core\Response;
 use Phue\Schii\Schema\SchemaRegistry;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
