@@ -28,14 +28,14 @@ final class AuthorizedModelEndpoint
     {
         $schema = $this->schemaRegistry->get($modelClass);
         $tableName = $schema->entity;
-        
+
         $requiredPermission = "{$tableName}.{$action}";
 
         $user = $this->auth->getUser();
         if ($user === null || !$this->rbac->checkAccess($user->getId(), $requiredPermission)) {
-            return Response::json(['error' => "Access Denied: Requires '{$requiredPermission}' permission."], 403);
+            return Response::json(['error' => "Access Denied: Requires '{$requiredPermission}' permission."], 403)->toPsr7();
         }
 
-        return Response::json(['status' => 'success', 'action' => $action]);
+        return Response::json(['status' => 'success', 'action' => $action])->toPsr7();
     }
 }
