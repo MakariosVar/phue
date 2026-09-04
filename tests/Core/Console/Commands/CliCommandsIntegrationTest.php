@@ -207,6 +207,31 @@ PHP
     }
 
     // ------------------------------------------------------------------
+    // migrate:rollback with error path
+    // ------------------------------------------------------------------
+
+    public function testMigrateRollbackCommandHandlesRollbackError(): void
+    {
+        chdir($this->baseDir);
+        $brokenClass = 'BrokenRollback' . uniqid();
+        file_put_contents(
+            $this->baseDir . '/database/migrations/' . $brokenClass . '.php',
+            '<?php use Phue\Core\Database\Migration; final class ' . $brokenClass . ' extends Migration { public function up(): void {} public function down(): void { throw new \RuntimeException("rollback boom"); } }'
+        );
+
+        // First apply the broken migration
+        $migrate = $this->runCommand(new MigrateCommand(), []);
+        $this->assertSame(0, $migrate['code']);
+
+        // Rollback should catch the error
+        $rollback = $this->runCommand(new MigrateRollbackCommand(), []);
+        $this->assertSame(1, $rollback['code']);
+        $this->assertStringContainsString('Rollback error:', $rollback['err']);
+
+        @unlink($this->baseDir . '/database/migrations/' . $brokenClass . '.php');
+    }
+
+    // ------------------------------------------------------------------
     // schii:migrate
     // ------------------------------------------------------------------
 

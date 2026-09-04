@@ -4,6 +4,7 @@ namespace Phue\Tests\Core\Console;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Console\Commands\MakeControllerCommand;
+use Phue\Core\Console\Commands\MakeMigrationCommand;
 use Phue\Core\Console\Commands\MakeModelCommand;
 use Phue\Core\Console\Commands\ServeCommand;
 
@@ -20,13 +21,19 @@ class CommandsTest extends TestCase
 
     protected function tearDown(): void
     {
+        parent::tearDown();
         if (file_exists($this->appDir . '/Controllers/TestController.php')) {
             unlink($this->appDir . '/Controllers/TestController.php');
         }
         if (file_exists($this->appDir . '/Models/Article.php')) {
             unlink($this->appDir . '/Models/Article.php');
         }
-        parent::tearDown();
+        $dbDir = getcwd() . '/database/migrations';
+        if (is_dir($dbDir)) {
+            foreach (glob($dbDir . '/*.php') ?: [] as $f) { unlink($f); }
+            rmdir($dbDir);
+            rmdir(dirname($dbDir));
+        }
     }
 
     public function testMakeControllerGeneratesFile(): void
@@ -88,6 +95,49 @@ class CommandsTest extends TestCase
         $content = file_get_contents($this->appDir . '/Models/Article.php');
         $this->assertStringContainsString('class Article extends BaseActiveRecord', $content);
         $this->assertStringContainsString("protected string \$table = 'articles';", $content);
+    }
+
+    public function testMakeModelFailsWhenNameMissing(): void
+    {
+        $cmd = new MakeModelCommand();
+        $errStream = fopen('php://memory', 'w+');
+        $code = $cmd->execute([], \STDOUT, $errStream);
+        fclose($errStream);
+        $this->assertSame(1, $code);
+    }
+
+    public function testMakeMigrationCommandMissingName(): void
+    {
+        $cmd = new MakeMigrationCommand();
+        $errStream = fopen('php://memory', 'w+');
+        $code = $cmd->execute([], \STDOUT, $errStream);
+        fclose($errStream);
+        $this->assertSame(1, $code);
+    }
+
+    public function testMakeModelFailsIfAlreadyExists(): void
+    {
+        $cmd = new MakeModelCommand();
+        $errStream = fopen('php://memory', 'w+');
+        ob_start();
+        $cmd->execute(['Article']);
+        ob_end_clean();
+        $code = $cmd->execute(['Article'], \STDOUT, $errStream);
+        fclose($errStream);
+        $this->assertSame(1, $code);
+    }
+
+    public function testMakeMigrationCommandCreatesFile(): void
+    {
+        $cmd = new MakeMigrationCommand();
+        $out = fopen('php://memory', 'r+');
+        $code = $cmd->execute(['create_users_table'], $out);
+        rewind($out);
+        $output = stream_get_contents($out);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('Created Migration:', $output);
+        $files = glob(getcwd() . '/database/migrations/*.php');
+        $this->assertNotEmpty($files);
     }
 
     public function testServeCommandMetadata(): void
