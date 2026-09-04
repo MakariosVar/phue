@@ -198,4 +198,62 @@ class SchiiAutoMigrationTest extends TestCase
         $this->assertStringContainsString('"id" SERIAL PRIMARY KEY', $pgsqlSql);
         $this->assertStringContainsString('"active" BOOLEAN NOT NULL', $pgsqlSql);
     }
+
+    /**
+     * Test that a failed ALTER TABLE statement triggers a transaction rollback.
+     *
+     * Note: Connection proxies driver methods through __call(), so a sub-class
+     * overriding __call() is the only way to fault-inject without mocking the
+     * (non-existent) Connection method surface.
+     */
+    public function testAutoMigratorRollsBackWhenColumnAlterFails(): void
+    {
+        $failDb = new FailOnAlterConnection([
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ]);
+        BaseActiveRecord::setConnection($failDb);
+
+        $registry = new SchemaRegistry();
+        $migrator = new AutoMigrator($registry, $failDb);
+
+        // Initial migration succeeds: CREATE TABLE passes through the override.
+        $initial = $migrator->migrate(MigratableProduct::class);
+        $this->assertCount(1, $initial);
+
+        try {
+            $migrator->migrate(MigratableProductV2::class);
+            $this->fail('Expected RuntimeException for failing ALTER TABLE');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('ALTER TABLE failed', $e->getMessage());
+        }
+
+        // The transaction must have been rolled back.
+        $this->assertFalse($failDb->inTransaction());
+
+        // And the schema must be untouched: 'sku' must NOT exist.
+        $stmt = $failDb->query('PRAGMA table_info(migratable_products)');
+        $columns = is_object($stmt) && method_exists($stmt, 'fetchAll') ? $stmt->fetchAll() : (array) $stmt;
+        $names = array_map(static fn (array $col): string => $col['name'], $columns);
+
+        $this->assertNotContains('sku', $names);
+    }
+}
+
+/**
+ * Connection sub-class that fails any ALTER TABLE execute() call while passing
+ * every other driver call through to the real sqlite driver.
+ *
+ * @package Phue\Tests\Schii
+ */
+final class FailOnAlterConnection extends Connection
+{
+    public function __call(string $method, array $arguments): mixed
+    {
+        if ($method === 'execute' && str_contains((string) ($arguments[0] ?? ''), 'ALTER TABLE')) {
+            throw new \RuntimeException('ALTER TABLE failed');
+        }
+
+        return parent::__call($method, $arguments);
+    }
 }

@@ -150,4 +150,52 @@ class ServerAdapterTest extends TestCase
         $adapter = new \Phue\Server\SwooleAdapter();
         $this->assertInstanceOf(\Phue\Server\SwooleAdapter::class, $adapter);
     }
+
+    public function testFpmAdapterRunCapturesRequestEmitsResponse(): void
+    {
+        $backupServer = $_SERVER;
+
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/health';
+
+            $app = $this->createMock(Application::class);
+            $app->expects($this->once())
+                ->method('handle')
+                ->willReturn(Response::json(['status' => 'ok']));
+
+            $adapter = new FpmAdapter();
+            $adapter->boot($app);
+
+            ob_start();
+            try {
+                $adapter->run();
+            } finally {
+                $output = ob_get_clean();
+            }
+
+            $this->assertStringContainsString('{"status":"ok"}', $output);
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
+
+    public function testFpmAdapterRunThrowsWhenNotBooted(): void
+    {
+        $backupServer = $_SERVER;
+
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/x';
+
+            $adapter = new FpmAdapter();
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessageMatches('/must be booted/');
+
+            $adapter->run();
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
 }

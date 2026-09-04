@@ -9,8 +9,13 @@ use Phue\Compiler\AotCompatibilityChecker;
 use Phue\Compiler\AotCompatibilityReport;
 use Phue\Compiler\FallbackStrategy;
 use Phue\Compiler\WiringGenerator;
+use Phue\Tests\Compiler\Fixtures\AbstractAotTargetClass;
+use Phue\Tests\Compiler\Fixtures\CallUserFuncArrayAotTargetClass;
+use Phue\Tests\Compiler\Fixtures\ExtractAotTargetClass;
 use Phue\Tests\Compiler\Fixtures\IncompatibleAotTargetClass;
+use Phue\Tests\Compiler\Fixtures\InterfaceAotTarget;
 use Phue\Tests\Compiler\Fixtures\ValidAotTargetClass;
+use Phue\Tests\Compiler\Fixtures\VariableVariableAotTargetClass;
 
 /**
  * Unit Test Suite for TypePHP AOT Compiler Engine.
@@ -85,7 +90,7 @@ final class CompilerTest extends TestCase
     }
 
     /**
-     * Tests that FallbackStrategy routes problematic classes away from AOT_NATIVE.
+     * Tests that FallbackStrategy routes conflicting reports away from AOT_NATIVE.
      */
     public function testFallbackStrategyResolvesNonNativeFallback(): void
     {
@@ -94,6 +99,116 @@ final class CompilerTest extends TestCase
 
         $mode = $strategy->resolveMode($report);
         $this->assertNotSame(FallbackStrategy::AOT_NATIVE, $mode);
+    }
+
+    /**
+     * Tests that the checker reports a non-existent class/type.
+     */
+    public function testCompatibilityCheckerReportsMissingType(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass('Phue\\Tests\\Compiler\\Fixtures\\DoesNotExistAnywhere');
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('does not exist', $report->issues[0]);
+    }
+
+    /**
+     * Tests that the checker flags abstract types as requiring dynamic binding.
+     */
+    public function testCompatibilityCheckerFlagsAbstractType(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass(AbstractAotTargetClass::class);
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('abstract or interface', $report->issues[0]);
+    }
+
+    /**
+     * Tests that the checker flags interface types as requiring dynamic binding.
+     */
+    public function testCompatibilityCheckerFlagsInterfaceType(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass(InterfaceAotTarget::class);
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('abstract or interface', $report->issues[0]);
+    }
+
+    /**
+     * Tests that the checker reports extract() usage.
+     */
+    public function testCompatibilityCheckerFlagsExtract(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass(ExtractAotTargetClass::class);
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('Forbidden use of extract()', implode("\n", $report->issues));
+    }
+
+    /**
+     * Tests that the checker reports variable-variable ($$var) usage.
+     */
+    public function testCompatibilityCheckerFlagsVariableVariables(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass(VariableVariableAotTargetClass::class);
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('Forbidden variable variables', implode("\n", $report->issues));
+    }
+
+    /**
+     * Tests that the checker reports dynamic call_user_func_array usage.
+     */
+    public function testCompatibilityCheckerFlagsDynamicCallUserFuncArray(): void
+    {
+        $checker = new AotCompatibilityChecker();
+        $report = $checker->checkClass(CallUserFuncArrayAotTargetClass::class);
+
+        $this->assertFalse($report->isFullyCompatible());
+        $this->assertStringContainsString('Dynamic call_user_func_array', implode("\n", $report->issues));
+    }
+
+    /**
+     * Tests that FallbackStrategy resolves to PHP_INTERPRETER when OPcache JIT is unavailable or disabled.
+     */
+    public function testFallbackStrategyResolvesInterpreterWhenJitUnavailable(): void
+    {
+        if (function_exists('opcache_get_status')) {
+            $status = opcache_get_status(false);
+            if ($status !== false && !empty($status['jit']['enabled'])) {
+                $this->markTestSkipped('OPcache JIT is enabled in this environment.');
+            }
+        }
+
+        $report = new AotCompatibilityReport(IncompatibleAotTargetClass::class, ['Forbidden eval() usage']);
+        $strategy = new FallbackStrategy();
+
+        $this->assertSame(FallbackStrategy::PHP_INTERPRETER, $strategy->resolveMode($report));
+    }
+
+    /**
+     * Tests that FallbackStrategy resolves to PHP_JIT when OPcache JIT is enabled.
+     */
+    public function testFallbackStrategyResolvesJitWhenEnabled(): void
+    {
+        if (!function_exists('opcache_get_status')) {
+            $this->markTestSkipped('opcache_get_status is unavailable in this environment.');
+        }
+
+        $status = opcache_get_status(false);
+        if ($status === false || empty($status['jit']['enabled'])) {
+            $this->markTestSkipped('OPcache JIT is not enabled in this environment.');
+        }
+
+        $report = new AotCompatibilityReport(IncompatibleAotTargetClass::class, ['Forbidden eval() usage']);
+        $strategy = new FallbackStrategy();
+
+        $this->assertSame(FallbackStrategy::PHP_JIT, $strategy->resolveMode($report));
     }
 
     /**
