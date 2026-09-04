@@ -675,6 +675,7 @@ $connection->table('users')->where('status', 'expired')->delete();
 ```
 
 - **Parameter Binding**: All `where()`, `orWhere()`, `insert()`, and `update()` values use positional `?` placeholders for parameter binding.
+- **LIKE wildcard escaping**: `where('name', 'LIKE', '...')` automatically appends an `ESCAPE '\'` clause, so backslash-escaped wildcards in the pattern (`\%`, `\_`) are treated as literals instead of scanning the whole table.
 ---
 
 ## 9. Active Record ORM Architecture
@@ -699,6 +700,7 @@ $allUsers   = User::all();                       // Returns array of User instan
 - **Dirty Attributes (`getDirty()`)**: Tracks modified properties compared to `$original`. `save()` executes `UPDATE` **only** on modified attributes.
 - **Persistence (`save()`)**: Determines automatically whether to perform `INSERT` (when `$exists` is `false`) or `UPDATE` (when `$exists` is `true`).
 - **Primary Key Assignment**: Automatically assigns the newly generated ID from `$connection->lastInsertId()` to the model upon insertion.
+- **Validation error bag**: `getErrors()` / `setErrors()` expose a validation error store that higher layers (e.g. `ModelEndpoint`) populate when schema rules fail and serialise back to the client.
 
 ---
 
@@ -743,6 +745,7 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
   - Sorting across `sortable` fields (`ASC`/`DESC`).
   - Pagination metadata (`total`, `page`, `limit`, `last_page`).
 - **`show()`, `store()`, `update()`, `delete()`**: Full REST CRUD handlers for registered entities.
+- **Strict validation contract**: before persistence, unknown fields are rejected with `422`, `required`/type `rules` from `#[Field]` are enforced, and primary keys are stripped from the payload (mass-assignment guard). `LIKE` searches escape wildcards (`%`, `_`) via an `ESCAPE` clause, and unregistered entities resolve to `404`.
 
 ### Auto-Migration Engine (`src/Schii/Migration/`)
 

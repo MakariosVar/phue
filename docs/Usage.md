@@ -639,6 +639,18 @@ $endpoint->registerEntity('products', App\Models\Product::class);
 // DELETE /schii/products/1            -> Delete record
 ```
 
+### Input Validation & Security Contract
+
+The REST endpoint applies strict validation **before** any persistence:
+
+- **Unknown fields → `422`**: any property not declared via `#[Field]` is rejected with `"Unknown field 'X' is not allowed"`. Since query strings and body are merged, this also covers stray URL parameters on `POST`/`PUT` — keep request URLs clean.
+- **Required fields → `422`**: fields declared with `required: true` must be present and non-empty on `store()`.
+- **Type rules → `422`**: `number`/`numeric` fields reject non-numeric input (e.g. `price: "abc"`), `email` fields require a valid e-mail. Declare additional rules directly on the attribute: `#[Field(type: 'select', rules: ['email'])]`.
+- **Mass-assignment protection**: the primary key and non-schema fields are stripped from the payload before `fill()` — clients can never forge their own `id`.
+- **Escaped `LIKE` search**: the wildcard characters `%` and `_` in `q` are escaped (the underlying `QueryBuilder` appends an `ESCAPE '\'` clause), so a bare `q=%` matches nothing instead of returning the whole table.
+- **Unregistered entities → `404`**: requesting `/schii/unknown` returns `404 Not Found` instead of throwing an exception.
+- **Pagination clamps**: `limit` is clamped to `[1, 100]` and `page` to `>= 1`; garbage values fall back to defaults.
+
 ### Auto-Migrating Database Tables from Schii Schemas
 
 You can auto-migrate missing tables or new columns directly from model schema declarations programmatically or via CLI:
