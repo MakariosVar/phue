@@ -26,7 +26,6 @@ final class ModelEndpoint
 
     /**
      * Register an entity name with its corresponding ActiveRecord class.
-     * Example: 'products' => \App\Models\Product::class
      *
      * @param string $entity The URL slug/identifier for the entity.
      * @param class-string<BaseActiveRecord> $modelClass The full class name.
@@ -38,17 +37,16 @@ final class ModelEndpoint
 
     /**
      * GET /schii/schema/{entity}
-     * Returns the Schii JSON Schema Protocol for UI consumption.
-     *
-     * @param Request $request
-     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
     public function schema(Request $request, array|string $params): Response
     {
-        $entity = is_array($params)
-            ? $params["entity"] ?? reset($params)
-            : $params;
+        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
         $schema = $this->schemaRegistry->get($modelClass);
 
         return Response::json($schema->toArray());
@@ -56,25 +54,25 @@ final class ModelEndpoint
 
     /**
      * GET /schii/{entity}
-     * Smart List Endpoint supporting search, filtering, sorting, and pagination.
-     *
-     * @param Request $request
-     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
     public function index(Request $request, array|string $params): Response
     {
-        $entity = is_array($params)
-            ? $params["entity"] ?? reset($params)
-            : $params;
+        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
         $schema = $this->schemaRegistry->get($modelClass);
 
         /** @var ActiveQuery $query */
         $query = $modelClass::query();
 
-        // 1. Global Search across searchable fields
+        // 1. Global Search with LIKE wildcard escaping
         $searchQuery = $request->input("q") ?? $request->getQuery("q");
         if (!empty($searchQuery)) {
+            $escapedQuery = addcslashes((string) $searchQuery, "%_\\");
             $searchableFields = array_values(
                 array_filter(
                     $schema->fields,
@@ -84,9 +82,9 @@ final class ModelEndpoint
 
             foreach ($searchableFields as $index => $field) {
                 if ($index === 0) {
-                    $query->where($field->name, "LIKE", "%{$searchQuery}%");
+                    $query->where($field->name, "LIKE", "%{$escapedQuery}%");
                 } else {
-                    $query->orWhere($field->name, "LIKE", "%{$searchQuery}%");
+                    $query->orWhere($field->name, "LIKE", "%{$escapedQuery}%");
                 }
             }
         }
@@ -94,59 +92,30 @@ final class ModelEndpoint
         // 2. Dynamic Filtering across filterable fields
         foreach ($schema->fields as $field) {
             if ($field->filterable) {
-                $value =
-                    $request->input($field->name) ??
-                    $request->getQuery($field->name);
+                $value = $request->input($field->name) ?? $request->getQuery($field->name);
                 if ($value !== "" && $value !== null) {
                     $query->where($field->name, "=", $value);
                 }
             }
         }
 
-        // 3. Dynamic Sorting across sortable fields
+        // 3. Dynamic Sorting
         $sort = $request->input("sort") ?? $request->getQuery("sort");
-        $direction =
-            strtoupper(
-                (string) ($request->input("direction") ??
-                    ($request->getQuery("direction") ?? "ASC")),
-            ) === "DESC"
-                ? "DESC"
-                : "ASC";
+        $direction = strtoupper((string) ($request->input("direction") ?? ($request->getQuery("direction") ?? "ASC"))) === "DESC" ? "DESC" : "ASC";
 
-        if (
-            $sort &&
-            isset($schema->fields[$sort]) &&
-            $schema->fields[$sort]->sortable
-        ) {
+        if ($sort && isset($schema->fields[$sort]) && $schema->fields[$sort]->sortable) {
             $query->orderBy($sort, $direction);
         }
 
         // 4. Pagination
-        $page = max(
-            1,
-            (int) ($request->input("page") ??
-                ($request->getQuery("page") ?? 1)),
-        );
-        $limit = max(
-            1,
-            min(
-                100,
-                (int) ($request->input("limit") ??
-                    ($request->getQuery("limit") ?? 25)),
-            ),
-        );
+        $page = max(1, (int) ($request->input("page") ?? ($request->getQuery("page") ?? 1)));
+        $limit = max(1, min(100, (int) ($request->input("limit") ?? ($request->getQuery("limit") ?? 25))));
         $total = (int) (clone $query)->count();
 
-        $items = $query
-            ->offset(($page - 1) * $limit)
-            ->limit($limit)
-            ->get();
+        $items = $query->offset(($page - 1) * $limit)->limit($limit)->get();
 
         return Response::json([
-            "data" => array_map(
-                static fn(BaseActiveRecord $item) => $item->toArray(),
-                $items,
-            ),
+            "data" => array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items),
             "meta" => [
                 "total" => $total,
                 "page" => $page,
@@ -158,10 +127,6 @@ final class ModelEndpoint
 
     /**
      * GET /schii/{entity}/{id}
-     * Retrieve a single record by primary key.
-     *
-     * @param Request $request
-     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
     public function show(Request $request, array $params): Response
     {
@@ -169,8 +134,11 @@ final class ModelEndpoint
         $id = $params["id"] ?? null;
 
         $modelClass = $this->resolveModelClass((string) $entity);
-        $model = $modelClass::find($id);
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
 
+        $model = $modelClass::find($id);
         if (!$model) {
             return Response::json(["error" => "Resource not found"], 404);
         }
@@ -180,70 +148,40 @@ final class ModelEndpoint
 
     /**
      * POST /schii/{entity}
-     * Create a new record.
-     *
-     * @param Request $request
-     * @param array<string, mixed>|string $params Route parameters array or single entity slug.
      */
     public function store(Request $request, array|string $params): Response
     {
-        $entity = is_array($params)
-            ? $params["entity"] ?? reset($params)
-            : $params;
+        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
+        $rawBody = method_exists($request, "getParsedBody")
+            ? array_merge($request->getQueryParams(), $request->getParsedBody())
+            : array_merge($request->getQueryParams(), $request->input());
+
+        // Run validation against schema rules and unknown fields
+        $errors = $this->validateData($rawBody, $modelClass, isUpdate: false);
+        if (!empty($errors)) {
+            return Response::json([
+                "error" => "Validation failed",
+                "errors" => $errors,
+            ], 422);
+        }
+
+        $inputData = $this->extractInputData($rawBody, $modelClass);
 
         /** @var BaseActiveRecord $model */
         $model = new $modelClass();
-        $inputData = $this->extractInputData($request);
-
-        // Basic validation for required fields
-        $modelClassReflection = new \ReflectionClass($modelClass);
-        $properties = $modelClassReflection->getProperties();
-
-        foreach ($properties as $property) {
-            if ($property->isPublic() && !$property->isStatic()) {
-                $propertyName = $property->getName();
-                $propertyType = $property->getType();
-
-                // Check if property is required (has no default value or is explicitly required)
-                if ($propertyType && !$propertyType->allowsNull()) {
-                    if (!array_key_exists($propertyName, $inputData)) {
-                        return Response::json(
-                            [
-                                "error" => "Validation failed",
-                                "message" => "Required field '{$propertyName}' is missing",
-                            ],
-                            422,
-                        );
-                    }
-
-                    // Check for empty values that would cause SQL errors
-                    if (
-                        $inputData[$propertyName] === null ||
-                        $inputData[$propertyName] === ""
-                    ) {
-                        return Response::json(
-                            [
-                                "error" => "Validation failed",
-                                "message" => "Required field '{$propertyName}' cannot be empty",
-                            ],
-                            422,
-                        );
-                    }
-                }
-            }
-        }
-
         $model->fill($inputData);
 
         if (!$model->save()) {
-            return Response::json(
-                [
-                    "error" => "Validation failed",
-                    "errors" => $model->getErrors(),
-                ],
-                422,
-            );
+            return Response::json([
+                "error" => "Validation failed",
+                "errors" => $model->getErrors(),
+            ], 422);
         }
 
         return Response::json(["data" => $model->toArray()], 201);
@@ -251,10 +189,6 @@ final class ModelEndpoint
 
     /**
      * PUT /schii/{entity}/{id}
-     * Update an existing record.
-     *
-     * @param Request $request
-     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
     public function update(Request $request, array $params): Response
     {
@@ -262,22 +196,37 @@ final class ModelEndpoint
         $id = $params["id"] ?? null;
 
         $modelClass = $this->resolveModelClass((string) $entity);
-        $model = $modelClass::find($id);
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
 
+        $model = $modelClass::find($id);
         if (!$model) {
             return Response::json(["error" => "Resource not found"], 404);
         }
 
-        $model->fill($this->extractInputData($request));
+        $rawBody = method_exists($request, "getParsedBody")
+            ? array_merge($request->getQueryParams(), $request->getParsedBody())
+            : array_merge($request->getQueryParams(), $request->input());
+
+        // Run validation against schema rules and unknown fields
+        $errors = $this->validateData($rawBody, $modelClass, isUpdate: true);
+        if (!empty($errors)) {
+            return Response::json([
+                "error" => "Validation failed",
+                "errors" => $errors,
+            ], 422);
+        }
+
+        $inputData = $this->extractInputData($rawBody, $modelClass);
+
+        $model->fill($inputData);
 
         if (!$model->save()) {
-            return Response::json(
-                [
-                    "error" => "Validation failed",
-                    "errors" => $model->getErrors(),
-                ],
-                422,
-            );
+            return Response::json([
+                "error" => "Validation failed",
+                "errors" => $model->getErrors(),
+            ], 422);
         }
 
         return Response::json(["data" => $model->toArray()]);
@@ -285,10 +234,6 @@ final class ModelEndpoint
 
     /**
      * DELETE /schii/{entity}/{id}
-     * Delete a record by primary key.
-     *
-     * @param Request $request
-     * @param array<string, mixed> $params Route parameters containing 'entity' and 'id'.
      */
     public function delete(Request $request, array $params): Response
     {
@@ -296,54 +241,113 @@ final class ModelEndpoint
         $id = $params["id"] ?? null;
 
         $modelClass = $this->resolveModelClass((string) $entity);
-        $model = $modelClass::find($id);
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
 
+        $model = $modelClass::find($id);
         if (!$model) {
             return Response::json(["error" => "Resource not found"], 404);
         }
 
         if (!$model->delete()) {
-            return Response::json(
-                ["error" => "Failed to delete resource"],
-                500,
-            );
+            return Response::json(["error" => "Failed to delete resource"], 500);
         }
 
         return Response::json(["message" => "Resource deleted successfully"]);
     }
 
     /**
-     * Safely extract all input data from the Request object.
+     * Extracts allowed input data, whitelisting schema fields and protecting primary keys.
      *
      * @return array<string, mixed>
      */
-    private function extractInputData(Request $request): array
+    private function extractInputData(array $data, string $modelClass): array
     {
-        if (method_exists($request, "getParsedBody")) {
-            return array_merge(
-                $request->getQueryParams(),
-                $request->getParsedBody(),
-            );
-        }
+        $schema = $this->schemaRegistry->get($modelClass);
+        $allowedFields = array_keys($schema->fields);
 
-        return array_merge($request->getQueryParams(), $request->input());
+        $filteredData = array_intersect_key($data, array_flip($allowedFields));
+
+        /** @var BaseActiveRecord $tempModel */
+        $tempModel = new $modelClass();
+        $pk = $tempModel->getPrimaryKey();
+
+        unset($filteredData[$pk]);
+
+        return $filteredData;
     }
 
     /**
-     * Resolve the string entity slug to a fully qualified class name.
+     * Validates input data against Schema Field attributes, rules and unknown fields.
      *
-     * @return class-string<BaseActiveRecord>
+     * @return array<string, string>
      */
-    private function resolveModelClass(string $entity): string
+    private function validateData(array $data, string $modelClass, bool $isUpdate = false): array
+    {
+        $errors = [];
+        $schema = $this->schemaRegistry->get($modelClass);
+        $allowedFields = array_keys($schema->fields);
+
+        /** @var BaseActiveRecord $tempModel */
+        $tempModel = new $modelClass();
+        $pk = $tempModel->getPrimaryKey();
+
+        // 1. Strict Check for Unknown Fields
+        foreach (array_keys($data) as $field) {
+            if ($field === $pk) {
+                continue; // Allow PK in body, it gets stripped safely later
+            }
+            if (!in_array($field, $allowedFields, true)) {
+                $errors[$field] = "Unknown field '{$field}' is not allowed";
+            }
+        }
+
+        // 2. Validate Known Fields & Schema Rules
+        foreach ($schema->fields as $fieldName => $fieldSchema) {
+            $value = $data[$fieldName] ?? null;
+
+            // Check required fields
+            if (!$isUpdate && $fieldSchema->required && ($value === null || $value === '')) {
+                $errors[$fieldName] = "Field '{$fieldName}' is required";
+                continue;
+            }
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            // Combine rules from attributes
+            $rules = $fieldSchema->rules;
+            if ($fieldSchema->type === 'number' || $fieldSchema->type === 'numeric') {
+                $rules[] = 'numeric';
+            }
+
+            foreach ($rules as $rule) {
+                if ($rule === 'numeric' && !is_numeric($value)) {
+                    $errors[$fieldName] = "Field '{$fieldName}' must be numeric";
+                }
+                if ($rule === 'integer' && filter_var($value, FILTER_VALIDATE_INT) === false) {
+                    $errors[$fieldName] = "Field '{$fieldName}' must be an integer";
+                }
+                if ($rule === 'email' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+                    $errors[$fieldName] = "Field '{$fieldName}' must be a valid email";
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Resolve the string entity slug to a fully qualified class name or null if missing.
+     *
+     * @return class-string<BaseActiveRecord>|null
+     */
+    private function resolveModelClass(string $entity): ?string
     {
         $key = strtolower($entity);
 
-        if (!isset($this->entityMapping[$key])) {
-            throw new \InvalidArgumentException(
-                "Unregistered Schii Entity: {$entity}",
-            );
-        }
-
-        return $this->entityMapping[$key];
+        return $this->entityMapping[$key] ?? null;
     }
 }

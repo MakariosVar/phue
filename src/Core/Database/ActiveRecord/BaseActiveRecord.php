@@ -45,6 +45,13 @@ abstract class BaseActiveRecord implements JsonSerializable
     protected array $original = [];
 
     /**
+     * Validation errors store.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $errors = [];
+
+    /**
      * Indicates if the model instance exists in the database.
      */
     protected bool $exists = false;
@@ -142,6 +149,26 @@ abstract class BaseActiveRecord implements JsonSerializable
     public function __unset(string $name): void
     {
         unset($this->attributes[$name]);
+    }
+
+    /**
+     * Returns validation errors array.
+     *
+     * @return array<string, mixed>
+     */
+    public function getErrors(): array
+    {
+        return $this->errors;
+    }
+
+    /**
+     * Sets validation errors manually if needed.
+     *
+     * @param array<string, mixed> $errors
+     */
+    public function setErrors(array $errors): void
+    {
+        $this->errors = $errors;
     }
 
     /**

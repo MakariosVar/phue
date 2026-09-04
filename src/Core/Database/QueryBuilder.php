@@ -72,10 +72,17 @@ class QueryBuilder
         }
 
         $quotedColumn = $this->quoteIdentifier($column);
+        $cleanOperator = strtoupper(trim((string)$operator));
+
+        // Append ESCAPE clause when doing LIKE queries to correctly handle escaped wildcards
+        $sqlClause = "{$quotedColumn} {$operator} ?";
+        if ($cleanOperator === 'LIKE' || $cleanOperator === 'NOT LIKE') {
+            $sqlClause .= " ESCAPE '\\'";
+        }
 
         $this->whereClauses[] = [
             'boolean' => $boolean,
-            'sql'     => "{$quotedColumn} {$operator} ?",
+            'sql'     => $sqlClause,
         ];
         
         $this->bindings[] = $value;
