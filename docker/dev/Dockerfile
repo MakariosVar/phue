@@ -13,5 +13,8 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 RUN git config --global --add safe.directory /app
 
-RUN pecl install redis\
+RUN pecl install redis \
     && docker-php-ext-enable redis
+
+RUN pecl install pcov \
+    && docker-php-ext-enable pcov
