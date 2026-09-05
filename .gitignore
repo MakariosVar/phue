@@ -9,5 +9,3 @@ composer.lock
 *.sqlite
 
 /database/migrations/*
-/App/Models
-/App/Controllers
