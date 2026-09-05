@@ -382,7 +382,7 @@ use Phue\Core\Routing\Attribute\Middleware;
 #[Middleware(AuthMiddleware::class)]
 class UserController
 {
-    #[Route('', methods: 'GET', name: 'index')]
+    #[Route('', methods: ['GET'], name: 'index')]
     public function index(): array { ... }
 
     #[Route('/{id:int}', methods: ['GET', 'POST'], where: ['id' => '\d+'])]
@@ -464,10 +464,7 @@ handler returns into a valid `Response`.
 ### Construction
 
 ```php
-$app = new Application([
-    'debug'   => true,   // when true, 500 errors include the exception message
-    'modules' => [App\DemoModule::class],
-]);
+$app = new Application(__DIR__ . '/..');
 ```
 
 The `debug` flag controls error verbosity (below). `modules` is an optional list of
@@ -573,7 +570,7 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 
-$app = new Application(['debug' => true]);
+$app = new Application(__DIR__ . '/..');
 
 $app->getRouter()->get('/users/{id}', function (Request $request, array $params) {
     return Response::json(['user' => $params['id']]);

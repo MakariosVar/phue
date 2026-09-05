@@ -69,9 +69,7 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 
 // 1. Instantiate Application
-$app = new Application([
-    'debug' => true
-]);
+$app = new Application(__DIR__ . '/..');
 
 // 2. Automatically scan and register all controllers
 $app->getRouter()->scanControllers(__DIR__ . '/Controllers', 'App\\Controllers');
@@ -105,7 +103,7 @@ class UserController
     /**
      * GET /api/v1/users
      */
-    #[Route('', methods: 'GET', name: 'index')]
+    #[Route('', methods: ['GET'], name: 'index')]
     public function index(): array
     {
         return [
@@ -120,7 +118,7 @@ class UserController
     /**
      * GET /api/v1/users/{id}
      */
-    #[Route('/{id:int}', methods: 'GET', name: 'show')]
+    #[Route('/{id:int}', methods: ['GET'], name: 'show')]
     public function show(Request $request, array $params): Response
     {
         $userId = (int) $params['id'];
@@ -171,11 +169,11 @@ Routes are automatically sorted so static routes take precedence over dynamic on
 class UserController
 {
     // Registered dynamic route
-    #[Route('/{id}', methods: 'GET')]
+    #[Route('/{id}', methods: ['GET'])]
     public function show() { ... }
 
     // Registered static route
-    #[Route('/new', methods: 'GET')]
+    #[Route('/new', methods: ['GET'])]
     public function create() { ... }
 }
 ```
@@ -243,13 +241,13 @@ use App\Middleware\RoleCheckMiddleware;
 #[Middleware(AuthMiddleware::class)] // Applied to all actions in AdminController
 class AdminController
 {
-    #[Route('/dashboard', methods: 'GET')]
+    #[Route('/dashboard', methods: ['GET'])]
     public function dashboard(): string
     {
         return 'Welcome Admin!';
     }
 
-    #[Route('/settings', methods: 'POST')]
+    #[Route('/settings', methods: ['POST'])]
     #[Middleware(RoleCheckMiddleware::class)] // Applied ONLY to settings()
     public function settings(): array
     {
@@ -327,7 +325,7 @@ class UserController
     // UserService is automatically instantiated and injected by DI Container
     public function __construct(private UserService $userService) {}
 
-    #[Route('/users', methods: 'GET')]
+    #[Route('/users', methods: ['GET'])]
     public function index(): array
     {
         return $this->userService->getAllUsers();
@@ -769,7 +767,7 @@ if ($rbac->checkAccess(10, 'posts.create')) {
 use Phue\Core\Application;
 use Phue\Server\RoadRunnerAdapter;
 
-$app = new Application(require 'config/app.php');
+$app = new Application(__DIR__ . '/..');
 
 // Boot RoadRunner persistent adapter
 $adapter = new RoadRunnerAdapter();
