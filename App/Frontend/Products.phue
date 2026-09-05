@@ -2,6 +2,7 @@
 return [
     'title' => 'Phue App - Products',
     'state' => [
+        'value' => $testValue ?? 'none',
         'products' => [
             ['id' => 1, 'name' => 'Widget A', 'price' => 19.99],
             ['id' => 2, 'name' => 'Widget B', 'price' => 29.99],
@@ -18,6 +19,7 @@ return [
             {{ p.name }} - ${{ p.price }}
         </li>
     </ul>
+        {{testValue}}
 </div>
 </template>
 
@@ -27,7 +29,8 @@ import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
 createApp({
     setup() {
         const products = ref(window.__INITIAL_STATE__.products || []);
-        return { products };
+        const testValue = ref(window.__INITIAL_STATE__.value);
+        return { products, testValue };
     }
 }).mount('#app');
 </script>

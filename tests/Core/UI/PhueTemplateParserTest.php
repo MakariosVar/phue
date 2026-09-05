@@ -99,7 +99,7 @@ return ['state' => []];
 <script>console.log('ok');</script>
 PHUE);
 
-        $this->assertSame('Phue Application', $this->parser->parse($path)->title);
+        $this->assertSame('Phue App', $this->parser->parse($path)->title);
     }
 
     public function testMissingPhpBlockYieldsEmptyState(): void

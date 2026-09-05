@@ -6,21 +6,36 @@ namespace Phue\Core\UI;
 
 use RuntimeException;
 
-/**
- * Single-pass strict structural parser for .phue SFCs using \G continuous anchoring.
- *
- * @package Phue\Core\UI
- */
 class PhueTemplateParser
 {
     /**
-     * Parse a .phue file into a structured PhueComponent.
-     *
-     * @param string $filePath Absolute path to the .phue file.
-     * @return PhueComponent Fully parsed component metadata and View object.
-     * @throws RuntimeException On I/O, structural errors, missing template, or security violations.
+     * Parses full component directly with optional params.
      */
-    public function parse(string $filePath): PhueComponent
+    public function parse(string $filePath, array $params = []): PhueComponent
+    {
+        $structure = $this->parseStructure($filePath);
+        $meta = $this->evaluatePhpBlock($structure['phpCode'] ?? '', $params);
+
+        $title = (string) ($meta['title'] ?? 'Phue App');
+        $state = is_array($meta['state'] ?? null) ? $meta['state'] : [];
+        $scripts = is_array($meta['scripts'] ?? null) ? $meta['scripts'] : [];
+
+        $view = new View(
+            template: $structure['template'],
+            state: $state,
+            scripts: $scripts,
+            inlineScript: $structure['script']
+        );
+
+        return new PhueComponent($title, $view);
+    }
+
+    /**
+     * Parses ONLY static structure (template, script, raw phpCode) without executing PHP.
+     *
+     * @return array{template: string, script: ?string, phpCode: ?string}
+     */
+    public function parseStructure(string $filePath): array
     {
         if (!file_exists($filePath)) {
             throw new RuntimeException("Phue template file not found: {$filePath}");
@@ -43,7 +58,6 @@ class PhueTemplateParser
 
         $scriptContent = null;
         if ($scriptBlock !== null) {
-            // Count occurrences across full raw span
             $occurrences = substr_count(strtolower($scriptBlock['raw']), '</script');
             if ($occurrences > 1) {
                 throw new RuntimeException("Security Exception: <script> block in {$filePath} contains invalid literal closing script tag.");
@@ -51,40 +65,22 @@ class PhueTemplateParser
             $scriptContent = trim($scriptBlock['body']);
         }
 
-        $meta = $this->evaluatePhpBlock($phpContent);
-
-        $title = (string) ($meta['title'] ?? 'Phue Application');
-        $state = is_array($meta['state'] ?? null) ? $meta['state'] : [];
-        $scripts = is_array($meta['scripts'] ?? null) ? $meta['scripts'] : [];
-
-        $view = new View(
-            template: trim($templateContent),
-            state: $state,
-            scripts: $scripts,
-            inlineScript: $scriptContent
-        );
-
-        return new PhueComponent($title, $view);
+        return [
+            'template' => trim($templateContent),
+            'script'   => $scriptContent,
+            'phpCode'  => $phpContent,
+        ];
     }
 
-    /**
-     * Parses top-level blocks in continuous sequence via \G anchoring.
-     *
-     * @return array<string, array{raw: string, body: string}>
-     */
     private function parseTopLevelBlocks(string $content, string $filePath): array
     {
         $blocks = [];
         $offset = 0;
         $length = strlen($content);
 
-        // Advance over initial whitespace
         $offset += strspn($content, " \t\r\n", $offset);
 
-        // Pattern for standard tags (<php>, <template>)
         $standardPattern = '/\G\s*<(php|template)\b[^>]*>(.*?)<\/\1\s*>/smsi';
-        
-        // Pattern for <script> tag: match greedily to the last </script> tag in sequence
         $scriptPattern = '/\G\s*<script\b[^>]*>(.*)(<\/script\s*>)/smsi';
 
         while ($offset < $length) {
@@ -127,32 +123,33 @@ class PhueTemplateParser
     }
 
     /**
-     * Evaluates PHP block content securely using an unguessable isolated file context.
-     *
-     * @return array<string, mixed>
+     * Evaluates the isolated PHP block with passed $params.
      */
-    private function evaluatePhpBlock(?string $code): array
+    public function evaluatePhpBlock(string $phpCode, array $params = []): array
     {
-        if ($code === null || trim($code) === '') {
-            return [];
+        if (trim($phpCode) === '') {
+            return ['title' => 'Phue App', 'state' => []];
         }
 
-        $randomSuffix = bin2hex(random_bytes(16));
-        $tmpFile = sys_get_temp_dir() . '/phue_block_' . $randomSuffix . '.php';
+        $evaluator = static function (string $code, array $params): array {
+            extract($params, EXTR_SKIP);
 
-        file_put_contents($tmpFile, "<?php\n" . $code, LOCK_EX);
+            $tmpFile = tempnam(sys_get_temp_dir(), 'phue_eval_');
+            if ($tmpFile === false) {
+                throw new RuntimeException('Failed to create temporary file for PHP evaluation');
+            }
 
-        $executor = static function (string $codeStreamPath): array {
-            $result = include $codeStreamPath;
-            return is_array($result) ? $result : [];
+            file_put_contents($tmpFile, "<?php\n" . $code . "\n", LOCK_EX);
+
+            try {
+                $returned = include $tmpFile;
+            } finally {
+                @unlink($tmpFile);
+            }
+
+            return is_array($returned) ? $returned : [];
         };
 
-        try {
-            return $executor($tmpFile);
-        } finally {
-            if (file_exists($tmpFile)) {
-                unlink($tmpFile);
-            }
-        }
+        return $evaluator($phpCode, $params);
     }
 }

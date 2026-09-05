@@ -31,8 +31,7 @@ class CommandsTest extends TestCase
         $dbDir = getcwd() . '/database/migrations';
         if (is_dir($dbDir)) {
             foreach (glob($dbDir . '/*.php') ?: [] as $f) { unlink($f); }
-            rmdir($dbDir);
-            rmdir(dirname($dbDir));
+            @rmdir($dbDir);
         }
     }
 

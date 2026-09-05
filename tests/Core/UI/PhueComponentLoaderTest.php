@@ -109,15 +109,19 @@ final class PhueComponentLoaderTest extends TestCase
         yield 'with space' => ['my view'];
     }
 
-    public function testLoadCachesIdenticalInstanceAcrossCalls(): void
+    public function testEachLoadReturnsFreshInstanceFromCachedStructure(): void
     {
-        $this->writeComponent('Cache', '<div>c</div>');
+        $this->writeComponent('Cache', '<div>c</div>', ['greeting' => 'hi']);
         $loader = new PhueComponentLoader($this->componentsDir);
 
         $first = $loader->load('Cache');
         $second = $loader->load('Cache');
 
-        $this->assertSame($first, $second);
+        $this->assertNotSame($first, $second);
+        $this->assertSame('Cache', $first->title);
+        $this->assertSame($first->title, $second->title);
+        $this->assertSame($first->view->getTemplate(), $second->view->getTemplate());
+        $this->assertSame($first->view->getState(), $second->view->getState());
     }
 
     public function testCacheRefreshesAfterFileModification(): void

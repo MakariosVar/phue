@@ -114,6 +114,23 @@ PHUE;
         $this->assertSame(trim(self::SCRIPT), $script);
     }
 
+    public function testScriptForNeverEvaluatesPhpBlock(): void
+    {
+        $script = "console.log('pure script');";
+        file_put_contents($this->componentsDir . '/NoEval.phue', <<<PHUE
+<php>echo 'PHP-LEAK'; return ['title' => 'NoEval', 'state' => []];</php>
+<template><div>NoEval</div></template>
+<script>{$script}</script>
+PHUE);
+
+        ob_start();
+        $served = $this->loader->scriptFor('NoEval', substr(hash('sha1', trim($script)), 0, 8));
+        $leaked = ob_get_clean();
+
+        $this->assertSame($script, $served);
+        $this->assertSame('', $leaked, 'scriptFor must not evaluate the <php> block (no output side effects)');
+    }
+
     public function testScriptForReturnsNullOnHashMismatch(): void
     {
         $this->assertNull($this->loader->scriptFor('Scripted', '0badc0de'));

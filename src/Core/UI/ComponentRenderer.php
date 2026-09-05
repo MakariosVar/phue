@@ -17,28 +17,48 @@ class ComponentRenderer
         private ?PhueComponentLoader $loader = null
     ) {}
 
-    public function render(string $nameOrTitle, View|string|null $viewOrTitleOverride = null): Response
-    {
-        // Named Resolution Path (e.g., render('Products')) -> External Module Mode
-        if ($viewOrTitleOverride === null || is_string($viewOrTitleOverride)) {
+    /**
+     * Overloads:
+     * - render('Products')
+     * - render('Products', ['testValue' => 'a'])
+     * - render('Products', 'Title Override', ['testValue' => 'a'])
+     * - render('Title', $viewInstance)
+     */
+    public function render(
+        string $nameOrTitle,
+        View|string|array|null $viewOrTitleOrParams = null,
+        array $params = []
+    ): Response {
+        // Path 1: render('Products', ['testValue' => 'a'])
+        if (is_array($viewOrTitleOrParams)) {
             if ($this->loader === null) {
                 throw new RuntimeException('Cannot render component by name: PhueComponentLoader is not configured.');
             }
 
-            $component = $this->loader->load($nameOrTitle);
-            $title = $viewOrTitleOverride ?? $component->title;
+            $component = $this->loader->load($nameOrTitle, $viewOrTitleOrParams);
+            return $this->renderComponentAsModule($nameOrTitle, $component->title, $component->view);
+        }
+
+        // Path 2: render('Products') OR render('Products', 'Title Override', ['testValue' => 'a'])
+        if ($viewOrTitleOrParams === null || is_string($viewOrTitleOrParams)) {
+            if ($this->loader === null) {
+                throw new RuntimeException('Cannot render component by name: PhueComponentLoader is not configured.');
+            }
+
+            $component = $this->loader->load($nameOrTitle, $params);
+            $title = $viewOrTitleOrParams ?? $component->title;
 
             return $this->renderComponentAsModule($nameOrTitle, $title, $component->view);
         }
 
-        // Direct BC Path: render('Title', $viewInstance) -> Remains Inline Script
-        return $this->renderView($nameOrTitle, $viewOrTitleOverride);
+        // Path 3: Direct BC Path -> render('Title', $viewInstance)
+        return $this->renderView($nameOrTitle, $viewOrTitleOrParams);
     }
 
-    public function renderFile(string $filePath, ?string $titleOverride = null): Response
+    public function renderFile(string $filePath, ?string $titleOverride = null, array $params = []): Response
     {
         $parser = new PhueTemplateParser();
-        $component = $parser->parse($filePath);
+        $component = $parser->parse($filePath, $params);
 
         $name = pathinfo($filePath, PATHINFO_FILENAME);
         $title = $titleOverride ?? $component->title;
@@ -46,20 +66,16 @@ class ComponentRenderer
         return $this->renderComponentAsModule($name, $title, $component->view);
     }
 
-    /**
-     * Renders a component using Module Mode (External JS asset with content-hash URL).
-     */
     private function renderComponentAsModule(string $name, string $title, View $view): Response
     {
         $inlineScript = $view->getInlineScript();
-        
+
         if ($inlineScript !== null && trim($inlineScript) !== '') {
             $hash = substr(sha1($inlineScript), 0, 8);
             $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
-            
-            // Enqueue external module script and clear inline script from shell
+
             $this->assetRegistry->addScript($scriptUrl, isModule: true);
-            
+
             $moduleView = new View(
                 template: $view->getTemplate(),
                 state: $view->getState(),
