@@ -197,8 +197,8 @@ class RouterTest extends TestCase
     }
 
     /**
-     * Test MethodNotAllowedException returns deduplicated list of allowed methods for matching path.
-     */
+      * Test MethodNotAllowedException returns deduplicated list of allowed methods for matching path.
+      */
     public function testMethodNotAllowedExceptionReturnsUniqueAllowedMethods(): void
     {
         $this->router->get('/users', fn () => 'list');
@@ -215,6 +215,12 @@ class RouterTest extends TestCase
             $this->assertContains('POST', $allowed);
             $this->assertContains('PUT', $allowed);
         }
+    }
+
+    public function testDispatchThrowsRouteNotFoundWhenNoRoutesRegistered(): void
+    {
+        $this->expectException(RouteNotFoundException::class);
+        $this->router->dispatch('GET', '/anything');
     }
 }
 

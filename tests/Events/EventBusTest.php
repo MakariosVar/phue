@@ -42,6 +42,16 @@ final class EventBusTest extends TestCase
         $this->assertSame('paid', $receivedData['status']);
     }
 
+    public function testInMemoryBusPublishToChannelWithNoListeners(): void
+    {
+        $bus = new InMemoryBusDriver();
+
+        // Should not throw, just return silently
+        $bus->publish('unknown_channel', ['data' => 'test']);
+
+        $this->assertTrue(true);
+    }
+
     /**
      * Tests formatting of SSE stream blocks using SseStreamer.
      *

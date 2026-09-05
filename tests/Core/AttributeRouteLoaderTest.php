@@ -26,8 +26,8 @@ class AttributeRouteLoaderTest extends TestCase
     }
 
     /**
-     * Tests loading routes from a controller with class-level prefixes and method-level attributes.
-     */
+      * Tests loading routes from a controller with class-level prefixes and method-level attributes.
+      */
     public function testLoadExtractsRoutesCorrectly(): void
     {
         $routes = $this->loader->load(DummyAttributeController::class);
@@ -50,6 +50,44 @@ class AttributeRouteLoaderTest extends TestCase
         $this->assertSame('api.v1.', $showRoute['name']); // Unnamed method inherits class prefix
         $this->assertSame([DummyAttributeController::class, 'show'], $showRoute['handler']);
         $this->assertSame(['id' => '\d+'], $showRoute['where']);
+    }
+
+    /**
+      * Tests that load returns empty array for non-instantiable classes (abstract/interface).
+      */
+    public function testLoadReturnsEmptyForNonInstantiableClass(): void
+    {
+        $routes = $this->loader->load(\Phue\Tests\Compiler\Fixtures\AbstractAotTargetClass::class);
+
+        $this->assertIsArray($routes);
+        $this->assertEmpty($routes);
+    }
+
+    /**
+      * Tests that scanDirectory returns empty array for non-existent directory.
+      */
+    public function testScanDirectoryReturnsEmptyForNonExistentDir(): void
+    {
+        $routes = $this->loader->scanDirectory('/nonexistent/path/12345', 'Phue\\Tests');
+
+        $this->assertIsArray($routes);
+        $this->assertEmpty($routes);
+    }
+
+    /**
+      * Tests that combinePaths handles empty prefix and root path correctly.
+      */
+    public function testCombinePathsRootCases(): void
+    {
+        $loader = new \Phue\Core\Routing\Loader\AttributeRouteLoader();
+
+        // combinePaths is private — use reflection to test (setAccessible deprecated in PHP 8.5, no effect since 8.1)
+        $reflection = new \ReflectionClass($loader);
+        $method = $reflection->getMethod('combinePaths');
+
+        $this->assertSame('/', $method->invoke($loader, '', '/'));
+        $this->assertSame('/api/users', $method->invoke($loader, '/api', '/users'));
+        $this->assertSame('/api/users', $method->invoke($loader, '/api/', '/users'));
     }
 }
 

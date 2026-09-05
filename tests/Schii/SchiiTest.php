@@ -143,4 +143,92 @@ class SchiiTest extends TestCase
         $showAfterDelete = $endpoint->show($storeReq, ['entity' => 'products', 'id' => $id]);
         $this->assertSame(404, $showAfterDelete->getStatusCode());
     }
+
+    public function testStoreUnknownEntityReturns404(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+
+        $req = new Request('POST', '/schii/unknown', [], ['name' => 'test']);
+        $res = $endpoint->store($req, 'unknown');
+
+        $this->assertSame(404, $res->getStatusCode());
+    }
+
+    public function testStoreValidationFailsForUnknownField(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+        $endpoint->registerEntity('products', StubProduct::class);
+
+        $req = new Request('POST', '/schii/products', [], ['name' => 'Test', 'price' => 100, 'unknown_field' => 'bad']);
+        $res = $endpoint->store($req, 'products');
+
+        $this->assertSame(422, $res->getStatusCode());
+    }
+
+    public function testStoreValidationFailsForMissingRequiredField(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+        $endpoint->registerEntity('products', StubProduct::class);
+
+        $req = new Request('POST', '/schii/products', [], ['price' => 100]);
+        $res = $endpoint->store($req, 'products');
+
+        $this->assertSame(422, $res->getStatusCode());
+    }
+
+    public function testStoreValidationFailsForNonNumericPrice(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+        $endpoint->registerEntity('products', StubProduct::class);
+
+        $req = new Request('POST', '/schii/products', [], ['name' => 'Test', 'price' => 'abc']);
+        $res = $endpoint->store($req, 'products');
+
+        $this->assertSame(422, $res->getStatusCode());
+    }
+
+    public function testUpdateUnknownEntityReturns404(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+
+        $req = new Request('PUT', '/schii/unknown/1', [], ['name' => 'Test']);
+        $res = $endpoint->update($req, ['entity' => 'unknown', 'id' => 1]);
+
+        $this->assertSame(404, $res->getStatusCode());
+    }
+
+    public function testUpdateValidationFailsForUnknownField(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+        $endpoint->registerEntity('products', StubProduct::class);
+
+        // Create a record first
+        $storeReq = new Request('POST', '/schii/products', [], ['name' => 'Test', 'price' => 100, 'status' => 'active']);
+        $storeRes = $endpoint->store($storeReq, 'products');
+        $storeData = json_decode($storeRes->getContent(), true);
+        $id = $storeData['data']['id'];
+
+        // Now try to update with unknown field
+        $req = new Request('PUT', "/schii/products/{$id}", [], ['name' => 'Test', 'unknown_field' => 'bad']);
+        $res = $endpoint->update($req, ['entity' => 'products', 'id' => $id]);
+
+        $this->assertSame(422, $res->getStatusCode());
+    }
+
+    public function testIndexUnknownEntityReturns404(): void
+    {
+        $registry = new SchemaRegistry();
+        $endpoint = new ModelEndpoint($registry);
+
+        $req = new Request('GET', '/schii/unknown');
+        $res = $endpoint->index($req, 'unknown');
+
+        $this->assertSame(404, $res->getStatusCode());
+    }
 }
