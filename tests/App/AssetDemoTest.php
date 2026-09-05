@@ -47,15 +47,39 @@ final class AssetDemoTest extends TestCase
         $this->assertStringContainsString('v-for="p in products"', $content);
     }
 
-    public function testDemoPageEmbedsInlineModuleScript(): void
+    public function testDemoPageEmbedsExtractedModuleScriptUrl(): void
     {
         $content = $this->app->handle(new Request('GET', '/'))->getContent();
 
-        $this->assertStringContainsString('<script type="module">', $content);
-        $this->assertStringContainsString('createApp', $content);
-        $this->assertStringContainsString(".mount('#app')", $content);
+        $this->assertMatchesRegularExpression(
+            '/<script type="module" src="\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js"><\/script>/',
+            $content
+        );
+        $this->assertStringNotContainsString('<script type="module">', $content);
         $this->assertStringNotContainsString('src="/assets/app.js"', $content);
-        $this->assertSame(1, substr_count($content, '<script type="module">'));
+        $this->assertStringNotContainsString('createApp', $content);
+    }
+
+    public function testDemoPageServesExtractedModuleScript(): void
+    {
+        $page = $this->app->handle(new Request('GET', '/'))->getContent();
+        preg_match('/src="(\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
+        $this->assertArrayHasKey(1, $module);
+
+        $response = $this->app->handle(new Request('GET', $module[1]));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
+        $this->assertStringContainsString('createApp', $response->getContent());
+        $this->assertStringContainsString(".mount('#app')", $response->getContent());
+    }
+
+    public function testUnknownModuleScriptUrlReturnsNonHtml404(): void
+    {
+        $response = $this->app->handle(new Request('GET', '/assets/phue/DoesNotExist.00000000.phue.js'));
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertStringNotContainsString('html', strtolower((string) $response->getHeader('content-type')));
     }
 
     public function testDemoPageEmbedsInitialProductsState(): void

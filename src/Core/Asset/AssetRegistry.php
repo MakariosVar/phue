@@ -17,11 +17,60 @@ class AssetRegistry
     /** @var array<string, string> URL prefix => system base directory path map */
     private array $sources = [];
 
+    /** @var array<string, callable> URL prefix => resolver callback map */
+    private array $resolvers = [];
+
     /** @var array<int, array{url: string, isModule: bool}> Registered JavaScript specifications */
     private array $scripts = [];
 
     /** @var array<int, string> Registered CSS Stylesheet URLs */
     private array $styles = [];
+
+    /**
+     * Map a URL prefix to a dynamic resolver callback.
+     *
+     * @param string $urlPrefix e.g. '/assets/phue/'
+     * @param callable(string): ?string $resolver Callback receiving the relative path and returning content or null
+     * @return self
+     */
+    public function addResolver(string $urlPrefix, callable $resolver): self
+    {
+        $normalizedPrefix = '/' . trim($urlPrefix, '/');
+        $this->resolvers[$normalizedPrefix] = $resolver;
+
+        // Sort by longest prefix first
+        uksort($this->resolvers, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        return $this;
+    }
+
+    /**
+     * Resolve a dynamic resource via registered resolvers.
+     *
+     * @param string $uri
+     * @return string|null Resolved dynamic content or null if not handled
+     */
+    public function resolveDynamic(string $uri): ?string
+    {
+        if (str_contains($uri, "\0")) {
+            return null;
+        }
+
+        $path = parse_url($uri, PHP_URL_PATH) ?? $uri;
+
+        foreach ($this->resolvers as $prefix => $resolver) {
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                $relativePath = ltrim(substr($path, strlen($prefix)), '/');
+                $result = $resolver($relativePath);
+
+                if (is_string($result)) {
+                    return $result;
+                }
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Map a URL prefix to a real filesystem directory. Sorts by prefix length descending for accurate matching.
@@ -150,5 +199,13 @@ class AssetRegistry
     public function getSources(): array
     {
         return $this->sources;
+    }
+
+    /**
+     * @return array<string, callable>
+     */
+    public function getResolvers(): array
+    {
+        return $this->resolvers;
     }
 }

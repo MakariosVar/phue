@@ -80,14 +80,36 @@ class Application
         $this->container->singleton(self::class, fn (): self => $this);
 
         // Core Asset Infrastructure Singletons
-        $this->container->singleton(AssetRegistry::class, fn (): AssetRegistry => new AssetRegistry());
+        $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
+            $registry = new AssetRegistry();
+
+            // Bind stateless asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
+            $registry->addResolver('/assets/phue/', function (string $path): ?string {
+                if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
+                    return null;
+                }
+
+                $name = $matches[1];
+                $hash = $matches[2];
+
+                /** @var PhueComponentLoader $loader */
+                $loader = $this->container->get(PhueComponentLoader::class);
+
+                return $loader->scriptFor($name, $hash);
+            });
+
+            return $registry;
+        });
+
         $this->container->singleton(AssetServer::class, fn (): AssetServer => new AssetServer(
             $this->container->get(AssetRegistry::class),
             (bool) $this->config->get('app.debug', false)
         ));
+
         $this->container->singleton(HtmlShellRenderer::class, fn (): HtmlShellRenderer => new HtmlShellRenderer(
             $this->container->get(AssetRegistry::class)
         ));
+
         $this->container->singleton(PhueComponentLoader::class, function () {
             return new PhueComponentLoader($this->basePath . '/App/Frontend');
         });

@@ -7,7 +7,7 @@ namespace Phue\Core\Asset;
 use Phue\Core\Response;
 
 /**
- * Handles streaming static assets with appropriate Content-Type and caching guards.
+ * Handles streaming static and dynamic assets with appropriate Content-Type and caching guards.
  *
  * @package Phue\Core\Asset
  */
@@ -34,15 +34,32 @@ class AssetServer
     ) {}
 
     /**
-     * Attempt to serve static asset based on requested URI.
+     * Attempt to serve static or dynamic asset based on requested URI.
      *
      * @param string $uri
      * @return Response|null Returns HTTP Response if resolved, or null if no matching source exists
      */
     public function serve(string $uri): ?Response
     {
-        $filePath = $this->registry->resolvePath($uri);
+        // 1. Try dynamic resolvers first (e.g. Phue virtual JS modules)
+        $dynamicContent = $this->registry->resolveDynamic($uri);
+        if ($dynamicContent !== null) {
+            $response = new Response($dynamicContent, 200, [
+                'Content-Type'   => 'text/javascript; charset=utf-8',
+                'Content-Length' => (string) strlen($dynamicContent),
+            ]);
 
+            if ($this->isDebug) {
+                $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            } else {
+                $response->setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+
+            return $response;
+        }
+
+        // 2. Fallback to physical filesystem assets
+        $filePath = $this->registry->resolvePath($uri);
         if ($filePath === null) {
             return null;
         }
@@ -56,7 +73,7 @@ class AssetServer
         }
 
         $response = new Response($content, 200, [
-            'Content-Type' => $contentType,
+            'Content-Type'   => $contentType,
             'Content-Length' => (string) strlen($content),
         ]);
 
@@ -67,5 +84,14 @@ class AssetServer
         }
 
         return $response;
+    }
+
+    /**
+     * Proxy helper to register dynamic resolvers directly onto the registry.
+     */
+    public function addResolver(string $prefix, callable $handler): self
+    {
+        $this->registry->addResolver($prefix, $handler);
+        return $this;
     }
 }
