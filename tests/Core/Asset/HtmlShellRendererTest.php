@@ -159,4 +159,43 @@ final class HtmlShellRendererTest extends TestCase
 
         $this->assertStringContainsString('Ti' . "\u{FFFD}" . '(tle', $html);
     }
+
+    public function testInDomContentIsInlinedInsideAppContainer(): void
+    {
+        $html = $this->renderer->render('T', 'app', [], '<div class="x">Hi</div>');
+
+        $this->assertStringContainsString(
+            '<div id="app"><div class="x">Hi</div></div>',
+            $html
+        );
+        $this->assertSame(1, substr_count($html, '<div id="app">'));
+    }
+
+    public function testInDomContentPreservesVueDirectivesAndQuotes(): void
+    {
+        $content = '<input type="number" step="0.01" v-model="newProduct.price" @submit.prevent="add" placeholder="Price" required>';
+
+        $html = $this->renderer->render('T', 'app', [], $content);
+
+        $this->assertStringContainsString($content, $html);
+    }
+
+    public function testInDomContentIsTrustedAndNeverEscaped(): void
+    {
+        $content = "{{ p.name }} - \${{ p.price }} & it's<strong>raw</strong>";
+
+        $html = $this->renderer->render('T', 'app', [], $content);
+
+        $this->assertStringContainsString($content, $html);
+        $this->assertStringNotContainsString('&quot;', $html);
+        $this->assertStringNotContainsString('&#039;', $html);
+        $this->assertStringNotContainsString('&lt;strong&gt;', $html);
+    }
+
+    public function testWithoutContentContainerStaysEmpty(): void
+    {
+        $html = $this->renderer->render('T', 'app', []);
+
+        $this->assertStringContainsString('<div id="app"></div>', $html);
+    }
 }

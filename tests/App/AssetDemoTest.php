@@ -26,8 +26,9 @@ final class AssetDemoTest extends TestCase
 
         $this->app = new Application('/app');
         $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
-        $this->app->getContainer()->get(AssetRegistry::class)
-            ->registerSource('/assets', '/app/storage/assets');
+        $registry = $this->app->getContainer()->get(AssetRegistry::class);
+        $registry->registerSource('/assets', '/app/App/Frontend');
+        $registry->registerSource('/assets/vendor', '/app/storage/assets/vendor');
     }
 
     public function testDemoPageReturnsHtmlShell(): void
@@ -36,7 +37,7 @@ final class AssetDemoTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/html; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('<title>Schii Demo - Products</title>', $response->getContent());
+        $this->assertStringContainsString('<title>Phue App - Products</title>', $response->getContent());
         $this->assertStringContainsString('<div id="app">', $response->getContent());
         $this->assertStringContainsString('v-for="p in products"', $response->getContent());
     }
@@ -46,7 +47,7 @@ final class AssetDemoTest extends TestCase
         $response = $this->app->handle(new Request('GET', '/'));
 
         $this->assertStringContainsString(
-            '<script type="module" src="/assets/js/app.js"></script>',
+            '<script type="module" src="/assets/app.js"></script>',
             $response->getContent()
         );
     }
@@ -62,9 +63,9 @@ final class AssetDemoTest extends TestCase
         $this->assertStringContainsString('29.99', $content);
     }
 
-    public function testServesAppJsFromRegisteredStorage(): void
+    public function testServesAppEntryFromFrontendSource(): void
     {
-        $response = $this->app->handle(new Request('GET', '/assets/js/app.js'));
+        $response = $this->app->handle(new Request('GET', '/assets/app.js'));
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
@@ -84,9 +85,16 @@ final class AssetDemoTest extends TestCase
         $this->assertStringNotContainsString('Unable to read', $response->getContent());
     }
 
+    public function testAppSourceIsNotReachableUnderVendorPrefix(): void
+    {
+        $response = $this->app->handle(new Request('GET', '/assets/vendor/js/app.js'));
+
+        $this->assertSame(404, $response->getStatusCode());
+    }
+
     public function testUnknownVendorFileReturns404(): void
     {
-        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue.esm-browser.dev.js'));
+        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue3/vue.esm-browser.prod.js'));
 
         $this->assertSame(404, $response->getStatusCode());
     }

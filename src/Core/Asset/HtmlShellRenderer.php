@@ -23,10 +23,16 @@ class HtmlShellRenderer
      * @param string $title Page title
      * @param string $appId Mounting root element ID (default: "app")
      * @param array<string, mixed> $initialState Global state injected via `window.__INITIAL_STATE__`
+     * @param string $content Inner HTML content to inline directly inside the mounting root element
+     *
      * @return string Valid HTML5 document markup
      */
-    public function render(string $title = 'Phue App', string $appId = 'app', array $initialState = []): string
-    {
+    public function render(
+        string $title = 'Phue App',
+        string $appId = 'app',
+        array $initialState = [],
+        string $content = ''
+    ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
 
@@ -64,7 +70,7 @@ class HtmlShellRenderer
     {$stylesMarkup}
 </head>
 <body>
-    <div id="{$safeAppId}"></div>
+    <div id="{$safeAppId}">{$content}</div>
     {$stateMarkup}{$scriptsMarkup}
 </body>
 </html>

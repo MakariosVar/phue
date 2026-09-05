@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Application;
@@ -11,7 +13,12 @@ $app = new Application(dirname(__DIR__));
 
 /** @var AssetRegistry $registry */
 $registry = $app->getContainer()->get(AssetRegistry::class);
-$registry->registerSource('/assets', $app->getBasePath() . '/storage/assets');
+
+// 1. App-level Source Code (/assets -> App/Frontend)
+$registry->registerSource('/assets', $app->getBasePath() . '/App/Frontend');
+
+// 2. Downloaded 3rd-Party Vendor Dependencies (/assets/vendor -> storage/assets/vendor)
+$registry->registerSource('/assets/vendor', $app->getBasePath() . '/storage/assets/vendor');
 
 // Register application controllers
 $app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
