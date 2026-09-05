@@ -7,9 +7,6 @@ namespace Phue\Core\UI;
 /**
  * Encapsulates view template data, initial client state payload, and JavaScript asset dependencies.
  *
- * Designed for server-authoritative rendering where HTML markup is inlined
- * directly into the initial payload for front-end framework hydration (e.g. Vue.js).
- *
  * @package Phue\Core\UI
  */
 class View
@@ -17,43 +14,35 @@ class View
     /**
      * View constructor.
      *
-     * @param string $template In-DOM HTML markup to be placed inside the application mounting element.
-     * @param array<string, mixed> $state Initial state array injected into the client window.__INITIAL_STATE__ object.
-     * @param array<int, string> $scripts List of asset URL paths for ESM module scripts required by this view. Defaults to empty array.
+     * @param string $template In-DOM HTML markup for hydration.
+     * @param array<string, mixed> $state Initial state injected into window.__INITIAL_STATE__.
+     * @param array<int, string> $scripts External ESM script URLs.
+     * @param string|null $inlineScript Inline ESM JavaScript logic extracted from <script> block.
      */
     public function __construct(
         private string $template,
         private array $state = [],
-        private array $scripts = []
+        private array $scripts = [],
+        private ?string $inlineScript = null
     ) {}
 
-    /**
-     * Get the HTML template markup for the view.
-     *
-     * @return string The raw HTML template string.
-     */
     public function getTemplate(): string
     {
         return $this->template;
     }
 
-    /**
-     * Get the initial state payload for hydration.
-     *
-     * @return array<string, mixed> Key-value pairs representing client initial state.
-     */
     public function getState(): array
     {
         return $this->state;
     }
 
-    /**
-     * Get the list of script asset URLs required by the view.
-     *
-     * @return array<int, string> List of script URLs.
-     */
     public function getScripts(): array
     {
         return $this->scripts;
+    }
+
+    public function getInlineScript(): ?string
+    {
+        return $this->inlineScript;
     }
 }

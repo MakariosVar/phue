@@ -7,7 +7,7 @@ namespace Phue\Core\Asset;
 use JsonException;
 
 /**
- * Renders the baseline HTML5 shell payload with registered asset dependencies and safe attributes.
+ * Renders the baseline HTML5 shell payload with registered asset dependencies and inline scripts.
  *
  * @package Phue\Core\Asset
  */
@@ -23,7 +23,8 @@ class HtmlShellRenderer
      * @param string $title Page title
      * @param string $appId Mounting root element ID (default: "app")
      * @param array<string, mixed> $initialState Global state injected via `window.__INITIAL_STATE__`
-     * @param string $content Inner HTML content to inline directly inside the mounting root element
+     * @param string $content Inner HTML content
+     * @param string|null $inlineScript Inline module script block
      *
      * @return string Valid HTML5 document markup
      */
@@ -31,7 +32,8 @@ class HtmlShellRenderer
         string $title = 'Phue App',
         string $appId = 'app',
         array $initialState = [],
-        string $content = ''
+        string $content = '',
+        ?string $inlineScript = null
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
@@ -60,6 +62,10 @@ class HtmlShellRenderer
             $stateMarkup = "<script>window.__INITIAL_STATE__ = {$jsonState};</script>\n    ";
         }
 
+        $inlineScriptMarkup = $inlineScript !== null && $inlineScript !== ''
+            ? "<script type=\"module\">\n{$inlineScript}\n</script>\n    "
+            : '';
+
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -71,15 +77,11 @@ class HtmlShellRenderer
 </head>
 <body>
     <div id="{$safeAppId}">{$content}</div>
-    {$stateMarkup}{$scriptsMarkup}
-</body>
+    {$stateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
 </html>
 HTML;
     }
 
-    /**
-     * Universal escaping method for HTML contexts and attributes.
-     */
     private function escape(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

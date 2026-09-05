@@ -1,0 +1,33 @@
+<php>
+return [
+    'title' => 'Phue App - Products',
+    'state' => [
+        'products' => [
+            ['id' => 1, 'name' => 'Widget A', 'price' => 19.99],
+            ['id' => 2, 'name' => 'Widget B', 'price' => 29.99],
+        ],
+    ],
+];
+</php>
+
+<template>
+<div class="container my-4">
+    <h2>Product Catalog</h2>
+    <ul>
+        <li v-for="p in products" :key="p.id">
+            {{ p.name }} - ${{ p.price }}
+        </li>
+    </ul>
+</div>
+</template>
+
+<script>
+import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
+
+createApp({
+    setup() {
+        const products = ref(window.__INITIAL_STATE__.products || []);
+        return { products };
+    }
+}).mount('#app');
+</script>

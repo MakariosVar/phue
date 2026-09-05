@@ -9,19 +9,12 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Response;
 
 /**
- * Core component renderer responsible for assembling HTML shells, inlining component templates,
- * enqueuing asset scripts, and generating HTTP Responses.
+ * Core component renderer assembling HTML shells, inline templates, scripts, and state payload.
  *
  * @package Phue\Core\UI
  */
 class ComponentRenderer
 {
-    /**
-     * ComponentRenderer constructor.
-     *
-     * @param HtmlShellRenderer $shellRenderer Service responsible for rendering the base HTML page shell.
-     * @param AssetRegistry $assetRegistry Service responsible for registering and tracking script dependencies.
-     */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
         private AssetRegistry $assetRegistry
@@ -30,14 +23,9 @@ class ComponentRenderer
     /**
      * Assembles a View object and returns a fully formed HTML HTTP Response.
      *
-     * Performs the following sequence:
-     * 1. Enqueues all view script dependencies as ESM modules into the AssetRegistry.
-     * 2. Renders the base HTML document shell with initial state serialization and inlined template content.
-     *
-     * @param string $title The document title to display in the browser <title> tag.
-     * @param View $view The View object containing template markup, state, and script dependencies.
-     *
-     * @return Response Standardized HTTP Response with status 200 and UTF-8 HTML headers.
+     * @param string $title Document title.
+     * @param View $view View object payload.
+     * @return Response HTTP response.
      */
     public function render(string $title, View $view): Response
     {
@@ -49,9 +37,27 @@ class ComponentRenderer
             title: $title,
             appId: 'app',
             initialState: $view->getState(),
-            content: $view->getTemplate()
+            content: $view->getTemplate(),
+            inlineScript: $view->getInlineScript()
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    /**
+     * Convenience helper to parse and render a .phue SFC file directly.
+     *
+     * @param string $filePath Path to the .phue file.
+     * @param string|null $titleOverride Optional document title override.
+     * @return Response
+     */
+    public function renderFile(string $filePath, ?string $titleOverride = null): Response
+    {
+        $parser = new PhueTemplateParser();
+        $component = $parser->parse($filePath);
+
+        $title = $titleOverride ?? $component->title;
+
+        return $this->render($title, $component->view);
     }
 }
