@@ -78,12 +78,21 @@ final class AssetServerTest extends TestCase
         $this->assertSame('text/plain; charset=utf-8', $response->getHeader('Content-Type'));
     }
 
-    public function testReturnsNullForUnmatchedUri(): void
+    public function testUnmatchedSourcePrefixReturnsNull(): void
     {
         $server = new AssetServer($this->registry());
 
         $this->assertNull($server->serve('/other/app.js'));
-        $this->assertNull($server->serve('/assets/missing.js'));
+    }
+
+    public function testMissingFileUnderKnownPrefixReturnsNonHtml404(): void
+    {
+        $response = (new AssetServer($this->registry()))->serve('/assets/missing.js');
+
+        $this->assertNotNull($response);
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('Content-Type'));
+        $this->assertSame('nosniff', $response->getHeader('X-Content-Type-Options'));
     }
 
     public function testDebugModeDisablesCaching(): void

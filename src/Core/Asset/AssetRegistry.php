@@ -178,6 +178,25 @@ class AssetRegistry
     }
 
     /**
+     * Check if a given URI starts with any registered static source prefix.
+     *
+     * @param string $uri
+     * @return bool
+     */
+    public function matchesSourcePrefix(string $uri): bool
+    {
+        $path = parse_url($uri, PHP_URL_PATH) ?? $uri;
+
+        foreach ($this->sources as $prefix => $baseDir) {
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<int, array{url: string, isModule: bool}>
      */
     public function getScripts(): array
