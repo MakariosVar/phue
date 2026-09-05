@@ -1,11 +1,11 @@
 .opencode
 AGENTS.md
 
-vendor/
+!storage/vendor/*
+/vendor/
 .phpunit.cache
 
 composer.lock
-
 *.sqlite
 
 /database/migrations/*

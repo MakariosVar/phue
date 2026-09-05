@@ -26,7 +26,8 @@ class AppIntegrationTest extends TestCase
 
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('Phue Logo', $response->getContent());
+        $this->assertStringContainsString('<div id="app">', $response->getContent());
+        $this->assertStringContainsString('window.__INITIAL_STATE__', $response->getContent());
     }
 
     public function testApiInfoRouteReturnsJson(): void
