@@ -30,9 +30,9 @@ class WebController
      *
      * @return Response HTTP Response containing the fully assembled HTML page.
      */
-    #[Route('/', methods: ['GET'])]
-    public function index(): Response
-    {
-        return $this->ui->renderFile(dirname(__DIR__, 2) . '/App/Frontend/Products.phue');
-    }
+     #[Route('/', methods: ['GET'])]
+     public function index(): Response
+     {
+         return $this->ui->render('Products');
+     }
 }

@@ -13,6 +13,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
+use Phue\Core\UI\PhueComponentLoader;
 use Throwable;
 
 /**
@@ -87,6 +88,9 @@ class Application
         $this->container->singleton(HtmlShellRenderer::class, fn (): HtmlShellRenderer => new HtmlShellRenderer(
             $this->container->get(AssetRegistry::class)
         ));
+        $this->container->singleton(PhueComponentLoader::class, function () {
+            return new PhueComponentLoader($this->basePath . '/App/Frontend');
+        });
 
         // Auto-register AssetsController to Router
         $this->router->registerController(AssetsController::class);
