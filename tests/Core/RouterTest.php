@@ -233,12 +233,12 @@ class RouterTest extends TestCase
 #[Route('/api/v2/products')]
 class RouterTestStubController
 {
-    #[Route('', methods: 'GET')]
+    #[Route('', methods: ['GET'])]
     public function index(): void
     {
     }
 
-    #[Route('/{id:int}', methods: 'GET')]
+    #[Route('/{id:int}', methods: ['GET'])]
     public function show(): void
     {
     }

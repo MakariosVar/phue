@@ -2,6 +2,7 @@
 
 namespace Phue\Core;
 
+use JsonException;
 use Nyholm\Psr7\Response as Psr7Response;
 use Psr\Http\Message\ResponseInterface;
 
@@ -9,6 +10,8 @@ use Psr\Http\Message\ResponseInterface;
  * Representation of an outgoing HTTP response.
  *
  * Holds HTTP status code, headers, and body payload ready to send to the browser.
+ *
+ * @package Phue\Core
  */
 class Response
 {
@@ -45,6 +48,7 @@ class Response
      * Create a JSON HTTP response object.
      *
      * Automatically encodes data array/object into JSON string.
+     * Throws 500 server error payload on JSON serialization failure.
      *
      * @param mixed $data Data payload to serialize into JSON
      * @param int $statusCode HTTP status code
@@ -52,13 +56,21 @@ class Response
      */
     public static function json(mixed $data, int $statusCode = 200): self
     {
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        try {
+            $json = json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return new self(
-            content: $json !== false ? $json : '{}',
-            statusCode: $statusCode,
-            headers: ['Content-Type' => 'application/json']
-        );
+            return new self(
+                content: $json,
+                statusCode: $statusCode,
+                headers: ['Content-Type' => 'application/json']
+            );
+        } catch (JsonException $e) {
+            return new self(
+                content: json_encode(['error' => 'Malformed JSON payload: ' . $e->getMessage()]),
+                statusCode: 500,
+                headers: ['Content-Type' => 'application/json']
+            );
+        }
     }
 
     /**
@@ -176,6 +188,8 @@ class Response
 
     /**
      * Converts native Phue Response to PSR-7 Response (e.g. Nyholm/Psr7).
+     *
+     * @return ResponseInterface PSR-7 compliant response instance.
      */
     public function toPsr7(): ResponseInterface
     {

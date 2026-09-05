@@ -20,19 +20,17 @@ class Route
     /**
      * Route constructor.
      *
-     * @param string               $path    The route URI pattern (e.g., '/users/{id}').
-     * @param string|array<string> $methods Allowed HTTP methods (e.g., 'GET' or ['GET', 'POST']).
-     * @param string|null          $name    Optional route name for URL generation.
+     * @param string                $path    The route URI pattern (e.g., '/users/{id}').
+     * @param array<string>         $methods Allowed HTTP methods (e.g., ['GET', 'POST']).
+     * @param string|null           $name    Optional route name for URL generation.
      * @param array<string, string> $where   Custom regex constraints for path parameters.
      */
     public function __construct(
         public string $path = '/',
-        string|array $methods = ['GET'],
+        array $methods = ['GET'],
         public ?string $name = null,
         public array $where = []
     ) {
-        // Normalize single method string or array into an uppercase array
-        $methodsArray = is_string($methods) ? [$methods] : $methods;
-        $this->methods = array_map('strtoupper', $methodsArray);
+        $this->methods = array_map('strtoupper', $methods);
     }
 }

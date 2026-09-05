@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace Phue\Cache;
+
 use Psr\SimpleCache\CacheInterface;
 
 /**

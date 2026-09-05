@@ -79,18 +79,31 @@ final class ResponseTest extends TestCase
     }
 
     /**
-     * Tests JSON response fallback when data cannot be JSON encoded (e.g. malformed UTF-8 sequence).
-     */
+      * Tests that Response::json() catches JSON encoding failures and returns 500 error.
+      * Invalid data (e.g. malformed UTF-8 or recursive references) should produce a server error,
+      * not a silent empty JSON object that hides the failure from API clients.
+      */
     public function testJsonResponseHandlesUnserializableDataFallback(): void
     {
-        // Malformed non-UTF8 binary payload cause json_encode to return false
+        // Malformed non-UTF8 binary payload causes json_encode to fail even with JSON_THROW_ON_ERROR
+        // Response catches the JsonException and returns a 500 error with structured JSON error message
         $invalidUtf8 = ["data" => "\xB1\x31"];
 
         $response = Response::json($invalidUtf8);
 
-        $this->assertEquals(200, $response->getStatusCode());
-        $this->assertEquals("{}", $response->getContent());
-        $this->assertEquals("application/json", $response->getHeader("Content-Type"));
+        $this->assertEquals(500, $response->getStatusCode());
+        $this->assertStringContainsString('Malformed JSON payload', $response->getContent());
+    }
+
+    public function testJsonResponseHandlesRecursiveData(): void
+    {
+        $recursive = ['self' => null];
+        $recursive['self'] = &$recursive;
+
+        $response = Response::json($recursive);
+
+        $this->assertEquals(500, $response->getStatusCode());
+        $this->assertStringContainsString('Recursion detected', $response->getContent());
     }
 }
 

@@ -133,11 +133,13 @@ class Application
     /**
      * Handle incoming HTTP Request through global middleware pipeline and router.
      *
-     * @param Request $request Incoming HTTP request object.
+     * @param Request|null $request Incoming HTTP request object. If null, automatically captures request from globals.
      * @return Response Standardized HTTP response object.
      */
-    public function handle(Request $request): Response
+    public function handle(?Request $request = null): Response
     {
+        $request ??= Request::capture();
+
         // Build the global middleware pipeline
         $pipeline = array_reduce(
             array_reverse($this->middlewareStack),

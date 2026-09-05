@@ -100,7 +100,7 @@ class DummyAttributeController
     /**
      * Index action test route.
      */
-    #[Route('/users', methods: 'GET', name: 'users.index')]
+    #[Route('/users', methods: ['GET'], name: 'users.index')]
     public function index(): void
     {
     }

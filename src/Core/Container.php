@@ -11,6 +11,8 @@ use Phue\Core\Exceptions\CircularDependencyException;
 /**
  * Main application Container handling dependency injection,
  * scope management (Application vs Request), and Reflection autowiring.
+ *
+ * @package Phue\Core
  */
 class Container
 {
@@ -50,9 +52,11 @@ class Container
     private array $resolving = [];
 
     /**
-     * Register a general factory binding (compatibility with set()).
-     * @param $id string | factory_id
-     * @param $factory callable | factory callable
+     * Register a general factory binding (compatibility wrapper for bind).
+     *
+     * @param string $id Unique service identifier or class/interface FQCN.
+     * @param callable $factory Factory callback used to create the service instance.
+     * @return void
      */
     public function set(string $id, callable $factory): void
     {
@@ -61,6 +65,10 @@ class Container
 
     /**
      * Register an Application-scoped singleton service.
+     *
+     * @param string $id Unique service identifier or class/interface FQCN.
+     * @param callable|null $factory Optional factory callback. If null, class autowiring will be attempted.
+     * @return void
      */
     public function singleton(string $id, ?callable $factory = null): void
     {
@@ -68,7 +76,11 @@ class Container
     }
 
     /**
-     * Register a Request-scoped service.
+     * Register a Request-scoped service that is reset between individual HTTP request lifecycles.
+     *
+     * @param string $id Unique service identifier or class/interface FQCN.
+     * @param callable|null $factory Optional factory callback. If null, class autowiring will be attempted.
+     * @return void
      */
     public function scoped(string $id, ?callable $factory = null): void
     {
@@ -76,7 +88,12 @@ class Container
     }
 
     /**
-     * Bind a service factory and register its scope.
+     * Bind a service factory and register its persistence scope.
+     *
+     * @param string $id Unique service identifier or class/interface FQCN.
+     * @param callable|null $factory Optional factory callback.
+     * @param bool $isScoped Whether the service should be request-scoped (true) or application-scoped (false).
+     * @return void
      */
     public function bind(string $id, ?callable $factory = null, bool $isScoped = false): void
     {
@@ -96,10 +113,13 @@ class Container
     }
 
     /**
-     * Resolve a service or class instance from the container based on scope.
+     * Resolve a service or class instance from the container based on its scope.
      *
-     * @param string $id Service identifier or target class name
-     * @return mixed Resolved instance or object
+     * @param string $id Service identifier or target class name.
+     * @return mixed Resolved instance or value.
+     * @throws CircularDependencyException If a circular dependency is detected during instantiation.
+     * @throws ContainerException If an uninstantiable class or unresolved parameter is encountered.
+     * @throws NotFoundException If no factory or autowirable class exists for the requested ID.
      */
     public function get(string $id): mixed
     {
@@ -129,6 +149,11 @@ class Container
 
     /**
      * Force resolution of a new, un-cached service instance.
+     *
+     * @param string $id Service identifier or target class name.
+     * @return mixed Resolved fresh instance or object.
+     * @throws CircularDependencyException If a circular dependency chain is encountered.
+     * @throws NotFoundException If no factory or resolvable class exists for the given ID.
      */
     public function make(string $id): mixed
     {
@@ -155,7 +180,10 @@ class Container
     }
 
     /**
-     * Check whether a service factory exists or if a class/interface exists.
+     * Check whether a service factory is bound or if a target class/interface exists.
+     *
+     * @param string $id Service identifier or class/interface FQCN.
+     * @return bool True if resolvable; false otherwise.
      */
     public function has(string $id): bool
     {
@@ -163,7 +191,9 @@ class Container
     }
 
     /**
-     * Clear all request-scoped instances and trigger ResettableInterface logic.
+     * Clear all request-scoped instances and trigger optional reset logic for resettable instances.
+     *
+     * @return void
      */
     public function flushScope(): void
     {
@@ -176,7 +206,14 @@ class Container
         $this->scopedInstances = [];
     }
 
-   private function autowire(string $id): object
+    /**
+     * Automatically instantiate a class using reflection and resolve constructor dependencies.
+     *
+     * @param string $id Fully Qualified Class Name (FQCN) to autowire.
+     * @return object Instantiated class object.
+     * @throws ContainerException If class cannot be instantiated or parameters cannot be resolved.
+     */
+    private function autowire(string $id): object
     {
         $reflection = new ReflectionClass($id);
 
@@ -238,6 +275,13 @@ class Container
         return $reflection->newInstanceArgs($dependencies);
     }
 
+    /**
+     * Throw an exception when a service or class cannot be resolved.
+     *
+     * @param string $id Unresolvable service or class key.
+     * @return never
+     * @throws NotFoundException Always throws exception.
+     */
     private function missingFactory(string $id): never
     {
         throw new NotFoundException("Missing factory or class for service: '{$id}'");

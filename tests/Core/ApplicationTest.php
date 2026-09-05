@@ -195,6 +195,27 @@ class ApplicationTest extends TestCase
         $config->set('custom.nested.setting', 'active');
         $this->assertEquals('active', $config->get('custom.nested.setting'));
     }
+
+    /**
+      * Test that Application::handle() works with default null request parameter,
+      * automatically capturing the HTTP request from PHP globals.
+      */
+    public function testHandleWithDefaultRequestParameter(): void
+    {
+        $this->app->getRouter()->get('/api/health', fn () => 'healthy');
+
+        // Set up $_SERVER globals for Request::capture()
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/api/health';
+
+        $response = $this->app->handle();
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('healthy', $response->getContent());
+
+        // Clean up
+        unset($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
+    }
 }
 
 
@@ -267,7 +288,7 @@ class BlockingMiddleware
 #[Middleware(ClassLevelMiddleware::class)]
 class DummyMiddlewareController
 {
-    #[Route('/middleware', methods: 'GET')]
+    #[Route('/middleware', methods: ['GET'])]
     #[Middleware(MethodLevelMiddleware::class)]
     public function index(): string
     {
@@ -283,7 +304,7 @@ class DummyMiddlewareController
 #[Middleware(BlockingMiddleware::class)]
 class DummyShortCircuitController
 {
-    #[Route('/unauthorized', methods: 'GET')]
+    #[Route('/unauthorized', methods: ['GET'])]
     public function index(): string
     {
         ExecutionTracker::$log[] = 'Action';

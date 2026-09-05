@@ -107,4 +107,20 @@ final class EdgeKvCacheTest extends TestCase
         $cache = new EdgeKvCache();
         $this->assertTrue($cache->clear());
     }
+
+    /**
+      * Tests that getMultiple returns array (not just iterable).
+      * The return type must be array for frontend API clients to use array methods (count, map, etc.).
+      */
+    public function testGetMultipleReturnsArrayType(): void
+    {
+        $cache = new EdgeKvCache();
+        $cache->set('a', 1);
+
+        $result = $cache->getMultiple(['a', 'b']);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('a', $result);
+        $this->assertArrayHasKey('b', $result);
+    }
 }
