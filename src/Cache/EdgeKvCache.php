@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace Phue\Cache;
+use Psr\SimpleCache\CacheInterface;
 
 /**
  * In-Memory & Key-Value Cache Driver for Read-Only Edge Filesystems.

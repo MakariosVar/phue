@@ -103,7 +103,7 @@ final class SwooleAdapter implements ServerAdapterInterface
             uri: $swRequest->server['request_uri'] ?? '/',
             method: $swRequest->server['request_method'] ?? 'GET',
             queryParams: $swRequest->get ?? [],
-            bodyParams: $swRequest->post ?? [],
+            parsedBody: $swRequest->post ?? [],
             headers: $headers,
             serverParams: $swRequest->server ?? []
         );
