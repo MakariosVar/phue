@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Phue\Core;
 
+use Phue\Core\Asset\AssetsController;
+use Phue\Core\Asset\AssetRegistry;
+use Phue\Core\Asset\AssetServer;
+use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
@@ -73,6 +77,19 @@ class Application
         $this->container->singleton(Router::class, fn (): Router => $this->router);
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
+
+        // Core Asset Infrastructure Singletons
+        $this->container->singleton(AssetRegistry::class, fn (): AssetRegistry => new AssetRegistry());
+        $this->container->singleton(AssetServer::class, fn (): AssetServer => new AssetServer(
+            $this->container->get(AssetRegistry::class),
+            (bool) $this->config->get('app.debug', false)
+        ));
+        $this->container->singleton(HtmlShellRenderer::class, fn (): HtmlShellRenderer => new HtmlShellRenderer(
+            $this->container->get(AssetRegistry::class)
+        ));
+
+        // Auto-register AssetsController to Router
+        $this->router->registerController(AssetsController::class);
     }
 
     /**
