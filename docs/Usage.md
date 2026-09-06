@@ -12,7 +12,11 @@ Welcome to **Phue Framework**! This guide provides practical examples and best p
 4. [Automatic Controller Scanning](#4-automatic-controller-scanning)
 5. [Dependency Injection & Scopes](#5-dependency-injection--scopes)
 6. [HTTP Request & Response API](#6-http-request--response-api)
-7. [Running & Testing Locally](#7-running--testing-locally)
+7. [Database Connections & Drivers](#7-database-connections--drivers)
+8. [Active Record ORM Usage](#8-active-record-orm-usage)
+9. [CLI Console Tool (`bin/phue`)](#9-cli-console-tool-binphue)
+10. [Schii Server-Driven UI & Zero-Controller REST](#10-schii-server-driven-ui--zero-controller-rest)
+11. [Running & Testing Locally](#11-running--testing-locally)
 
 ---
 
@@ -28,13 +32,17 @@ my-app/
 │   ├── Controllers/
 │   │   ├── HomeController.php
 │   │   └── UserController.php
+│   ├── Frontend/                 # App-level .phue components (served at /assets)
 │   ├── Middleware/
 │   │   └── AuthMiddleware.php
+│   ├── Models/                   # #[UI]/#[Field] models (Schii entities)
 │   ├── Services/
 │   │   └── UserService.php
-│   └── index.php             # Web entry point
 ├── config/
-│   └── app.php
+│   ├── app.php
+│   └── schii.php
+├── public/
+│   └── index.php                 # Web entry point
 ├── docker/
 ├── src/                      # Phue Framework Core
 ├── composer.json
@@ -58,29 +66,38 @@ Ensure your `App` namespace is registered in `composer.json`:
 
 Run `composer dump-autoload` after editing `composer.json`.
 
-### Web Entry Point (`App/index.php`)
+### Web Entry Point (`public/index.php`)
 
 ```php
 <?php
 
+declare(strict_types=1);
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Application;
+use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Request;
 
-// 1. Instantiate Application
-$app = new Application(__DIR__ . '/..');
+// 1. Instantiate Application with the project root
+$app = new Application(dirname(__DIR__));
 
-// 2. Automatically scan and register all controllers
-$app->getRouter()->scanControllers(__DIR__ . '/Controllers', 'App\\Controllers');
+/** @var AssetRegistry $registry */
+$registry = $app->getContainer()->get(AssetRegistry::class);
 
-// 3. Capture incoming HTTP request and execute pipeline
-$request = Request::capture();
-$response = $app->handle($request);
+// 2. Register asset sources (/assets -> App/Frontend, /assets/vendor -> downloaded binaries)
+$registry->registerSource('/assets', $app->getBasePath() . '/App/Frontend');
+$registry->registerSource('/assets/vendor', $app->getBasePath() . '/storage/assets/vendor');
 
-// 4. Send HTTP headers and body to client
+// 3. Automatically scan and register all application controllers
+$app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
+
+// 4. Capture incoming HTTP request and execute pipeline
+$response = $app->handle(Request::capture());
 $response->send();
 ```
+
+> The **document root is `public/`** — assets are routed through `AssetsController` and never hit disk, so serving via `./bin/phue serve` (which uses `-t public`) is the intended path.
 
 ---
 
@@ -561,21 +578,34 @@ Phue provides a terminal executable `./bin/phue` for managing dev servers and ge
 ./bin/phue list
 ```
 
+Currently registered commands (all under `./bin/phue`):
+
+```bash
+serve              # Launch dev web server (docroot public/, default host 0.0.0.0)
+make:controller    # Generate App/Controllers/XxxController.php with #[Route] attribute
+make:model         # Generate App/Models/Xxx.php extending BaseActiveRecord
+make:migration     # Generate a migration file under database/migrations/
+schii:migrate      # Apply migrations for Schii entities
+migrate            # Apply pending migrations
+migrate:rollback   # Roll back the last applied batch of migrations
+deploy             # Edge build/deploy helper (WASM targets)
+```
+
 ### Launch Development Web Server (`serve`)
 
 ```bash
-# Starts server on 127.0.0.1:8000
+# Starts server on 0.0.0.0:8000 (document root: public/)
 ./bin/phue serve
 
 # Override port or host
-./bin/phue serve --port=8080 --host=0.0.0.0
+./bin/phue serve --port=8080 --host=127.0.0.1
 ```
 
 ### Generate Controller Class (`make:controller`)
 
 ```bash
 ./bin/phue make:controller UserController
-# Creates App/Controllers/UserController.php with pre-configured #[Route] attribute
+# Creates App/Controllers/UserController.php with a pre-configured #[Route('/...', methods: ['GET'])] attribute
 ```
 
 ### Generate Model Class (`make:model`)
@@ -583,6 +613,13 @@ Phue provides a terminal executable `./bin/phue` for managing dev servers and ge
 ```bash
 ./bin/phue make:model Product
 # Creates App/Models/Product.php extending BaseActiveRecord
+```
+
+### Generate Migration (`make:migration`)
+
+```bash
+./bin/phue make:migration create_products_table
+# Creates database/migrations/<timestamp>_create_products_table.php
 ```
 
 ---
@@ -629,32 +666,42 @@ $endpoint = new ModelEndpoint($registry);
 $endpoint->registerEntity('products', App\Models\Product::class);
 
 // Handled Endpoints:
-// GET    /schii/schema/products      -> Returns JSON Schema protocol for Vue Admin
-// GET    /schii/products?q=Lap&page=1 -> List with search, filter, sort & pagination
-// GET    /schii/products/1            -> Show record
-// POST   /schii/products              -> Create record
-// PUT    /schii/products/1            -> Update record
-// DELETE /schii/products/1            -> Delete record
+// GET    /api/schii/schema/products      -> Returns JSON Schema protocol for Vue Admin
+// GET    /api/schii/products?q=Lap&page=1 -> List with search, filter, sort & pagination
+// GET    /api/schii/products/1            -> Show record
+// POST   /api/schii/products              -> Create record
+// PUT    /api/schii/products/1            -> Update record
+// DELETE /api/schii/products/1            -> Delete record
 ```
 
 > **Namespace discovery**: normally you don't register entities manually — the module discovers them from the configured `entityNamespace` (default `App\Models`). Put `#[UI]`/`#[Field]` models there and the REST API + console board pick them up automatically. A discovery endpoint — `GET /{apiPrefix}/schema` → `{"entities":[...]}` — lists the served slugs server-authoritatively.
+
+### Console URL vs API prefix
+
+Two distinct settings drive URLs:
+
+- **prefix** — where the console page is mounted (default `/schii`).
+- **apiPrefix** — where the zero-controller REST API lives (default `/api/schii`).
+
+The console at `/schii` queries `GET /api/schii/schema` server-authoritatively; nothing is hardcoded in the frontend.
 
 ### Serving the Developer Console (No-Build Vue UI)
 
 Schii ships a dev console at `/schii` — a **Vue 3 no-build app** (ES modules straight from the server, no bundler). Run the built-in server and open `http://localhost:8000/schii`:
 
 ```bash
-./bin/phue serve  # -> http://127.0.0.1:8000
+./bin/phue serve  # -> http://localhost:8000 (bound to 0.0.0.0)
 ```
 
-- The sidebar is populated **server-authoritatively**: the page loads `GET /schii/schema` and renders whatever entities the configured namespace yields — nothing hardcoded in the frontend.
+- The sidebar is populated **server-authoritatively**: the page loads `GET /api/schii/schema` and renders whatever entities the configured namespace yields — nothing hardcoded in the frontend.
 - Clicking an entity fetches its JSON schema + rows and renders them.
 - Configuration lives in a dedicated `config/schii.php`:
 
 ```php
 return [
-    'apiPrefix'       => 'schii',       // URL prefix -> /schii/{entity}, /schii/schema
-    'entityNamespace' => 'App\Models',  // entities scanned for #[UI]/#[Field]
+    'prefix'          => '/schii',       // where the console UI is mounted
+    'apiPrefix'       => '/api/schii',   // REST prefix -> /api/schii/{entity}, /api/schii/schema
+    'entityNamespace' => 'App\Models',   // entities scanned for #[UI]/#[Field]
     'cachePrefix'     => 'schii_schema_',
 ];
 ```
@@ -740,7 +787,7 @@ final class M2026_09_03_014500_Create_Orders_Table extends Migration
 ./bin/phue migrate:rollback
 ```
 
-### 11. Authentication & RBAC Subsystem
+### 10.1 Authentication & RBAC Subsystem
 
 #### Configuring AuthManager & Authenticators
 
@@ -783,7 +830,7 @@ if ($rbac->checkAccess(10, 'posts.create')) {
 }
 ```
 
-### 12. Server Adapters & TypePHP AOT Engine
+### 10.2 Server Adapters & TypePHP AOT Engine
 
 #### Running Persistent Server Adapters (RoadRunner & Swoole)
 
@@ -814,7 +861,7 @@ $result = $generator->generate();
 echo "Generated static wiring for {$result['count']} classes.\n";
 ```
 
-### 13. Edge / WASM Infrastructure & Serverless Database Drivers
+### 10.3 Edge / WASM Infrastructure & Serverless Database Drivers
 
 #### Using Turso & Neon Serverless HTTP Drivers
 
@@ -850,7 +897,7 @@ $result = $adapter->handleWasmRequest([
 ], fn($request) => $app->handle($request));
 ```
 
-### 14. Real-Time Event Bus & Live SSE Streaming
+### 10.4 Real-Time Event Bus & Live SSE Streaming
 
 #### Publishing & Subscribing via Redis Streams Driver
 
@@ -898,7 +945,7 @@ class Order extends ActiveRecord
 }
 ```
 
-### 15. Production Hardening, Health Probes & Zero-Downtime Deployment
+### 10.5 Production Hardening, Health Probes & Zero-Downtime Deployment
 
 #### Running Diagnostic Health Probes
 
@@ -951,7 +998,15 @@ $hardenedResponse = $middleware->handle($response);
 ./phue-docker shell
 ```
 
-### Running Test Suite (Inside Container)
+### Running Test Suite
+
+Inside the container (the canonical harness used by the framework):
+
+```bash
+docker exec phue_app vendor/bin/phpunit --do-not-cache-result
+```
+
+Or on the host, if vendor/bin is on PATH:
 
 ```bash
 vendor/bin/phpunit
@@ -960,7 +1015,9 @@ vendor/bin/phpunit
 ### Launching Dev Web Server (Inside Container)
 
 ```bash
-php -S 0.0.0.0:8000 App/index.php
+./bin/phue serve          # docroot public/, host 0.0.0.0:8000
+# or equivalently:
+php -S 0.0.0.0:8000 -t public public/index.php
 ```
 
 Test endpoints in terminal or HTTP client:

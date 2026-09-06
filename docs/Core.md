@@ -713,9 +713,13 @@ The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/p
 
 ### Built-in Commands (`src/Core/Console/Commands/`)
 
-- **`ServeCommand` (`serve`)**: Launches local development HTTP server (`php -S 127.0.0.1:8000`).
-- **`MakeControllerCommand` (`make:controller`)**: Generates controller classes with pre-filled `#[Route]` attributes.
+- **`ServeCommand` (`serve`)**: Launches local dev HTTP server with document root `public/` (`php -S 0.0.0.0:8000 -t public`).
+- **`MakeControllerCommand` (`make:controller`)**: Generates controller classes with pre-filled `#[Route('/...', methods: ['GET'])]` attributes.
 - **`MakeModelCommand` (`make:model`)**: Generates Active Record model classes extending `BaseActiveRecord`.
+- **`MakeMigrationCommand` (`make:migration`)**: Scaffolds a timestamped migration file under `database/migrations/`.
+- **`MigrateCommand` (`migrate`)**, **`MigrateRollbackCommand` (`migrate:rollback`)**: Apply / roll back pending migrations; the DB connection is resolved from `config/database.php` (never a hardcoded path).
+- **`SchiiMigrateCommand` (`schii:migrate`)**: Runs Schii's auto-migration for configured entities.
+- **`DeployCommand` (`deploy`)**: Zero-downtime atomic release deployment (see §17).
 
 ---
 
@@ -735,8 +739,8 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
 
 ### Zero-Controller REST Endpoint (`src/Schii/Endpoint/ModelEndpoint.php`)
 
-- **`schema($entity)`**: `GET /schii/schema/{entity}` returning complete JSON schema.
-- **`index($entity, $request)`**: `GET /schii/{entity}` featuring:
+- **`schema($entity)`**: `GET /{apiPrefix}/schema/{entity}` returning complete JSON schema.
+- **`index($entity, $request)`**: `GET /{apiPrefix}/{entity}` featuring:
   - Global Search across `searchable` fields.
   - Dynamic Filtering across `filterable` fields.
   - Sorting across `sortable` fields (`ASC`/`DESC`).
@@ -756,7 +760,8 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
 
 Schii reads its settings from a dedicated `config/schii.php`. The framework config is keyed **per file** (`items['app']`, `items['schii']`, ...), so `Config::get('schii')` returns the Schii section — never `get('app.schii')`. Settings:
 
-- `apiPrefix` — URL prefix for the REST endpoint (dev default `/schii`) → `/{apiPrefix}/{entity}`.
+- `apiPrefix` — URL prefix for the REST endpoint (default `/api/schii` — the single source of truth in `config/schii.php` and `SchiiConfig`) → `/{apiPrefix}/{entity}`.
+- `prefix` — URL where the dev console UI is mounted (default `/schii`, i.e. the console page at `/schii` talks to `/{apiPrefix}/schema`).
 - `entityNamespace` — namespace scanned for `#[UI]`/`#[Field]` entities (default `App\Models`).
 - `autoMigrate`, `cachePrefix`.
 
@@ -815,7 +820,7 @@ Phue provides a modular Authentication and Role-Based Access Control (RBAC) subs
 - **`AuthManager` (`src/Auth/AuthManager.php`)**: Evaluates authentication drivers in sequence, tracks state (`getUser()`, `login()`, `logout()`, `check()`).
 - **`RbacManager` (`src/Auth/RbacManager.php`)**: Handles role assignments, permissions (`addRole()`, `assign()`), and recursive role inheritance (`addChild()`) with visited set cycle detection to prevent infinite loops.
 - **`AccessControlMiddleware` (`src/Auth/Middleware/AccessControlMiddleware.php`)**: Enforces required permissions on routes, returning `401 Unauthorized` for unauthenticated requests or `403 Forbidden` for insufficient privileges.
-- **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata.
+- **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata. *(status: component stub exists and is unit-tested; it is **not yet wired** into the Schii route table — `SchiiModule` currently routes straight to `ModelEndpoint`. Wiring is a roadmap item.)*
 
 ---
 
