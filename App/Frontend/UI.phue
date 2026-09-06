@@ -1,26 +1,256 @@
 <php>
-return [
-    'title' => 'Phue App - UI',
-    'state' => [
-        'value' => $testValue ?? 'none',
-    ],
-];
+    $phuiDir = '/app/src/Core/UI/Phui';
+    $urls = [];
+    if (is_dir($phuiDir)) {
+        foreach (glob($phuiDir . '/*.phue') as $f) {
+            $name = basename($f, '.phue');
+            $urls[$name] = "/assets/phue/{$name}." . substr(sha1(file_get_contents($f)), 0, 8) . ".phue.js";
+        }
+    }
+    return [
+        'title' => 'Phue App — UI Component Showcase',
+        'state' => [
+            'phuiUrls'     => $urls,
+            'checked'      => $checked ?? true,
+            'radioValue'   => $radioValue ?? 'option1',
+            'loading'      => $loading ?? false,
+            'currentPage'  => $currentPage ?? 3,
+            'totalPages'   => $totalPages ?? 10,
+            'activeTab'    => $activeTab ?? 'tab1',
+            'alertDismissed' => $alertDismissed ?? false,
+            'inputValue'   => $inputValue ?? '',
+            'selectValue'  => $selectValue ?? '',
+        ],
+    ];
 </php>
 
 <template>
-<div class="d-flex flex-column gap-2 p-4">
-    <h2>Phue App - UI</h2>
-    {{testValue}}
+<div id="app" class="ph-card" style="border-radius: var(--ph-radius-lg); overflow: hidden;">
+
+    <!-- Header -->
+    <div class="ph-card__header" style="border-bottom: 2px solid var(--ph-color-primary);">
+        <h1 class="ph-heading ph-heading--2" style="color: var(--ph-color-primary);">Phue UI Component Showcase</h1>
+        <p class="ph-text ph-text--muted ph-text--sm">25 built-in Vue 3 components — no build step, <code>--ph-*</code> tokens</p>
+    </div>
+
+    <div class="ph-card__body d-flex flex-column gap-4 p-4">
+
+        <!-- 1. Typography -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">1. Typography</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-2">
+                <h1 class="ph-heading ph-heading--1">Heading 1</h1>
+                <h2 class="ph-heading ph-heading--2">Heading 2</h2>
+                <h3 class="ph-heading ph-heading--3">Heading 3</h3>
+                <h4 class="ph-heading ph-heading--4">Heading 4</h4>
+                <h5 class="ph-heading ph-heading--5">Heading 5</h5>
+                <h6 class="ph-heading ph-heading--6">Heading 6</h6>
+                <p class="ph-text ph-text--xs ph-text--light">XS Light</p>
+                <p class="ph-text ph-text--sm ph-text--muted">SM Muted</p>
+                <p class="ph-text ph-text--md ph-text--medium">MD Medium</p>
+                <p class="ph-text ph-text--lg ph-text--semibold">LG Semibold</p>
+                <p class="ph-text ph-text--xl ph-text--bold">XL Bold</p>
+            </div>
+        </section>
+
+        <!-- 2. Layout -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">2. Layout & Utilities</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-3">
+                <div class="d-flex items-center justify-between p-2" style="background-color: var(--ph-bg-surface); border-radius: var(--ph-radius-md);">
+                    <span class="ph-text ph-text--sm">Flex Row Left</span>
+                    <span class="ph-spacer" style="width: 2rem;"></span>
+                    <span class="ph-text ph-text--sm">Flex Row Right</span>
+                </div>
+                <div class="p-3 m-2 ph-box" style="border: 1px solid var(--ph-border-color); border-radius: var(--ph-radius-md);">
+                    <span class="ph-text ph-text--sm">PhBox with padding, border, background</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <span class="m-1 p-1 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-1</span>
+                    <span class="m-2 p-2 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-2</span>
+                    <span class="m-4 p-4 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-4 / p-4</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Buttons -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">3. Buttons <span class="ph-text ph-text--xs ph-text--muted">(PhButton)</span></h2></div>
+            <div class="ph-card__body d-flex flex-column gap-3">
+                <div class="d-flex items-center gap-2 flex-wrap">
+                    <span class="ph-btn ph-btn--primary ph-btn--sm">Primary SM</span>
+                    <span class="ph-btn ph-btn--secondary ph-btn--md">Secondary MD</span>
+                    <span class="ph-btn ph-btn--outline ph-btn--lg">Outline LG</span>
+                    <span class="ph-btn ph-btn--ghost">Ghost</span>
+                    <span class="ph-btn ph-btn--danger">Danger</span>
+                </div>
+                <div class="d-flex items-center gap-2 flex-wrap">
+                    <span class="ph-btn ph-btn--primary" disabled>Disabled</span>
+                    <span class="ph-btn ph-btn--primary ph-btn--loading">
+                        <span class="ph-btn__spinner" aria-hidden="true"></span> Loading
+                    </span>
+                </div>
+                <span class="ph-btn ph-btn--primary ph-btn--block">Block Button</span>
+            </div>
+        </section>
+
+        <!-- 4. Form Controls -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">4. Form Controls</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-3">
+                <PhInput v-if="phuiUrls['PhInput']" :is="phuiUrls['PhInput']" v-model="inputValue" label="PhInput" placeholder="Enter text..." helper-text="Helper text." />
+                <PhInput v-if="phuiUrls['PhInput']" :is="phuiUrls['PhInput']" model-value="Invalid" label="Error State" error="This field is required." />
+                <PhSelect v-if="phuiUrls['PhSelect']" :is="phuiUrls['PhSelect']" v-model="selectValue" label="PhSelect">
+                    <option value="option1">Option 1</option>
+                    <option value="option2">Option 2</option>
+                </PhSelect>
+                <PhTextarea v-if="phuiUrls['PhTextarea']" :is="phuiUrls['PhTextarea']" label="PhTextarea" placeholder="Write something..." />
+                <div class="d-flex items-center gap-4 flex-wrap">
+                    <PhCheckbox v-if="phuiUrls['PhCheckbox']" :is="phuiUrls['PhCheckbox']" v-model="checked" :label="'PhCheckbox: ' + checked" />
+                    <PhCheckbox v-if="phuiUrls['PhCheckbox']" :is="phuiUrls['PhCheckbox']" disabled label="Disabled" />
+                </div>
+                <div class="d-flex items-center gap-4 flex-wrap">
+                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" v-model="radioValue" value="option1" label="Option 1" />
+                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" v-model="radioValue" value="option2" label="Option 2" />
+                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" disabled label="Disabled Option" />
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Data Display -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">5. Data Display</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-3">
+                <div class="d-flex items-center gap-2 flex-wrap">
+                    <span class="ph-badge ph-badge--primary ph-badge--sm">Primary</span>
+                    <span class="ph-badge ph-badge--secondary ph-badge--md">Secondary</span>
+                    <span class="ph-badge ph-badge--success ph-badge--lg">Success</span>
+                    <span class="ph-badge ph-badge--warning ph-badge--pill">Warning Pill</span>
+                    <span class="ph-badge ph-badge--error">Error</span>
+                    <span class="ph-badge ph-badge--info">Info</span>
+                    <span class="ph-badge ph-badge--neutral">Neutral</span>
+                </div>
+                <div class="d-flex items-center gap-2 flex-wrap">
+                    <span class="ph-chip">PhChip Standard</span>
+                    <span class="ph-chip ph-chip--disabled">Disabled</span>
+                </div>
+                <div class="d-flex items-center gap-2">
+                    <span class="ph-avatar ph-avatar--xs ph-avatar--circle">XS</span>
+                    <span class="ph-avatar ph-avatar--sm ph-avatar--square">SM</span>
+                    <span class="ph-avatar ph-avatar--md ph-avatar--rounded">MD</span>
+                    <span class="ph-avatar ph-avatar--lg ph-avatar--circle">LG</span>
+                    <span class="ph-avatar ph-avatar--xl ph-avatar--circle">XL</span>
+                </div>
+                <div class="ph-card ph-card--bordered ph-card--hoverable">
+                    <div class="ph-card__header"><h3 class="ph-card__title">PhCard Hoverable</h3></div>
+                    <div class="ph-card__body"><p class="ph-text">PhCard Body</p></div>
+                    <div class="ph-card__footer"><span class="ph-text ph-text--xs ph-text--muted">PhCard Footer</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. Feedback -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">6. Feedback</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-3">
+                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="info" title="Info Alert" dismissible @dismiss="alertDismissed = true" />
+                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="success" title="Success Alert" />
+                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="warning" title="Warning Alert" />
+                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="error" title="Error Alert" />
+                <div class="ph-progress">
+                    <div class="ph-progress__header"><span class="ph-text ph-text--sm">Loading</span><span class="ph-text ph-text--sm">60%</span></div>
+                    <div class="ph-progress__track ph-progress__track--md">
+                        <div class="ph-progress__fill ph-progress__fill--animated" style="width: 60%;"></div>
+                    </div>
+                </div>
+                <div class="d-flex flex-column gap-1">
+                    <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 100%; height: 1rem;"></span>
+                    <span class="ph-skeleton ph-skeleton--circular ph-skeleton--animated" style="width: 3rem; height: 3rem;"></span>
+                    <span class="ph-skeleton ph-skeleton--rectangular ph-skeleton--animated" style="width: 100%; height: 4rem;"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. Navigation -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">7. Navigation</h2></div>
+            <div class="ph-card__body d-flex flex-column gap-4">
+                <div class="d-flex items-center gap-2">
+                    <a href="#" class="ph-link">Primary Link</a>
+                    <a href="#" class="ph-link ph-link--underline">Underline</a>
+                    <a href="#" class="ph-link ph-link--danger">Danger</a>
+                    <a href="#" class="ph-link ph-link--disabled">Disabled</a>
+                </div>
+                <nav class="ph-breadcrumb">
+                    <ol class="ph-breadcrumb__list">
+                        <li class="ph-breadcrumb__item"><a href="#" class="ph-breadcrumb__link">Home</a><span class="ph-breadcrumb__separator">/</span></li>
+                        <li class="ph-breadcrumb__item"><a href="#" class="ph-breadcrumb__link">Components</a><span class="ph-breadcrumb__separator">/</span></li>
+                        <li class="ph-breadcrumb__item"><span class="ph-breadcrumb__link ph-breadcrumb__link--active">Showcase</span></li>
+                    </ol>
+                </nav>
+                <div class="ph-tabs">
+                    <div class="ph-tabs__nav">
+                        <button class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'tab1' }" @click="activeTab = 'tab1'">Tab One</button>
+                        <button class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'tab2' }" @click="activeTab = 'tab2'">Tab Two</button>
+                        <button class="ph-tabs__item ph-tabs__item--disabled">Disabled</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. Data Table -->
+        <section class="ph-card">
+            <div class="ph-card__header"><h2 class="ph-card__title">8. Data Table <span class="ph-text ph-text--xs ph-text--muted">(PhDataTable)</span></h2></div>
+            <div class="ph-card__body">
+                <div class="ph-data-table-container">
+                    <table class="ph-data-table">
+                        <thead>
+                            <tr>
+                                <th class="ph-data-table__th ph-data-table__th--sortable">
+                                    <div class="ph-data-table__th-content">
+                                        <span>ID</span>
+                                        <span class="ph-data-table__sort-icon">▲</span>
+                                    </div>
+                                </th>
+                                <th class="ph-data-table__th">Name</th>
+                                <th class="ph-data-table__th">Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="ph-data-table__tr">
+                                <td class="ph-data-table__td">1</td>
+                                <td class="ph-data-table__td">Jane Doe</td>
+                                <td class="ph-data-table__td"><span class="ph-badge ph-badge--primary">Admin</span></td>
+                            </tr>
+                            <tr class="ph-data-table__tr">
+                                <td class="ph-data-table__td">2</td>
+                                <td class="ph-data-table__td">John Smith</td>
+                                <td class="ph-data-table__td"><span class="ph-badge ph-badge--secondary">User</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="ph-data-table__pagination">
+                        <span class="ph-data-table__page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+                        <div class="ph-pagination">
+                            <button class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage <= 1" @click="currentPage--">Prev</button>
+                            <button class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage >= totalPages" @click="currentPage++">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
 </div>
 </template>
 
 <script>
-import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createApp, reactive } from '/assets/vendor/vue3/vue.esm-browser.js';
 
 createApp({
     setup() {
-        const testValue = ref(window.__INITIAL_STATE__.value);
-        return { testValue };
+        const state = reactive(window.__INITIAL_STATE__ || {});
+        return { ...state };
     }
 }).mount('#app');
 </script>
