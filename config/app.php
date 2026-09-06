@@ -5,6 +5,6 @@ return [
     'env'   => 'development',
     'debug' => true,
     'modules' => [
-        \Phue\Schii\SchiiModule::class,
+        \Phue\Schii\SchiiModule::class, // Comment this on production
     ],
 ];

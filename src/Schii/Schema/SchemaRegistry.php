@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Schii\Schema;
 
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Schii\Attribute\Field;
 use Phue\Schii\Attribute\UI;
 use Psr\SimpleCache\CacheInterface;
@@ -13,20 +14,108 @@ use ReflectionProperty;
 final class SchemaRegistry
 {
     /**
-     * In-memory cache για αποφυγή επανειλημμένης ανάγνωσης στο ίδιο worker process
+     * In-memory cache to prevent repeated parsing within the same worker process.
+     *
      * @var array<string, ModelSchema>
      */
     private array $memoryCache = [];
 
+    /**
+     * @param string|null $basePath The root directory path of the application (e.g., Application::getBasePath())
+     * @param CacheInterface|null $cache Optional persistent PSR-16 cache implementation
+     * @param string $cachePrefix Prefix key used for persistent caching
+     */
     public function __construct(
+        private readonly ?string $basePath = null,
         private readonly ?CacheInterface $cache = null,
         private readonly string $cachePrefix = 'schii_schema_'
     ) {}
 
     /**
-     * Αναλύει το Model class και επιστρέφει το ModelSchema
+     * Discover all valid ActiveRecord entity slugs within a target PHP namespace.
+     *
+     * @param string $namespace The root namespace to scan (e.g., "App\\Models" or "Phue\\Tests\\Schii\\Stubs")
+     * @return array<string> List of slugified entity names
+     */
+    public function discoverEntities(string $namespace): array
+    {
+        $entities = [];
+        $directory = $this->resolveNamespaceToPath($namespace);
+
+        if (!$directory || !is_dir($directory)) {
+            return [];
+        }
+
+        $files = scandir($directory) ?: [];
+
+        foreach ($files as $file) {
+            if (!str_ends_with($file, '.php')) {
+                continue;
+            }
+
+            $className = pathinfo($file, PATHINFO_FILENAME);
+            $fullClassName = rtrim($namespace, '\\') . '\\' . $className;
+
+            if (class_exists($fullClassName)) {
+                $reflector = new ReflectionClass($fullClassName);
+
+                if ($reflector->isSubclassOf(BaseActiveRecord::class) && !$reflector->isAbstract()) {
+                    // Slugify: User -> user, UserProfile -> user-profiles
+                    $slug = strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $className));
+                    $entities[] = $slug;
+                }
+            }
+        }
+
+        return array_values(array_unique($entities));
+    }
+
+    /**
+     * Maps a target namespace to its physical directory path using multiple root bases
+     * (application basePath & process getcwd fallback).
+     *
+     * @param string $namespace
+     * @return string|null
+     */
+    private function resolveNamespaceToPath(string $namespace): ?string
+    {
+        $cleanNamespace = trim($namespace, '\\');
+        $relativePath = str_replace('\\', '/', $cleanNamespace);
+
+        // 1. Collect candidate root directories (basePath + getcwd)
+        $roots = array_filter(array_unique([
+            $this->basePath ? rtrim($this->basePath, '/') : null,
+            getcwd() ? rtrim(getcwd(), '/') : null,
+        ]));
+
+        // 2. Scan candidates across all root directories
+        foreach ($roots as $root) {
+            $possiblePaths = [
+                // Direct path match (e.g. {root}/App/Models or {root}/Phue/Tests/Schii/Stubs)
+                "{$root}/{$relativePath}",
+                // App\ -> {root}/src/
+                "{$root}/src/" . preg_replace('#^App/#', '', $relativePath),
+                // Phue\Tests\ -> {root}/tests/
+                "{$root}/tests/" . preg_replace('#^Phue/Tests/#', '', $relativePath),
+                // Generic tests directory fallback
+                "{$root}/tests/{$relativePath}",
+            ];
+
+            foreach ($possiblePaths as $path) {
+                if (is_dir($path)) {
+                    return $path;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Parses the specified Model class and returns its ModelSchema representation.
      *
      * @param class-string $modelClass
+     * @return ModelSchema
      */
     public function get(string $modelClass): ModelSchema
     {
@@ -56,9 +145,10 @@ final class SchemaRegistry
     }
 
     /**
-     * Αναλύει την κλάση μέσω Reflection
+     * Parses a class via Reflection to build its schema structure.
      *
      * @param class-string $modelClass
+     * @return ModelSchema
      */
     private function parse(string $modelClass): ModelSchema
     {
@@ -86,7 +176,7 @@ final class SchemaRegistry
             $field = $fieldAttrs[0]->newInstance();
             $propertyName = $property->getName();
 
-            // Υπολογισμός Fallback Label
+            // Calculate Fallback Label
             $fieldLabel = $field->label !== '' 
                 ? $field->label 
                 : $this->humanize($propertyName);
@@ -124,8 +214,11 @@ final class SchemaRegistry
     }
 
     /**
-     * Μετατρέπει camelCase ή snake_case σε Human Readable string
+     * Converts camelCase or snake_case identifiers into human-readable strings.
      * e.g., 'email_verified_at' -> 'Email Verified At', 'firstName' -> 'First Name'
+     *
+     * @param string $input
+     * @return string
      */
     private function humanize(string $input): string
     {
@@ -134,7 +227,7 @@ final class SchemaRegistry
     }
 
     /**
-     * Καθαρίζει το memory cache (π.χ. σε αλλαγή request ή στο reset του Swoole)
+     * Clears the in-memory cache (e.g., between requests or during Swoole worker reset).
      */
     public function clearMemoryCache(): void
     {

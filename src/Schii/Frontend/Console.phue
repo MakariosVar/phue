@@ -6,16 +6,12 @@ $title = 'Schii Console';
 
 $state = [
     'apiPrefix' => '/api/schii',
-    'entities' => [
-        'users',
-        'products',
-        'orders',
-    ],
+    'entities'  => [], // Dynamic discovery via GET /api/schii/schema
 ];
 
 return [
-    'title' => $title,
-    'state' => $state,
+    'title'   => $title,
+    'state'   => $state,
     'scripts' => [],
 ];
 </php>
@@ -30,9 +26,12 @@ return [
         <main class="schii-content">
             <aside class="schii-sidebar">
                 <h3>Entities</h3>
-                <ul class="schii-entity-list">
+                <div v-if="loadingEntities" class="schii-loading-sidebar">
+                    Discovering schemas...
+                </div>
+                <ul v-else class="schii-entity-list">
                     <li
-                        v-for="entity in state.entities"
+                        v-for="entity in entities"
                         :key="entity"
                         :class="{ active: currentEntity === entity }"
                         @click="selectEntity(entity)"
@@ -83,61 +82,83 @@ return [
     </div>
 </template>
 
-<script>
-/**
- * Vue 3 Client Application Bootstrap & REST Fetcher
- */
-(function() {
-    if (typeof Vue === 'undefined') return;
+<script type="module">
+import { createApp, ref, reactive, onMounted } from '/assets/vendor/vue3/vue.esm-browser.js';
 
-    const { createApp, ref, reactive } = Vue;
+createApp({
+    setup() {
+        const title = ref('Schii Console');
 
-    createApp({
-        setup() {
-            const title = ref('Schii Console');
-            const state = reactive(window.__PHUE_STATE__ || {
-                apiPrefix: '/api/schii',
-                entities: ['users', 'products', 'orders']
-            });
+        // Read shell-injected initial state
+        const initialState = window.__INITIAL_STATE__ || {};
+        const apiPrefix = initialState.apiPrefix || '/api/schii';
 
-            const currentEntity = ref(null);
-            const fields = ref([]);
-            const rows = ref([]);
-            const loading = ref(false);
+        const entities = ref([]);
+        const loadingEntities = ref(true);
+        const currentEntity = ref(null);
+        const fields = ref([]);
+        const rows = ref([]);
+        const loading = ref(false);
 
-            const selectEntity = async (entity) => {
-                currentEntity.value = entity;
-                loading.value = true;
-
-                try {
-                    const schemaRes = await fetch(`${state.apiPrefix}/schema/${entity}`);
-                    if (schemaRes.ok) {
-                        const schemaData = await schemaRes.json();
-                        fields.value = schemaData.fields || [];
-                    }
-
-                    const dataRes = await fetch(`${state.apiPrefix}/${entity}`);
-                    if (dataRes.ok) {
-                        const data = await dataRes.json();
-                        rows.value = Array.isArray(data) ? data : (data.data || []);
-                    }
-                } catch (e) {
-                    console.error('Failed to fetch entity context:', e);
-                } finally {
-                    loading.value = false;
+        // Fetch dynamic entity schemas from server on mount
+        const fetchEntities = async () => {
+            loadingEntities.value = true;
+            try {
+                const res = await fetch(`${apiPrefix}/schema`);
+                if (res.ok) {
+                    const data = await res.json();
+                    entities.value = data.entities || [];
                 }
-            };
+            } catch (err) {
+                console.error('Failed to discover entity schemas:', err);
+            } finally {
+                loadingEntities.value = false;
+            }
+        };
 
-            return {
-                title,
-                state,
-                currentEntity,
-                fields,
-                rows,
-                loading,
-                selectEntity,
-            };
-        }
-    }).mount('#app');
-})();
+        // Select entity & fetch schema + rows concurrently
+        const selectEntity = async (entity) => {
+            currentEntity.value = entity;
+            loading.value = true;
+            fields.value = [];
+            rows.value = [];
+
+            try {
+                const [schemaRes, dataRes] = await Promise.all([
+                    fetch(`${apiPrefix}/schema/${entity}`),
+                    fetch(`${apiPrefix}/${entity}`)
+                ]);
+
+                if (schemaRes.ok) {
+                    const schemaData = await schemaRes.json();
+                    fields.value = schemaData.fields || [];
+                }
+
+                if (dataRes.ok) {
+                    const data = await dataRes.json();
+                    rows.value = Array.isArray(data) ? data : (data.data || []);
+                }
+            } catch (err) {
+                console.error(`Failed to fetch schema or data for ${entity}:`, err);
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        onMounted(() => {
+            fetchEntities();
+        });
+
+        return {
+            title,
+            entities,
+            loadingEntities,
+            currentEntity,
+            fields,
+            rows,
+            loading,
+            selectEntity,
+        };
+    }
+}).mount('#app');
 </script>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Schii;
 
+use Phue\Core\Application;
 use Phue\Core\Config;
 use Phue\Core\Container;
 use Phue\Core\Routing\Router;
@@ -76,6 +77,7 @@ class SchiiModule
                 $cache = $c->has('cache') ? $c->get('cache') : null;
 
                 return new SchemaRegistry(
+                    basePath: $c->get(Application::class)->getBasePath(),
                     cache: $cache,
                     cachePrefix: $schiiConfig->cachePrefix ?? 'schii_schema_',
                 );
@@ -127,6 +129,8 @@ class SchiiModule
         $middleware = !empty($schiiConfig->middleware)
             ? $schiiConfig->middleware
             : [CorsMiddleware::class];
+
+        $router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], $middleware);
 
         $router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], $middleware);
         $router->addRoute('GET', "{$apiPrefix}/{entity}", [ModelEndpoint::class, 'index'], $middleware);

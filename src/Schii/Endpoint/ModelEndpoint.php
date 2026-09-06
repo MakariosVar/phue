@@ -24,9 +24,9 @@ final class ModelEndpoint
     /**
      * ModelEndpoint constructor.
      *
-     * @param SchemaRegistry                                $schemaRegistry  Registry parsing model reflection schema definitions.
-     * @param array<string, class-string<BaseActiveRecord>> $entityMapping   Explicit map of entity slugs to ActiveRecord classes.
-     * @param string                                        $entityNamespace Base PHP namespace for dynamic entity resolutions.
+     * @param SchemaRegistry                         $schemaRegistry Registry parsing model reflection schema definitions.
+     * @param array<string, class-string<BaseActiveRecord>> $entityMapping  Explicit map of entity slugs to ActiveRecord classes.
+     * @param string                                 $entityNamespace Base PHP namespace for dynamic entity resolutions.
      */
     public function __construct(
         private readonly SchemaRegistry $schemaRegistry,
@@ -45,6 +45,30 @@ final class ModelEndpoint
     public function registerEntity(string $entity, string $modelClass): void
     {
         $this->entityMapping[strtolower($entity)] = $modelClass;
+    }
+
+    /**
+     * List all available entities dynamically for server-authoritative frontend discovery.
+     *
+     * @route GET /api/schii/schema
+     *
+     * @param Request      $request The incoming HTTP request instance.
+     * @param array|string $params  Route parameters (if any).
+     *
+     * @return Response JSON response containing the list of available entity slugs.
+     */
+    public function listSchemas(Request $request, array|string $params = []): Response
+    {
+        $entities = array_keys($this->entityMapping);
+
+        if (method_exists($this->schemaRegistry, 'discoverEntities')) {
+            $discovered = $this->schemaRegistry->discoverEntities($this->entityNamespace);
+            $entities = array_unique(array_merge($entities, $discovered));
+        }
+
+        return Response::json([
+            "entities" => array_values($entities),
+        ]);
     }
 
     /**

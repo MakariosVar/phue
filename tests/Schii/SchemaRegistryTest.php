@@ -85,7 +85,7 @@ final class SchemaRegistryTest extends TestCase
         }
 
         $cache = new ArraySimpleCache();
-        $registry = new SchemaRegistry($cache);
+        $registry = new SchemaRegistry(null, $cache);
 
         $first = $registry->get(TaggedCat::class);
         $this->assertNotEmpty($cache->keys(), 'Parsed schema must be stored in the persistent cache');
@@ -105,7 +105,7 @@ final class SchemaRegistryTest extends TestCase
         );
         $cache->set($cacheKey, $cachedSchema);
 
-        $registryWithSameCache = new SchemaRegistry($cache);
+        $registryWithSameCache = new SchemaRegistry(null, $cache);
         $cached = $registryWithSameCache->get(TaggedCat::class);
         $this->assertInstanceOf(ModelSchema::class, $cached);
         $this->assertSame('Cached Cat', $cached->label);

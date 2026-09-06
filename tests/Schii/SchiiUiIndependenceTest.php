@@ -92,6 +92,22 @@ PHP);
         $this->assertSame([], $hits, 'Schii module must not reference an application namespace at runtime');
     }
 
+    public function testSchemaDiscoveryListsNamespaceEntities(): void
+    {
+        $this->writeConfig('/api/schii', 'Phue\\Tests\\Schii\\Stubs');
+
+        $app = new Application($this->tmpBase);
+
+        $listing = $app->handle(new Request('GET', '/api/schii/schema'));
+        $this->assertSame(200, $listing->getStatusCode());
+        $decoded = json_decode($listing->getContent(), true);
+        $this->assertContains('user', $decoded['entities'] ?? []);
+
+        $entity = $app->handle(new Request('GET', '/api/schii/schema/user'));
+        $this->assertSame(200, $entity->getStatusCode());
+        $this->assertSame('User', json_decode($entity->getContent(), true)['entity']);
+    }
+
     public function testModuleRegistersConsolePageFromItsOwnFrontend(): void
     {
         $this->writeConfig('/api/schii', 'Phue\\Tests\\Schii\\Stubs');
@@ -109,6 +125,9 @@ PHP);
         $module = $app->handle(new Request('GET', $m[0]));
         $this->assertSame(200, $module->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $module->getHeader('Content-Type'));
+        $this->assertStringContainsString('createApp', $module->getContent());
+        $this->assertStringContainsString("/schema", $module->getContent());
+        $this->assertStringContainsString(".mount('#app')", $module->getContent());
     }
 
     private function rmTree(string $dir): void
