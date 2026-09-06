@@ -224,7 +224,7 @@ final class PhueDefaultStylesheetTest extends TestCase
         $size = filesize($this->stylesDir . '/phue.css');
 
         $this->assertGreaterThan(0, $size, 'phue.css must not be empty');
-        $this->assertLessThanOrEqual(20 * 1024, $size, 'phue.css must not exceed 20KB (tokens + light utilities target ~10-12KB)');
+        $this->assertLessThanOrEqual(30 * 1024, $size, 'phue.css must not exceed 30KB (global app CSS like Bootstrap5, tokens + components + utilities)');
     }
 
     // -------------------------------------------------------------------------

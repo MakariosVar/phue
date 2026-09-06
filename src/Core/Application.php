@@ -20,34 +20,62 @@ use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
 /**
- * Main application entry point and dependency coordinator.
+ * Class Application
+ *
+ * Main application entry point and dependency coordinator for the Phue framework.
  *
  * @package Phue\Core
  */
 class Application
 {
+    /**
+     * Absolute base directory path of the application.
+     */
     private string $basePath;
+
+    /**
+     * Global application configuration manager.
+     */
     private Config $config;
+
+    /**
+     * Dependency Injection container instance.
+     */
     private Container $container;
+
+    /**
+     * HTTP router dispatcher instance.
+     */
     private Router $router;
+
+    /**
+     * Event dispatcher instance.
+     */
     private EventDispatcher $events;
 
     /**
+     * Global HTTP middleware execution stack.
+     *
      * @var array<int, callable|string>
      */
     private array $middlewareStack = [];
 
     /**
+     * Loaded application module instances.
+     *
      * @var array<int, object>
      */
     private array $modules = [];
 
+    /**
+     * Application debug mode state.
+     */
     private bool $debug = false;
 
     /**
      * Initialize application with root directory path, load configs, and bootstrap infrastructure.
      *
-     * @param string $basePath Application root directory.
+     * @param string $basePath Application root directory path.
      */
     public function __construct(string $basePath)
     {
@@ -66,7 +94,7 @@ class Application
         $this->bootstrapDatabase();
 
         // Load configured module classes
-        $this->loadModules($this->config->get('app.modules', []));
+        $this->loadModules((array) $this->config->get('app.modules', []));
     }
 
     /**
@@ -88,19 +116,33 @@ class Application
         });
         $this->container->alias('cache', CacheInterface::class);
 
-        // Primary App Component Loader Singleton
-        $this->container->singleton(PhueComponentLoader::class, function () {
+        // Primary App Component Loader Singleton (/App/Frontend)
+        $this->container->singleton(PhueComponentLoader::class, function (): PhueComponentLoader {
             return new PhueComponentLoader($this->basePath . '/App/Frontend');
+        });
+
+        // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
+        $this->container->singleton('phui.loader', function (): PhueComponentLoader {
+            return new PhueComponentLoader($this->basePath . '/src/Core/UI/Phui');
         });
 
         // Composite Component Loader Registry Singleton
         $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
             $registry = new ComponentLoaderRegistry();
 
-            // Lazy/Safe mount of the primary application frontend loader (first priority)
+            // Priority 1: Main Application Loader (/App/Frontend)
             $registry->addLoader(function (): ?PhueComponentLoader {
                 try {
                     return $this->container->get(PhueComponentLoader::class);
+                } catch (Throwable) {
+                    return null;
+                }
+            });
+
+            // Priority 2: PhUI Framework Core Library Loader (/src/Core/UI/Phui)
+            $registry->addLoader(function (): ?PhueComponentLoader {
+                try {
+                    return $this->container->get('phui.loader');
                 } catch (Throwable) {
                     return null;
                 }
@@ -162,6 +204,7 @@ class Application
      */
     private function bootstrapDatabase(): void
     {
+        /** @var string|null $defaultConnection */
         $defaultConnection = $this->config->get('database.default');
 
         if (!$defaultConnection) {
@@ -180,7 +223,7 @@ class Application
     /**
      * Retrieve the root application directory path.
      *
-     * @return string
+     * @return string Absolute base path string.
      */
     public function getBasePath(): string
     {
@@ -190,7 +233,7 @@ class Application
     /**
      * Retrieve the application configuration instance.
      *
-     * @return Config
+     * @return Config Configuration manager instance.
      */
     public function getConfig(): Config
     {
@@ -201,6 +244,7 @@ class Application
      * Register a global HTTP middleware callable or class name to the stack.
      *
      * @param callable|string $middleware Callable implementation or class FQCN to be resolved via DI container.
+     *
      * @return self Fluent instance reference.
      */
     public function use(callable|string $middleware): self
@@ -226,6 +270,7 @@ class Application
             array_reverse($this->middlewareStack),
             fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
                 if (is_string($middleware)) {
+                    /** @var callable $middleware */
                     $middleware = $this->container->get($middleware);
                 }
 
@@ -244,11 +289,11 @@ class Application
         } catch (Throwable $e) {
             if ($this->debug) {
                 return Response::json([
-                    'error'   => $e->getMessage(),
-                    'class'   => get_class($e),
-                    'file'    => $e->getFile(),
-                    'line'    => $e->getLine(),
-                    'trace'   => explode("\n", $e->getTraceAsString()),
+                    'error' => $e->getMessage(),
+                    'class' => get_class($e),
+                    'file'  => $e->getFile(),
+                    'line'  => $e->getLine(),
+                    'trace' => explode("\n", $e->getTraceAsString()),
                 ], 500);
             }
 
@@ -263,6 +308,7 @@ class Application
      * Dispatch request to router, wrap route-level middlewares, and resolve handler execution.
      *
      * @param Request $request Request instance to match against registered routes.
+     *
      * @return Response Evaluated controller or middleware response.
      */
     protected function dispatchToRouter(Request $request): Response
@@ -287,6 +333,7 @@ class Application
                 $resolvedHandler[0] = $this->container->get($resolvedHandler[0]);
             }
 
+            /** @var mixed $result */
             $result = call_user_func($resolvedHandler, $req, $params);
 
             return $this->normalizeResponse($result);
@@ -302,6 +349,7 @@ class Application
             array_reverse($routeMiddlewares),
             fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
                 if (is_string($middleware)) {
+                    /** @var callable $middleware */
                     $middleware = $this->container->get($middleware);
                 }
 
@@ -317,6 +365,7 @@ class Application
      * Convert handler return value into a valid Response object.
      *
      * @param mixed $result Raw output returned from a route action or controller.
+     *
      * @return Response Formatted response instance.
      */
     protected function normalizeResponse(mixed $result): Response
@@ -336,6 +385,7 @@ class Application
      * Instantiate and register application module extensions.
      *
      * @param array<int, string> $modules List of FQCNs representing application modules.
+     *
      * @return void
      */
     protected function loadModules(array $modules): void
@@ -345,6 +395,7 @@ class Application
                 continue;
             }
 
+            /** @var object $module */
             $module = $this->container->get($moduleClass);
 
             if ($module instanceof Module) {

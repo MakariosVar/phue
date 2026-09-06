@@ -7,6 +7,13 @@ namespace Phue\Core\UI;
 use Exception;
 use RuntimeException;
 
+/**
+ * Class PhueComponentLoader
+ *
+ * Loads, parses, and evaluates single-file Phue components (.phue).
+ *
+ * @package Phue\Core\UI
+ */
 class PhueComponentLoader
 {
     private string $componentsDir;
@@ -34,8 +41,9 @@ class PhueComponentLoader
     /**
      * Loads, parses (or fetches cached structure), and dynamically evaluates PHP block with $params.
      *
-     * @param string $name Component logical name.
+     * @param string               $name   Component logical name.
      * @param array<string, mixed> $params Parameters passed into the <php> evaluation context.
+     *
      * @return PhueComponent
      */
     public function load(string $name, array $params = []): PhueComponent
@@ -46,10 +54,53 @@ class PhueComponentLoader
     }
 
     /**
+     * Retrieves the un-evaluated raw JavaScript content for a component by name.
+     * Performs zero PHP evaluation to ensure no side effects or variable leaks occur.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null Inline JavaScript content or null if not found/has no script.
+     */
+    public function contentFor(string $name): ?string
+    {
+        try {
+            $structure = $this->getOrFetchStructure($name);
+            return $structure['script'] ?? null;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * Retrieves the inline script content for a component IF the hash matches.
+     *
+     * @param string $name Component logical name.
+     * @param string $hash 8-character sha1 prefix hash.
+     *
+     * @return string|null JavaScript content or null if unknown, malformed, or hash mismatch.
+     */
+    public function scriptFor(string $name, string $hash): ?string
+    {
+        $script = $this->contentFor($name);
+        if ($script === null) {
+            return null;
+        }
+
+        $computedHash = substr(sha1($script), 0, 8);
+        if (!hash_equals($computedHash, $hash)) {
+            return null;
+        }
+
+        return $script;
+    }
+
+    /**
      * Evaluates parsed structure dynamically per-render call.
      *
      * @param array{template: string, script: ?string, phpCode: ?string} $structure
-     * @param array<string, mixed> $params
+     * @param array<string, mixed>                                       $params
+     *
+     * @return PhueComponent
      */
     private function evaluateStructure(array $structure, array $params): PhueComponent
     {
@@ -70,37 +121,9 @@ class PhueComponentLoader
     }
 
     /**
-     * Retrieves the inline script content for a component IF the hash matches.
-     * ZERO PHP evaluation is performed during this call to prevent side-effects/leaks.
-     *
-     * @param string $name Component logical name.
-     * @param string $hash 8-character sha1 prefix hash.
-     * @return string|null JavaScript content or null if unknown, malformed, or hash mismatch.
-     */
-    public function scriptFor(string $name, string $hash): ?string
-    {
-        try {
-            // Get or cache purely the static file structure (never evaluates PHP)
-            $structure = $this->getOrFetchStructure($name);
-        } catch (Exception) {
-            return null;
-        }
-
-        $script = $structure['script'] ?? null;
-        if ($script === null) {
-            return null;
-        }
-
-        $computedHash = substr(sha1($script), 0, 8);
-        if (!hash_equals($computedHash, $hash)) {
-            return null;
-        }
-
-        return $script;
-    }
-
-    /**
      * Resolves file path and returns/caches ONLY the static AST structure.
+     *
+     * @param string $name
      *
      * @return array{template: string, script: ?string, phpCode: ?string}
      */
