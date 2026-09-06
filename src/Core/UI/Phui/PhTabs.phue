@@ -1,0 +1,47 @@
+<template>
+  <div class="ph-tabs">
+    <div class="ph-tabs__nav" role="tablist">
+      <button
+        v-for="tab in items"
+        :key="tab.value"
+        type="button"
+        :class="['ph-tabs__item', { 'ph-tabs__item--active': modelValue === tab.value, 'ph-tabs__item--disabled': tab.disabled }]"
+        role="tab"
+        :aria-selected="modelValue === tab.value"
+        :disabled="tab.disabled"
+        @click="selectTab(tab)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+    <div class="ph-tabs__content" role="tabpanel">
+      <slot :active-tab="modelValue" />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhTabs',
+  props: {
+    modelValue: {
+      type: [String, Number],
+      required: true
+    },
+    items: {
+      type: Array,
+      required: true,
+      validator: (arr) => arr.every((tab) => typeof tab === 'object' && tab.label && tab.value !== undefined)
+    }
+  },
+  emits: ['update:modelValue', 'change'],
+  methods: {
+    selectTab(tab) {
+      if (!tab.disabled && tab.value !== this.modelValue) {
+        this.$emit('update:modelValue', tab.value);
+        this.$emit('change', tab.value);
+      }
+    }
+  }
+};
+</script>

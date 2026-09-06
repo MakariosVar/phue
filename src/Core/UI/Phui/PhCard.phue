@@ -1,0 +1,42 @@
+<template>
+  <div :class="['ph-card', { 'ph-card--bordered': bordered, 'ph-card--hoverable': hoverable }]">
+    <div v-if="$slots.header || title" class="ph-card__header">
+      <slot name="header">
+        <h3 class="ph-card__title">{{ title }}</h3>
+        <p v-if="subtitle" class="ph-card__subtitle">{{ subtitle }}</p>
+      </slot>
+    </div>
+
+    <div class="ph-card__body">
+      <slot />
+    </div>
+
+    <div v-if="$slots.footer" class="ph-card__footer">
+      <slot name="footer" />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhCard',
+  props: {
+    title: {
+      type: String,
+      default: ''
+    },
+    subtitle: {
+      type: String,
+      default: ''
+    },
+    bordered: {
+      type: Boolean,
+      default: true
+    },
+    hoverable: {
+      type: Boolean,
+      default: false
+    }
+  }
+};
+</script>

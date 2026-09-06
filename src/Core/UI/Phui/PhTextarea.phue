@@ -1,0 +1,84 @@
+<template>
+  <div :class="['ph-textarea-group', { 'ph-textarea-group--error': !!error, 'ph-textarea-group--disabled': disabled }]">
+    <label v-if="label" :for="textareaId" class="ph-textarea-label">
+      {{ label }}
+      <span v-if="required" class="ph-textarea-label__required">*</span>
+    </label>
+
+    <textarea
+      :id="textareaId"
+      :value="modelValue"
+      :placeholder="placeholder"
+      :rows="rows"
+      :disabled="disabled"
+      :readonly="readonly"
+      :style="{ resize: resize }"
+      class="ph-textarea"
+      @input="$emit('update:modelValue', $event.target.value)"
+      @blur="$emit('blur', $event)"
+      @focus="$emit('focus', $event)"
+    ></textarea>
+
+    <p v-if="error" class="ph-textarea-error">{{ error }}</p>
+    <p v-else-if="helperText" class="ph-textarea-helper">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhTextarea',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    rows: {
+      type: Number,
+      default: 4
+    },
+    resize: {
+      type: String,
+      default: 'vertical',
+      validator: (val) => ['none', 'both', 'horizontal', 'vertical'].includes(val)
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'blur', 'focus'],
+  computed: {
+    textareaId() {
+      return $props.id || `ph-textarea-${Math.random().toString(36).substring(2, 9)}`;
+    }
+  }
+};
+</script>

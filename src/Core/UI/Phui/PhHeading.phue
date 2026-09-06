@@ -1,0 +1,41 @@
+<template>
+  <component
+    :is="tag"
+    :class="['ph-heading', `ph-heading--${level}`, `ph-heading--${color}`]"
+    :style="headingStyles"
+  >
+    <slot />
+  </component>
+</template>
+
+<script>
+export default {
+  name: 'PhHeading',
+  props: {
+    level: {
+      type: [String, Number],
+      default: 1,
+      validator: (val) => [1, 2, 3, 4, 5, 6, '1', '2', '3', '4', '5', '6'].includes(val)
+    },
+    color: {
+      type: String,
+      default: 'default'
+    },
+    align: {
+      type: String,
+      default: 'left',
+      validator: (val) => ['left', 'center', 'right', 'justify'].includes(val)
+    }
+  },
+  computed: {
+    tag() {
+      return `h${this.level}`;
+    },
+    headingStyles() {
+      return {
+        textAlign: this.align
+      };
+    }
+  }
+};
+</script>

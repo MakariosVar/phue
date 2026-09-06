@@ -1,0 +1,36 @@
+<template>
+  <nav class="ph-breadcrumb" aria-label="Breadcrumb">
+    <ol class="ph-breadcrumb__list">
+      <li v-for="(item, index) in items" :key="index" class="ph-breadcrumb__item">
+        <component
+          :is="item.href && index < items.length - 1 ? 'a' : 'span'"
+          :href="item.href && index < items.length - 1 ? item.href : undefined"
+          :class="['ph-breadcrumb__link', { 'ph-breadcrumb__link--active': index === items.length - 1 }]"
+          :aria-current="index === items.length - 1 ? 'page' : undefined"
+        >
+          {{ item.label }}
+        </component>
+        <span v-if="index < items.length - 1" class="ph-breadcrumb__separator" aria-hidden="true">
+          <slot name="separator">{{ separator }}</slot>
+        </span>
+      </li>
+    </ol>
+  </nav>
+</template>
+
+<script>
+export default {
+  name: 'PhBreadcrumb',
+  props: {
+    items: {
+      type: Array,
+      required: true,
+      validator: (arr) => arr.every((item) => typeof item === 'object' && item.label)
+    },
+    separator: {
+      type: String,
+      default: '/'
+    }
+  }
+};
+</script>

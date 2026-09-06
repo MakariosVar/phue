@@ -1,0 +1,27 @@
+<template>
+  <div class="ph-spacer" :style="spacerStyles" aria-hidden="true"></div>
+</template>
+
+<script>
+export default {
+  name: 'Spacer',
+  props: {
+    size: {
+      type: [String, Number],
+      default: 'md'
+    },
+    horizontal: {
+      type: Boolean,
+      default: false
+    }
+  },
+  computed: {
+    spacerStyles() {
+      const val = typeof this.size === 'number' ? `${this.size}px` : `var(--ph-space-${this.size}, ${this.size})`;
+      return this.horizontal
+        ? { width: val, height: '100%', flexShrink: 0 }
+        : { height: val, width: '100%', flexShrink: 0 };
+    }
+  }
+};
+</script>

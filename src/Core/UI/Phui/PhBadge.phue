@@ -1,0 +1,31 @@
+<template>
+  <span :class="['ph-badge', `ph-badge--${variant}`, `ph-badge--${size}`, { 'ph-badge--pill': pill }]">
+    <slot>{{ label }}</slot>
+  </span>
+</template>
+
+<script>
+export default {
+  name: 'PhBadge',
+  props: {
+    label: {
+      type: String,
+      default: ''
+    },
+    variant: {
+      type: String,
+      default: 'neutral',
+      validator: (val) => ['primary', 'secondary', 'success', 'warning', 'error', 'info', 'neutral'].includes(val)
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
+    pill: {
+      type: Boolean,
+      default: false
+    }
+  }
+};
+</script>

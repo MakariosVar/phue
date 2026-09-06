@@ -1,0 +1,57 @@
+<template>
+  <component
+    :is="as"
+    :class="[
+      'ph-text',
+      `ph-text--${size}`,
+      `ph-text--${weight}`,
+      `ph-text--${color}`,
+      { 'ph-text--truncate': truncate }
+    ]"
+    :style="textStyles"
+  >
+    <slot />
+  </component>
+</template>
+
+<script>
+export default {
+  name: 'PhText',
+  props: {
+    as: {
+      type: String,
+      default: 'p'
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['xs', 'sm', 'md', 'lg', 'xl'].includes(val)
+    },
+    weight: {
+      type: String,
+      default: 'normal',
+      validator: (val) => ['light', 'normal', 'medium', 'semibold', 'bold'].includes(val)
+    },
+    color: {
+      type: String,
+      default: 'default'
+    },
+    align: {
+      type: String,
+      default: 'left',
+      validator: (val) => ['left', 'center', 'right', 'justify'].includes(val)
+    },
+    truncate: {
+      type: Boolean,
+      default: false
+    }
+  },
+  computed: {
+    textStyles() {
+      return {
+        textAlign: this.align
+      };
+    }
+  }
+};
+</script>

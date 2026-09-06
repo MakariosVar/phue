@@ -1,0 +1,89 @@
+<template>
+  <div :class="['ph-select-group', { 'ph-select-group--error': !!error, 'ph-select-group--disabled': disabled }]">
+    <label v-if="label" :for="selectId" class="ph-select-label">
+      {{ label }}
+      <span v-if="required" class="ph-select-label__required">*</span>
+    </label>
+
+    <div class="ph-select-wrapper">
+      <select
+        :id="selectId"
+        :value="modelValue"
+        :disabled="disabled"
+        class="ph-select"
+        @change="$emit('update:modelValue', $event.target.value)"
+      >
+        <option v-if="placeholder" value="" disabled selected>{{ placeholder }}</option>
+        <option
+          v-for="option in normalizedOptions"
+          :key="option.value"
+          :value="option.value"
+          :disabled="option.disabled"
+        >
+          {{ option.label }}
+        </option>
+      </select>
+    </div>
+
+    <p v-if="error" class="ph-select-error">{{ error }}</p>
+    <p v-else-if="helperText" class="ph-select-helper">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhSelect',
+  props: {
+    modelValue: {
+      type: [String, Number],
+      default: ''
+    },
+    options: {
+      type: Array,
+      default: () => []
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue'],
+  computed: {
+    selectId() {
+      return $props.id || `ph-select-${Math.random().toString(36).substring(2, 9)}`;
+    },
+    normalizedOptions() {
+      return $props.options.map((opt) => {
+        if (typeof opt === 'object' && opt !== null) {
+          return { label: opt.label ?? opt.value, value: opt.value, disabled: !!opt.disabled };
+        }
+        return { label: String(opt), value: opt, disabled: false };
+      });
+    }
+  }
+};
+</script>

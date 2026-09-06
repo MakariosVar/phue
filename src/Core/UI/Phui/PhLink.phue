@@ -1,0 +1,72 @@
+<template>
+  <component
+    :is="componentType"
+    :href="isAnchor ? href : undefined"
+    :to="!isAnchor ? href : undefined"
+    :target="target"
+    :rel="computedRel"
+    :class="['ph-link', `ph-link--${variant}`, { 'ph-link--underline': underline, 'ph-link--disabled': disabled }]"
+    @click="handleClick"
+  >
+    <slot>{{ label }}</slot>
+  </component>
+</template>
+
+<script>
+export default {
+  name: 'PhLink',
+  props: {
+    href: {
+      type: [String, Object],
+      default: '#'
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    variant: {
+      type: String,
+      default: 'primary',
+      validator: (val) => ['primary', 'secondary', 'neutral', 'danger'].includes(val)
+    },
+    target: {
+      type: String,
+      default: '_self'
+    },
+    rel: {
+      type: String,
+      default: null
+    },
+    underline: {
+      type: Boolean,
+      default: true
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['click'],
+  computed: {
+    isAnchor() {
+      return typeof this.href === 'string' && (this.href.startsWith('http') || this.href.startsWith('mailto:') || this.href.startsWith('#'));
+    },
+    componentType() {
+      return this.isAnchor ? 'a' : 'router-link';
+    },
+    computedRel() {
+      if (this.rel) return this.rel;
+      return this.target === '_blank' ? 'noopener noreferrer' : undefined;
+    }
+  },
+  methods: {
+    handleClick(event) {
+      if (this.disabled) {
+        event.preventDefault();
+        return;
+      }
+      this.$emit('click', event);
+    }
+  }
+};
+</script>

@@ -1,0 +1,51 @@
+<template>
+  <div :class="['ph-avatar', `ph-avatar--${size}`, `ph-avatar--${shape}`]">
+    <img v-if="src && !hasError" :src="src" :alt="alt" class="ph-avatar__image" @error="hasError = true" />
+    <span v-else class="ph-avatar__initials">{{ computedInitials }}</span>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhAvatar',
+  props: {
+    src: {
+      type: String,
+      default: ''
+    },
+    name: {
+      type: String,
+      default: ''
+    },
+    alt: {
+      type: String,
+      default: 'Avatar'
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['xs', 'sm', 'md', 'lg', 'xl'].includes(val)
+    },
+    shape: {
+      type: String,
+      default: 'circle',
+      validator: (val) => ['circle', 'square', 'rounded'].includes(val)
+    }
+  },
+  data() {
+    return {
+      hasError: false
+    };
+  },
+  computed: {
+    computedInitials() {
+      if (!this.name) return '?';
+      const parts = this.name.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+  }
+};
+</script>

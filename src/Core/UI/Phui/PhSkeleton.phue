@@ -1,0 +1,48 @@
+<template>
+  <div
+    :class="['ph-skeleton', `ph-skeleton--${variant}`, { 'ph-skeleton--animated': animated }]"
+    :style="skeletonStyles"
+  ></div>
+</template>
+
+<script>
+export default {
+  name: 'PhSkeleton',
+  props: {
+    variant: {
+      type: String,
+      default: 'text',
+      validator: (val) => ['text', 'circular', 'rectangular'].includes(val)
+    },
+    width: {
+      type: [String, Number],
+      default: '100%'
+    },
+    height: {
+      type: [String, Number],
+      default: null
+    },
+    animated: {
+      type: Boolean,
+      default: true
+    }
+  },
+  computed: {
+    skeletonStyles() {
+      const w = typeof this.width === 'number' ? `${this.width}px` : this.width;
+      let h = this.height;
+      if (h !== null && typeof h === 'number') {
+        h = `${h}px`;
+      }
+      if (!h) {
+        h = this.variant === 'text' ? '1em' : '100%';
+      }
+
+      return {
+        width: w,
+        height: h
+      };
+    }
+  }
+};
+</script>

@@ -1,0 +1,49 @@
+<template>
+  <div class="ph-box" :style="boxStyles">
+    <slot />
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhBox',
+  props: {
+    padding: {
+      type: [String, Number],
+      default: 'md'
+    },
+    margin: {
+      type: [String, Number],
+      default: '0'
+    },
+    border: {
+      type: Boolean,
+      default: false
+    },
+    radius: {
+      type: String,
+      default: 'md'
+    },
+    bg: {
+      type: String,
+      default: 'surface'
+    }
+  },
+  computed: {
+    boxStyles() {
+      const padVal = typeof this.padding === 'number' ? `${this.padding}px` : `var(--ph-space-${this.padding}, ${this.padding})`;
+      const marVal = typeof this.margin === 'number' ? `${this.margin}px` : `var(--ph-space-${this.margin}, ${this.margin})`;
+      const radVal = `var(--ph-radius-${this.radius}, ${this.radius})`;
+      const bgVal = `var(--ph-color-${this.bg}, ${this.bg})`;
+
+      return {
+        padding: padVal,
+        margin: marVal,
+        borderRadius: radVal,
+        backgroundColor: bgVal,
+        border: this.border ? '1px solid var(--ph-color-border)' : 'none'
+      };
+    }
+  }
+};
+</script>

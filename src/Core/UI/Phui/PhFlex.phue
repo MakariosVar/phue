@@ -1,0 +1,50 @@
+<template>
+  <div class="ph-flex" :style="flexStyles">
+    <slot />
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhFlex',
+  props: {
+    direction: {
+      type: String,
+      default: 'row',
+      validator: (val) => ['row', 'row-reverse', 'column', 'column-reverse'].includes(val)
+    },
+    wrap: {
+      type: String,
+      default: 'nowrap',
+      validator: (val) => ['nowrap', 'wrap', 'wrap-reverse'].includes(val)
+    },
+    align: {
+      type: String,
+      default: 'stretch',
+      validator: (val) => ['stretch', 'flex-start', 'center', 'flex-end', 'baseline'].includes(val)
+    },
+    justify: {
+      type: String,
+      default: 'flex-start',
+      validator: (val) => ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'].includes(val)
+    },
+    gap: {
+      type: [String, Number],
+      default: '0'
+    }
+  },
+  computed: {
+    flexStyles() {
+      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : `var(--ph-space-${this.gap}, ${this.gap})`;
+      return {
+        display: 'flex',
+        flexDirection: this.direction,
+        flexWrap: this.wrap,
+        alignItems: this.align,
+        justifyContent: this.justify,
+        gap: gapVal
+      };
+    }
+  }
+};
+</script>

@@ -1,0 +1,83 @@
+<template>
+  <nav class="ph-pagination" aria-label="Pagination">
+    <button
+      type="button"
+      class="ph-btn ph-btn--sm ph-btn--ghost ph-pagination__prev"
+      :disabled="currentPage <= 1"
+      @click="changePage(currentPage - 1)"
+    >
+      Previous
+    </button>
+
+    <div class="ph-pagination__pages">
+      <button
+        v-for="page in pages"
+        :key="page"
+        type="button"
+        :class="['ph-btn ph-btn--sm', page === currentPage ? 'ph-btn--primary' : 'ph-btn--ghost']"
+        :disabled="page === '...'"
+        @click="typeof page === 'number' ? changePage(page) : null"
+      >
+        {{ page }}
+      </button>
+    </div>
+
+    <button
+      type="button"
+      class="ph-btn ph-btn--sm ph-btn--ghost ph-pagination__next"
+      :disabled="currentPage >= totalPages"
+      @click="changePage(currentPage + 1)"
+    >
+      Next
+    </button>
+  </nav>
+</template>
+
+<script>
+export default {
+  name: 'PhPagination',
+  props: {
+    currentPage: {
+      type: Number,
+      default: 1
+    },
+    totalPages: {
+      type: Number,
+      required: true
+    },
+    maxVisible: {
+      type: Number,
+      default: 5
+    }
+  },
+  emits: ['update:currentPage', 'page-change'],
+  computed: {
+    pages() {
+      const total = this.totalPages;
+      const current = this.currentPage;
+      if (total <= this.maxVisible) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+      }
+
+      const list = [1];
+      let start = Math.max(2, current - 1);
+      let end = Math.min(total - 1, current + 1);
+
+      if (start > 2) list.push('...');
+      for (let i = start; i <= end; i++) list.push(i);
+      if (end < total - 1) list.push('...');
+      list.push(total);
+
+      return list;
+    }
+  },
+  methods: {
+    changePage(page) {
+      if (page >= 1 && page <= this.totalPages && page !== this.currentPage) {
+        this.$emit('update:currentPage', page);
+        this.$emit('page-change', page);
+      }
+    }
+  }
+};
+</script>

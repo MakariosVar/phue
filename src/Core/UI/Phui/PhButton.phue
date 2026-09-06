@@ -1,0 +1,53 @@
+<template>
+  <button
+    :type="type"
+    :class="[
+      'ph-btn',
+      `ph-btn--${variant}`,
+      `ph-btn--${size}`,
+      { 'ph-btn--block': block, 'ph-btn--loading': loading }
+    ]"
+    :disabled="disabled || loading"
+    @click="$emit('click', $event)"
+  >
+    <span v-if="loading" class="ph-btn__spinner" aria-hidden="true"></span>
+    <span class="ph-btn__content">
+      <slot />
+    </span>
+  </button>
+</template>
+
+<script>
+export default {
+  name: 'PhButton',
+  props: {
+    type: {
+      type: String,
+      default: 'button'
+    },
+    variant: {
+      type: String,
+      default: 'primary',
+      validator: (val) => ['primary', 'secondary', 'outline', 'ghost', 'danger'].includes(val)
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
+    block: {
+      type: Boolean,
+      default: false
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    loading: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['click']
+};
+</script>

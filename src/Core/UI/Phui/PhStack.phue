@@ -1,0 +1,33 @@
+<template>
+  <div class="ph-stack" :style="stackStyles">
+    <slot />
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhStack',
+  props: {
+    gap: {
+      type: [String, Number],
+      default: 'md'
+    },
+    align: {
+      type: String,
+      default: 'stretch',
+      validator: (val) => ['stretch', 'flex-start', 'center', 'flex-end', 'baseline'].includes(val)
+    }
+  },
+  computed: {
+    stackStyles() {
+      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : `var(--ph-space-${this.gap}, ${this.gap})`;
+      return {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: this.align,
+        gap: gapVal
+      };
+    }
+  }
+};
+</script>

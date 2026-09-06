@@ -1,0 +1,80 @@
+<template>
+  <div :class="['ph-input-group', { 'ph-input-group--error': !!error, 'ph-input-group--disabled': disabled }]">
+    <label v-if="label" :for="inputId" class="ph-input-label">
+      {{ label }}
+      <span v-if="required" class="ph-input-label__required">*</span>
+    </label>
+    
+    <div class="ph-input-wrapper">
+      <input
+        :id="inputId"
+        :type="type"
+        :value="modelValue"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :readonly="readonly"
+        class="ph-input"
+        @input="$emit('update:modelValue', $event.target.value)"
+        @blur="$emit('blur', $event)"
+        @focus="$emit('focus', $event)"
+      />
+    </div>
+
+    <p v-if="error" class="ph-input-error">{{ error }}</p>
+    <p v-else-if="helperText" class="ph-input-helper">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhInput',
+  props: {
+    modelValue: {
+      type: [String, Number],
+      default: ''
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    type: {
+      type: String,
+      default: 'text'
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'blur', 'focus'],
+  computed: {
+    inputId() {
+      return $props.id || `ph-input-${Math.random().toString(36).substring(2, 9)}`;
+    }
+  }
+};
+</script>

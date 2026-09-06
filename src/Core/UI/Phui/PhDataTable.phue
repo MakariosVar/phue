@@ -1,0 +1,124 @@
+<template>
+  <div class="ph-data-table-container">
+    <table class="ph-data-table">
+      <thead>
+        <tr>
+          <th
+            v-for="col in columns"
+            :key="col.key"
+            :class="['ph-data-table__th', { 'ph-data-table__th--sortable': col.sortable }]"
+            @click="col.sortable ? handleSort(col.key) : null"
+          >
+            <div class="ph-data-table__th-content">
+              <span>{{ col.label || col.key }}</span>
+              <span v-if="col.sortable" class="ph-data-table__sort-icon">
+                <template v-if="sortKey === col.key">
+                  {{ sortOrder === 'asc' ? '▲' : '▼' }}
+                </template>
+                <template v-else>↕</template>
+              </span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-if="paginatedData.length === 0">
+          <td :colspan="columns.length" class="ph-data-table__empty">
+            <slot name="empty">No data available</slot>
+          </td>
+        </tr>
+        <tr v-for="(row, rowIndex) in paginatedData" :key="row.id || rowIndex" class="ph-data-table__tr">
+          <td v-for="col in columns" :key="col.key" class="ph-data-table__td">
+            <slot :name="`cell(${col.key})`" :row="row" :value="row[col.key]">
+              {{ row[col.key] }}
+            </slot>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div v-if="paginated && totalPages > 1" class="ph-data-table__pagination">
+      <button
+        type="button"
+        class="ph-btn ph-btn--sm ph-btn--ghost"
+        :disabled="currentPage === 1"
+        @click="currentPage--"
+      >
+        Previous
+      </button>
+      <span class="ph-data-table__page-info">
+        Page {{ currentPage }} of {{ totalPages }}
+      </span>
+      <button
+        type="button"
+        class="ph-btn ph-btn--sm ph-btn--ghost"
+        :disabled="currentPage === totalPages"
+        @click="currentPage++"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhDataTable',
+  props: {
+    columns: {
+      type: Array,
+      required: true
+    },
+    items: {
+      type: Array,
+      default: () => []
+    },
+    paginated: {
+      type: Boolean,
+      default: false
+    },
+    pageSize: {
+      type: Number,
+      default: 10
+    }
+  },
+  data() {
+    return {
+      sortKey: '',
+      sortOrder: 'asc',
+      currentPage: 1
+    };
+  },
+  computed: {
+    sortedData() {
+      if (!this.sortKey) return this.items;
+      return [...this.items].sort((a, b) => {
+        const valA = a[this.sortKey];
+        const valB = b[this.sortKey];
+        if (valA === valB) return 0;
+        const res = valA > valB ? 1 : -1;
+        return this.sortOrder === 'asc' ? res : -res;
+      });
+    },
+    totalPages() {
+      if (!this.paginated || this.pageSize <= 0) return 1;
+      return Math.ceil(this.sortedData.length / this.pageSize) || 1;
+    },
+    paginatedData() {
+      if (!this.paginated) return this.sortedData;
+      const start = (this.currentPage - 1) * this.pageSize;
+      return this.sortedData.slice(start, start + this.pageSize);
+    }
+  },
+  methods: {
+    handleSort(key) {
+      if (this.sortKey === key) {
+        this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortKey = key;
+        this.sortOrder = 'asc';
+      }
+    }
+  }
+};
+</script>
