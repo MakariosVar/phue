@@ -214,6 +214,7 @@ class Application
      * Handle incoming HTTP Request through global middleware pipeline and router.
      *
      * @param Request|null $request Incoming HTTP request object. If null, automatically captures request from globals.
+     *
      * @return Response Standardized HTTP response object.
      */
     public function handle(?Request $request = null): Response
@@ -241,8 +242,17 @@ class Application
             return (new Response('Method Not Allowed', 405))
                 ->setHeader('Allow', implode(', ', $e->getAllowedMethods()));
         } catch (Throwable $e) {
-            $message = $this->debug ? $e->getMessage() : 'Internal Server Error';
-            return new Response($message, 500);
+            if ($this->debug) {
+                return Response::json([
+                    'error'   => $e->getMessage(),
+                    'class'   => get_class($e),
+                    'file'    => $e->getFile(),
+                    'line'    => $e->getLine(),
+                    'trace'   => explode("\n", $e->getTraceAsString()),
+                ], 500);
+            }
+
+            return Response::json(['error' => 'Internal Server Error'], 500);
         } finally {
             // Clean request-scoped services automatically at the end of the lifecycle
             $this->container->flushScope();

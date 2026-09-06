@@ -5,18 +5,15 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
-use Phue\Core\Database\Connection;
-use Phue\Core\Config;
 use Phue\Schii\Migration\AutoMigrator;
 use Phue\Schii\Schema\SchemaRegistry;
-use \RuntimeException;
 
 /**
  * CLI Command to run Schii declarative auto-migration for a target model class.
  *
  * @package Phue\Core\Console\Commands
  */
-final class SchiiMigrateCommand implements CommandInterface
+final class SchiiMigrateCommand extends AbstractDatabaseCommand implements CommandInterface
 {
     /**
      * Retrieves command identifier name.
@@ -42,6 +39,9 @@ final class SchiiMigrateCommand implements CommandInterface
      * Executes declarative auto-migration on the requested model class.
      *
      * @param array<int, string> $args Command arguments containing model class.
+     * @param resource $outputStream Standard output stream.
+     * @param resource $errorStream Standard error stream.
+     *
      * @return int Exit code (0 for success, 1 for failure).
      */
     public function execute(
@@ -94,40 +94,5 @@ final class SchiiMigrateCommand implements CommandInterface
             );
             return 1;
         }
-    }
-
-    /**
-     * Resolves application database connection directly from config.
-     *
-     * @throws RuntimeException If config or connection definitions are missing.
-     * @return Connection
-     */
-    private function resolveConnection(): Connection
-    {
-        $configPath = getcwd() . "/config";
-
-        if (!is_dir($configPath)) {
-            throw new RuntimeException(
-                "Config directory missing at: {$configPath}",
-            );
-        }
-
-        $config = new Config($configPath);
-
-        $defaultDriver = $config->get("database.default");
-        if (!$defaultDriver || !is_string($defaultDriver)) {
-            throw new RuntimeException(
-                "Database connection not configured: 'database.default' is missing.",
-            );
-        }
-
-        $dbConfig = $config->get("database.connections.{$defaultDriver}");
-        if (!$dbConfig || !is_array($dbConfig)) {
-            throw new RuntimeException(
-                "Database connection not configured: 'database.connections.{$defaultDriver}' is missing or invalid.",
-            );
-        }
-
-        return new Connection($dbConfig);
     }
 }

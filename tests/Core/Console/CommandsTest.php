@@ -39,9 +39,10 @@ class CommandsTest extends TestCase
     {
         $cmd = new MakeControllerCommand();
 
-        ob_start();
-        $code = $cmd->execute(['Test']);
-        $output = ob_get_clean();
+        $out = fopen('php://memory', 'w+');
+        $code = $cmd->execute(['Test'], $out);
+        rewind($out);
+        $output = stream_get_contents($out);
 
         $this->assertSame(0, $code);
         $this->assertFileExists($this->appDir . '/Controllers/TestController.php');
@@ -50,6 +51,9 @@ class CommandsTest extends TestCase
         $content = file_get_contents($this->appDir . '/Controllers/TestController.php');
         $this->assertStringContainsString('class TestController', $content);
         $this->assertStringContainsString('use Phue\Core\Routing\Attribute\Route;', $content);
+        // Route(path, methods) positional order — never path='GET' (which made the route unreachable)
+        $this->assertStringContainsString("#[Route('/', ['GET'])]", $content);
+        $this->assertStringNotContainsString("Route('GET'", $content);
     }
 
     public function testMakeControllerFailsWhenNameMissing(): void

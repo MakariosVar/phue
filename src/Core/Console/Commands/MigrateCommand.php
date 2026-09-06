@@ -4,18 +4,15 @@ declare(strict_types=1);
 
 namespace Phue\Core\Console\Commands;
 
-use Phue\Core\Config;
 use Phue\Core\Console\CommandInterface;
-use Phue\Core\Database\Connection;
 use Phue\Core\Database\Migrator;
-use \RuntimeException;
 
 /**
  * CLI Command to run pending explicit database migrations.
  *
  * @package Phue\Core\Console\Commands
  */
-final class MigrateCommand implements CommandInterface
+final class MigrateCommand extends AbstractDatabaseCommand implements CommandInterface
 {
     /**
      * Retrieves command identifier name.
@@ -72,40 +69,5 @@ final class MigrateCommand implements CommandInterface
             fwrite($errorStream, "Migration error: " . $e->getMessage() . "\n");
             return 1;
         }
-    }
-
-    /**
-     * Resolves application database connection directly from config.
-     *
-     * @throws RuntimeException If config or connection definitions are missing.
-     * @return Connection
-     */
-    private function resolveConnection(): Connection
-    {
-        $configPath = getcwd() . "/config";
-
-        if (!is_dir($configPath)) {
-            throw new RuntimeException(
-                "Config directory missing at: {$configPath}",
-            );
-        }
-
-        $config = new Config($configPath);
-
-        $defaultDriver = $config->get("database.default");
-        if (!$defaultDriver || !is_string($defaultDriver)) {
-            throw new RuntimeException(
-                "Database connection not configured: 'database.default' is missing.",
-            );
-        }
-
-        $dbConfig = $config->get("database.connections.{$defaultDriver}");
-        if (!$dbConfig || !is_array($dbConfig)) {
-            throw new RuntimeException(
-                "Database connection not configured: 'database.connections.{$defaultDriver}' is missing or invalid.",
-            );
-        }
-
-        return new Connection($dbConfig);
     }
 }

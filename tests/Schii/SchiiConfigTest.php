@@ -75,5 +75,20 @@ final class SchiiConfigTest extends TestCase
         $this->assertFalse($exported['autoMigrate']);
         $this->assertSame('custom_cache_', $exported['cachePrefix']);
         $this->assertSame(['SecurityMiddleware'], $exported['middleware']);
+        // `prefix` (console UI mount) round-trips through toArray
+        $this->assertSame('/schii', $exported['prefix']);
+    }
+
+    public function testPrefixRoundTrip(): void
+    {
+        $this->assertSame('/schii', (new SchiiConfig())->prefix);
+
+        $config = SchiiConfig::fromArray(['prefix' => '/admin', 'apiPrefix' => '/api/admin']);
+        $this->assertSame('/admin', $config->prefix);
+        $this->assertSame('/api/admin', $config->apiPrefix);
+
+        $exported = $config->toArray();
+        $this->assertSame('/admin', $exported['prefix']);
+        $this->assertSame('/api/admin', $exported['apiPrefix']);
     }
 }

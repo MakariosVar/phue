@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
@@ -35,6 +37,9 @@ class MakeControllerCommand implements CommandInterface
      * Executes the controller generation process using the provided arguments.
      *
      * @param array<int, string> $args Command line arguments (expects controller name as first index).
+     * @param resource $outputStream Standard output stream.
+     * @param resource $errorStream Standard error stream.
+     *
      * @return int Status code (0 for success, 1 for failure).
      */
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
@@ -49,7 +54,8 @@ class MakeControllerCommand implements CommandInterface
             $name .= 'Controller';
         }
 
-        $dir = getcwd() . '/App/Controllers';
+        $basePath = defined('PHUE_BASE_PATH') ? PHUE_BASE_PATH : getcwd();
+        $dir = $basePath . '/App/Controllers';
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
@@ -72,7 +78,7 @@ use Phue\Core\Routing\Attribute\Route;
 
 class {$name}
 {
-    #[Route('GET', '/')]
+    #[Route('/', ['GET'])]
     public function index(Request \$request): Response
     {
         return Response::json(['message' => 'Hello from {$name}!']);
@@ -81,7 +87,7 @@ class {$name}
 PHP;
 
         file_put_contents($filePath, $template);
-        echo sprintf("\033[32mController created successfully:\033[0m App/Controllers/%s.php\n", $name);
+        fwrite($outputStream, sprintf("\033[32mController created successfully:\033[0m App/Controllers/%s.php\n", $name));
 
         return 0;
     }
