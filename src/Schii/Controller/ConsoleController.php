@@ -8,6 +8,7 @@ use Phue\Core\Container;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\UI\ComponentRenderer;
+use Phue\Schii\Config\SchiiConfig;
 
 /**
  * Class ConsoleController
@@ -40,9 +41,13 @@ final class ConsoleController
         /** @var ComponentRenderer $renderer */
         $renderer = $this->container->get("schii.renderer");
 
+        /** @var SchiiConfig $config */
+        $config = $this->container->get(SchiiConfig::class);
+
         return $renderer->render("Console", [
             "request" => $request,
             "params" => $params,
+            "apiPrefix" => $config->apiPrefix,
         ]);
     }
 }

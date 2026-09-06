@@ -8,6 +8,7 @@ use Phue\Core\Asset\AssetsController;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\AssetServer;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Cache\FileCache;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
@@ -15,6 +16,7 @@ use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
 use Phue\Core\UI\PhueComponentLoader;
+use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
 /**
@@ -80,6 +82,12 @@ class Application
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
 
+        // Register L2 PSR-16 Cache Service Singletons
+        $this->container->singleton(CacheInterface::class, function (): CacheInterface {
+            return new FileCache($this->basePath . '/storage/cache');
+        });
+        $this->container->alias('cache', CacheInterface::class);
+
         // Primary App Component Loader Singleton
         $this->container->singleton(PhueComponentLoader::class, function () {
             return new PhueComponentLoader($this->basePath . '/App/Frontend');
@@ -105,26 +113,26 @@ class Application
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
 
-                // Register default framework static styles path only if directory exists
-                $stylesPath = $this->basePath . '/storage/assets/styles';
-                if (is_dir($stylesPath)) {
-                    $registry->registerSource('/assets/styles', $stylesPath);
+            // Register default framework static styles path only if directory exists
+            $stylesPath = $this->basePath . '/storage/assets/styles';
+            if (is_dir($stylesPath)) {
+                $registry->registerSource('/assets/styles', $stylesPath);
+            }
+
+            // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
+            $registry->addResolver('/assets/phue/', function (string $path): ?string {
+                if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
+                    return null;
                 }
 
-                // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
-                $registry->addResolver('/assets/phue/', function (string $path): ?string {
-                    if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
-                        return null;
-                    }
+                $name = $matches[1];
+                $hash = $matches[2];
 
-                    $name = $matches[1];
-                    $hash = $matches[2];
+                /** @var ComponentLoaderRegistry $loaderRegistry */
+                $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
 
-                    /** @var ComponentLoaderRegistry $loaderRegistry */
-                    $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
-
-                    return $loaderRegistry->scriptFor($name, $hash);
-                });
+                return $loaderRegistry->scriptFor($name, $hash);
+            });
 
             return $registry;
         });

@@ -4,14 +4,12 @@
  */
 $title = 'Schii Console';
 
-$state = [
-    'apiPrefix' => '/api/schii',
-    'entities'  => [], // Dynamic discovery via GET /api/schii/schema
-];
-
 return [
     'title'   => $title,
-    'state'   => $state,
+    'state'   => [
+        'apiPrefix' => $apiPrefix ?? '/api/schii',
+        'entities'  => [],
+    ],
     'scripts' => [],
 ];
 </php>

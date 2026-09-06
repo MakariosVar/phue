@@ -191,6 +191,24 @@ class Container
     }
 
     /**
+     * Register an alias for an existing abstract binding or service.
+     *
+     * Maps an alias string directly to a factory closure that resolves
+     * the target abstract FQCN via the container.
+     *
+     * @param string $alias    Alias identifier (e.g. 'cache').
+     * @param string $abstract Target abstract class or interface FQCN.
+     *
+     * @return self Fluent instance reference for chaining.
+     */
+    public function alias(string $alias, string $abstract): self
+    {
+        $this->factories[$alias] = fn (): mixed => $this->get($abstract);
+
+        return $this;
+    }
+
+    /**
      * Clear all request-scoped instances and trigger optional reset logic for resettable instances.
      *
      * @return void

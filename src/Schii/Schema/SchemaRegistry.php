@@ -114,8 +114,14 @@ final class SchemaRegistry
     /**
      * Parses the specified Model class and returns its ModelSchema representation.
      *
-     * @param class-string $modelClass
-     * @return ModelSchema
+     * Resolves the schema sequentially via:
+     * 1. In-memory static array cache (L1).
+     * 2. Persistent storage cache with array-to-object rehydration (L2).
+     * 3. Reflection-based parsing on cache miss.
+     *
+     * @param class-string $modelClass Fully qualified class name of the target model.
+     *
+     * @return ModelSchema Rehydrated or newly parsed schema instance.
      */
     public function get(string $modelClass): ModelSchema
     {
@@ -128,18 +134,31 @@ final class SchemaRegistry
 
         // 2. Persistent Cache Hit (L2 - Redis/File)
         if ($this->cache?->has($cacheKey)) {
-            /** @var ModelSchema $schema */
-            $schema = $this->cache->get($cacheKey);
-            $this->memoryCache[$modelClass] = $schema;
-            return $schema;
+            $cachedData = $this->cache->get($cacheKey);
+
+            if (is_array($cachedData)) {
+                try {
+                    $schema = ModelSchema::fromArray($cachedData);
+                    $this->memoryCache[$modelClass] = $schema;
+
+                    return $schema;
+                } catch (\Throwable) {
+                    // Cache is corrupt or schema version changed; fall back to parsing
+                    $this->cache->delete($cacheKey);
+                }
+            } elseif ($cachedData instanceof ModelSchema) {
+                $this->memoryCache[$modelClass] = $cachedData;
+
+                return $cachedData;
+            }
         }
 
         // 3. Cache Miss: Parsing via Reflection
         $schema = $this->parse($modelClass);
 
-        // Store in caches
+        // Store in caches (L1 object instance, L2 array representation or object)
         $this->memoryCache[$modelClass] = $schema;
-        $this->cache?->set($cacheKey, $schema);
+        $this->cache?->set($cacheKey, $schema->toArray());
 
         return $schema;
     }

@@ -10,6 +10,11 @@
             "email": "makariosvar@gmail.com"
         }
     ],
+    "scripts": {
+        "test": "phpunit",
+        "phue": "php bin/phue",
+        "phue_test": "php bin/phue_test"
+    },
     "require": {
         "php": ">=8.5",
         "nyholm/psr7": "^1.8",

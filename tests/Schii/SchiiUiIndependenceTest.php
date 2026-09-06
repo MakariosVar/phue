@@ -130,6 +130,36 @@ PHP);
         $this->assertStringContainsString(".mount('#app')", $module->getContent());
     }
 
+    public function testConsoleStateCarriesConfiguredApiPrefix(): void
+    {
+        // Non-default prefix: the console must discover the real one, not /
+        // api/schii
+        $this->writeConfig('/custom/api', 'Phue\\Tests\\Schii\\Stubs');
+
+        $app = new Application($this->tmpBase);
+
+        $page = $app->handle(new Request('GET', '/schii'));
+        $this->assertSame(200, $page->getStatusCode());
+
+        $content = $page->getContent();
+
+        preg_match('/window\\.__INITIAL_STATE__ = (\\{.*?\\});/', $content, $m);
+        $this->assertArrayHasKey(1, $m, 'Console page must inject window.__INITIAL_STATE__');
+        $state = json_decode($m[1], true);
+
+        $this->assertSame(
+            '/custom/api',
+            $state['apiPrefix'] ?? null,
+            'Console page must carry the configured apiPrefix (never the hardcoded default)',
+        );
+
+        $this->assertStringNotContainsString(
+            '"apiPrefix":"/api/schii"',
+            $content,
+            'The hardcoded /api/schii default must not leak into the console page state',
+        );
+    }
+
     private function rmTree(string $dir): void
     {
         if (!is_dir($dir)) {
