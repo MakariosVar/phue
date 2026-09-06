@@ -341,15 +341,23 @@ class Application
     protected function loadModules(array $modules): void
     {
         foreach ($modules as $moduleClass) {
-            if (class_exists($moduleClass)) {
-                $module = $this->container->get($moduleClass);
-
-                if (method_exists($module, 'register')) {
-                    $module->register($this->router, $this->container, $this->events);
-                }
-
-                $this->modules[] = $module;
+            if (!class_exists($moduleClass)) {
+                continue;
             }
+
+            $module = $this->container->get($moduleClass);
+
+            if ($module instanceof Module) {
+                $module->id = $moduleClass;
+                $module->basePath = $this->basePath;
+                $module->setDependencies($this->router, $this->container, $this->events);
+                $module->init();
+            } elseif (method_exists($module, 'register')) {
+                // Fallback support for legacy non-Module classes with register()
+                $module->register($this->router, $this->container, $this->events);
+            }
+
+            $this->modules[] = $module;
         }
     }
 
