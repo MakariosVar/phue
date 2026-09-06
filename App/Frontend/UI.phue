@@ -1,0 +1,26 @@
+<php>
+return [
+    'title' => 'Phue App - UI',
+    'state' => [
+        'value' => $testValue ?? 'none',
+    ],
+];
+</php>
+
+<template>
+<div class="d-flex flex-column gap-2 p-4">
+    <h2>Phue App - UI</h2>
+    {{testValue}}
+</div>
+</template>
+
+<script>
+import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
+
+createApp({
+    setup() {
+        const testValue = ref(window.__INITIAL_STATE__.value);
+        return { testValue };
+    }
+}).mount('#app');
+</script>
