@@ -6,7 +6,6 @@ namespace App\Controllers;
 
 use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Route;
-use Phue\Core\UI\ComponentRenderer;
 
 /**
  * WebController handles primary HTTP routes and orchestrates page rendering.
@@ -14,27 +13,29 @@ use Phue\Core\UI\ComponentRenderer;
  * @package App\Controllers
  */
 #[Route('/')]
-class WebController
+class WebController extends Controller
 {
-    /**
-     * WebController constructor.
-     *
-     * @param ComponentRenderer $ui Core UI component rendering engine service.
-     */
-    public function __construct(
-        private ComponentRenderer $ui
-    ) {}
+    #[Route('/', methods: ['GET'])]
+    public function index(): Response
+    {
+        return $this->ui->render('Products', [
+            'testValue' => 'HomePage'
+        ]);
+    }
 
-    /**
-     * Handles the index route GET request and returns the rendered product catalog page.
-     *
-     * @return Response HTTP Response containing the fully assembled HTML page.
-     */
-     #[Route('/', methods: ['GET'])]
-     public function index(): Response
-     {
-         return $this->ui->render('Products', [
-             'testValue' => 'value String'
-         ]);
-     }
+    #[Route('/docs', methods: ['GET'])]
+    public function docs(): Response
+    {
+        return $this->ui->render('Docs', [
+            'testValue' => 'DocsPage'
+        ]);
+    }
+
+    #[Route('/ui', methods: ['GET'])]
+    public function ui(): Response
+    {
+        return $this->ui->render('UI', [
+            'testValue' => 'UIPage'
+        ]);
+    }
 }
