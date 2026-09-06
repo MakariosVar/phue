@@ -105,20 +105,26 @@ class Application
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
 
-            // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
-            $registry->addResolver('/assets/phue/', function (string $path): ?string {
-                if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
-                    return null;
+                // Register default framework static styles path only if directory exists
+                $stylesPath = $this->basePath . '/storage/assets/styles';
+                if (is_dir($stylesPath)) {
+                    $registry->registerSource('/assets/styles', $stylesPath);
                 }
 
-                $name = $matches[1];
-                $hash = $matches[2];
+                // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
+                $registry->addResolver('/assets/phue/', function (string $path): ?string {
+                    if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
+                        return null;
+                    }
 
-                /** @var ComponentLoaderRegistry $loaderRegistry */
-                $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
+                    $name = $matches[1];
+                    $hash = $matches[2];
 
-                return $loaderRegistry->scriptFor($name, $hash);
-            });
+                    /** @var ComponentLoaderRegistry $loaderRegistry */
+                    $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
+
+                    return $loaderRegistry->scriptFor($name, $hash);
+                });
 
             return $registry;
         });
@@ -128,9 +134,14 @@ class Application
             (bool) $this->config->get('app.debug', false)
         ));
 
-        $this->container->singleton(HtmlShellRenderer::class, fn (): HtmlShellRenderer => new HtmlShellRenderer(
-            $this->container->get(AssetRegistry::class)
-        ));
+        $this->container->singleton(HtmlShellRenderer::class, function (): HtmlShellRenderer {
+            $renderer = new HtmlShellRenderer($this->container->get(AssetRegistry::class));
+
+            // Automatically inject default phue.css into shell head
+            $renderer->addStyle('/assets/styles/phue.css');
+
+            return $renderer;
+        });
 
         // Auto-register AssetsController to Router
         $this->router->registerController(AssetsController::class);

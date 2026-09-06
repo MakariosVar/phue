@@ -14,8 +14,33 @@ use JsonException;
 class HtmlShellRenderer
 {
     public function __construct(
-        private AssetRegistry $registry
+        private readonly AssetRegistry $registry
     ) {}
+
+    /**
+     * Proxies style registration directly to the underlying AssetRegistry.
+     *
+     * @param string $url Asset URL
+     * @return self
+     */
+    public function addStyle(string $url): self
+    {
+        $this->registry->addStyle($url);
+        return $this;
+    }
+
+    /**
+     * Proxies script registration directly to the underlying AssetRegistry.
+     *
+     * @param string $url Asset URL
+     * @param bool $isModule Whether script should be treated as type="module"
+     * @return self
+     */
+    public function addScript(string $url, bool $isModule = true): self
+    {
+        $this->registry->addScript($url, $isModule);
+        return $this;
+    }
 
     /**
      * Render the full HTML document string.
