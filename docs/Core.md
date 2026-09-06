@@ -752,6 +752,55 @@ Schii (`Phue\Schii`) is Phue's runtime schema-driven UI engine. It parses PHP at
 - **`SchemaToSqlConverter` (`src/Schii/Migration/SchemaToSqlConverter.php`)**: Generates dialect-aware SQL DDL queries tailored for SQLite, MySQL, or PostgreSQL (`AUTOINCREMENT` vs `AUTO_INCREMENT` vs `SERIAL`, `TINYINT(1)` vs `BOOLEAN`).
 - **`SqlIdentifier` (`src/Core/Database/SqlIdentifier.php`)**: Sanitizes SQL identifiers with regex whitelist validation (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) and provides dialect-aware identifier quoting (backticks for MySQL/SQLite, double-quotes for PostgreSQL).
 
+### Module Configuration (`config/schii.php`)
+
+Schii reads its settings from a dedicated `config/schii.php`. The framework config is keyed **per file** (`items['app']`, `items['schii']`, ...), so `Config::get('schii')` returns the Schii section — never `get('app.schii')`. Settings:
+
+- `apiPrefix` — URL prefix for the REST endpoint (dev default `/schii`) → `/{apiPrefix}/{entity}`.
+- `entityNamespace` — namespace scanned for `#[UI]`/`#[Field]` entities (default `App\Models`).
+- `autoMigrate`, `cachePrefix`.
+
+`Container::singleton()` returns **void**, so bindings must be registered first and then retrieved via `$container->get(cls::class)`; a `$x = $container->singleton(...)` pattern silently degrades to `null` under `?->`/`??`.
+
+### Entity Discovery & API Board
+
+- `SchemaRegistry::discoverEntities(string $namespace): array` resolves the configured namespace to a directory **starting from the Application base path** (the module injects `Application::getBasePath()`), falling back to `getcwd()` — a server launched from any working directory still lists the same entities.
+- `GET {apiPrefix}/schema` → `{"entities": ["product", ...]}` — registered **before** `/{entity}` so the literal `/schema` wins over entity routing.
+- The Schii module is fully self-contained: it resolves entities from the configured namespace and hosts its own console frontend (see §12); no `App\*` references exist in `src/Schii` (enforced by contract tests).
+
+---
+
+## 12. No-Build Frontend Serving & Server-Driven Console (`Phue\Core\Frontend`)
+
+Phue serves frontends without a bundler: `.phue` components are plain templates with PHP blocks, and module code ships as statically-served, content-hashed ES modules the browser imports directly — no `eval()`, no inline `<script>`, no build step.
+
+### Component rendering (`ComponentRenderer`)
+
+- `ComponentRenderer::__construct(HtmlShellRenderer, AssetRegistry, ?PhueComponentLoader = null)`.
+- `render(string $name, ?array $pageData = null, array $params = []): Response` — the **3rd argument (`$params`) is passed intact to the component's PHP block**; the loader re-evaluates the template per render, so page data is always fresh.
+- The result is already a full HTML `Response` — never wrap it in a new `Response()`.
+- `HtmlShellRenderer` reads the component's page configuration (title, assets) and injects `window.__INITIAL_STATE__ = {...}` just before `</body>`; the module then boots from that state instead of inline JS.
+
+### Module scripts & content-hashed URLs
+
+- Components that declare their own script publish it at `/assets/phue/{Name}.{8hex}.phue.js` — the hash is derived from module file contents, so far-future caching is safe and parallel deploys can't collide.
+- Serving is stateless: the request only reads the module file, coerces the `.php` block to plain JS, and streams it as `text/javascript`.
+- Hardening (`AssetServerForPhueModules`): oversized/`.phue`-mismatched payloads → `413`; modules rendering non-HTML → `404`; TOCTOU race re-validates before serving; error responses are never cached; responses carry `X-Phue-Module: Name.HASH` and `X-Content-Type-Options: nosniff`.
+
+### Module loaders (`PhueComponentLoader`, `ComponentLoaderRegistry`)
+
+- `ComponentLoaderRegistry` (`src/Core/Frontend/ComponentLoaderRegistry.php`) is a **composite, fail-safe** loader — a throwing loader is skipped, the next is tried.
+- Priority: the application loader first, then module loaders in registration order; first non-null wins. Modules declare their loaders (e.g. `ComponentLoaderRegistry::addLoader(...)`) instead of mutating `/assets/phue` URL prefixes.
+- Per the plan's stateless/declarative-only module rules, loaders are registered as container bindings (`schii.loader`) and resolved through construction injection.
+
+### Developer console page
+
+`SchiiModule` routes `GET /schii` → `ConsoleController::index(Request, array $params)` which returns `ComponentRenderer::render('Console', [...])`. The console page (`src/Schii/Frontend/Console.phue`) is a **Vue 3 no-build app**:
+
+- Boots from `/assets/vendor/vue3/vue.esm-browser.js` and reads `window.__INITIAL_STATE__`.
+- On mount it queries `GET {apiPrefix}/schema` — **server-authoritative entity discovery**: the page carries no hardcoded entity list.
+- `selectEntity(slug)` fetches the entity's JSON schema + rows concurrently; the sidebar lists whatever entities the configured namespace yields.
+
 ---
 
 ## 13. Auth & RBAC Subsystem (`Phue\Auth`)
@@ -845,7 +894,7 @@ Enterprise-grade production readiness features ensuring high availability, secur
 
 ---
 
-## 12. Intentional design decisions (why it's built this way)
+## 18. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:
 

@@ -637,6 +637,30 @@ $endpoint->registerEntity('products', App\Models\Product::class);
 // DELETE /schii/products/1            -> Delete record
 ```
 
+> **Namespace discovery**: normally you don't register entities manually — the module discovers them from the configured `entityNamespace` (default `App\Models`). Put `#[UI]`/`#[Field]` models there and the REST API + console board pick them up automatically. A discovery endpoint — `GET /{apiPrefix}/schema` → `{"entities":[...]}` — lists the served slugs server-authoritatively.
+
+### Serving the Developer Console (No-Build Vue UI)
+
+Schii ships a dev console at `/schii` — a **Vue 3 no-build app** (ES modules straight from the server, no bundler). Run the built-in server and open `http://localhost:8000/schii`:
+
+```bash
+./bin/phue serve  # -> http://127.0.0.1:8000
+```
+
+- The sidebar is populated **server-authoritatively**: the page loads `GET /schii/schema` and renders whatever entities the configured namespace yields — nothing hardcoded in the frontend.
+- Clicking an entity fetches its JSON schema + rows and renders them.
+- Configuration lives in a dedicated `config/schii.php`:
+
+```php
+return [
+    'apiPrefix'       => 'schii',       // URL prefix -> /schii/{entity}, /schii/schema
+    'entityNamespace' => 'App\Models',  // entities scanned for #[UI]/#[Field]
+    'cachePrefix'     => 'schii_schema_',
+];
+```
+
+> To add entities, create your model in the configured namespace (e.g. `make:model`) and restart the server. Discovery is rooted at the application base path, so it works no matter which directory you launch the server from.
+
 ### Input Validation & Security Contract
 
 The REST endpoint applies strict validation **before** any persistence:
