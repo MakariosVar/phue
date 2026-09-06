@@ -10,6 +10,7 @@ use Phue\Core\Asset\AssetServer;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
@@ -79,11 +80,32 @@ class Application
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
 
+        // Primary App Component Loader Singleton
+        $this->container->singleton(PhueComponentLoader::class, function () {
+            return new PhueComponentLoader($this->basePath . '/App/Frontend');
+        });
+
+        // Composite Component Loader Registry Singleton
+        $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
+            $registry = new ComponentLoaderRegistry();
+
+            // Lazy/Safe mount of the primary application frontend loader (first priority)
+            $registry->addLoader(function (): ?PhueComponentLoader {
+                try {
+                    return $this->container->get(PhueComponentLoader::class);
+                } catch (Throwable) {
+                    return null;
+                }
+            });
+
+            return $registry;
+        });
+
         // Core Asset Infrastructure Singletons
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
 
-            // Bind stateless asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
+            // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
             $registry->addResolver('/assets/phue/', function (string $path): ?string {
                 if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
                     return null;
@@ -92,10 +114,10 @@ class Application
                 $name = $matches[1];
                 $hash = $matches[2];
 
-                /** @var PhueComponentLoader $loader */
-                $loader = $this->container->get(PhueComponentLoader::class);
+                /** @var ComponentLoaderRegistry $loaderRegistry */
+                $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
 
-                return $loader->scriptFor($name, $hash);
+                return $loaderRegistry->scriptFor($name, $hash);
             });
 
             return $registry;
@@ -109,10 +131,6 @@ class Application
         $this->container->singleton(HtmlShellRenderer::class, fn (): HtmlShellRenderer => new HtmlShellRenderer(
             $this->container->get(AssetRegistry::class)
         ));
-
-        $this->container->singleton(PhueComponentLoader::class, function () {
-            return new PhueComponentLoader($this->basePath . '/App/Frontend');
-        });
 
         // Auto-register AssetsController to Router
         $this->router->registerController(AssetsController::class);

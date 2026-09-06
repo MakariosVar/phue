@@ -11,24 +11,36 @@ use Phue\Core\Response;
 use Phue\Schii\Schema\SchemaRegistry;
 
 /**
+ * Class ModelEndpoint
+ *
  * Handles automatic REST API endpoints for Schii-annotated models.
+ * Dynamically resolves entity slugs to ActiveRecord class representations
+ * based on namespace conventions or explicit mappings.
+ *
+ * @package Phue\Schii\Endpoint
  */
 final class ModelEndpoint
 {
     /**
-     * @param SchemaRegistry $schemaRegistry Registry that parses model reflection data.
-     * @param array<string, class-string<BaseActiveRecord>> $entityMapping Map of entity names to ActiveRecord class paths.
+     * ModelEndpoint constructor.
+     *
+     * @param SchemaRegistry                                $schemaRegistry  Registry parsing model reflection schema definitions.
+     * @param array<string, class-string<BaseActiveRecord>> $entityMapping   Explicit map of entity slugs to ActiveRecord classes.
+     * @param string                                        $entityNamespace Base PHP namespace for dynamic entity resolutions.
      */
     public function __construct(
         private readonly SchemaRegistry $schemaRegistry,
         private array $entityMapping = [],
+        private string $entityNamespace = "App\\Models",
     ) {}
 
     /**
-     * Register an entity name with its corresponding ActiveRecord class.
+     * Register an explicit entity slug mapping with its corresponding ActiveRecord class.
      *
-     * @param string $entity The URL slug/identifier for the entity.
-     * @param class-string<BaseActiveRecord> $modelClass The full class name.
+     * @param string                         $entity     The URL slug/identifier for the target entity.
+     * @param class-string<BaseActiveRecord> $modelClass Fully qualified class name of the target ActiveRecord.
+     *
+     * @return void
      */
     public function registerEntity(string $entity, string $modelClass): void
     {
@@ -36,11 +48,21 @@ final class ModelEndpoint
     }
 
     /**
-     * GET /schii/schema/{entity}
+     * Retrieve and return the JSON Schema representation for a target entity.
+     *
+     * @route GET /api/schii/schema/{entity}
+     *
+     * @param Request      $request The incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the target entity slug.
+     *
+     * @return Response JSON response containing the schema dictionary or a 404 error.
      */
     public function schema(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
@@ -53,11 +75,21 @@ final class ModelEndpoint
     }
 
     /**
-     * GET /schii/{entity}
+     * List entity records with support for searching, filtering, sorting, and pagination.
+     *
+     * @route GET /api/schii/{entity}
+     *
+     * @param Request      $request The incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the target entity slug.
+     *
+     * @return Response JSON response containing items and pagination meta data, or a 404 error.
      */
     public function index(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
@@ -70,6 +102,7 @@ final class ModelEndpoint
         $query = $modelClass::query();
 
         // 1. Global Search with LIKE wildcard escaping
+        /** @var string|null $searchQuery */
         $searchQuery = $request->input("q") ?? $request->getQuery("q");
         if (!empty($searchQuery)) {
             $escapedQuery = addcslashes((string) $searchQuery, "%_\\");
@@ -92,7 +125,9 @@ final class ModelEndpoint
         // 2. Dynamic Filtering across filterable fields
         foreach ($schema->fields as $field) {
             if ($field->filterable) {
-                $value = $request->input($field->name) ?? $request->getQuery($field->name);
+                $value =
+                    $request->input($field->name) ??
+                    $request->getQuery($field->name);
                 if ($value !== "" && $value !== null) {
                     $query->where($field->name, "=", $value);
                 }
@@ -100,22 +135,51 @@ final class ModelEndpoint
         }
 
         // 3. Dynamic Sorting
+        /** @var string|null $sort */
         $sort = $request->input("sort") ?? $request->getQuery("sort");
-        $direction = strtoupper((string) ($request->input("direction") ?? ($request->getQuery("direction") ?? "ASC"))) === "DESC" ? "DESC" : "ASC";
+        /** @var string $direction */
+        $direction =
+            strtoupper(
+                (string) ($request->input("direction") ??
+                    ($request->getQuery("direction") ?? "ASC")),
+            ) === "DESC"
+                ? "DESC"
+                : "ASC";
 
-        if ($sort && isset($schema->fields[$sort]) && $schema->fields[$sort]->sortable) {
+        if (
+            $sort &&
+            isset($schema->fields[$sort]) &&
+            $schema->fields[$sort]->sortable
+        ) {
             $query->orderBy($sort, $direction);
         }
 
         // 4. Pagination
-        $page = max(1, (int) ($request->input("page") ?? ($request->getQuery("page") ?? 1)));
-        $limit = max(1, min(100, (int) ($request->input("limit") ?? ($request->getQuery("limit") ?? 25))));
+        $page = max(
+            1,
+            (int) ($request->input("page") ??
+                ($request->getQuery("page") ?? 1)),
+        );
+        $limit = max(
+            1,
+            min(
+                100,
+                (int) ($request->input("limit") ??
+                    ($request->getQuery("limit") ?? 25)),
+            ),
+        );
         $total = (int) (clone $query)->count();
 
-        $items = $query->offset(($page - 1) * $limit)->limit($limit)->get();
+        $items = $query
+            ->offset(($page - 1) * $limit)
+            ->limit($limit)
+            ->get();
 
         return Response::json([
-            "data" => array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items),
+            "data" => array_map(
+                static fn(BaseActiveRecord $item) => $item->toArray(),
+                $items,
+            ),
             "meta" => [
                 "total" => $total,
                 "page" => $page,
@@ -126,7 +190,14 @@ final class ModelEndpoint
     }
 
     /**
-     * GET /schii/{entity}/{id}
+     * Retrieve a specific entity record by its primary identifier.
+     *
+     * @route GET /api/schii/{entity}/{id}
+     *
+     * @param Request $request The incoming HTTP request instance.
+     * @param array   $params  Route parameters containing entity slug and record ID.
+     *
+     * @return Response JSON response containing the model payload or a 404 error.
      */
     public function show(Request $request, array $params): Response
     {
@@ -147,28 +218,44 @@ final class ModelEndpoint
     }
 
     /**
-     * POST /schii/{entity}
+     * Create and store a new entity record.
+     *
+     * @route POST /api/schii/{entity}
+     *
+     * @param Request      $request The incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the target entity slug.
+     *
+     * @return Response JSON response containing created record payload (201 Created) or validation errors (422).
      */
     public function store(Request $request, array|string $params): Response
     {
-        $entity = is_array($params) ? $params["entity"] ?? reset($params) : $params;
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
             return Response::json(["error" => "Resource not found"], 404);
         }
 
+        /** @var array<string, mixed> $rawBody */
         $rawBody = method_exists($request, "getParsedBody")
-            ? array_merge($request->getQueryParams(), $request->getParsedBody())
+            ? array_merge(
+                $request->getQueryParams(),
+                $request->getParsedBody() ?? [],
+            )
             : array_merge($request->getQueryParams(), $request->input());
 
-        // Run validation against schema rules and unknown fields
         $errors = $this->validateData($rawBody, $modelClass, isUpdate: false);
         if (!empty($errors)) {
-            return Response::json([
-                "error" => "Validation failed",
-                "errors" => $errors,
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $errors,
+                ],
+                422,
+            );
         }
 
         $inputData = $this->extractInputData($rawBody, $modelClass);
@@ -178,17 +265,27 @@ final class ModelEndpoint
         $model->fill($inputData);
 
         if (!$model->save()) {
-            return Response::json([
-                "error" => "Validation failed",
-                "errors" => $model->getErrors(),
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $model->getErrors(),
+                ],
+                422,
+            );
         }
 
         return Response::json(["data" => $model->toArray()], 201);
     }
 
     /**
-     * PUT /schii/{entity}/{id}
+     * Update an existing entity record.
+     *
+     * @route PUT /api/schii/{entity}/{id}
+     *
+     * @param Request $request The incoming HTTP request instance.
+     * @param array   $params  Route parameters containing entity slug and record ID.
+     *
+     * @return Response JSON response with updated record payload (200 OK), 404 if missing, or 422 on validation error.
      */
     public function update(Request $request, array $params): Response
     {
@@ -205,17 +302,23 @@ final class ModelEndpoint
             return Response::json(["error" => "Resource not found"], 404);
         }
 
+        /** @var array<string, mixed> $rawBody */
         $rawBody = method_exists($request, "getParsedBody")
-            ? array_merge($request->getQueryParams(), $request->getParsedBody())
+            ? array_merge(
+                $request->getQueryParams(),
+                $request->getParsedBody() ?? [],
+            )
             : array_merge($request->getQueryParams(), $request->input());
 
-        // Run validation against schema rules and unknown fields
         $errors = $this->validateData($rawBody, $modelClass, isUpdate: true);
         if (!empty($errors)) {
-            return Response::json([
-                "error" => "Validation failed",
-                "errors" => $errors,
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $errors,
+                ],
+                422,
+            );
         }
 
         $inputData = $this->extractInputData($rawBody, $modelClass);
@@ -223,17 +326,27 @@ final class ModelEndpoint
         $model->fill($inputData);
 
         if (!$model->save()) {
-            return Response::json([
-                "error" => "Validation failed",
-                "errors" => $model->getErrors(),
-            ], 422);
+            return Response::json(
+                [
+                    "error" => "Validation failed",
+                    "errors" => $model->getErrors(),
+                ],
+                422,
+            );
         }
 
         return Response::json(["data" => $model->toArray()]);
     }
 
     /**
-     * DELETE /schii/{entity}/{id}
+     * Delete an existing entity record from database.
+     *
+     * @route DELETE /api/schii/{entity}/{id}
+     *
+     * @param Request $request The incoming HTTP request instance.
+     * @param array   $params  Route parameters containing entity slug and record ID.
+     *
+     * @return Response JSON status response (200 OK), 404 if missing, or 500 on deletion failure.
      */
     public function delete(Request $request, array $params): Response
     {
@@ -251,7 +364,10 @@ final class ModelEndpoint
         }
 
         if (!$model->delete()) {
-            return Response::json(["error" => "Failed to delete resource"], 500);
+            return Response::json(
+                ["error" => "Failed to delete resource"],
+                500,
+            );
         }
 
         return Response::json(["message" => "Resource deleted successfully"]);
@@ -260,7 +376,10 @@ final class ModelEndpoint
     /**
      * Extracts allowed input data, whitelisting schema fields and protecting primary keys.
      *
-     * @return array<string, mixed>
+     * @param array<string, mixed>            $data       Raw incoming request data.
+     * @param class-string<BaseActiveRecord> $modelClass Fully qualified model class name.
+     *
+     * @return array<string, mixed> Whitelisted data array.
      */
     private function extractInputData(array $data, string $modelClass): array
     {
@@ -281,10 +400,17 @@ final class ModelEndpoint
     /**
      * Validates input data against Schema Field attributes, rules and unknown fields.
      *
-     * @return array<string, string>
+     * @param array<string, mixed>            $data       Incoming payload data.
+     * @param class-string<BaseActiveRecord> $modelClass Target model class name.
+     * @param bool                            $isUpdate   Flag denoting whether the operation is an update.
+     *
+     * @return array<string, string> Key-value dictionary of validation error messages.
      */
-    private function validateData(array $data, string $modelClass, bool $isUpdate = false): array
-    {
+    private function validateData(
+        array $data,
+        string $modelClass,
+        bool $isUpdate = false,
+    ): array {
         $errors = [];
         $schema = $this->schemaRegistry->get($modelClass);
         $allowedFields = array_keys($schema->fields);
@@ -296,7 +422,7 @@ final class ModelEndpoint
         // 1. Strict Check for Unknown Fields
         foreach (array_keys($data) as $field) {
             if ($field === $pk) {
-                continue; // Allow PK in body, it gets stripped safely later
+                continue;
             }
             if (!in_array($field, $allowedFields, true)) {
                 $errors[$field] = "Unknown field '{$field}' is not allowed";
@@ -307,31 +433,48 @@ final class ModelEndpoint
         foreach ($schema->fields as $fieldName => $fieldSchema) {
             $value = $data[$fieldName] ?? null;
 
-            // Check required fields
-            if (!$isUpdate && $fieldSchema->required && ($value === null || $value === '')) {
+            if (
+                !$isUpdate &&
+                $fieldSchema->required &&
+                ($value === null || $value === "")
+            ) {
                 $errors[$fieldName] = "Field '{$fieldName}' is required";
                 continue;
             }
 
-            if ($value === null || $value === '') {
+            if ($value === null || $value === "") {
                 continue;
             }
 
-            // Combine rules from attributes
             $rules = $fieldSchema->rules;
-            if ($fieldSchema->type === 'number' || $fieldSchema->type === 'numeric') {
-                $rules[] = 'numeric';
+            if (
+                $fieldSchema->type === "number" ||
+                $fieldSchema->type === "numeric"
+            ) {
+                $rules[] = "numeric";
             }
 
             foreach ($rules as $rule) {
-                if ($rule === 'numeric' && !is_numeric($value)) {
-                    $errors[$fieldName] = "Field '{$fieldName}' must be numeric";
+                if ($rule === "numeric" && !is_numeric($value)) {
+                    $errors[
+                        $fieldName
+                    ] = "Field '{$fieldName}' must be numeric";
                 }
-                if ($rule === 'integer' && filter_var($value, FILTER_VALIDATE_INT) === false) {
-                    $errors[$fieldName] = "Field '{$fieldName}' must be an integer";
+                if (
+                    $rule === "integer" &&
+                    filter_var($value, FILTER_VALIDATE_INT) === false
+                ) {
+                    $errors[
+                        $fieldName
+                    ] = "Field '{$fieldName}' must be an integer";
                 }
-                if ($rule === 'email' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-                    $errors[$fieldName] = "Field '{$fieldName}' must be a valid email";
+                if (
+                    $rule === "email" &&
+                    filter_var($value, FILTER_VALIDATE_EMAIL) === false
+                ) {
+                    $errors[
+                        $fieldName
+                    ] = "Field '{$fieldName}' must be a valid email";
                 }
             }
         }
@@ -340,14 +483,44 @@ final class ModelEndpoint
     }
 
     /**
-     * Resolve the string entity slug to a fully qualified class name or null if missing.
+     * Resolve the string entity slug to a fully qualified ActiveRecord class name.
      *
-     * @return class-string<BaseActiveRecord>|null
+     * Combines explicit mapping lookup with dynamic namespace resolution and singular/plural conventions.
+     *
+     * @param string $entity The entity slug or identifier from the URL.
+     *
+     * @return class-string<BaseActiveRecord>|null Resolved class name or null if non-existent.
      */
     private function resolveModelClass(string $entity): ?string
     {
-        $key = strtolower($entity);
+        $key = strtolower(trim($entity));
 
-        return $this->entityMapping[$key] ?? null;
+        // 1. Check explicit mapping array
+        if (isset($this->entityMapping[$key])) {
+            return $this->entityMapping[$key];
+        }
+
+        // 2. Namespace resolution with singular/plural support
+        $candidates = [$key];
+        if (str_ends_with($key, "s") && strlen($key) > 1) {
+            $candidates[] = substr($key, 0, -1);
+        }
+
+        $baseNamespace = rtrim($this->entityNamespace, "\\");
+
+        foreach ($candidates as $candidate) {
+            $studly = str_replace(
+                " ",
+                "",
+                ucwords(str_replace(["-", "_"], " ", $candidate)),
+            );
+            $targetClass = "{$baseNamespace}\\{$studly}";
+
+            if (class_exists($targetClass)) {
+                return $targetClass;
+            }
+        }
+
+        return null;
     }
 }

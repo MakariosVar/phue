@@ -1,0 +1,143 @@
+<php>
+/**
+ * Schii Console Server-Authoritative Logic & State
+ */
+$title = 'Schii Console';
+
+$state = [
+    'apiPrefix' => '/api/schii',
+    'entities' => [
+        'users',
+        'products',
+        'orders',
+    ],
+];
+
+return [
+    'title' => $title,
+    'state' => $state,
+    'scripts' => [],
+];
+</php>
+
+<template>
+    <div class="schii-console" id="app">
+        <header class="schii-header">
+            <h1 v-text="title">Schii Console</h1>
+            <p>Zero-Controller Dynamic REST Management Interface</p>
+        </header>
+
+        <main class="schii-content">
+            <aside class="schii-sidebar">
+                <h3>Entities</h3>
+                <ul class="schii-entity-list">
+                    <li
+                        v-for="entity in state.entities"
+                        :key="entity"
+                        :class="{ active: currentEntity === entity }"
+                        @click="selectEntity(entity)"
+                    >
+                        {{ entity }}
+                    </li>
+                </ul>
+            </aside>
+
+            <section class="schii-main">
+                <div v-if="loading" class="schii-loading">
+                    Loading data...
+                </div>
+
+                <div v-else-if="currentEntity" class="schii-entity-view">
+                    <h2>{{ currentEntity }} Management</h2>
+
+                    <div class="schii-table-container">
+                        <table class="schii-table">
+                            <thead>
+                                <tr>
+                                    <th v-for="field in fields" :key="field.name">
+                                        {{ field.label || field.name }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="row in rows" :key="row.id || JSON.stringify(row)">
+                                    <td v-for="field in fields" :key="field.name">
+                                        {{ row[field.name] }}
+                                    </td>
+                                </tr>
+                                <tr v-if="rows.length === 0">
+                                    <td :colspan="fields.length || 1" class="schii-empty">
+                                        No records found.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div v-else class="schii-placeholder">
+                    Select an entity from the sidebar to inspect schema and records.
+                </div>
+            </section>
+        </main>
+    </div>
+</template>
+
+<script>
+/**
+ * Vue 3 Client Application Bootstrap & REST Fetcher
+ */
+(function() {
+    if (typeof Vue === 'undefined') return;
+
+    const { createApp, ref, reactive } = Vue;
+
+    createApp({
+        setup() {
+            const title = ref('Schii Console');
+            const state = reactive(window.__PHUE_STATE__ || {
+                apiPrefix: '/api/schii',
+                entities: ['users', 'products', 'orders']
+            });
+
+            const currentEntity = ref(null);
+            const fields = ref([]);
+            const rows = ref([]);
+            const loading = ref(false);
+
+            const selectEntity = async (entity) => {
+                currentEntity.value = entity;
+                loading.value = true;
+
+                try {
+                    const schemaRes = await fetch(`${state.apiPrefix}/schema/${entity}`);
+                    if (schemaRes.ok) {
+                        const schemaData = await schemaRes.json();
+                        fields.value = schemaData.fields || [];
+                    }
+
+                    const dataRes = await fetch(`${state.apiPrefix}/${entity}`);
+                    if (dataRes.ok) {
+                        const data = await dataRes.json();
+                        rows.value = Array.isArray(data) ? data : (data.data || []);
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch entity context:', e);
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            return {
+                title,
+                state,
+                currentEntity,
+                fields,
+                rows,
+                loading,
+                selectEntity,
+            };
+        }
+    }).mount('#app');
+})();
+</script>

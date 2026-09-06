@@ -9,6 +9,7 @@
         <testsuite name="Phue Test Suite">
             <directory suffix=".php">tests</directory>
             <exclude>tests/Core/Stubs</exclude>
+            <exclude>tests/Schii/Stubs</exclude>
             <exclude>tests/Compiler/Fixtures</exclude>
             <exclude>tests/Benchmark/BenchmarkRunner.php</exclude>
         </testsuite>

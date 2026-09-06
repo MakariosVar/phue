@@ -1,30 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Schii;
 
+use Phue\Core\Config;
 use Phue\Core\Container;
 use Phue\Core\Routing\Router;
 use Phue\Core\EventDispatcher;
+use Phue\Core\Asset\AssetRegistry;
+use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\UI\PhueComponentLoader;
+use Phue\Core\UI\ComponentRenderer;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Endpoint\ModelEndpoint;
 use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Schii\Controller\ConsoleController;
 use Phue\Http\Middleware\CorsMiddleware;
 
 /**
  * Class SchiiModule
  *
  * Bootstraps and registers the Schii REST engine within the Phue framework application lifecycle.
- * Handles dependency injection bindings and dynamic zero-controller route registrations.
  *
  * @package Phue\Schii
  */
 class SchiiModule
 {
     /**
-     * Register singletons, bindings, and dynamic API endpoints for Schii.
+     * Register singletons, bindings, component renderers, and dynamic API endpoints for Schii.
      *
-     * @param Router          $router          The application's router instance.
-     * @param Container       $container       The application's Dependency Injection container.
+     * @param Router          $router          The application's router instance for route registration.
+     * @param Container       $container       The application's Dependency Injection container instance.
      * @param EventDispatcher $eventDispatcher The application's event dispatcher instance.
      *
      * @return void
@@ -34,108 +42,102 @@ class SchiiModule
         Container $container,
         EventDispatcher $eventDispatcher,
     ): void {
-        // 1. Instantiate configuration using the factory method
-        $configArray = $container->has("config")
-            ? $container->get("config")->get("schii", [])
-            : [];
-        $schiiConfig = SchiiConfig::fromArray($configArray);
-
+        // 1. Config Binding: Register SchiiConfig singleton factory in DI container
         $container->singleton(
             SchiiConfig::class,
-            fn(): SchiiConfig => $schiiConfig,
+            function () use ($container): SchiiConfig {
+                /** @var array<string, mixed> $rawConfig */
+                $rawConfig = [];
+
+                if ($container->has(Config::class)) {
+                    /** @var Config $configInstance */
+                    $configInstance = $container->get(Config::class);
+                    $rawConfig = $configInstance->get('schii', []);
+                } elseif ($container->has('config')) {
+                    /** @var Config|array<string, mixed> $configBinding */
+                    $configBinding = $container->get('config');
+                    $rawConfig = is_array($configBinding)
+                        ? ($configBinding['schii'] ?? [])
+                        : $configBinding->get('schii', []);
+                }
+
+                return SchiiConfig::fromArray($rawConfig);
+            }
         );
 
+        /** @var SchiiConfig $schiiConfig */
+        $schiiConfig = $container->get(SchiiConfig::class);
+
         // 2. Register SchemaRegistry as a singleton
-        $container->singleton(SchemaRegistry::class, function (
-            Container $c,
-        ) use ($schiiConfig): SchemaRegistry {
-            $cache = $c->has("cache") ? $c->get("cache") : null;
+        $container->singleton(
+            SchemaRegistry::class,
+            function (Container $c) use ($schiiConfig): SchemaRegistry {
+                /** @var mixed $cache */
+                $cache = $c->has('cache') ? $c->get('cache') : null;
 
-            return new SchemaRegistry(
-                cache: $cache,
-                cachePrefix: $schiiConfig->cachePrefix,
-            );
-        });
+                return new SchemaRegistry(
+                    cache: $cache,
+                    cachePrefix: $schiiConfig->cachePrefix ?? 'schii_schema_',
+                );
+            }
+        );
 
-        // 3. Bind ModelEndpoint to container
-        $container->bind(ModelEndpoint::class, function (
-            Container $c,
-        ): ModelEndpoint {
-            $entityMapping = [
-                "products" => \App\Models\Product::class,
-                "product" => \App\Models\Product::class, // Support both singular and plural slugs
-            ];
+        // 3. Register isolated Schii Loader and append to ComponentLoaderRegistry if available
+        $container->singleton(
+            'schii.loader',
+            fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
+        );
 
-            return new ModelEndpoint(
-                $c->get(SchemaRegistry::class),
-                $entityMapping,
-            );
-        });
+        if ($container->has(ComponentLoaderRegistry::class)) {
+            /** @var ComponentLoaderRegistry $loaderRegistry */
+            $loaderRegistry = $container->get(ComponentLoaderRegistry::class);
+            $loaderRegistry->addLoader($container->get('schii.loader'));
+        }
 
-        // 4. Register Dynamic Zero-Controller Routes
-        $prefix = $schiiConfig->apiPrefix;
+        // 4. Register Schii ComponentRenderer
+        $container->singleton(
+            'schii.renderer',
+            fn(Container $c): ComponentRenderer => new ComponentRenderer(
+                $c->get(HtmlShellRenderer::class),
+                $c->get(AssetRegistry::class),
+                $c->get('schii.loader')
+            )
+        );
+
+        // 5. Bind ModelEndpoint with entityNamespace from SchiiConfig
+        $container->bind(
+            ModelEndpoint::class,
+            function (Container $c): ModelEndpoint {
+                /** @var SchiiConfig $config */
+                $config = $c->get(SchiiConfig::class);
+
+                return new ModelEndpoint(
+                    $c->get(SchemaRegistry::class),
+                    [],
+                    $config->entityNamespace ?? 'App\\Models'
+                );
+            }
+        );
+
+        // 6. Dynamic Zero-Controller Route Registrations
+        /** @var string $apiPrefix */
+        $apiPrefix = '/' . trim($schiiConfig->apiPrefix ?? '/api/schii', '/');
+
+        /** @var array<int, class-string> $middleware */
         $middleware = !empty($schiiConfig->middleware)
             ? $schiiConfig->middleware
             : [CorsMiddleware::class];
 
-        /**
-         * @route GET /api/schii/schema/{entity} - Returns the JSON Schema of a target entity
-         */
-        $router->addRoute(
-            "GET",
-            "{$prefix}/schema/{entity}",
-            [ModelEndpoint::class, "schema"],
-            $middleware,
-        );
+        $router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], $middleware);
+        $router->addRoute('GET', "{$apiPrefix}/{entity}", [ModelEndpoint::class, 'index'], $middleware);
+        $router->addRoute('POST', "{$apiPrefix}/{entity}", [ModelEndpoint::class, 'store'], $middleware);
+        $router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'show'], $middleware);
+        $router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'update'], $middleware);
+        $router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'delete'], $middleware);
 
-        /**
-         * @route GET /api/schii/{entity} - List entity records (Index)
-         */
-        $router->addRoute(
-            "GET",
-            "{$prefix}/{entity}",
-            [ModelEndpoint::class, "index"],
-            $middleware,
-        );
-
-        /**
-         * @route POST /api/schii/{entity} - Create a new entity record (Store)
-         */
-        $router->addRoute(
-            "POST",
-            "{$prefix}/{entity}",
-            [ModelEndpoint::class, "store"],
-            $middleware,
-        );
-
-        /**
-         * @route GET /api/schii/{entity}/{id} - Retrieve a specific record (Show)
-         */
-        $router->addRoute(
-            "GET",
-            "{$prefix}/{entity}/{id}",
-            [ModelEndpoint::class, "show"],
-            $middleware,
-        );
-
-        /**
-         * @route PUT /api/schii/{entity}/{id} - Update an existing record (Update)
-         */
-        $router->addRoute(
-            "PUT",
-            "{$prefix}/{entity}/{id}",
-            [ModelEndpoint::class, "update"],
-            $middleware,
-        );
-
-        /**
-         * @route DELETE /api/schii/{entity}/{id} - Remove a record (Delete)
-         */
-        $router->addRoute(
-            "DELETE",
-            "{$prefix}/{entity}/{id}",
-            [ModelEndpoint::class, "delete"],
-            $middleware,
-        );
+        // 7. Module Console UI Route
+        /** @var string $consolePrefix */
+        $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
+        $router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);
     }
 }
