@@ -899,6 +899,96 @@ Enterprise-grade production readiness features ensuring high availability, secur
 
 ---
 
+## 18a. Module Base Class (`Phue\Core\Module`)
+
+The `Module` abstraction provides a consistent structure for framework extensions. Before this fix, every module was an ad-hoc class with a static `register()` method. Now modules follow a uniform pattern:
+
+```php
+abstract class Module
+{
+    public function __construct(
+        protected string $id,
+        protected string $basePath,
+        protected array $modules = [],
+        protected string $controllerNamespace = '',
+        protected array $controllerMap = [],
+        protected array $urlRules = []
+    ) {}
+
+    abstract public function init(): void;
+
+    public function setDependencies(Router $router, Container $container, EventDispatcher $events): void;
+    public function getController(string $name): ?object;
+    public function getModule(string $id): ?object;
+}
+```
+
+**How it works:**
+- `Application::loadModules()` instantiates modules via the container, calls `setDependencies()` to inject infrastructure, then calls `init()`.
+- `SchiiModule extends Module` uses `init()` containing the registration logic (previously in a static `register()` method).
+- Legacy `register()` fallback is retained for backward compatibility.
+
+---
+
+## 18b. Component Loader Registry (`Phue\Core\Frontend\ComponentLoaderRegistry`)
+
+The registry is a composite, fail-safe loader that resolves components across multiple directories:
+
+| Method | Description |
+|---|---|
+| `load(string $name, array $params = [])` | Iterates loaders, returns the first loaded `PhueComponent` (for SSR/inline rendering) |
+| `scriptUrl(string $name)` | Resolves raw script content, computes `substr(sha1(content), 0, 8)` hash, returns `/assets/phue/{Name}.{hash}.phue.js` |
+| `scriptFor(string $name, string $hash)` | Returns script content if hash matches (security verification) |
+
+**Global component resolution:** The registry is shared between the application and all modules. The application registers its loader first, then the PhUI loader, then module loaders (e.g., Schii). First non-null wins.
+
+```php
+// Application registers PhUI loader as Priority 2
+$this->container->singleton('phui.loader', fn () => new PhueComponentLoader($basePath . '/src/Core/UI/Phui'));
+$registry->addLoader(fn () => $this->container->get('phui.loader'));
+```
+
+---
+
+## 18c. PhUI Component Kit (`src/Core/UI/Phui/`)
+
+25 ready-to-use Vue 3 components, each a single `.phue` file consuming `--ph-*` CSS tokens:
+
+| Category | Components |
+|---|---|
+| Form Controls | `PhButton`, `PhInput`, `PhSelect`, `PhTextarea`, `PhCheckbox`, `PhRadio` |
+| Data Display | `PhBadge`, `PhChip`, `PhAvatar`, `PhCard` |
+| Layout | `PhBox`, `PhStack`, `PhFlex`, `PhHeading`, `PhText`, `Spacer` |
+| Feedback | `PhAlert`, `PhModal`, `PhProgressBar`, `PhSkeleton` |
+| Navigation | `PhLink`, `PhPagination`, `PhBreadcrumb`, `PhTabs` |
+| Data | `PhDataTable` |
+
+Each component is a self-contained `.phue` file with `<template>` (Vue markup) + `<script>` (ESM module). Components consume `--ph-*` CSS custom properties from the global `storage/assets/styles/phue.css` stylesheet (tokens, base reset, component styles, layout/spacing utilities — ~25KB).
+
+---
+
+## 18d. Abstract Controller Base (`App\Controllers\Controller`)
+
+All application controllers extend the abstract `Controller` base class to avoid repeating the `ComponentRenderer` constructor injection:
+
+```php
+abstract class Controller
+{
+    public function __construct(protected ComponentRenderer $ui) {}
+}
+
+#[Route('/')]
+class WebController extends Controller
+{
+    #[Route('/', methods: ['GET'])]
+    public function index(): Response { ... }
+}
+```
+
+**Route concatenation:** `AttributeRouteLoader::combinePaths()` concatenates class-level `#[Route('/products')]` with method-level `#[Route('/', methods: ['GET'])]` → `/products`. Avoid duplicating the prefix in the method route (e.g., don't use `#[Route('/products/index')]` with `#[Route('/products')]` class prefix — that yields `/products/products/index`).
+
+---
+
 ## 18. Intentional design decisions (why it's built this way)
 
 A collection of choices worth documenting so future readers understand the *why*:

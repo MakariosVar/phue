@@ -105,6 +105,21 @@ $response->send();
 
 Phue uses native PHP 8 Attributes for declaring routes directly above controller classes and methods.
 
+### Abstract Controller Base
+
+All controllers extend `App\Controllers\Controller`, which injects `ComponentRenderer`:
+
+```php
+namespace App\Controllers;
+
+#[Route('/')]
+class WebController extends Controller
+{
+    #[Route('/', methods: ['GET'])]
+    public function index(): Response { ... }
+}
+```
+
 ### Basic Controller Example
 
 ```php
@@ -980,6 +995,72 @@ $hardenedResponse = $middleware->handle($response);
 # Execute zero-downtime deployment script
 ./bin/phue deploy
 ```
+
+---
+
+## 11. PhUI Component Kit
+
+Phue ships a complete Vue 3 component library (`src/Core/UI/Phui/`) — 25 components, no build step, all consuming `--ph-*` CSS custom properties from the global `phue.css` stylesheet.
+
+### Available Components
+
+| Category | Components |
+|---|---|
+| Form Controls | `PhButton`, `PhInput`, `PhSelect`, `PhTextarea`, `PhCheckbox`, `PhRadio` |
+| Data Display | `PhBadge`, `PhChip`, `PhAvatar`, `PhCard` |
+| Layout | `PhBox`, `PhStack`, `PhFlex`, `PhHeading`, `PhText`, `Spacer` |
+| Feedback | `PhAlert`, `PhModal`, `PhProgressBar`, `PhSkeleton` |
+| Navigation | `PhLink`, `PhPagination`, `PhBreadcrumb`, `PhTabs` |
+| Data | `PhDataTable` |
+
+### How PhUI Works
+
+Each component is a `.phue` single-file component (`<template>` + `<script>`). The `ComponentLoaderRegistry` resolves components globally:
+
+- **`PhButton`** — `:type`, `:variant` (`primary|secondary|outline|ghost|danger`), `:size` (`sm|md|lg`), `:block`, `:loading`, emits `click`
+- **`PhInput`** — `v-model`, `:error`, `:disabled`, label + helper text
+- **`PhSelect`** — `v-model`, `:options`, `:error`, `:disabled`
+- **`PhAlert`** — `:variant` (`info|success|warning|error`), `:dismissible`
+- **`PhModal`** — `v-model`, `:title`, `:size` (`sm|md|lg|xl|full`), slots `header`/`footer`
+- **`PhDataTable`** — `:columns`, `:items`, `:paginated`, sortable columns
+- **`PhHeading`** — `:level` (`1-6`), `:color`
+- **`PhText`** — `:size`, `:weight`, `:color`, `:align`, `:truncate`
+- **`PhLink`** — `href`, `:variant`, `:underline`, `:disabled`
+- **`PhCard`** — `:title`, `:subtitle`, `:bordered`, `:hoverable`
+- **`PhBadge`** — `:variant`, `:size`, `:pill`
+- **`PhChip`** — `:variant`, `:removable`, `:disabled`
+- **`PhAvatar`** — `src`, `name`, `:size`, `:shape`
+
+All components use `--ph-*` tokens: `--ph-color-primary`, `--ph-space-1..8`, `--ph-radius-sm|md|lg`, `--ph-text-xs|sm|base|lg|xl`, etc.
+
+### Global Stylesheet
+
+`storage/assets/styles/phue.css` (~25KB) is the global app CSS — tokens, base reset, component styles, layout + spacing utilities. Loaded automatically by `HtmlShellRenderer`. Override via CSS custom properties in your own stylesheet.
+
+---
+
+## 12. Abstract Controller Base (`App\Controllers\Controller`)
+
+All controllers extend the abstract `Controller` base to avoid repeating the `ComponentRenderer` constructor:
+
+```php
+namespace App\Controllers;
+
+use Phue\Core\Response;
+use Phue\Core\Routing\Attribute\Route;
+
+#[Route('/')]
+class WebController extends Controller
+{
+    #[Route('/', methods: ['GET'])]
+    public function index(): Response
+    {
+        return $this->ui->render('Home');
+    }
+}
+```
+
+**Route pitfall:** Class-level `#[Route('/products')]` + method-level `#[Route('/', methods: ['GET'])]` → `/products`. Do NOT duplicate the prefix (e.g., `#[Route('/products/index')]` with `#[Route('/products')]` yields `/products/products/index`).
 
 ---
 
