@@ -46,6 +46,19 @@ final class CliCommandsIntegrationTest extends TestCase
         $this->origCwd = getcwd();
         $this->baseDir = sys_get_temp_dir() . '/phue_cli_' . uniqid('', true);
         mkdir($this->baseDir . '/database/migrations', 0777, true);
+        mkdir($this->baseDir . '/config', 0777, true);
+        file_put_contents(
+            $this->baseDir . '/config/database.php',
+            "<?php\nreturn [\n"
+            . "    'default' => 'sqlite',\n"
+            . "    'connections' => [\n"
+            . "        'sqlite' => [\n"
+            . "            'driver' => 'sqlite',\n"
+            . "            'database' => " . var_export($this->baseDir . '/database/database.sqlite', true) . ",\n"
+            . "        ],\n"
+            . "    ],\n"
+            . "];\n",
+        );
     }
 
     protected function tearDown(): void

@@ -2,8 +2,6 @@
 
 namespace Phue\Core\Console;
 
-use RuntimeException;
-
 /**
  * Core CLI Console Application runner and command registry.
  *
@@ -26,6 +24,7 @@ class Application
     public function __construct(string $version = '1.0.0')
     {
         $this->version = $version;
+
     }
 
     /**

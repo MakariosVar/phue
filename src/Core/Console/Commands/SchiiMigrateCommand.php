@@ -6,8 +6,10 @@ namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
 use Phue\Core\Database\Connection;
+use Phue\Core\Config;
 use Phue\Schii\Migration\AutoMigrator;
 use Phue\Schii\Schema\SchemaRegistry;
+use \RuntimeException;
 
 /**
  * CLI Command to run Schii declarative auto-migration for a target model class.
@@ -23,7 +25,7 @@ final class SchiiMigrateCommand implements CommandInterface
      */
     public function getName(): string
     {
-        return 'schii:migrate';
+        return "schii:migrate";
     }
 
     /**
@@ -33,7 +35,7 @@ final class SchiiMigrateCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Runs declarative Schii auto-migration for a specific ActiveRecord model class.';
+        return "Runs declarative Schii auto-migration for a specific ActiveRecord model class.";
     }
 
     /**
@@ -42,17 +44,26 @@ final class SchiiMigrateCommand implements CommandInterface
      * @param array<int, string> $args Command arguments containing model class.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
-    {
+    public function execute(
+        array $args,
+        $outputStream = \STDOUT,
+        $errorStream = \STDERR,
+    ): int {
         $modelClass = $args[0] ?? null;
 
         if (!$modelClass) {
-            fwrite($errorStream, "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n");
+            fwrite(
+                $errorStream,
+                "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n",
+            );
             return 1;
         }
 
         if (!class_exists($modelClass)) {
-            fwrite($errorStream, "Error: Model class '{$modelClass}' not found.\n");
+            fwrite(
+                $errorStream,
+                "Error: Model class '{$modelClass}' not found.\n",
+            );
             return 1;
         }
 
@@ -64,7 +75,10 @@ final class SchiiMigrateCommand implements CommandInterface
             $actions = $migrator->migrate($modelClass);
 
             if (empty($actions)) {
-                fwrite($outputStream, "Schema up to date for '{$modelClass}'. No changes applied.\n");
+                fwrite(
+                    $outputStream,
+                    "Schema up to date for '{$modelClass}'. No changes applied.\n",
+                );
                 return 0;
             }
 
@@ -74,21 +88,46 @@ final class SchiiMigrateCommand implements CommandInterface
 
             return 0;
         } catch (\Throwable $e) {
-            fwrite($errorStream, "Schii Migration Error: " . $e->getMessage() . "\n");
+            fwrite(
+                $errorStream,
+                "Schii Migration Error: " . $e->getMessage() . "\n",
+            );
             return 1;
         }
     }
 
     /**
-     * Resolves database connection instance.
+     * Resolves application database connection directly from config.
      *
+     * @throws RuntimeException If config or connection definitions are missing.
      * @return Connection
      */
     private function resolveConnection(): Connection
     {
-        return new Connection([
-            'driver' => 'sqlite',
-            'database' => getcwd() . '/database/database.sqlite',
-        ]);
+        $configPath = getcwd() . "/config";
+
+        if (!is_dir($configPath)) {
+            throw new RuntimeException(
+                "Config directory missing at: {$configPath}",
+            );
+        }
+
+        $config = new Config($configPath);
+
+        $defaultDriver = $config->get("database.default");
+        if (!$defaultDriver || !is_string($defaultDriver)) {
+            throw new RuntimeException(
+                "Database connection not configured: 'database.default' is missing.",
+            );
+        }
+
+        $dbConfig = $config->get("database.connections.{$defaultDriver}");
+        if (!$dbConfig || !is_array($dbConfig)) {
+            throw new RuntimeException(
+                "Database connection not configured: 'database.connections.{$defaultDriver}' is missing or invalid.",
+            );
+        }
+
+        return new Connection($dbConfig);
     }
 }

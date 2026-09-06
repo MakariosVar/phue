@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Phue\Core\Console\Commands;
 
+use Phue\Core\Config;
 use Phue\Core\Console\CommandInterface;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\Migrator;
+use \RuntimeException;
 
 /**
  * CLI Command to run pending explicit database migrations.
@@ -22,7 +24,7 @@ final class MigrateCommand implements CommandInterface
      */
     public function getName(): string
     {
-        return 'migrate';
+        return "migrate";
     }
 
     /**
@@ -32,7 +34,7 @@ final class MigrateCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Runs all pending database migrations.';
+        return "Runs all pending database migrations.";
     }
 
     /**
@@ -41,10 +43,13 @@ final class MigrateCommand implements CommandInterface
      * @param array<int, string> $args Command arguments.
      * @return int Exit code (0 for success, 1 for failure).
      */
-    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
-    {
+    public function execute(
+        array $args,
+        $outputStream = \STDOUT,
+        $errorStream = \STDERR,
+    ): int {
         $db = $this->resolveConnection();
-        $path = getcwd() . '/database/migrations';
+        $path = getcwd() . "/database/migrations";
 
         $migrator = new Migrator($db, $path);
 
@@ -70,15 +75,37 @@ final class MigrateCommand implements CommandInterface
     }
 
     /**
-     * Resolves configured application database connection instance.
+     * Resolves application database connection directly from config.
      *
+     * @throws RuntimeException If config or connection definitions are missing.
      * @return Connection
      */
     private function resolveConnection(): Connection
     {
-        return new Connection([
-            'driver' => 'sqlite',
-            'database' => getcwd() . '/database/database.sqlite',
-        ]);
+        $configPath = getcwd() . "/config";
+
+        if (!is_dir($configPath)) {
+            throw new RuntimeException(
+                "Config directory missing at: {$configPath}",
+            );
+        }
+
+        $config = new Config($configPath);
+
+        $defaultDriver = $config->get("database.default");
+        if (!$defaultDriver || !is_string($defaultDriver)) {
+            throw new RuntimeException(
+                "Database connection not configured: 'database.default' is missing.",
+            );
+        }
+
+        $dbConfig = $config->get("database.connections.{$defaultDriver}");
+        if (!$dbConfig || !is_array($dbConfig)) {
+            throw new RuntimeException(
+                "Database connection not configured: 'database.connections.{$defaultDriver}' is missing or invalid.",
+            );
+        }
+
+        return new Connection($dbConfig);
     }
 }
