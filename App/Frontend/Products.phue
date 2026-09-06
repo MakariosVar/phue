@@ -12,10 +12,10 @@ return [
 </php>
 
 <template>
-<div class="d-flex flex-column gap-2 p-3 m-4">
+<div class="d-flex flex-column gap-2 p-4">
     <h2>Product Catalog</h2>
     <ul class="m-0 p-0 d-flex flex-column gap-1">
-        <li v-for="p in products" :key="p.id" class="p-1">
+        <li v-for="p in products" :key="p.id" class="p-2">
             {{ p.name }} - ${{ p.price }}
         </li>
     </ul>

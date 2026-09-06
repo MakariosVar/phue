@@ -18,13 +18,13 @@ return [
 
 <template>
     <div class="schii-console" id="app">
-        <header class="schii-header p-3">
+        <header class="schii-header p-4">
             <h1 v-text="title" class="m-0">Schii Console</h1>
             <p class="m-0">Zero-Controller Dynamic REST Management Interface</p>
         </header>
 
         <main class="d-flex schii-content">
-            <aside class="schii-sidebar p-3">
+            <aside class="schii-sidebar p-4">
                 <h3 class="m-0 p-2">Entities</h3>
                 <div v-if="loadingEntities" class="schii-loading-sidebar p-2">
                     Discovering schemas...
@@ -34,7 +34,7 @@ return [
                         v-for="entity in entities"
                         :key="entity"
                         :class="{ active: currentEntity === entity }"
-                        class="p-1 d-flex justify-between items-center"
+                        class="p-2 d-flex justify-between items-center"
                         @click="selectEntity(entity)"
                     >
                         {{ entity }}
@@ -42,12 +42,12 @@ return [
                 </ul>
             </aside>
 
-            <section class="schii-main p-3">
-                <div v-if="loading" class="schii-loading p-3">
+            <section class="schii-main p-4">
+                <div v-if="loading" class="schii-loading p-4">
                     Loading data...
                 </div>
 
-                <div v-else-if="currentEntity" class="schii-entity-view p-3">
+                <div v-else-if="currentEntity" class="schii-entity-view p-4">
                     <h2>{{ currentEntity }} Management</h2>
 
                     <div class="schii-table-container p-2">
@@ -66,7 +66,7 @@ return [
                                     </td>
                                 </tr>
                                 <tr v-if="rows.length === 0">
-                                    <td :colspan="fields.length || 1" class="schii-empty p-3">
+                                    <td :colspan="fields.length || 1" class="schii-empty p-4">
                                         No records found.
                                     </td>
                                 </tr>
@@ -75,7 +75,7 @@ return [
                     </div>
                 </div>
 
-                <div v-else class="schii-placeholder p-3">
+                <div v-else class="schii-placeholder p-4">
                     Select an entity from the sidebar to inspect schema and records.
                 </div>
             </section>
