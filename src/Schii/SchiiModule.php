@@ -66,12 +66,13 @@ class SchiiModule extends Module
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
-        // 2. AuthManager Binding: Configures Bearer token authenticator with dynamic resolver
+        // 2. AuthManager Singleton with Framework Zero-Config Default Resolver
         $this->container->singleton(
             AuthManager::class,
             function (Container $c) use ($schiiConfig): AuthManager {
                 /** @var callable|null $resolver */
-                $resolver = $schiiConfig->authResolver ?? null;
+                $resolver = $schiiConfig->authResolver 
+                    ?? [\Phue\Auth\BaseUser::class, 'findIdentityByAuthKey'];
 
                 $bearerAuth = new BearerTokenAuthenticator(
                     tokenResolver: static function (string $token) use ($resolver): mixed {

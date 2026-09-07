@@ -127,7 +127,8 @@ class AuthorizedModelEndpoint
         
         $permission = "admin.{$entity}.{$action}";
 
-        if (!$this->rbacManager->checkAccess($user->getId(), $permission)) {
+        // Pass both user ID and explicit user roles from IdentityInterface
+        if (!$this->rbacManager->checkAccess($user->getId(), $permission, $user->getRoles())) {
             return new Response(
                 json_encode([
                     'error'   => 'Forbidden',
