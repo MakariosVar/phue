@@ -8,249 +8,704 @@
         }
     }
     return [
-        'title' => 'Phue App — UI Component Showcase',
+        'title' => 'Phue PhUI — Component System',
         'state' => [
-            'phuiUrls'     => $urls,
-            'checked'      => $checked ?? true,
-            'radioValue'   => $radioValue ?? 'option1',
-            'loading'      => $loading ?? false,
-            'currentPage'  => $currentPage ?? 3,
-            'totalPages'   => $totalPages ?? 10,
-            'activeTab'    => $activeTab ?? 'tab1',
+            'phuiUrls'       => $urls,
+            'checked'        => $checked ?? true,
+            'radioValue'     => $radioValue ?? 'option1',
+            'loading'        => $loading ?? false,
+            'currentPage'    => $currentPage ?? 2,
+            'totalPages'     => $totalPages ?? 8,
+            'activeTab'      => $activeTab ?? 'tokens',
+            'activeSection'  => $activeSection ?? 'overview',
             'alertDismissed' => $alertDismissed ?? false,
-            'inputValue'   => $inputValue ?? '',
-            'selectValue'  => $selectValue ?? '',
+            'inputValue'     => $inputValue ?? '',
+            'selectValue'    => $selectValue ?? '',
+            'modalOpen'      => $modalOpen ?? false,
+            'progressValue'  => $progressValue ?? 65,
         ],
     ];
 </php>
 
 <template>
-<div id="app" class="ph-card" style="border-radius: var(--ph-radius-lg); overflow: hidden;">
+<div id="app" class="phue-docs" style="display:flex; min-height:100vh;">
 
-    <!-- Header -->
-    <div class="ph-card__header" style="border-bottom: 2px solid var(--ph-color-primary);">
-        <h1 class="ph-heading ph-heading--2" style="color: var(--ph-color-primary);">Phue UI Component Showcase</h1>
-        <p class="ph-text ph-text--muted ph-text--sm">25 built-in Vue 3 components — no build step, <code>--ph-*</code> tokens</p>
-    </div>
+    <!-- Sidebar -->
+    <aside class="phue-sidebar" style="
+        width: 260px; flex-shrink: 0;
+        background: var(--ph-bg-surface);
+        border-right: 1px solid var(--ph-border-color);
+        padding: var(--ph-space-6) 0;
+        position: sticky; top: 0; height: 100vh;
+        overflow-y: auto;
+    ">
+        <div style="padding: 0 var(--ph-space-6) var(--ph-space-6); border-bottom: 1px solid var(--ph-border-color);">
+            <h2 class="ph-heading ph-heading--4" style="margin:0; color: var(--ph-color-primary);">Phue PhUI</h2>
+            <p class="ph-text ph-text--xs ph-text--muted" style="margin: var(--ph-space-1) 0 0 0;">Component System Docs</p>
+        </div>
+        <nav style="padding: var(--ph-space-4) 0;">
+            <a v-for="item in navItems" :key="item.id"
+               :href="'#' + item.id"
+               class="phue-nav-link"
+               :class="{ 'phue-nav-link--active': activeSection === item.id }"
+               @click.prevent="scrollTo(item.id)"
+               style="
+                   display: block; padding: var(--ph-space-2) var(--ph-space-6);
+                   font-size: var(--ph-text-sm); text-decoration: none;
+                   color: var(--ph-text-muted); transition: all var(--ph-transition-fast);
+                   border-left: 3px solid transparent;
+               ">
+                {{ item.label }}
+            </a>
+        </nav>
+    </aside>
 
-    <div class="ph-card__body d-flex flex-column gap-4 p-4">
+    <!-- Main Content -->
+    <main style="flex: 1; min-width: 0; padding: var(--ph-space-8) var(--ph-space-8) var(--ph-space-8) var(--ph-space-8);">
 
-        <!-- 1. Typography -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">1. Typography</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-2">
-                <h1 class="ph-heading ph-heading--1">Heading 1</h1>
-                <h2 class="ph-heading ph-heading--2">Heading 2</h2>
-                <h3 class="ph-heading ph-heading--3">Heading 3</h3>
-                <h4 class="ph-heading ph-heading--4">Heading 4</h4>
-                <h5 class="ph-heading ph-heading--5">Heading 5</h5>
-                <h6 class="ph-heading ph-heading--6">Heading 6</h6>
-                <p class="ph-text ph-text--xs ph-text--light">XS Light</p>
-                <p class="ph-text ph-text--sm ph-text--muted">SM Muted</p>
-                <p class="ph-text ph-text--md ph-text--medium">MD Medium</p>
-                <p class="ph-text ph-text--lg ph-text--semibold">LG Semibold</p>
-                <p class="ph-text ph-text--xl ph-text--bold">XL Bold</p>
+        <!-- Hero -->
+        <section id="overview" style="margin-bottom: var(--ph-space-8); padding-bottom: var(--ph-space-8); border-bottom: 1px solid var(--ph-border-color);">
+            <div class="d-flex items-center gap-2" style="margin-bottom: var(--ph-space-4);">
+                <img src="Phue.svg" alt="Phue" style="height: 48px;" />
+                <div>
+                    <h1 class="ph-heading ph-heading--1" style="margin:0;">PhUI Component System</h1>
+                    <p class="ph-text ph-text--lg ph-text--muted" style="margin: var(--ph-space-1) 0 0 0;">
+                        25 built-in Vue 3 components &mdash; no build step required
+                    </p>
+                </div>
             </div>
-        </section>
-
-        <!-- 2. Layout -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">2. Layout & Utilities</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-3">
-                <div class="d-flex items-center justify-between p-2" style="background-color: var(--ph-bg-surface); border-radius: var(--ph-radius-md);">
-                    <span class="ph-text ph-text--sm">Flex Row Left</span>
-                    <span class="ph-spacer" style="width: 2rem;"></span>
-                    <span class="ph-text ph-text--sm">Flex Row Right</span>
-                </div>
-                <div class="p-3 m-2 ph-box" style="border: 1px solid var(--ph-border-color); border-radius: var(--ph-radius-md);">
-                    <span class="ph-text ph-text--sm">PhBox with padding, border, background</span>
-                </div>
-                <div class="d-flex gap-2">
-                    <span class="m-1 p-1 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-1</span>
-                    <span class="m-2 p-2 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-2</span>
-                    <span class="m-4 p-4 ph-text ph-text--xs" style="background: var(--ph-bg-muted);">m-4 / p-4</span>
-                </div>
+            <div class="d-flex gap-2" style="margin-top: var(--ph-space-4);">
+                <span class="ph-badge ph-badge--primary ph-badge--pill">Vue 3</span>
+                <span class="ph-badge ph-badge--success ph-badge--pill">No Build</span>
+                <span class="ph-badge ph-badge--info ph-badge--pill">CSS Tokens</span>
+                <span class="ph-badge ph-badge--neutral ph-badge--pill">Dark Mode</span>
             </div>
-        </section>
-
-        <!-- 3. Buttons -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">3. Buttons <span class="ph-text ph-text--xs ph-text--muted">(PhButton)</span></h2></div>
-            <div class="ph-card__body d-flex flex-column gap-3">
-                <div class="d-flex items-center gap-2 flex-wrap">
-                    <span class="ph-btn ph-btn--primary ph-btn--sm">Primary SM</span>
-                    <span class="ph-btn ph-btn--secondary ph-btn--md">Secondary MD</span>
-                    <span class="ph-btn ph-btn--outline ph-btn--lg">Outline LG</span>
-                    <span class="ph-btn ph-btn--ghost">Ghost</span>
-                    <span class="ph-btn ph-btn--danger">Danger</span>
-                </div>
-                <div class="d-flex items-center gap-2 flex-wrap">
-                    <span class="ph-btn ph-btn--primary" disabled>Disabled</span>
-                    <span class="ph-btn ph-btn--primary ph-btn--loading">
-                        <span class="ph-btn__spinner" aria-hidden="true"></span> Loading
-                    </span>
-                </div>
-                <span class="ph-btn ph-btn--primary ph-btn--block">Block Button</span>
-            </div>
-        </section>
-
-        <!-- 4. Form Controls -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">4. Form Controls</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-3">
-                <PhInput v-if="phuiUrls['PhInput']" :is="phuiUrls['PhInput']" v-model="inputValue" label="PhInput" placeholder="Enter text..." helper-text="Helper text." />
-                <PhInput v-if="phuiUrls['PhInput']" :is="phuiUrls['PhInput']" model-value="Invalid" label="Error State" error="This field is required." />
-                <PhSelect v-if="phuiUrls['PhSelect']" :is="phuiUrls['PhSelect']" v-model="selectValue" label="PhSelect">
-                    <option value="option1">Option 1</option>
-                    <option value="option2">Option 2</option>
-                </PhSelect>
-                <PhTextarea v-if="phuiUrls['PhTextarea']" :is="phuiUrls['PhTextarea']" label="PhTextarea" placeholder="Write something..." />
-                <div class="d-flex items-center gap-4 flex-wrap">
-                    <PhCheckbox v-if="phuiUrls['PhCheckbox']" :is="phuiUrls['PhCheckbox']" v-model="checked" :label="'PhCheckbox: ' + checked" />
-                    <PhCheckbox v-if="phuiUrls['PhCheckbox']" :is="phuiUrls['PhCheckbox']" disabled label="Disabled" />
-                </div>
-                <div class="d-flex items-center gap-4 flex-wrap">
-                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" v-model="radioValue" value="option1" label="Option 1" />
-                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" v-model="radioValue" value="option2" label="Option 2" />
-                    <PhRadio v-if="phuiUrls['PhRadio']" :is="phuiUrls['PhRadio']" disabled label="Disabled Option" />
+            <div class="ph-card ph-card--bordered" style="margin-top: var(--ph-space-6);">
+                <div class="ph-card__body">
+                    <p class="ph-text ph-text--sm">
+                        PhUI is a zero-dependency, token-driven component system built into the Phue framework.
+                        Every component uses <code class="phue-code">--ph-*</code> CSS custom properties,
+                        supports dark mode automatically, and requires no JavaScript build step &mdash;
+                        components render as inline Vue 3 ESM modules served by the framework's asset pipeline.
+                    </p>
                 </div>
             </div>
         </section>
 
-        <!-- 5. Data Display -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">5. Data Display</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-3">
-                <div class="d-flex items-center gap-2 flex-wrap">
-                    <span class="ph-badge ph-badge--primary ph-badge--sm">Primary</span>
-                    <span class="ph-badge ph-badge--secondary ph-badge--md">Secondary</span>
-                    <span class="ph-badge ph-badge--success ph-badge--lg">Success</span>
-                    <span class="ph-badge ph-badge--warning ph-badge--pill">Warning Pill</span>
-                    <span class="ph-badge ph-badge--error">Error</span>
-                    <span class="ph-badge ph-badge--info">Info</span>
-                    <span class="ph-badge ph-badge--neutral">Neutral</span>
-                </div>
-                <div class="d-flex items-center gap-2 flex-wrap">
-                    <span class="ph-chip">PhChip Standard</span>
-                    <span class="ph-chip ph-chip--disabled">Disabled</span>
-                </div>
-                <div class="d-flex items-center gap-2">
-                    <span class="ph-avatar ph-avatar--xs ph-avatar--circle">XS</span>
-                    <span class="ph-avatar ph-avatar--sm ph-avatar--square">SM</span>
-                    <span class="ph-avatar ph-avatar--md ph-avatar--rounded">MD</span>
-                    <span class="ph-avatar ph-avatar--lg ph-avatar--circle">LG</span>
-                    <span class="ph-avatar ph-avatar--xl ph-avatar--circle">XL</span>
-                </div>
-                <div class="ph-card ph-card--bordered ph-card--hoverable">
-                    <div class="ph-card__header"><h3 class="ph-card__title">PhCard Hoverable</h3></div>
-                    <div class="ph-card__body"><p class="ph-text">PhCard Body</p></div>
-                    <div class="ph-card__footer"><span class="ph-text ph-text--xs ph-text--muted">PhCard Footer</span></div>
-                </div>
-            </div>
-        </section>
+        <!-- Design Tokens -->
+        <section id="tokens" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Design Tokens</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                All visual values are defined as CSS custom properties on <code class="phue-code">:root</code>.
+                Override them to theme your application.
+            </p>
 
-        <!-- 6. Feedback -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">6. Feedback</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-3">
-                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="info" title="Info Alert" dismissible @dismiss="alertDismissed = true" />
-                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="success" title="Success Alert" />
-                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="warning" title="Warning Alert" />
-                <PhAlert v-if="phuiUrls['PhAlert']" :is="phuiUrls['PhAlert']" variant="error" title="Error Alert" />
-                <div class="ph-progress">
-                    <div class="ph-progress__header"><span class="ph-text ph-text--sm">Loading</span><span class="ph-text ph-text--sm">60%</span></div>
-                    <div class="ph-progress__track ph-progress__track--md">
-                        <div class="ph-progress__fill ph-progress__fill--animated" style="width: 60%;"></div>
-                    </div>
-                </div>
-                <div class="d-flex flex-column gap-1">
-                    <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 100%; height: 1rem;"></span>
-                    <span class="ph-skeleton ph-skeleton--circular ph-skeleton--animated" style="width: 3rem; height: 3rem;"></span>
-                    <span class="ph-skeleton ph-skeleton--rectangular ph-skeleton--animated" style="width: 100%; height: 4rem;"></span>
-                </div>
-            </div>
-        </section>
-
-        <!-- 7. Navigation -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">7. Navigation</h2></div>
-            <div class="ph-card__body d-flex flex-column gap-4">
-                <div class="d-flex items-center gap-2">
-                    <a href="#" class="ph-link">Primary Link</a>
-                    <a href="#" class="ph-link ph-link--underline">Underline</a>
-                    <a href="#" class="ph-link ph-link--danger">Danger</a>
-                    <a href="#" class="ph-link ph-link--disabled">Disabled</a>
-                </div>
-                <nav class="ph-breadcrumb">
-                    <ol class="ph-breadcrumb__list">
-                        <li class="ph-breadcrumb__item"><a href="#" class="ph-breadcrumb__link">Home</a><span class="ph-breadcrumb__separator">/</span></li>
-                        <li class="ph-breadcrumb__item"><a href="#" class="ph-breadcrumb__link">Components</a><span class="ph-breadcrumb__separator">/</span></li>
-                        <li class="ph-breadcrumb__item"><span class="ph-breadcrumb__link ph-breadcrumb__link--active">Showcase</span></li>
-                    </ol>
-                </nav>
-                <div class="ph-tabs">
-                    <div class="ph-tabs__nav">
-                        <button class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'tab1' }" @click="activeTab = 'tab1'">Tab One</button>
-                        <button class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'tab2' }" @click="activeTab = 'tab2'">Tab Two</button>
-                        <button class="ph-tabs__item ph-tabs__item--disabled">Disabled</button>
+            <h3 class="ph-heading ph-heading--4" style="margin-top: var(--ph-space-6);">Colors</h3>
+            <div class="d-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--ph-space-3); margin-bottom: var(--ph-space-6);">
+                <div v-for="c in colorTokens" :key="c.name" class="ph-card ph-card--bordered ph-card--hoverable" style="padding: 0; overflow: hidden;">
+                    <div :style="{ background: c.value, height: '3rem' }"></div>
+                    <div style="padding: var(--ph-space-3);">
+                        <p class="ph-text ph-text--xs ph-text--muted" style="margin:0;">{{ c.name }}</p>
+                        <p class="ph-text ph-text--sm ph-text--bold" style="margin: var(--ph-space-1) 0 0 0;">{{ c.value }}</p>
                     </div>
                 </div>
             </div>
+
+            <h3 class="ph-heading ph-heading--4">Spacing</h3>
+            <div class="d-flex flex-column gap-2" style="margin-bottom: var(--ph-space-6);">
+                <div v-for="s in spacingTokens" :key="s.name" class="d-flex items-center gap-4">
+                    <span class="ph-text ph-text--xs ph-text--muted" style="width: 100px; font-family: var(--ph-font-mono);">{{ s.name }}</span>
+                    <div :style="{ width: s.value, height: '1.5rem', background: 'var(--ph-color-primary)', borderRadius: 'var(--ph-radius-sm)', opacity: 0.7 }"></div>
+                    <span class="ph-text ph-text--xs ph-text--muted">{{ s.value }}</span>
+                </div>
+            </div>
+
+            <h3 class="ph-heading ph-heading--4">Usage in CSS</h3>
+            <pre class="phue-code-block"><code>.my-component {
+    background: var(--ph-bg-surface);
+    color: var(--ph-text-main);
+    border: 1px solid var(--ph-border-color);
+    border-radius: var(--ph-radius-lg);
+    padding: var(--ph-space-4);
+    font-size: var(--ph-text-sm);
+    transition: box-shadow var(--ph-transition-fast);
+}
+.my-component:hover {
+    box-shadow: var(--ph-shadow-md);
+}</code></pre>
         </section>
 
-        <!-- 8. Data Table -->
-        <section class="ph-card">
-            <div class="ph-card__header"><h2 class="ph-card__title">8. Data Table <span class="ph-text ph-text--xs ph-text--muted">(PhDataTable)</span></h2></div>
-            <div class="ph-card__body">
-                <div class="ph-data-table-container">
-                    <table class="ph-data-table">
-                        <thead>
-                            <tr>
-                                <th class="ph-data-table__th ph-data-table__th--sortable">
-                                    <div class="ph-data-table__th-content">
-                                        <span>ID</span>
-                                        <span class="ph-data-table__sort-icon">▲</span>
-                                    </div>
-                                </th>
-                                <th class="ph-data-table__th">Name</th>
-                                <th class="ph-data-table__th">Role</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="ph-data-table__tr">
-                                <td class="ph-data-table__td">1</td>
-                                <td class="ph-data-table__td">Jane Doe</td>
-                                <td class="ph-data-table__td"><span class="ph-badge ph-badge--primary">Admin</span></td>
-                            </tr>
-                            <tr class="ph-data-table__tr">
-                                <td class="ph-data-table__td">2</td>
-                                <td class="ph-data-table__td">John Smith</td>
-                                <td class="ph-data-table__td"><span class="ph-badge ph-badge--secondary">User</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="ph-data-table__pagination">
-                        <span class="ph-data-table__page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-                        <div class="ph-pagination">
-                            <button class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage <= 1" @click="currentPage--">Prev</button>
-                            <button class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage >= totalPages" @click="currentPage++">Next</button>
+        <!-- Buttons -->
+        <section id="buttons" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Buttons</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Versatile button component with multiple variants, sizes, and states.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Variants</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-2" style="flex-wrap: wrap;">
+                        <button type="button" class="ph-btn ph-btn--primary">Primary</button>
+                        <button type="button" class="ph-btn ph-btn--secondary">Secondary</button>
+                        <button type="button" class="ph-btn ph-btn--outline">Outline</button>
+                        <button type="button" class="ph-btn ph-btn--ghost">Ghost</button>
+                        <button type="button" class="ph-btn ph-btn--danger">Danger</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Sizes</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-2">
+                        <button type="button" class="ph-btn ph-btn--primary ph-btn--sm">Small</button>
+                        <button type="button" class="ph-btn ph-btn--primary ph-btn--md">Medium</button>
+                        <button type="button" class="ph-btn ph-btn--primary ph-btn--lg">Large</button>
+                        <button type="button" class="ph-btn ph-btn--primary ph-btn--block" style="max-width: 300px;">Block</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">States</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-2">
+                        <button type="button" class="ph-btn ph-btn--primary" disabled>Disabled</button>
+                        <button type="button" class="ph-btn ph-btn--primary ph-btn--loading">
+                            <span class="ph-btn__spinner" aria-hidden="true"></span> Loading
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="ph-heading ph-heading--5">HTML</h3>
+            <pre class="phue-code-block"><code>&lt;button class="ph-btn ph-btn--primary"&gt;Primary&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--secondary"&gt;Secondary&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--outline"&gt;Outline&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--ghost"&gt;Ghost&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--danger"&gt;Danger&lt;/button&gt;
+
+&lt;!-- Sizes --&gt;
+&lt;button class="ph-btn ph-btn--primary ph-btn--sm"&gt;Small&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--primary ph-btn--md"&gt;Medium&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--primary ph-btn--lg"&gt;Large&lt;/button&gt;
+
+&lt;!-- States --&gt;
+&lt;button class="ph-btn ph-btn--primary" disabled&gt;Disabled&lt;/button&gt;
+&lt;button class="ph-btn ph-btn--primary ph-btn--loading"&gt;
+    &lt;span class="ph-btn__spinner"&gt;&lt;/span&gt; Loading
+&lt;/button&gt;</code></pre>
+        </section>
+
+        <!-- Form Controls -->
+        <section id="forms" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Form Controls</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Input, Select, Textarea, Checkbox, and Radio components with validation states.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Input</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-3">
+                    <div class="ph-input-group" style="max-width: 400px;">
+                        <label class="ph-input-label">Username</label>
+                        <div class="ph-input-wrapper">
+                            <input type="text" class="ph-input" v-model="inputValue" placeholder="Enter username..." />
+                        </div>
+                        <p class="ph-input-helper">3-50 characters, alphanumeric.</p>
+                    </div>
+
+                    <div class="ph-input-group ph-input-group--error" style="max-width: 400px;">
+                        <label class="ph-input-label">Email <span class="ph-input-label__required">*</span></label>
+                        <div class="ph-input-wrapper">
+                            <input type="text" class="ph-input" value="invalid@" />
+                        </div>
+                        <p class="ph-input-error">Please enter a valid email address.</p>
+                    </div>
+
+                    <div class="ph-input-group ph-input-group--disabled" style="max-width: 400px;">
+                        <label class="ph-input-label">Disabled</label>
+                        <div class="ph-input-wrapper">
+                            <input type="text" class="ph-input" value="Read only" disabled />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Select</h3></div>
+                <div class="ph-card__body">
+                    <div class="ph-select-group" style="max-width: 400px;">
+                        <label class="ph-select-label">Framework</label>
+                        <div class="ph-select-wrapper">
+                            <select class="ph-select" v-model="selectValue">
+                                <option value="">Choose...</option>
+                                <option value="phue">Phue</option>
+                                <option value="laravel">Laravel</option>
+                                <option value="symfony">Symfony</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Checkbox &amp; Radio</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-3">
+                    <div class="d-flex items-center gap-4">
+                        <label class="ph-checkbox" :class="{ 'ph-checkbox--checked': checked }">
+                            <input type="checkbox" class="ph-checkbox__input" v-model="checked" />
+                            <span class="ph-checkbox__box">
+                                <svg v-if="checked" class="ph-checkbox__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            </span>
+                            <span class="ph-checkbox__label">Enable notifications ({{ checked }})</span>
+                        </label>
+                        <label class="ph-checkbox ph-checkbox--disabled">
+                            <input type="checkbox" class="ph-checkbox__input" disabled />
+                            <span class="ph-checkbox__box"></span>
+                            <span class="ph-checkbox__label">Disabled</span>
+                        </label>
+                    </div>
+                    <div class="d-flex items-center gap-4">
+                        <label class="ph-radio" :class="{ 'ph-radio--checked': radioValue === 'option1' }">
+                            <input type="radio" class="ph-radio__input" v-model="radioValue" value="option1" />
+                            <span class="ph-radio__circle"><span v-if="radioValue === 'option1'" class="ph-radio__dot"></span></span>
+                            <span class="ph-radio__label">Option 1</span>
+                        </label>
+                        <label class="ph-radio" :class="{ 'ph-radio--checked': radioValue === 'option2' }">
+                            <input type="radio" class="ph-radio__input" v-model="radioValue" value="option2" />
+                            <span class="ph-radio__circle"><span v-if="radioValue === 'option2'" class="ph-radio__dot"></span></span>
+                            <span class="ph-radio__label">Option 2</span>
+                        </label>
+                        <label class="ph-radio ph-radio--disabled">
+                            <input type="radio" class="ph-radio__input" disabled />
+                            <span class="ph-radio__circle"></span>
+                            <span class="ph-radio__label">Disabled</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="ph-heading ph-heading--5">HTML</h3>
+            <pre class="phue-code-block"><code>&lt;div class="ph-input-group"&gt;
+    &lt;label class="ph-input-label"&gt;Username&lt;/label&gt;
+    &lt;div class="ph-input-wrapper"&gt;
+        &lt;input type="text" class="ph-input" placeholder="Enter..." /&gt;
+    &lt;/div&gt;
+    &lt;p class="ph-input-helper"&gt;Helper text.&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;!-- Error state --&gt;
+&lt;div class="ph-input-group ph-input-group--error"&gt;
+    &lt;label class="ph-input-label"&gt;Email *&lt;/label&gt;
+    &lt;input type="text" class="ph-input" /&gt;
+    &lt;p class="ph-input-error"&gt;Invalid email.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+        </section>
+
+        <!-- Data Display -->
+        <section id="data" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Data Display</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Badges, Chips, Avatars, Cards, Data Tables, and Pagination.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Badges</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-2" style="flex-wrap: wrap;">
+                        <span class="ph-badge ph-badge--primary">Primary</span>
+                        <span class="ph-badge ph-badge--secondary">Secondary</span>
+                        <span class="ph-badge ph-badge--success">Success</span>
+                        <span class="ph-badge ph-badge--warning">Warning</span>
+                        <span class="ph-badge ph-badge--error">Error</span>
+                        <span class="ph-badge ph-badge--info">Info</span>
+                        <span class="ph-badge ph-badge--neutral">Neutral</span>
+                        <span class="ph-badge ph-badge--primary ph-badge--pill">Pill</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Avatars</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-2">
+                        <span class="ph-avatar ph-avatar--xs ph-avatar--circle">XS</span>
+                        <span class="ph-avatar ph-avatar--sm ph-avatar--square">SM</span>
+                        <span class="ph-avatar ph-avatar--md ph-avatar--rounded">MD</span>
+                        <span class="ph-avatar ph-avatar--lg ph-avatar--circle">LG</span>
+                        <span class="ph-avatar ph-avatar--xl ph-avatar--circle">XL</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Cards</h3></div>
+                <div class="ph-card__body d-flex gap-4">
+                    <div class="ph-card ph-card--bordered" style="flex:1;">
+                        <div class="ph-card__header"><h4 class="ph-card__title">Default Card</h4></div>
+                        <div class="ph-card__body"><p class="ph-text ph-text--sm">Body content goes here.</p></div>
+                        <div class="ph-card__footer"><span class="ph-text ph-text--xs ph-text--muted">Footer info</span></div>
+                    </div>
+                    <div class="ph-card ph-card--bordered ph-card--hoverable" style="flex:1;">
+                        <div class="ph-card__header"><h4 class="ph-card__title">Hoverable Card</h4></div>
+                        <div class="ph-card__body"><p class="ph-text ph-text--sm">Hover to see the lift effect.</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Data Table</h3></div>
+                <div class="ph-card__body">
+                    <div class="ph-data-table-container">
+                        <table class="ph-data-table">
+                            <thead>
+                                <tr>
+                                    <th class="ph-data-table__th ph-data-table__th--sortable">
+                                        <div class="ph-data-table__th-content"><span>#</span><span class="ph-data-table__sort-icon">&#9650;</span></div>
+                                    </th>
+                                    <th class="ph-data-table__th ph-data-table__th--sortable">
+                                        <div class="ph-data-table__th-content"><span>Name</span><span class="ph-data-table__sort-icon">&#9650;</span></div>
+                                    </th>
+                                    <th class="ph-data-table__th">Role</th>
+                                    <th class="ph-data-table__th">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="ph-data-table__tr" v-for="user in tableUsers" :key="user.id">
+                                    <td class="ph-data-table__td">{{ user.id }}</td>
+                                    <td class="ph-data-table__td d-flex items-center gap-2">
+                                        <span class="ph-avatar ph-avatar--xs ph-avatar--circle">{{ user.name.charAt(0) }}</span>
+                                        {{ user.name }}
+                                    </td>
+                                    <td class="ph-data-table__td"><span class="ph-badge ph-badge--primary">{{ user.role }}</span></td>
+                                    <td class="ph-data-table__td"><span class="ph-badge" :class="user.active ? 'ph-badge--success' : 'ph-badge--neutral'">{{ user.active ? 'Active' : 'Inactive' }}</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="ph-data-table__pagination">
+                            <span class="ph-data-table__page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+                            <div class="ph-pagination">
+                                <button type="button" class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
+                                <button type="button" class="ph-btn ph-btn--outline ph-btn--sm" :disabled="currentPage >= totalPages" @click="currentPage++">Next &raquo;</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-    </div>
+        <!-- Feedback -->
+        <section id="feedback" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Feedback</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Alerts, Progress bars, Skeletons, and Modals.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Alerts</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-2">
+                    <div v-if="!alertDismissed" class="ph-alert ph-alert--info">
+                        <div class="ph-alert__content">
+                            <h4 class="ph-alert__title">Info</h4>
+                            <div class="ph-alert__body">This is an informational message with a close button.</div>
+                        </div>
+                        <button type="button" class="ph-alert__close" @click="alertDismissed = true">
+                            <svg class="ph-alert__close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div v-else class="ph-alert ph-alert--success">
+                        <div class="ph-alert__content"><h4 class="ph-alert__title">Dismissed! (click refresh to show again)</h4></div>
+                    </div>
+                    <div class="ph-alert ph-alert--success"><div class="ph-alert__content"><h4 class="ph-alert__title">Success</h4></div></div>
+                    <div class="ph-alert ph-alert--warning"><div class="ph-alert__content"><h4 class="ph-alert__title">Warning</h4></div></div>
+                    <div class="ph-alert ph-alert--error"><div class="ph-alert__content"><h4 class="ph-alert__title">Error</h4></div></div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Progress Bar</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-3">
+                    <div class="ph-progress">
+                        <div class="ph-progress__header"><span class="ph-text ph-text--sm">Default</span><span class="ph-text ph-text--sm">{{ progressValue }}%</span></div>
+                        <div class="ph-progress__track ph-progress__track--md"><div class="ph-progress__fill" :style="{ width: progressValue + '%' }"></div></div>
+                    </div>
+                    <div class="ph-progress">
+                        <div class="ph-progress__header"><span class="ph-text ph-text--sm">Animated</span><span class="ph-text ph-text--sm">45%</span></div>
+                        <div class="ph-progress__track ph-progress__track--lg"><div class="ph-progress__fill ph-progress__fill--animated ph-progress__fill--success" style="width: 45%;"></div></div>
+                    </div>
+                    <div class="d-flex items-center gap-2">
+                        <button type="button" class="ph-btn ph-btn--outline ph-btn--sm" @click="progressValue = Math.max(0, progressValue - 10)">-10</button>
+                        <button type="button" class="ph-btn ph-btn--outline ph-btn--sm" @click="progressValue = Math.min(100, progressValue + 10)">+10</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Skeleton Loaders</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-2">
+                    <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 100%; height: 1rem;"></span>
+                    <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 80%; height: 1rem;"></span>
+                    <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 60%; height: 1rem;"></span>
+                    <div class="d-flex items-center gap-2" style="margin-top: var(--ph-space-2);">
+                        <span class="ph-skeleton ph-skeleton--circular ph-skeleton--animated" style="width: 3rem; height: 3rem;"></span>
+                        <div class="d-flex flex-column gap-1" style="flex:1;">
+                            <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 50%; height: 0.75rem;"></span>
+                            <span class="ph-skeleton ph-skeleton--text ph-skeleton--animated" style="width: 30%; height: 0.75rem;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered">
+                <div class="ph-card__header"><h3 class="ph-card__title">Modal</h3></div>
+                <div class="ph-card__body">
+                    <button type="button" class="ph-btn ph-btn--primary" @click="modalOpen = true">Open Modal</button>
+
+                    <div v-if="modalOpen" class="ph-modal-backdrop" @click.self="modalOpen = false">
+                        <div class="ph-modal ph-modal--md">
+                            <div class="ph-modal__header">
+                                <h3 class="ph-modal__title">Example Modal</h3>
+                                <button type="button" class="ph-modal__close" @click="modalOpen = false">
+                                    <svg class="ph-modal__close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <div class="ph-modal__body">
+                                <p class="ph-text">This modal is rendered entirely with PhUI CSS tokens. No JavaScript framework required beyond Vue 3 reactivity.</p>
+                                <div class="ph-input-group" style="margin-top: var(--ph-space-4);">
+                                    <label class="ph-input-label">Your name</label>
+                                    <input type="text" class="ph-input" placeholder="Type something..." />
+                                </div>
+                            </div>
+                            <div class="ph-modal__footer">
+                                <button type="button" class="ph-btn ph-btn--outline" @click="modalOpen = false">Cancel</button>
+                                <button type="button" class="ph-btn ph-btn--primary" @click="modalOpen = false">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation -->
+        <section id="navigation" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Navigation</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Links, Breadcrumbs, Tabs, and Pagination.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Links</h3></div>
+                <div class="ph-card__body">
+                    <div class="d-flex items-center gap-3">
+                        <a href="#buttons" class="ph-link">Primary Link</a>
+                        <a href="#buttons" class="ph-link ph-link--underline">Underline</a>
+                        <a href="#buttons" class="ph-link ph-link--danger">Danger</a>
+                        <span class="ph-link ph-link--disabled">Disabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Breadcrumbs</h3></div>
+                <div class="ph-card__body">
+                    <nav class="ph-breadcrumb">
+                        <ol class="ph-breadcrumb__list">
+                            <li class="ph-breadcrumb__item"><a href="#overview" class="ph-breadcrumb__link">Home</a><span class="ph-breadcrumb__separator">/</span></li>
+                            <li class="ph-breadcrumb__item"><a href="#data" class="ph-breadcrumb__link">Components</a><span class="ph-breadcrumb__separator">/</span></li>
+                            <li class="ph-breadcrumb__item"><span class="ph-breadcrumb__link ph-breadcrumb__link--active">Navigation</span></li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered">
+                <div class="ph-card__header"><h3 class="ph-card__title">Tabs</h3></div>
+                <div class="ph-card__body">
+                    <div class="ph-tabs">
+                        <div class="ph-tabs__nav">
+                            <button type="button" class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'tokens' }" @click="activeTab = 'tokens'">Design Tokens</button>
+                            <button type="button" class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'components' }" @click="activeTab = 'components'">Components</button>
+                            <button type="button" class="ph-tabs__item" :class="{ 'ph-tabs__item--active': activeTab === 'examples' }" @click="activeTab = 'examples'">Examples</button>
+                            <button type="button" class="ph-tabs__item ph-tabs__item--disabled" disabled>Coming Soon</button>
+                        </div>
+                        <div class="ph-tabs__content">
+                            <p class="ph-text ph-text--sm ph-text--muted" v-if="activeTab === 'tokens'">CSS custom properties that power every component. Override to theme.</p>
+                            <p class="ph-text ph-text--sm ph-text--muted" v-if="activeTab === 'components'">25 Vue 3 components, each using token-based styling.</p>
+                            <p class="ph-text ph-text--sm ph-text--muted" v-if="activeTab === 'examples'">Copy-paste examples for common patterns.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Layout Utilities -->
+        <section id="layout" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Layout Utilities</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Flexbox, spacing, and display helpers.
+            </p>
+
+            <div class="ph-card ph-card--bordered" style="margin-bottom: var(--ph-space-4);">
+                <div class="ph-card__header"><h3 class="ph-card__title">Flexbox</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-3">
+                    <div class="d-flex items-center justify-between p-2" style="background: var(--ph-bg-muted); border-radius: var(--ph-radius-md);">
+                        <span class="ph-text ph-text--sm">Left</span>
+                        <span class="ph-text ph-text--xs ph-text--muted">justify-between</span>
+                        <span class="ph-text ph-text--sm">Right</span>
+                    </div>
+                    <div class="d-flex items-center gap-2">
+                        <span class="ph-badge ph-badge--neutral">d-flex</span>
+                        <span class="ph-badge ph-badge--neutral">items-center</span>
+                        <span class="ph-badge ph-badge--neutral">gap-2</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ph-card ph-card--bordered">
+                <div class="ph-card__header"><h3 class="ph-card__title">Spacing</h3></div>
+                <div class="ph-card__body d-flex flex-column gap-2">
+                    <div class="d-flex items-center gap-2">
+                        <span class="m-1 p-2 ph-text ph-text--xs" style="background: var(--ph-bg-muted); border-radius: var(--ph-radius-sm);">m-1 p-2</span>
+                        <span class="m-2 p-2 ph-text ph-text--xs" style="background: var(--ph-bg-muted); border-radius: var(--ph-radius-sm);">m-2 p-2</span>
+                        <span class="m-4 p-4 ph-text ph-text--xs" style="background: var(--ph-bg-muted); border-radius: var(--ph-radius-sm);">m-4 p-4</span>
+                    </div>
+                    <p class="ph-text ph-text--xs ph-text--muted">Spacing scale: --ph-space-1 (0.25rem) to --ph-space-8 (2rem)</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Typography -->
+        <section id="typography" style="margin-bottom: var(--ph-space-8);">
+            <h2 class="ph-heading ph-heading--2">Typography</h2>
+            <p class="ph-text ph-text--muted" style="margin-bottom: var(--ph-space-4);">
+                Headings, text styles, and font tokens.
+            </p>
+
+            <div class="ph-card ph-card--bordered">
+                <div class="ph-card__body d-flex flex-column gap-2">
+                    <h1 class="ph-heading ph-heading--1">Heading 1</h1>
+                    <h2 class="ph-heading ph-heading--2">Heading 2</h2>
+                    <h3 class="ph-heading ph-heading--3">Heading 3</h3>
+                    <h4 class="ph-heading ph-heading--4">Heading 4</h4>
+                    <h5 class="ph-heading ph-heading--5">Heading 5</h5>
+                    <h6 class="ph-heading ph-heading--6">Heading 6</h6>
+                    <hr style="border: none; border-top: 1px solid var(--ph-border-color); margin: var(--ph-space-2) 0;" />
+                    <p class="ph-text ph-text--xs ph-text--light">Extra Small Light</p>
+                    <p class="ph-text ph-text--sm ph-text--muted">Small Muted</p>
+                    <p class="ph-text ph-text--md ph-text--medium">Medium Medium</p>
+                    <p class="ph-text ph-text--lg ph-text--semibold">Large Semibold</p>
+                    <p class="ph-text ph-text--xl ph-text--bold">XL Bold</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer style="padding: var(--ph-space-6) 0; border-top: 1px solid var(--ph-border-color); text-align: center;">
+            <p class="ph-text ph-text--xs ph-text--muted">
+                Phue PhUI &mdash; Built with <span style="color: var(--ph-color-danger);">&#9829;</span> by the Phue Framework
+            </p>
+        </footer>
+
+    </main>
 </div>
 </template>
 
 <script>
-import { createApp, reactive } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createApp, reactive, toRefs } from '/assets/vendor/vue3/vue.esm-browser.js';
+
+const styleText = `
+    .phue-docs code.phue-code {
+        font-family: var(--ph-font-mono);
+        font-size: var(--ph-text-xs);
+        background: var(--ph-bg-muted);
+        padding: 0.125rem 0.375rem;
+        border-radius: var(--ph-radius-sm);
+    }
+    .phue-code-block {
+        font-family: var(--ph-font-mono);
+        font-size: var(--ph-text-xs);
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: var(--ph-space-4);
+        border-radius: var(--ph-radius-lg);
+        overflow-x: auto;
+        line-height: 1.6;
+        margin: var(--ph-space-2) 0;
+    }
+    .phue-code-block code { color: inherit; }
+    .phue-nav-link:hover {
+        color: var(--ph-text-main) !important;
+        background: var(--ph-bg-muted);
+    }
+    .phue-nav-link--active {
+        color: var(--ph-color-primary) !important;
+        border-left-color: var(--ph-color-primary) !important;
+        background: rgba(2, 132, 199, 0.06);
+        font-weight: 500;
+    }
+    .phue-sidebar::-webkit-scrollbar { width: 4px; }
+    .phue-sidebar::-webkit-scrollbar-track { background: transparent; }
+    .phue-sidebar::-webkit-scrollbar-thumb { background: var(--ph-border-color); border-radius: 4px; }
+`;
+const styleEl = document.createElement('style');
+styleEl.textContent = styleText;
+document.head.appendChild(styleEl);
 
 createApp({
     setup() {
-        const state = reactive(window.__INITIAL_STATE__ || {});
-        return { ...state };
+        const state = reactive({
+            ...window.__INITIAL_STATE__,
+            navItems: [
+                { id: 'overview', label: 'Overview' },
+                { id: 'tokens', label: 'Design Tokens' },
+                { id: 'buttons', label: 'Buttons' },
+                { id: 'forms', label: 'Form Controls' },
+                { id: 'data', label: 'Data Display' },
+                { id: 'feedback', label: 'Feedback' },
+                { id: 'navigation', label: 'Navigation' },
+                { id: 'layout', label: 'Layout Utilities' },
+                { id: 'typography', label: 'Typography' },
+            ],
+            colorTokens: [
+                { name: '--ph-color-primary', value: '#0284c7' },
+                { name: '--ph-color-primary-hover', value: '#0369a1' },
+                { name: '--ph-color-secondary', value: '#475569' },
+                { name: '--ph-color-success', value: '#16a34a' },
+                { name: '--ph-color-danger', value: '#dc2626' },
+                { name: '--ph-color-warning', value: '#ca8a04' },
+                { name: '--ph-bg-base', value: '#ffffff' },
+                { name: '--ph-bg-surface', value: '#f8fafc' },
+                { name: '--ph-bg-muted', value: '#f1f5f9' },
+                { name: '--ph-text-main', value: '#0f172a' },
+                { name: '--ph-text-muted', value: '#64748b' },
+                { name: '--ph-border-color', value: '#e2e8f0' },
+            ],
+            spacingTokens: [
+                { name: '--ph-space-1', value: '0.25rem' },
+                { name: '--ph-space-2', value: '0.5rem' },
+                { name: '--ph-space-3', value: '0.75rem' },
+                { name: '--ph-space-4', value: '1rem' },
+                { name: '--ph-space-6', value: '1.5rem' },
+                { name: '--ph-space-8', value: '2rem' },
+            ],
+            tableUsers: [
+                { id: 1, name: 'Jane Doe', role: 'Admin', active: true },
+                { id: 2, name: 'John Smith', role: 'Editor', active: true },
+                { id: 3, name: 'Alice Wang', role: 'User', active: false },
+            ],
+        });
+
+        function scrollTo(id) {
+            state.activeSection = id;
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        return { ...toRefs(state), scrollTo };
     }
 }).mount('#app');
 </script>

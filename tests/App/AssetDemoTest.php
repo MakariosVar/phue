@@ -42,9 +42,9 @@ final class AssetDemoTest extends TestCase
 
         preg_match('/<title>(.*?)<\/title>/', $content, $title);
         $this->assertNotNull($title[1] ?? null);
-        $this->assertStringContainsString('Products', $title[1]);
+        $this->assertStringContainsString('Phue', $title[1]);
         $this->assertStringContainsString('<div id="app">', $content);
-        $this->assertStringContainsString('v-for="p in products"', $content);
+        $this->assertStringContainsString('window.__INITIAL_STATE__', $content);
     }
 
     public function testDemoPageEmbedsExtractedModuleScriptUrl(): void
@@ -52,7 +52,7 @@ final class AssetDemoTest extends TestCase
         $content = $this->app->handle(new Request('GET', '/'))->getContent();
 
         $this->assertMatchesRegularExpression(
-            '/<script type="module" src="\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js"><\/script>/',
+            '/<script type="module" src="\/assets\/phue\/Home\.[a-f0-9]{8}\.phue\.js"><\/script>/',
             $content
         );
         $this->assertStringNotContainsString('<script type="module">', $content);
@@ -63,7 +63,7 @@ final class AssetDemoTest extends TestCase
     public function testDemoPageServesExtractedModuleScript(): void
     {
         $page = $this->app->handle(new Request('GET', '/'))->getContent();
-        preg_match('/src="(\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
+        preg_match('/src="(\/assets\/phue\/Home\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
         $this->assertArrayHasKey(1, $module);
 
         $response = $this->app->handle(new Request('GET', $module[1]));
@@ -84,7 +84,7 @@ final class AssetDemoTest extends TestCase
 
     public function testDemoPageEmbedsInitialProductsState(): void
     {
-        $content = $this->app->handle(new Request('GET', '/'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/products'))->getContent();
 
         $this->assertStringContainsString('window.__INITIAL_STATE__', $content);
 
