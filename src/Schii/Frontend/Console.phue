@@ -1,12 +1,14 @@
 <php>
 /**
  * Schii Console Server-Authoritative Logic & State
+ *
+ * @var string|null $apiPrefix Dynamic API route prefix passed from shell router.
  */
 $title = 'Schii Console';
 
 return [
-    'title'   => $title,
-    'state'   => [
+    'title' => $title,
+    'state' => [
         'apiPrefix' => $apiPrefix ?? '/api/schii',
         'entities'  => [],
     ],
@@ -16,9 +18,14 @@ return [
 
 <template>
     <div class="schii-console" id="app">
-        <header class="schii-header p-4">
-            <h1 v-text="title" class="m-0">Schii Console</h1>
-            <p class="m-0">Zero-Controller Dynamic REST Management Interface</p>
+        <header class="schii-header p-4 d-flex justify-between items-center">
+            <div>
+                <h1 v-text="title" class="m-0">Schii Console</h1>
+                <p class="m-0">Zero-Controller Dynamic REST Management Interface</p>
+            </div>
+            <button v-if="currentEntity" @click="openCreateModal" class="ph-btn ph-btn-primary">
+                + New {{ currentEntity }}
+            </button>
         </header>
 
         <main class="d-flex schii-content">
@@ -32,7 +39,7 @@ return [
                         v-for="entity in entities"
                         :key="entity"
                         :class="{ active: currentEntity === entity }"
-                        class="p-2 d-flex justify-between items-center"
+                        class="p-2 d-flex justify-between items-center cursor-pointer"
                         @click="selectEntity(entity)"
                     >
                         {{ entity }}
@@ -55,6 +62,7 @@ return [
                                     <th v-for="field in fields" :key="field.name">
                                         {{ field.label || field.name }}
                                     </th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -62,9 +70,13 @@ return [
                                     <td v-for="field in fields" :key="field.name">
                                         {{ row[field.name] }}
                                     </td>
+                                    <td class="d-flex gap-2">
+                                        <button @click="openEditModal(row)" class="ph-btn ph-btn-sm">Edit</button>
+                                        <button @click="deleteRecord(row.id)" class="ph-btn ph-btn-sm ph-btn-danger">Delete</button>
+                                    </td>
                                 </tr>
                                 <tr v-if="rows.length === 0">
-                                    <td :colspan="fields.length || 1" class="schii-empty p-4">
+                                    <td :colspan="(fields.length || 1) + 1" class="schii-empty p-4">
                                         No records found.
                                     </td>
                                 </tr>
@@ -78,17 +90,78 @@ return [
                 </div>
             </section>
         </main>
+
+        <!-- Dynamic Dynamic Modal for Form Store/Update -->
+        <div v-if="showModal" class="ph-modal-backdrop d-flex items-center justify-center">
+            <div class="ph-modal-content p-4">
+                <h3>{{ isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity }}</h3>
+                
+                <form @submit.prevent="submitForm" class="d-flex flex-column gap-3">
+                    <div v-for="field in writableFields" :key="field.name" class="ph-field">
+                        <label class="ph-field__label">{{ field.label || field.name }}</label>
+                        
+                        <select 
+                            v-if="field.type === 'select'" 
+                            v-model="form[field.name]" 
+                            class="ph-input ph-select"
+                        >
+                            <option v-for="(lbl, val) in field.options" :key="val" :value="val">{{ lbl }}</option>
+                        </select>
+
+                        <textarea 
+                            v-else-if="field.type === 'textarea'" 
+                            v-model="form[field.name]" 
+                            class="ph-input ph-textarea"
+                        ></textarea>
+
+                        <input 
+                            v-else 
+                            :type="field.type || 'text'" 
+                            v-model="form[field.name]" 
+                            class="ph-input" 
+                        />
+                    </div>
+
+                    <div v-if="formError" class="ph-field__error">{{ formError }}</div>
+
+                    <div class="d-flex justify-end gap-2 mt-3">
+                        <button type="button" @click="closeModal" class="ph-btn">Cancel</button>
+                        <button type="submit" :disabled="submitting" class="ph-btn ph-btn-primary">
+                            {{ submitting ? 'Saving...' : 'Save' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </template>
 
 <script type="module">
-import { createApp, ref, reactive, onMounted } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createApp, ref, computed, onMounted } from '/assets/vendor/vue3/vue.esm-browser.js';
+
+/**
+ * Custom inline composable for managing dynamic entity reactive state & operations
+ */
+function useForm(initialFields = []) {
+    const form = ref({});
+    const submitting = ref(false);
+    const formError = ref(null);
+
+    const resetForm = (fields = [], initialData = {}) => {
+        const formData = {};
+        fields.forEach(field => {
+            formData[field.name] = initialData[field.name] !== undefined ? initialData[field.name] : '';
+        });
+        form.value = formData;
+        formError.value = null;
+    };
+
+    return { form, submitting, formError, resetForm };
+}
 
 createApp({
     setup() {
         const title = ref('Schii Console');
-
-        // Read shell-injected initial state
         const initialState = window.__INITIAL_STATE__ || {};
         const apiPrefix = initialState.apiPrefix || '/api/schii';
 
@@ -99,7 +172,14 @@ createApp({
         const rows = ref([]);
         const loading = ref(false);
 
-        // Fetch dynamic entity schemas from server on mount
+        // Modal and form state
+        const showModal = ref(false);
+        const isEditing = ref(false);
+        const activeId = ref(null);
+        const { form, submitting, formError, resetForm } = useForm();
+
+        const writableFields = computed(() => fields.value.filter(f => f.name !== 'id' && f.writable !== false));
+
         const fetchEntities = async () => {
             loadingEntities.value = true;
             try {
@@ -115,7 +195,6 @@ createApp({
             }
         };
 
-        // Select entity & fetch schema + rows concurrently
         const selectEntity = async (entity) => {
             currentEntity.value = entity;
             loading.value = true;
@@ -138,9 +217,75 @@ createApp({
                     rows.value = Array.isArray(data) ? data : (data.data || []);
                 }
             } catch (err) {
-                console.error(`Failed to fetch schema or data for ${entity}:`, err);
+                console.error(`Failed to fetch schema/data for ${entity}:`, err);
             } finally {
                 loading.value = false;
+            }
+        };
+
+        const openCreateModal = () => {
+            isEditing.value = false;
+            activeId.value = null;
+            resetForm(writableFields.value);
+            showModal.value = true;
+        };
+
+        const openEditModal = (row) => {
+            isEditing.value = true;
+            activeId.value = row.id;
+            resetForm(writableFields.value, row);
+            showModal.value = true;
+        };
+
+        const closeModal = () => {
+            showModal.value = false;
+            formError.value = null;
+        };
+
+        const submitForm = async () => {
+            submitting.value = true;
+            formError.value = null;
+
+            const url = isEditing.value 
+                ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
+                : `${apiPrefix}/${currentEntity.value}`;
+
+            const method = isEditing.value ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(form.value)
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.message || 'Failed to save record.');
+                }
+
+                closeModal();
+                await selectEntity(currentEntity.value);
+            } catch (err) {
+                formError.value = err.message;
+            } finally {
+                submitting.value = false;
+            }
+        };
+
+        const deleteRecord = async (id) => {
+            if (!confirm(`Are you sure you want to delete this record?`)) return;
+
+            try {
+                const res = await fetch(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    alert(errData.message || 'Failed to delete record.');
+                    return;
+                }
+                await selectEntity(currentEntity.value);
+            } catch (err) {
+                console.error('Delete error:', err);
             }
         };
 
@@ -154,9 +299,20 @@ createApp({
             loadingEntities,
             currentEntity,
             fields,
+            writableFields,
             rows,
             loading,
+            showModal,
+            isEditing,
+            form,
+            submitting,
+            formError,
             selectEntity,
+            openCreateModal,
+            openEditModal,
+            closeModal,
+            submitForm,
+            deleteRecord,
         };
     }
 }).mount('#app');

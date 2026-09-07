@@ -47,42 +47,38 @@ class SchiiIntegrationTest extends TestCase
         $this->assertContains('description', $fieldNames);
     }
 
-    public function testListEndpointReturnsPagination(): void
+    public function testListEndpointRequiresAuthentication(): void
     {
         $request = new Request('GET', '/api/schii/products');
         $response = $this->app->handle($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(401, $response->getStatusCode());
         $result = json_decode($response->getContent(), true);
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('data', $result);
-        $this->assertArrayHasKey('meta', $result);
-        $this->assertArrayHasKey('total', $result['meta']);
-        $this->assertArrayHasKey('page', $result['meta']);
-        $this->assertArrayHasKey('limit', $result['meta']);
-        $this->assertSame(25, $result['meta']['limit']);
+        $this->assertSame('Unauthorized', $result['error'] ?? null);
     }
 
-    public function testListEndpointSupportsSearch(): void
+    public function testListEndpointDoesNotFailWithServerError(): void
+    {
+        $request = new Request('GET', '/api/schii/products');
+        $response = $this->app->handle($request);
+
+        $this->assertNotSame(500, $response->getStatusCode());
+    }
+
+    public function testListEndpointSearchIsRejectedWithoutAuthentication(): void
     {
         $request = new Request('GET', '/api/schii/products', ['q' => 'test']);
         $response = $this->app->handle($request);
 
-        $this->assertSame(200, $response->getStatusCode());
-        $result = json_decode($response->getContent(), true);
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('data', $result);
+        $this->assertSame(401, $response->getStatusCode());
     }
 
-    public function testListEndpointSupportsPaginationWithParams(): void
+    public function testListEndpointPaginationIsRejectedWithoutAuthentication(): void
     {
         $request = new Request('GET', '/api/schii/products', ['limit' => 10, 'page' => 1]);
         $response = $this->app->handle($request);
 
-        $this->assertSame(200, $response->getStatusCode());
-        $result = json_decode($response->getContent(), true);
-        $this->assertSame(10, $result['meta']['limit']);
-        $this->assertSame(1, $result['meta']['page']);
+        $this->assertSame(401, $response->getStatusCode());
     }
 
     public function testUnregisteredEntityReturns404(): void

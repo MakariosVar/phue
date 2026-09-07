@@ -8,4 +8,7 @@ return [
     'entityNamespace' => 'App\\Models',
     'autoMigrate' => true,
     'cachePrefix' => 'schii_schema_',
+    'requireAuth' => true,
+    'middleware' => [],
+    'authResolver' => ['App\\Models\\User', 'findIdentity'],
 ];

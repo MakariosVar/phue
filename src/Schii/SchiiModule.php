@@ -14,28 +14,33 @@ use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Schii\Config\SchiiConfig;
+use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
 use Phue\Schii\Schema\SchemaRegistry;
 use Phue\Schii\Controller\ConsoleController;
-use Phue\Http\Middleware\CorsMiddleware;
+use Phue\Auth\AuthManager;
+use Phue\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Auth\RbacManager;
 
 /**
  * Class SchiiModule
  *
- * Bootstraps and registers the Schii REST engine within the Phue framework application lifecycle.
+ * Serves as the bootstrapping module for the Schii admin panel and REST architecture.
+ * Configures framework dependency injections, handles UI component loaders, wires up
+ * dynamic authentication resolvers, and registers REST API and console routes.
  *
  * @package Phue\Schii
  */
 class SchiiModule extends Module
 {
     /**
-     * Bootstraps singletons, bindings, component renderers, and dynamic API endpoints for Schii.
+     * Initializes module singletons, service bindings, component loaders, and REST routes.
      *
      * @return void
      */
     public function init(): void
     {
-        // 1. Config Binding: Register SchiiConfig singleton factory in DI container
+        // 1. Config Binding: Resolves and registers the SchiiConfig singleton
         $this->container->singleton(
             SchiiConfig::class,
             function (): SchiiConfig {
@@ -61,7 +66,33 @@ class SchiiModule extends Module
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
-        // 2. Register SchemaRegistry as a singleton
+        // 2. AuthManager Binding: Configures Bearer token authenticator with dynamic resolver
+        $this->container->singleton(
+            AuthManager::class,
+            function (Container $c) use ($schiiConfig): AuthManager {
+                /** @var callable|null $resolver */
+                $resolver = $schiiConfig->authResolver ?? null;
+
+                $bearerAuth = new BearerTokenAuthenticator(
+                    tokenResolver: static function (string $token) use ($resolver): mixed {
+                        if (is_callable($resolver)) {
+                            return $resolver($token);
+                        }
+                        return null;
+                    }
+                );
+
+                return new AuthManager([$bearerAuth]);
+            }
+        );
+
+        // 3. RbacManager Singleton
+        $this->container->singleton(
+            RbacManager::class,
+            fn(): RbacManager => new RbacManager()
+        );
+
+        // 4. SchemaRegistry Singleton
         $this->container->singleton(
             SchemaRegistry::class,
             function (Container $c) use ($schiiConfig): SchemaRegistry {
@@ -76,7 +107,7 @@ class SchiiModule extends Module
             }
         );
 
-        // 3. Register isolated Schii Loader and append to ComponentLoaderRegistry if available
+        // 5. Register Component Loader & Renderer Services
         $this->container->singleton(
             'schii.loader',
             fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
@@ -88,7 +119,6 @@ class SchiiModule extends Module
             $loaderRegistry->addLoader($this->container->get('schii.loader'));
         }
 
-        // 4. Register Schii ComponentRenderer
         $this->container->singleton(
             'schii.renderer',
             fn(Container $c): ComponentRenderer => new ComponentRenderer(
@@ -98,7 +128,7 @@ class SchiiModule extends Module
             )
         );
 
-        // 5. Bind ModelEndpoint with entityNamespace from SchiiConfig
+        // 6. ModelEndpoint Dependency Bindings
         $this->container->bind(
             ModelEndpoint::class,
             function (Container $c): ModelEndpoint {
@@ -113,24 +143,45 @@ class SchiiModule extends Module
             }
         );
 
-        // 6. Dynamic Zero-Controller Route Registrations
+        $this->container->bind(
+            AuthorizedModelEndpoint::class,
+            function (Container $c): AuthorizedModelEndpoint {
+                return new AuthorizedModelEndpoint(
+                    $c->get(ModelEndpoint::class),
+                    $c->get(AuthManager::class),
+                    $c->get(RbacManager::class),
+                    $c->get(SchemaRegistry::class)
+                );
+            }
+        );
+
+        // 7. Dynamic REST & Console Route Mappings
         /** @var string $apiPrefix */
         $apiPrefix = '/' . trim($schiiConfig->apiPrefix ?? '/api/schii', '/');
 
         /** @var array<int, class-string> $middleware */
-        $middleware = !empty($schiiConfig->middleware)
-            ? $schiiConfig->middleware
-            : [CorsMiddleware::class];
+        $middleware = $schiiConfig->middleware ?? [];
 
+        /** @var bool $requireAuth */
+        $requireAuth = $schiiConfig->requireAuth ?? true;
+
+        /** @var class-string $crudHandler */
+        $crudHandler = $requireAuth 
+            ? AuthorizedModelEndpoint::class 
+            : ModelEndpoint::class;
+
+        // Public Schema Metadata Endpoints
         $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], $middleware);
         $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [ModelEndpoint::class, 'index'], $middleware);
-        $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [ModelEndpoint::class, 'store'], $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'show'], $middleware);
-        $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'update'], $middleware);
-        $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [ModelEndpoint::class, 'delete'], $middleware);
 
-        // 7. Module Console UI Route
+        // Protected CRUD Operations Endpoints
+        $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], $middleware);
+        $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], $middleware);
+        $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], $middleware);
+        $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], $middleware);
+        $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], $middleware);
+
+        // Admin Console View Route
         /** @var string $consolePrefix */
         $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
         $this->router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);

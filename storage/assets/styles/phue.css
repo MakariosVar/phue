@@ -612,3 +612,84 @@ body {
 .gap-4 { gap: var(--ph-space-4) !important; }
 
 .ph-spacer { flex-shrink: 0; }
+
+/* ==========================================================================
+   10. FORM FIELDS
+   ========================================================================== */
+
+
+/* Unified PhFormField Component Tokens */
+.ph-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ph-space-1);
+  width: 100%;
+}
+
+.ph-field__label,
+.ph-input-label,
+.ph-select-label,
+.ph-textarea-label {
+  font-size: var(--ph-text-sm);
+  font-weight: 500;
+  color: var(--ph-text-main);
+}
+
+.ph-field__required,
+.ph-input-label__required,
+.ph-select-label__required,
+.ph-textarea-label__required {
+  color: var(--ph-color-danger);
+  margin-left: 2px;
+}
+
+/* Base Form Control Unification */
+.ph-input,
+.ph-select,
+.ph-textarea {
+  width: 100%;
+  padding: var(--ph-space-2) var(--ph-space-3);
+  font-size: var(--ph-text-sm);
+  background-color: var(--ph-bg-base);
+  color: var(--ph-text-main);
+  border: 1px solid var(--ph-border-color);
+  border-radius: var(--ph-radius-md);
+  transition: border-color var(--ph-transition-fast), box-shadow var(--ph-transition-fast);
+}
+
+.ph-input:focus,
+.ph-select:focus,
+.ph-textarea:focus {
+  outline: none;
+  border-color: var(--ph-color-primary);
+  box-shadow: var(--ph-focus-ring);
+}
+
+/* Field States */
+.ph-field--error .ph-input,
+.ph-input-group--error .ph-input,
+.ph-select-group--error .ph-select,
+.ph-textarea-group--error .ph-textarea {
+  border-color: var(--ph-color-danger);
+}
+
+.ph-field--disabled,
+.ph-input-group--disabled,
+.ph-select-group--disabled,
+.ph-textarea-group--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Field Messages */
+.ph-field__helper, .ph-input-helper, .ph-select-helper, .ph-textarea-helper {
+  margin: 0;
+  font-size: var(--ph-text-xs);
+  color: var(--ph-text-muted);
+}
+
+.ph-field__error, .ph-input-error, .ph-select-error, .ph-textarea-error {
+  margin: 0;
+  font-size: var(--ph-text-xs);
+  color: var(--ph-color-danger);
+}

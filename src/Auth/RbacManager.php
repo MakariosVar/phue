@@ -20,6 +20,37 @@ final class RbacManager
     /** @var array<int|string, array<string>> User assignments */
     private array $assignments = [];
 
+    /**
+     * RbacManager constructor. Ingests seed configuration if available.
+     *
+     * @param string|null $configPath Optional path to RBAC seed configuration.
+     */
+    public function __construct(?string $configPath = null)
+    {
+        $path = $configPath ?? __DIR__ . '/../../config/rbac_seeding.php';
+        if (file_exists($path)) {
+            /** @var array{
+             *     roles?: array<string, array<int, string>>,
+             *     assignments?: array<int|string, array<int, string>>
+             * } $seedData */
+            $seedData = require $path;
+
+            if (!empty($seedData['roles'])) {
+                foreach ($seedData['roles'] as $role => $permissions) {
+                    $this->addRole($role, $permissions);
+                }
+            }
+
+            if (!empty($seedData['assignments'])) {
+                foreach ($seedData['assignments'] as $userId => $userRoles) {
+                    foreach ((array)$userRoles as $role) {
+                        $this->assign($userId, $role);
+                    }
+                }
+            }
+        }
+    }
+
     public function addRole(string $role, array $permissions = []): void
     {
         $this->roles[$role] = $permissions;
@@ -49,24 +80,16 @@ final class RbacManager
         return false;
     }
 
-    /**
-     * Recursively checks role permissions through the inheritance chain with cycle detection.
-     *
-     * @param string $role Current role evaluated.
-     * @param string $permission Required permission name.
-     * @param array<string, bool> $visited Map of visited roles in current execution path.
-     * @return bool
-     */
     private function hasPermission(string $role, string $permission, array &$visited): bool
     {
         if (isset($visited[$role])) {
-            return false; // Prevents infinite recursion on cycles
+            return false;
         }
 
         $visited[$role] = true;
 
         $directPermissions = $this->roles[$role] ?? [];
-        if (in_array($permission, $directPermissions, true)) {
+        if (in_array($permission, $directPermissions, true) || in_array('*', $directPermissions, true)) {
             return true;
         }
 
