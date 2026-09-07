@@ -812,15 +812,31 @@ Phue serves frontends without a bundler: `.phue` components are plain templates 
 
 Phue provides a modular Authentication and Role-Based Access Control (RBAC) subsystem designed for stateless API and traditional web applications.
 
-### Core Contracts & Management
+### Core Contracts & Base Model
+
 - **`IdentityInterface` (`src/Auth/IdentityInterface.php`)**: Contract for authenticated identities (`getId()`, `findIdentity()`, `getAuthKey()`).
+- **`BaseUser` (`src/Auth/BaseUser.php`)**: Abstract ActiveRecord-backed implementation of `IdentityInterface`. Extends `BaseActiveRecord` and provides:
+  - `findIdentity(int|string $id): ?static` — resolves by primary key (AR `find`)
+  - `findIdentityByAuthKey(string $key): ?static` — resolves by `auth_key` column (Bearer token resolution)
+  - `getId()`, `getAuthKey()`, `getRoles()` (decodes a JSON `roles` column), `validatePassword()`
+  - App models simply extend it: `class User extends \Phue\Auth\BaseUser {}` — zero boilerplate identity code.
 - **Authenticators (`src/Auth/Authenticator/`)**: Chain-of-responsibility drivers:
   - `SessionAuthenticator`: Web and Admin session-based user authentication.
-  - `BearerTokenAuthenticator`: REST API and Schii Bearer token / JWT authentication.
+  - `BearerTokenAuthenticator`: REST API and Schii Bearer token authentication. Its `tokenResolver` defaults to `[\Phue\Auth\BaseUser::class, 'findIdentityByAuthKey']` (zero-config) when `authResolver` is omitted from config.
 - **`AuthManager` (`src/Auth/AuthManager.php`)**: Evaluates authentication drivers in sequence, tracks state (`getUser()`, `login()`, `logout()`, `check()`).
-- **`RbacManager` (`src/Auth/RbacManager.php`)**: Handles role assignments, permissions (`addRole()`, `assign()`), and recursive role inheritance (`addChild()`) with visited set cycle detection to prevent infinite loops.
+- **`RbacManager` (`src/Auth/RbacManager.php`)**: Handles role assignments, permissions (`addRole()`, `assign()`), and recursive role inheritance (`addChild()`) with visited set cycle detection. `checkAccess(int|string $userContext, string $permission, array $explicitRoles = [])` evaluates permissions — when explicit roles are supplied (e.g. from an authenticated identity), it uses them directly instead of static assignments, keeping the engine pure and DB-independent.
 - **`AccessControlMiddleware` (`src/Auth/Middleware/AccessControlMiddleware.php`)**: Enforces required permissions on routes, returning `401 Unauthorized` for unauthenticated requests or `403 Forbidden` for insufficient privileges.
-- **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata. *(status: component stub exists and is unit-tested; it is **not yet wired** into the Schii route table — `SchiiModule` currently routes straight to `ModelEndpoint`. Wiring is a roadmap item.)*
+- **`AuthorizedModelEndpoint` (`src/Schii/Endpoint/AuthorizedModelEndpoint.php`)**: Decorator for Schii CRUD REST endpoints automatically enforcing dynamic permissions (`{entity}.{action}`) parsed from schema metadata. **Wired into the Schii route table** — `SchiiModule` selects `AuthorizedModelEndpoint` as the CRUD handler when `requireAuth => true` (the default in `config/schii.php`), and falls back to `ModelEndpoint` when auth is disabled. The endpoint delegates `checkAccess($user->getId(), $permission, $user->getRoles())`, bridging the authenticated identity's DB-loaded roles into the RBAC gate.
+
+### Module Configuration (`config/schii.php`)
+
+- `authResolver` — callable used by `BearerTokenAuthenticator` to resolve a Bearer token to an identity. Defaults to `[\Phue\Auth\BaseUser::class, 'findIdentityByAuthKey']` when omitted. Can be overridden (e.g. `['App\Models\User', 'findIdentityByAuthKey']`) for app-specific identity classes that extend `BaseUser`.
+- `requireAuth` — when `true` (default), Schii routes CRUD operations through `AuthorizedModelEndpoint`; when `false`, uses bare `ModelEndpoint`.
+- `middleware` — optional route middleware array applied to Schii endpoints.
+
+### Token Resolution Semantics
+
+The `findIdentity` method resolves by **primary key** (for session lookup). The `findIdentityByAuthKey` method resolves by the **`auth_key` column** — this is the correct semantic for Bearer tokens, since a token must never be treated as a user ID. Identity implementations should populate `auth_key` during user registration/login and use it for stateless authentication.
 
 ---
 

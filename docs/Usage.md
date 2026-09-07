@@ -804,7 +804,35 @@ final class M2026_09_03_014500_Create_Orders_Table extends Migration
 
 ### 10.1 Authentication & RBAC Subsystem
 
-#### Configuring AuthManager & Authenticators
+#### The BaseUser identity model
+
+App models extend `Phue\Auth\BaseUser` — an ActiveRecord-backed implementation of `IdentityInterface`. This gives you `getId()`, `findIdentity()`, `findIdentityByAuthKey()`, `getRoles()` (reads a JSON `roles` column), and `validatePassword()` with zero boilerplate:
+
+```php
+namespace App\Models;
+
+use Phue\Auth\BaseUser;
+use Phue\Schii\Attribute\Field;
+
+class User extends BaseUser
+{
+    #[Field(type: 'text')]
+    public string $username;
+
+    #[Field(type: 'text')]
+    public string $password_hash;
+
+    #[Field(type: 'text')]
+    public ?string $auth_key = null;
+
+    #[Field(type: 'text')]
+    public mixed $roles = '[]';
+}
+```
+
+`findIdentity` resolves by **primary key** (session lookup). `findIdentityByAuthKey` resolves by the **`auth_key` column** — the correct semantic for Bearer tokens, since a token must never be treated as a user ID.
+
+#### Configuring AuthManager & the Bearer resolver
 
 ```php
 use Phue\Auth\AuthManager;
@@ -813,12 +841,14 @@ use Phue\Auth\Authenticator\SessionAuthenticator;
 
 $authManager = new AuthManager([
     new SessionAuthenticator(App\Models\User::class),
-    new BearerTokenAuthenticator(fn($token) => App\Models\User::findByToken($token)),
+    new BearerTokenAuthenticator(fn (string $token) => App\Models\User::findIdentityByAuthKey($token)),
 ]);
 
 // Authenticate incoming request
 $user = $authManager->authenticate($request);
 ```
+
+`config/schii.php` can set `authResolver` to override the default `[\Phue\Auth\BaseUser::class, 'findIdentityByAuthKey']` used by `BearerTokenAuthenticator`. When omitted, the framework default applies — zero-config auth.
 
 #### Configuring RBAC Roles & Inheritance
 
@@ -827,7 +857,7 @@ use Phue\Auth\RbacManager;
 
 $rbac = new RbacManager();
 
-// Register roles and permissions
+// Register roles and their direct permissions
 $rbac->addRole('author', ['posts.create']);
 $rbac->addRole('editor', ['posts.update', 'posts.delete']);
 $rbac->addRole('admin', ['admin.dashboard']);
@@ -836,14 +866,21 @@ $rbac->addRole('admin', ['admin.dashboard']);
 $rbac->addChild('admin', 'editor');
 $rbac->addChild('editor', 'author');
 
-// Assign role to user ID
+// Assign role to user ID (static assignment)
 $rbac->assign(10, 'admin');
 
-// Check access (evaluates full inheritance tree safely)
+// checkAccess accepts an optional explicitRoles array:
+// - with explicitRoles: uses them directly (DB-backed identity pattern)
+// - without: falls back to static assignments
 if ($rbac->checkAccess(10, 'posts.create')) {
     // Access granted
 }
+if ($rbac->checkAccess($userId, 'admin.product.read', $user->getRoles())) {
+    // Authorized via the authenticated identity's DB-loaded roles
+}
 ```
+
+The `AuthorizedModelEndpoint` bridges these two: it calls `$rbacManager->checkAccess($user->getId(), $permission, $user->getRoles())`, so a Bearer-authenticated user's DB roles flow straight into the RBAC gate.
 
 ### 10.2 Server Adapters & TypePHP AOT Engine
 
