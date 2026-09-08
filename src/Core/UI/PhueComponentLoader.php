@@ -50,15 +50,17 @@ class PhueComponentLoader
      * PhueComponentLoader constructor.
      *
      * @param string                  $componentsDir   Absolute or relative path to component files directory.
-     * @param PhueTemplateParser|null $parser          Optional parser instance; defaults to new PhueTemplateParser.
+     * @param PhueTemplateParser|null $parser          Optional parser instance.
      * @param CacheInterface|null     $persistentCache Optional PSR-16 cache implementation.
+     * @param string|null             $viewsCacheDir   Optional compiled PHP views cache directory for OPCache optimization.
      *
      * @throws RuntimeException If $componentsDir path is invalid or unreadable.
      */
     public function __construct(
         string $componentsDir,
         ?PhueTemplateParser $parser = null,
-        ?CacheInterface $persistentCache = null
+        ?CacheInterface $persistentCache = null,
+        ?string $viewsCacheDir = null
     ) {
         $realBase = realpath($componentsDir);
         if ($realBase === false || !is_dir($realBase)) {
@@ -66,7 +68,7 @@ class PhueComponentLoader
         }
 
         $this->componentsDir = $realBase;
-        $this->parser = $parser ?? new PhueTemplateParser();
+        $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
     }
 

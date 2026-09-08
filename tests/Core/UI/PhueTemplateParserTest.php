@@ -40,6 +40,14 @@ final class PhueTemplateParserTest extends TestCase
         foreach (glob(self::DIR . '/*.phue') ?: [] as $file) {
             @unlink($file);
         }
+        
+        $cacheDir = self::DIR . '/cache';
+        if (is_dir($cacheDir)) {
+            foreach (glob($cacheDir . '/*.php') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($cacheDir);
+        }
 
         parent::tearDown();
     }
@@ -222,5 +230,45 @@ PHUE);
 
         $this->assertSame("<div>   spaced   </div>", $component->view->getTemplate());
         $this->assertSame("console.log('x');", $component->view->getInlineScript());
+    }
+
+    public function testParserCompilesPhpBlockAndKeepsFileOnDisk(): void
+    {
+        $cacheDir = self::DIR . '/cache';
+        $parser = new PhueTemplateParser($cacheDir);
+
+        $phpCode = "return ['title' => 'Disk Cached'];";
+        $result = $parser->evaluatePhpBlock($phpCode);
+
+        $this->assertSame('Disk Cached', $result['title']);
+        
+        $hash = md5($phpCode);
+        $expectedFile = $cacheDir . '/phue_' . $hash . '.php';
+        
+        $this->assertFileExists($expectedFile);
+        $this->assertStringContainsString("return ['title' => 'Disk Cached'];", file_get_contents($expectedFile));
+    }
+
+    public function testParserReusesCompiledFileForSamePhpCode(): void
+    {
+        $cacheDir = self::DIR . '/cache';
+        $parser = new PhueTemplateParser($cacheDir);
+
+        $phpCode = "return ['title' => 'Reused'];";
+        
+        // Initial compilation
+        $parser->evaluatePhpBlock($phpCode);
+        
+        $hash = md5($phpCode);
+        $expectedFile = $cacheDir . '/phue_' . $hash . '.php';
+        $this->assertFileExists($expectedFile);
+        
+        // Tamper with the compiled file to ensure it doesn't re-compile
+        file_put_contents($expectedFile, "<?php return ['title' => 'Tampered'];");
+        
+        // Re-evaluate
+        $result = $parser->evaluatePhpBlock($phpCode);
+        
+        $this->assertSame('Tampered', $result['title'], 'Parser must reuse existing cache file instead of re-compiling');
     }
 }

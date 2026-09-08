@@ -112,6 +112,9 @@ class Application
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
 
+        // Directory where compiled component PHP blocks are written for OPCache execution
+        $viewsCacheDir = $this->basePath . '/storage/cache/views';
+
         // Register L2 PSR-16 Cache Service Singletons
         $this->container->singleton(CacheInterface::class, function (): CacheInterface {
             return new FileCache($this->basePath . '/storage/cache');
@@ -119,13 +122,23 @@ class Application
         $this->container->alias('cache', CacheInterface::class);
 
         // Primary App Component Loader Singleton (/App/Frontend)
-        $this->container->singleton(PhueComponentLoader::class, function (): PhueComponentLoader {
-            return new PhueComponentLoader($this->basePath . '/App/Frontend');
+        $this->container->singleton(PhueComponentLoader::class, function () use ($viewsCacheDir): PhueComponentLoader {
+            return new PhueComponentLoader(
+                componentsDir: $this->basePath . '/App/Frontend',
+                parser: null,
+                persistentCache: $this->container->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir
+            );
         });
 
         // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
-        $this->container->singleton('phui.loader', function (): PhueComponentLoader {
-            return new PhueComponentLoader($this->basePath . '/src/Core/UI/Phui');
+        $this->container->singleton('phui.loader', function () use ($viewsCacheDir): PhueComponentLoader {
+            return new PhueComponentLoader(
+                componentsDir: $this->basePath . '/src/Core/UI/Phui',
+                parser: null,
+                persistentCache: $this->container->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir
+            );
         });
 
         // Composite Component Loader Registry Singleton
