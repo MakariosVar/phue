@@ -35,6 +35,9 @@
   --ph-radius-lg: 0.5rem;
   --ph-radius-full: 9999px;
 
+  /* Navigation Tokens */
+  --ph-nav-width: 260px;
+
   /* Typography Tokens */
   --ph-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --ph-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -551,6 +554,103 @@ body {
 .ph-tabs__item--disabled { opacity: 0.5; cursor: not-allowed; }
 .ph-tabs__content { padding-top: var(--ph-space-4); }
 
+/* Navigation Component Rules */
+.ph-nav {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--ph-bg-surface);
+  color: var(--ph-text-main);
+  padding: var(--ph-space-4);
+}
+
+.ph-nav--vertical {
+  width: var(--ph-nav-width);
+  height: 100vh;
+}
+
+.ph-nav--horizontal {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ph-nav__header {
+  margin-bottom: var(--ph-space-6);
+  font-weight: bold;
+}
+
+.ph-nav__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ph-space-2);
+}
+
+.ph-nav--horizontal .ph-nav__list {
+  flex-direction: row;
+}
+
+.ph-nav__link {
+  display: block;
+  padding: var(--ph-space-2) var(--ph-space-3);
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--ph-radius-md);
+  transition: background-color 0.2s ease;
+}
+
+.ph-nav__link:hover {
+  background-color: var(--ph-bg-muted);
+}
+
+.ph-nav--vertical .ph-nav__link.is-active {
+  font-weight: 600;
+  color: var(--ph-color-primary);
+  background-color: var(--ph-bg-muted);
+  border-left: 3px solid var(--ph-color-primary);
+}
+
+.ph-nav--horizontal .ph-nav__link.is-active {
+  font-weight: 600;
+  color: var(--ph-color-primary);
+  border-bottom: 2px solid var(--ph-color-primary);
+  border-radius: 0;
+}
+
+.ph-nav__link.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.ph-nav__footer {
+  margin-top: auto;
+  font-size: var(--ph-text-sm);
+  opacity: 0.7;
+}
+
+.ph-nav--horizontal .ph-nav__footer {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+/* Layout Integration Styles */
+.app-layout,
+.schii-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-content,
+.schii-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ph-space-6);
+}
+
 /* ==========================================================================
    8. TYPOGRAPHY
    ========================================================================== */
@@ -616,7 +716,6 @@ body {
 /* ==========================================================================
    10. FORM FIELDS
    ========================================================================== */
-
 
 /* Unified PhFormField Component Tokens */
 .ph-field {
@@ -692,79 +791,4 @@ body {
   margin: 0;
   font-size: var(--ph-text-xs);
   color: var(--ph-color-danger);
-}
-
-/* Navigation Component Rules */
-.ph-nav {
-  display: flex;
-  flex-direction: column;
-  background-color: var(--ph-bg-surface);
-  color: var(--ph-text-main);
-  padding: 1rem;
-}
-
-.ph-nav--vertical {
-  width: 260px;
-  height: 100vh;
-}
-
-.ph-nav--horizontal {
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.ph-nav__header {
-  margin-bottom: 1.5rem;
-  font-weight: bold;
-}
-
-.ph-nav__list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.ph-nav--horizontal .ph-nav__list {
-  flex-direction: row;
-}
-
-.ph-nav__link {
-  display: block;
-  padding: 0.5rem 0.75rem;
-  color: inherit;
-  text-decoration: none;
-  border-radius: 6px;
-  transition: background-color 0.2s ease;
-}
-
-.ph-nav__link:hover {
-  background-color: var(--ph-bg-muted);
-}
-
-.ph-nav__link.is-active {
-    font-weight: 600;
-    color: var(--ph-color-primary);
-    border-bottom: 2px solid var(--ph-color-primary);
-}
-
-.ph-nav__link.is-disabled {
-    opacity: 0.5;
-    pointer-events: none;
-    cursor: not-allowed;
-}
-
-.ph-nav__footer {
-  margin-top: auto;
-  font-size: 0.85rem;
-  opacity: 0.7;
-}
-
-.ph-nav--horizontal .ph-nav__footer {
-  margin-top: 0;
-  margin-left: auto;
 }

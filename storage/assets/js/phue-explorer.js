@@ -17,14 +17,23 @@
     const href = link.getAttribute('href');
     const target = link.getAttribute('target');
 
-    // Skip external, new tab, download, or fragment links
+    // Safe origin check using new URL construction
+    let isSameOrigin = false;
+    try {
+      const resolvedUrl = new URL(link.href, window.location.href);
+      isSameOrigin = resolvedUrl.origin === window.location.origin;
+    } catch {
+      isSameOrigin = false;
+    }
+
+    // Skip external, new tab, download, fragment, or cross-origin links
     if (
       !href ||
       href.startsWith('#') ||
       href.startsWith('javascript:') ||
       target === '_blank' ||
       link.hasAttribute('download') ||
-      link.origin !== window.location.origin
+      !isSameOrigin
     ) {
       return;
     }
@@ -72,6 +81,12 @@
         return;
       }
 
+      // --- Unmount existing Vue instance before DOM swap ---
+      if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
+        window.__phueApp.unmount();
+        window.__phueApp = null;
+      }
+
       currentApp.innerHTML = newApp.innerHTML;
 
       // 3. Update Browser History
@@ -79,27 +94,46 @@
         window.history.pushState(null, '', url);
       }
 
-      // 4. Re-execute inline <script type="module"> tags for Vue re-mounting with object URL revocation
+      // Update global state before remounting Vue
+      const stateScript = Array.from(doc.querySelectorAll('script')).find(s => 
+        !s.hasAttribute('type') && s.textContent.includes('window.__INITIAL_STATE__')
+      );
+      if (stateScript) {
+        const newStateScript = document.createElement('script');
+        newStateScript.textContent = stateScript.textContent;
+        document.body.appendChild(newStateScript);
+        newStateScript.remove();
+      }
+
+
+      // 4. Re-execute inline <script type="module"> tags for Vue re-mounting
       const scripts = doc.querySelectorAll('script[type="module"]');
       for (const oldScript of scripts) {
-        const newScript = document.createElement('script');
-        newScript.type = 'module';
-
         if (oldScript.src) {
-          newScript.src = oldScript.src;
+          // Ignore vendor scripts (e.g. Vue source)
+          if (oldScript.src.includes('/assets/vendor/')) continue;
+          // Dynamic import! If already in memory, returns instantly.
+          import(oldScript.src).then(mod => {
+            if (typeof mod.default === 'function') {
+              mod.default(); // Mount the Vue component!
+            }
+          }).catch(console.error);
         } else {
+          // Blob / inline scripts
           const blob = new Blob([oldScript.textContent], { type: 'text/javascript' });
           const blobUrl = URL.createObjectURL(blob);
+          const newScript = document.createElement('script');
+          newScript.type = 'module';
           newScript.src = blobUrl;
-
-          // Revoke Blob URL after execution to prevent memory leaks
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          
+          const cleanup = () => {
+            URL.revokeObjectURL(blobUrl);
+            newScript.remove();
+          };
+          newScript.addEventListener('load', cleanup);
+          newScript.addEventListener('error', cleanup);
+          document.body.appendChild(newScript);
         }
-
-        document.body.appendChild(newScript);
-
-        // Remove element from DOM body once evaluated
-        setTimeout(() => newScript.remove(), 1000);
       }
     } catch (err) {
       console.error('[Phue Explorer] Navigation failed, falling back to full load:', err);

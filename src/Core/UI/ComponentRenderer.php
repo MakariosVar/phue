@@ -22,11 +22,12 @@ class ComponentRenderer
     /**
      * ComponentRenderer constructor.
      *
-     * @param HtmlShellRenderer        $shellRenderer Service responsible for rendering the outer HTML document shell.
-     * @param AssetRegistry            $assetRegistry Global registry managing script dependencies.
-     * @param PhueComponentLoader|null  $loader        Optional component loader instance.
-     * @param string|null              $layoutName    Optional layout component name (e.g., 'AppLayout').
-     * @param callable|null            $uriResolver   Optional callable returning current request URI string: fn(): string.
+     * @param HtmlShellRenderer        $shellRenderer   Service responsible for rendering the outer HTML document shell.
+     * @param AssetRegistry            $assetRegistry   Global registry managing script dependencies.
+     * @param PhueComponentLoader|null $loader          Optional component loader instance.
+     * @param string|null              $layoutName      Optional layout component name (e.g., 'AppLayout').
+     * @param mixed                    $uriResolver     Optional callable returning current request URI string: fn(): string.
+     * @param PhuePartialRenderer|null $partialRenderer Optional partial renderer for layout integration.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -177,7 +178,7 @@ class ComponentRenderer
      *
      * @return string Wrapped HTML markup or original markup if no layout is defined.
      */
-     private function applyLayoutIfConfigured(string $pageMarkup): string
+    private function applyLayoutIfConfigured(string $pageMarkup): string
     {
         if ($this->layoutName === null || $this->loader === null) {
             return $pageMarkup;

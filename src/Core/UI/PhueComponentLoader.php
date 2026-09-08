@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Phue\Core\UI;
 
 use Exception;
+use Psr\SimpleCache\CacheInterface;
 use RuntimeException;
 
 /**
  * Class PhueComponentLoader
  *
  * Loads, parses, and evaluates single-file Phue components (.phue).
- * Handles structural AST caching and dynamic runtime context evaluation.
+ * Handles structural AST caching (in-memory & PSR-16 persistent) and dynamic runtime context evaluation.
  *
  * @package Phue\Core\UI
  */
@@ -25,7 +26,7 @@ class PhueComponentLoader
     private string $componentsDir;
 
     /**
-     * Caches ONLY static raw structure per file path, NEVER the evaluated state.
+     * Caches ONLY static raw structure per file path in-memory for the current request.
      *
      * @var array<string, array{mtime: int, size: int, structure: array{template: string, script: ?string, phpCode: ?string}}>
      */
@@ -39,15 +40,26 @@ class PhueComponentLoader
     private PhueTemplateParser $parser;
 
     /**
+     * Optional PSR-16 persistent cache interface for cross-request structure caching.
+     *
+     * @var CacheInterface|null
+     */
+    private ?CacheInterface $persistentCache;
+
+    /**
      * PhueComponentLoader constructor.
      *
-     * @param string                  $componentsDir Absolute or relative path to component files directory.
-     * @param PhueTemplateParser|null $parser        Optional parser instance; defaults to new PhueTemplateParser.
+     * @param string                  $componentsDir   Absolute or relative path to component files directory.
+     * @param PhueTemplateParser|null $parser          Optional parser instance; defaults to new PhueTemplateParser.
+     * @param CacheInterface|null     $persistentCache Optional PSR-16 cache implementation.
      *
      * @throws RuntimeException If $componentsDir path is invalid or unreadable.
      */
-    public function __construct(string $componentsDir, ?PhueTemplateParser $parser = null)
-    {
+    public function __construct(
+        string $componentsDir,
+        ?PhueTemplateParser $parser = null,
+        ?CacheInterface $persistentCache = null
+    ) {
         $realBase = realpath($componentsDir);
         if ($realBase === false || !is_dir($realBase)) {
             throw new RuntimeException("Invalid component directory path: {$componentsDir}");
@@ -55,6 +67,7 @@ class PhueComponentLoader
 
         $this->componentsDir = $realBase;
         $this->parser = $parser ?? new PhueTemplateParser();
+        $this->persistentCache = $persistentCache;
     }
 
     /**
@@ -159,10 +172,15 @@ class PhueComponentLoader
         }
 
         $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . $name . '.phue';
-        $resolvedPath = realpath($targetPath);
 
+        // Fast preliminary check to avoid unneeded realpath() & stat() calls
+        if (!file_exists($targetPath)) {
+            throw new RuntimeException("Phue component file not found: '{$name}'");
+        }
+
+        $resolvedPath = realpath($targetPath);
         if ($resolvedPath === false || !str_starts_with($resolvedPath, $this->componentsDir . DIRECTORY_SEPARATOR)) {
-            throw new RuntimeException("Phue component file not found or inaccessible: '{$name}'");
+            throw new RuntimeException("Phue component file inaccessible: '{$name}'");
         }
 
         $stat = stat($resolvedPath);
@@ -173,7 +191,7 @@ class PhueComponentLoader
         $mtime = $stat['mtime'];
         $size = $stat['size'];
 
-        // Static Structural Cache Hit
+        // 1. In-Memory Request Cache Hit
         if (isset($this->cache[$resolvedPath])) {
             $cached = $this->cache[$resolvedPath];
             if ($cached['mtime'] === $mtime && $cached['size'] === $size) {
@@ -181,14 +199,35 @@ class PhueComponentLoader
             }
         }
 
-        // Cache Miss
+        // 2. PSR-16 Persistent Cache Hit
+        $cacheKey = 'phue_structure_' . md5($resolvedPath);
+        if ($this->persistentCache !== null) {
+            $persistentData = $this->persistentCache->get($cacheKey);
+            if (
+                is_array($persistentData) &&
+                isset($persistentData['mtime'], $persistentData['size'], $persistentData['structure']) &&
+                $persistentData['mtime'] === $mtime &&
+                $persistentData['size'] === $size
+            ) {
+                $this->cache[$resolvedPath] = $persistentData;
+                return $persistentData['structure'];
+            }
+        }
+
+        // 3. Cache Miss — Parse file from disk
         $structure = $this->parser->parseStructure($resolvedPath);
 
-        $this->cache[$resolvedPath] = [
+        $payload = [
             'mtime'     => $mtime,
             'size'      => $size,
             'structure' => $structure,
         ];
+
+        $this->cache[$resolvedPath] = $payload;
+
+        if ($this->persistentCache !== null) {
+            $this->persistentCache->set($cacheKey, $payload);
+        }
 
         return $structure;
     }

@@ -655,57 +655,61 @@ const styleEl = document.createElement('style');
 styleEl.textContent = styleText;
 document.head.appendChild(styleEl);
 
-createApp({
-    setup() {
-        const state = reactive({
-            ...window.__INITIAL_STATE__,
-            navItems: [
-                { id: 'overview', label: 'Overview' },
-                { id: 'tokens', label: 'Design Tokens' },
-                { id: 'buttons', label: 'Buttons' },
-                { id: 'forms', label: 'Form Controls' },
-                { id: 'data', label: 'Data Display' },
-                { id: 'feedback', label: 'Feedback' },
-                { id: 'navigation', label: 'Navigation' },
-                { id: 'layout', label: 'Layout Utilities' },
-                { id: 'typography', label: 'Typography' },
-            ],
-            colorTokens: [
-                { name: '--ph-color-primary', value: '#0284c7' },
-                { name: '--ph-color-primary-hover', value: '#0369a1' },
-                { name: '--ph-color-secondary', value: '#475569' },
-                { name: '--ph-color-success', value: '#16a34a' },
-                { name: '--ph-color-danger', value: '#dc2626' },
-                { name: '--ph-color-warning', value: '#ca8a04' },
-                { name: '--ph-bg-base', value: '#ffffff' },
-                { name: '--ph-bg-surface', value: '#f8fafc' },
-                { name: '--ph-bg-muted', value: '#f1f5f9' },
-                { name: '--ph-text-main', value: '#0f172a' },
-                { name: '--ph-text-muted', value: '#64748b' },
-                { name: '--ph-border-color', value: '#e2e8f0' },
-            ],
-            spacingTokens: [
-                { name: '--ph-space-1', value: '0.25rem' },
-                { name: '--ph-space-2', value: '0.5rem' },
-                { name: '--ph-space-3', value: '0.75rem' },
-                { name: '--ph-space-4', value: '1rem' },
-                { name: '--ph-space-6', value: '1.5rem' },
-                { name: '--ph-space-8', value: '2rem' },
-            ],
-            tableUsers: [
-                { id: 1, name: 'Jane Doe', role: 'Admin', active: true },
-                { id: 2, name: 'John Smith', role: 'Editor', active: true },
-                { id: 3, name: 'Alice Wang', role: 'User', active: false },
-            ],
-        });
+export default function mountApp() {
+    window.__phueApp = createApp({
+        setup() {
+            const state = reactive({
+                ...window.__INITIAL_STATE__,
+                navItems: [
+                    { id: 'overview', label: 'Overview' },
+                    { id: 'tokens', label: 'Design Tokens' },
+                    { id: 'buttons', label: 'Buttons' },
+                    { id: 'forms', label: 'Form Controls' },
+                    { id: 'data', label: 'Data Display' },
+                    { id: 'feedback', label: 'Feedback' },
+                    { id: 'navigation', label: 'Navigation' },
+                    { id: 'layout', label: 'Layout Utilities' },
+                    { id: 'typography', label: 'Typography' },
+                ],
+                colorTokens: [
+                    { name: '--ph-color-primary', value: '#0284c7' },
+                    { name: '--ph-color-primary-hover', value: '#0369a1' },
+                    { name: '--ph-color-secondary', value: '#475569' },
+                    { name: '--ph-color-success', value: '#16a34a' },
+                    { name: '--ph-color-danger', value: '#dc2626' },
+                    { name: '--ph-color-warning', value: '#ca8a04' },
+                    { name: '--ph-bg-base', value: '#ffffff' },
+                    { name: '--ph-bg-surface', value: '#f8fafc' },
+                    { name: '--ph-bg-muted', value: '#f1f5f9' },
+                    { name: '--ph-text-main', value: '#0f172a' },
+                    { name: '--ph-text-muted', value: '#64748b' },
+                    { name: '--ph-border-color', value: '#e2e8f0' },
+                ],
+                spacingTokens: [
+                    { name: '--ph-space-1', value: '0.25rem' },
+                    { name: '--ph-space-2', value: '0.5rem' },
+                    { name: '--ph-space-3', value: '0.75rem' },
+                    { name: '--ph-space-4', value: '1rem' },
+                    { name: '--ph-space-6', value: '1.5rem' },
+                    { name: '--ph-space-8', value: '2rem' },
+                ],
+                tableUsers: [
+                    { id: 1, name: 'Jane Doe', role: 'Admin', active: true },
+                    { id: 2, name: 'John Smith', role: 'Editor', active: true },
+                    { id: 3, name: 'Alice Wang', role: 'User', active: false },
+                ],
+            });
 
-        function scrollTo(id) {
-            state.activeSection = id;
-            const el = document.getElementById(id);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            function scrollTo(id) {
+                state.activeSection = id;
+                const el = document.getElementById(id);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            return { ...toRefs(state), scrollTo };
         }
-
-        return { ...toRefs(state), scrollTo };
-    }
-}).mount('#app');
+    });
+    window.__phueApp.mount('#app');
+}
+mountApp();
 </script>

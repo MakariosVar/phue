@@ -5,16 +5,27 @@ use App\Config\NavigationConfig;
 /**
  * @var string $content
  * @var string $uri
+ * @var array $items
+ * @var string $cacheKey
+ * @var array $cache
  * @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer
  */
 $content = $content ?? '';
 $uri = $uri ?? '/';
 $items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems() : []);
+static $cache = [];
 
-$navHtml = $partialRenderer->renderPartial('PhNavigation', [
-    'items'       => $items,
-    'activeRoute' => $uri,
-]);
+$cacheKey = 'nav_html_' . md5(serialize($items) . $uri);
+    
+if (isset($cache[$cacheKey])) {
+    $navHtml = $cache[$cacheKey];
+} else {
+    $navHtml = $partialRenderer->renderPartial('PhNavigation', [
+        'items' => $items,
+        'uri'   => $uri
+    ]);
+    $cache[$cacheKey] = $navHtml;
+}
 
 return [
     'html' => sprintf(

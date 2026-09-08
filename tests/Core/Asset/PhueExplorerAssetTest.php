@@ -166,7 +166,7 @@ final class PhueExplorerAssetTest extends TestCase
     {
         $source = $this->explorerSource();
 
-        foreach (["href.startsWith('#')", "href.startsWith('javascript:')", "target === '_blank'", "link.hasAttribute('download')", "link.origin !== window.location.origin"] as $skip) {
+        foreach (["href.startsWith('#')", "href.startsWith('javascript:')", "target === '_blank'", "link.hasAttribute('download')", "!isSameOrigin"] as $skip) {
             $this->assertStringContainsString($skip, $source, "Interceptor must skip {$skip} anchors");
         }
     }

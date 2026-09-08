@@ -7,7 +7,7 @@ namespace Phue\Core\Frontend;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\PhueComponentLoader;
 use Throwable;
-use RuntimeException;
+
 /**
  * Class ComponentLoaderRegistry
  *
@@ -61,29 +61,6 @@ class ComponentLoaderRegistry
 
         return null;
     }
-
-public function renderPartial(string $name, array $params = []): string
-{
-    try {
-        $component = $this->load($name, $params);
-        $view = $component->view;
-
-        if (!$view->hasHtml()) {
-            throw new RuntimeException("Component '{$name}' used as partial must operate in HTML-first mode.");
-        }
-
-        return $view->getHtml();
-    } catch (\Throwable $e) {
-        error_log("[Phue Partial Error] Failed rendering '{$name}': " . $e->getMessage());
-
-        // Re-throw during testing/dev to avoid silent failures
-        if (defined('PHUE_ENV') && PHUE_ENV === 'test') {
-            throw $e;
-        }
-
-        return sprintf('<!-- Partial [%s] rendering failed -->', htmlspecialchars($name, ENT_QUOTES, 'UTF-8'));
-    }
-}
 
     /**
      * Resolves raw script content across candidate loaders and returns the hashed asset URL.

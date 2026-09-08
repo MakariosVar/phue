@@ -16,11 +16,15 @@ return [
 
 <script>
 import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
+export default function mountApp() {
+    window.__phueApp = createApp({
+        setup() {
+            const testValue = ref(window.__INITIAL_STATE__.value);
+            return { testValue };
+        }
+    });
+    window.__phueApp.mount('#app');
+}
 
-createApp({
-    setup() {
-        const testValue = ref(window.__INITIAL_STATE__.value);
-        return { testValue };
-    }
-}).mount('#app');
+mountApp();
 </script>

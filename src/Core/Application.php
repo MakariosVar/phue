@@ -128,17 +128,6 @@ class Application
             return new PhueComponentLoader($this->basePath . '/src/Core/UI/Phui');
         });
 
-        $this->container->singleton(ComponentRenderer::class, function ($c) {
-            return new ComponentRenderer(
-                shellRenderer: $c->get(HtmlShellRenderer::class),
-                assetRegistry: $c->get(AssetRegistry::class),
-                loader: $c->get(PhueComponentLoader::class),
-                layoutName: 'AppLayout',
-                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
-                partialRenderer: $c->get(PhuePartialRenderer::class)
-            );
-        });
-
         // Composite Component Loader Registry Singleton
         $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
             $registry = new ComponentLoaderRegistry();
@@ -162,6 +151,22 @@ class Application
             });
 
             return $registry;
+        });
+
+        // Phue Partial Renderer Singleton
+        $this->container->singleton(PhuePartialRenderer::class, function ($c): PhuePartialRenderer {
+            return new PhuePartialRenderer($c->get(ComponentLoaderRegistry::class));
+        });
+
+        $this->container->singleton(ComponentRenderer::class, function ($c) {
+            return new ComponentRenderer(
+                shellRenderer: $c->get(HtmlShellRenderer::class),
+                assetRegistry: $c->get(AssetRegistry::class),
+                loader: $c->get(PhueComponentLoader::class),
+                layoutName: 'AppLayout',
+                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+                partialRenderer: $c->get(PhuePartialRenderer::class)
+            );
         });
 
         // Core Asset Infrastructure Singletons

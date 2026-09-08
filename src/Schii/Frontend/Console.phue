@@ -159,161 +159,166 @@ function useForm(initialFields = []) {
     return { form, submitting, formError, resetForm };
 }
 
-createApp({
-    setup() {
-        const title = ref('Schii Console');
-        const initialState = window.__INITIAL_STATE__ || {};
-        const apiPrefix = initialState.apiPrefix || '/api/schii';
+export default function mountApp() {
+    window.__phueApp = createApp({
+        setup() {
+            const title = ref('Schii Console');
+            const initialState = window.__INITIAL_STATE__ || {};
+            const apiPrefix = initialState.apiPrefix || '/api/schii';
 
-        const entities = ref([]);
-        const loadingEntities = ref(true);
-        const currentEntity = ref(null);
-        const fields = ref([]);
-        const rows = ref([]);
-        const loading = ref(false);
+            const entities = ref([]);
+            const loadingEntities = ref(true);
+            const currentEntity = ref(null);
+            const fields = ref([]);
+            const rows = ref([]);
+            const loading = ref(false);
 
-        // Modal and form state
-        const showModal = ref(false);
-        const isEditing = ref(false);
-        const activeId = ref(null);
-        const { form, submitting, formError, resetForm } = useForm();
+            // Modal and form state
+            const showModal = ref(false);
+            const isEditing = ref(false);
+            const activeId = ref(null);
+            const { form, submitting, formError, resetForm } = useForm();
 
-        const writableFields = computed(() => fields.value.filter(f => f.name !== 'id' && f.writable !== false));
+            const writableFields = computed(() => fields.value.filter(f => f.name !== 'id' && f.writable !== false));
 
-        const fetchEntities = async () => {
-            loadingEntities.value = true;
-            try {
-                const res = await fetch(`${apiPrefix}/schema`);
-                if (res.ok) {
-                    const data = await res.json();
-                    entities.value = data.entities || [];
+            const fetchEntities = async () => {
+                loadingEntities.value = true;
+                try {
+                    const res = await fetch(`${apiPrefix}/schema`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        entities.value = data.entities || [];
+                    }
+                } catch (err) {
+                    console.error('Failed to discover entity schemas:', err);
+                } finally {
+                    loadingEntities.value = false;
                 }
-            } catch (err) {
-                console.error('Failed to discover entity schemas:', err);
-            } finally {
-                loadingEntities.value = false;
-            }
-        };
+            };
 
-        const selectEntity = async (entity) => {
-            currentEntity.value = entity;
-            loading.value = true;
-            fields.value = [];
-            rows.value = [];
+            const selectEntity = async (entity) => {
+                currentEntity.value = entity;
+                loading.value = true;
+                fields.value = [];
+                rows.value = [];
 
-            try {
-                const [schemaRes, dataRes] = await Promise.all([
-                    fetch(`${apiPrefix}/schema/${entity}`),
-                    fetch(`${apiPrefix}/${entity}`)
-                ]);
+                try {
+                    const [schemaRes, dataRes] = await Promise.all([
+                        fetch(`${apiPrefix}/schema/${entity}`),
+                        fetch(`${apiPrefix}/${entity}`)
+                    ]);
 
-                if (schemaRes.ok) {
-                    const schemaData = await schemaRes.json();
-                    fields.value = schemaData.fields || [];
+                    if (schemaRes.ok) {
+                        const schemaData = await schemaRes.json();
+                        fields.value = schemaData.fields || [];
+                    }
+
+                    if (dataRes.ok) {
+                        const data = await dataRes.json();
+                        rows.value = Array.isArray(data) ? data : (data.data || []);
+                    }
+                } catch (err) {
+                    console.error(`Failed to fetch schema/data for ${entity}:`, err);
+                } finally {
+                    loading.value = false;
                 }
+            };
 
-                if (dataRes.ok) {
-                    const data = await dataRes.json();
-                    rows.value = Array.isArray(data) ? data : (data.data || []);
+            const openCreateModal = () => {
+                isEditing.value = false;
+                activeId.value = null;
+                resetForm(writableFields.value);
+                showModal.value = true;
+            };
+
+            const openEditModal = (row) => {
+                isEditing.value = true;
+                activeId.value = row.id;
+                resetForm(writableFields.value, row);
+                showModal.value = true;
+            };
+
+            const closeModal = () => {
+                showModal.value = false;
+                formError.value = null;
+            };
+
+            const submitForm = async () => {
+                submitting.value = true;
+                formError.value = null;
+
+                const url = isEditing.value 
+                    ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
+                    : `${apiPrefix}/${currentEntity.value}`;
+
+                const method = isEditing.value ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(form.value)
+                    });
+
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.message || 'Failed to save record.');
+                    }
+
+                    closeModal();
+                    await selectEntity(currentEntity.value);
+                } catch (err) {
+                    formError.value = err.message;
+                } finally {
+                    submitting.value = false;
                 }
-            } catch (err) {
-                console.error(`Failed to fetch schema/data for ${entity}:`, err);
-            } finally {
-                loading.value = false;
-            }
-        };
+            };
 
-        const openCreateModal = () => {
-            isEditing.value = false;
-            activeId.value = null;
-            resetForm(writableFields.value);
-            showModal.value = true;
-        };
+            const deleteRecord = async (id) => {
+                if (!confirm(`Are you sure you want to delete this record?`)) return;
 
-        const openEditModal = (row) => {
-            isEditing.value = true;
-            activeId.value = row.id;
-            resetForm(writableFields.value, row);
-            showModal.value = true;
-        };
-
-        const closeModal = () => {
-            showModal.value = false;
-            formError.value = null;
-        };
-
-        const submitForm = async () => {
-            submitting.value = true;
-            formError.value = null;
-
-            const url = isEditing.value 
-                ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
-                : `${apiPrefix}/${currentEntity.value}`;
-
-            const method = isEditing.value ? 'PUT' : 'POST';
-
-            try {
-                const res = await fetch(url, {
-                    method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form.value)
-                });
-
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.message || 'Failed to save record.');
+                try {
+                    const res = await fetch(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        alert(errData.message || 'Failed to delete record.');
+                        return;
+                    }
+                    await selectEntity(currentEntity.value);
+                } catch (err) {
+                    console.error('Delete error:', err);
                 }
+            };
 
-                closeModal();
-                await selectEntity(currentEntity.value);
-            } catch (err) {
-                formError.value = err.message;
-            } finally {
-                submitting.value = false;
-            }
-        };
+            onMounted(() => {
+                fetchEntities();
+            });
 
-        const deleteRecord = async (id) => {
-            if (!confirm(`Are you sure you want to delete this record?`)) return;
+            return {
+                title,
+                entities,
+                loadingEntities,
+                currentEntity,
+                fields,
+                writableFields,
+                rows,
+                loading,
+                showModal,
+                isEditing,
+                form,
+                submitting,
+                formError,
+                selectEntity,
+                openCreateModal,
+                openEditModal,
+                closeModal,
+                submitForm,
+                deleteRecord,
+            };
+        }
+    })
+    window.__phueApp.mount('#app');
+}
 
-            try {
-                const res = await fetch(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    alert(errData.message || 'Failed to delete record.');
-                    return;
-                }
-                await selectEntity(currentEntity.value);
-            } catch (err) {
-                console.error('Delete error:', err);
-            }
-        };
-
-        onMounted(() => {
-            fetchEntities();
-        });
-
-        return {
-            title,
-            entities,
-            loadingEntities,
-            currentEntity,
-            fields,
-            writableFields,
-            rows,
-            loading,
-            showModal,
-            isEditing,
-            form,
-            submitting,
-            formError,
-            selectEntity,
-            openCreateModal,
-            openEditModal,
-            closeModal,
-            submitForm,
-            deleteRecord,
-        };
-    }
-}).mount('#app');
+mountApp();
 </script>
