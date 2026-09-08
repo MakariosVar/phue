@@ -66,6 +66,11 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `SecurityMiddleware` | `Core/Security/SecurityMiddleware.php` | Production Security Hardening Middleware injecting OWASP defense headers |
 | `DeployCommand` | `Core/Console/Commands/DeployCommand.php` | Zero-Downtime Atomic Release Deployment Handler |
 | `BenchmarkRunner` | `tests/Benchmark/BenchmarkRunner.php` | Automated Benchmark Suite measuring container latency & HTTP throughput |
+| `ComponentRenderer` | `Core/UI/ComponentRenderer.php` | HTML-first rendering lifecycle: component → layout → shell |
+| `HtmlShellRenderer` | `Core/Asset/HtmlShellRenderer.php` | Renders the outer HTML5 shell with styles, scripts, state, and layout content |
+| `View` | `Core/UI/View.php` | Encapsulates template, state, scripts, and optional server-rendered HTML |
+| `PhuePartialRenderer` | `Core/UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) via the ComponentLoaderRegistry |
+| `PhNavigation` | `Core/UI/Phui/PhNavigation.phue` | SSR nav partial with boundary-aware active-route matching |
 
 ---
 
@@ -797,6 +802,39 @@ Phue serves frontends without a bundler: `.phue` components are plain templates 
 - `ComponentLoaderRegistry` (`src/Core/Frontend/ComponentLoaderRegistry.php`) is a **composite, fail-safe** loader — a throwing loader is skipped, the next is tried.
 - Priority: the application loader first, then module loaders in registration order; first non-null wins. Modules declare their loaders (e.g. `ComponentLoaderRegistry::addLoader(...)`) instead of mutating `/assets/phue` URL prefixes.
 - Per the plan's stateless/declarative-only module rules, loaders are registered as container bindings (`schii.loader`) and resolved through construction injection.
+
+### HTML-first layout engine (`ComponentRenderer::applyLayoutIfConfigured`)
+
+`ComponentRenderer` now accepts optional `layoutName`, `uriResolver`, and `partialRenderer` constructor arguments. When `layoutName` is provided, the renderer loads the named `.phue` layout component and wraps the page markup inside it:
+
+- `layoutName` — name of the layout component (e.g. `AppLayout`, `SchiiLayout`).
+- `uriResolver` — callable returning the current request URI (used for active nav state).
+- `partialRenderer` — `PhuePartialRenderer` instance injected into the layout's PHP context.
+
+Layouts receive two variables in their `<php>` block:
+
+- `$content` — the evaluated page markup.
+- `$uri` — the current request URI.
+
+They return an `html` key whose value replaces the page markup inside the shell. If no layout is configured, the renderer falls back to the raw page markup (backwards-compatible).
+
+### SSR navigation partial (`PhNavigation`)
+
+`src/Core/UI/Phui/PhNavigation.phue` is an HTML-first SSR partial that renders a `<nav class="ph-nav">` list. It accepts `items` and `activeRoute` and computes active state in PHP:
+
+- Root path (`/`) uses exact match only.
+- Child paths activate their parent via `/`-delimited prefix matching (`str_starts_with`).
+- Disabled items render as `<span class="ph-nav__link is-disabled" aria-disabled="true">`.
+- Labels and hrefs are escaped with `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`.
+
+### SPA interceptor (`phue-explorer.js`)
+
+`storage/assets/js/phue-explorer.js` is registered automatically by `HtmlShellRenderer`. It turns the app into a SPA without changing server behavior:
+
+- Intercepts same-origin `<a href>` clicks (ignores modified clicks, `target="_blank"`, fragments, `javascript:`).
+- Sends `X-Phue-SPA: true` on fetch requests.
+- Replaces `#app` innerHTML, updates `document.title`, and pushes history state.
+- Re-executes module `<script type="module">` tags via blob URLs with automatic revocation, so Vue pages remount after navigation.
 
 ### Developer console page
 

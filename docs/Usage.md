@@ -1076,32 +1076,111 @@ All components use `--ph-*` tokens: `--ph-color-primary`, `--ph-space-1..8`, `--
 
 ---
 
-## 12. Abstract Controller Base (`App\Controllers\Controller`)
+## 12. HTML-First Layouts & Server-Side Navigation
 
-All controllers extend the abstract `Controller` base to avoid repeating the `ComponentRenderer` constructor:
+Phue now supports HTML-first layouts that wrap page content, and a shared SSR navigation partial.
+
+### Defining a Layout
+
+Layouts are `.phue` files with a `<php>` block that receives `$content` (page markup) and `$uri` (current path). They return an `html` key:
 
 ```php
-namespace App\Controllers;
+<php>
+use App\Config\NavigationConfig;
 
-use Phue\Core\Response;
-use Phue\Core\Routing\Attribute\Route;
+/** @var string $content */
+/** @var string $uri */
+/** @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer */
 
-#[Route('/')]
-class WebController extends Controller
+$content = $content ?? '';
+$uri = $uri ?? '/';
+
+$navHtml = $partialRenderer->renderPartial('PhNavigation', [
+    'items'       => NavigationConfig::getAppItems(),
+    'activeRoute' => $uri,
+]);
+
+return [
+    'html' => sprintf(
+        '<div class="app-layout">%s<main class="app-content">%s</main></div>',
+        $navHtml,
+        $content
+    ),
+];
+</php>
+
+<template>
+    <!-- Layout template is ignored when html is returned -->
+</template>
+```
+
+### Shared Navigation Definitions
+
+Define nav items in a shared config (`App/Config/NavigationConfig.php`):
+
+```php
+namespace App\Config;
+
+class NavigationConfig
 {
-    #[Route('/', methods: ['GET'])]
-    public function index(): Response
+    public static function getAppItems(): array
     {
-        return $this->ui->render('Home');
+        return [
+            ['label' => 'Home', 'href' => '/'],
+            ['label' => 'Docs', 'href' => '/docs'],
+        ];
     }
 }
 ```
 
-**Route pitfall:** Class-level `#[Route('/products')]` + method-level `#[Route('/', methods: ['GET'])]` → `/products`. Do NOT duplicate the prefix (e.g., `#[Route('/products/index')]` with `#[Route('/products')]` yields `/products/products/index`).
+### Wiring the Renderer with a Layout
+
+In `Application::registerCoreBindings()`:
+
+```php
+$this->container->singleton(ComponentRenderer::class, function ($c) {
+    return new ComponentRenderer(
+        shellRenderer: $c->get(HtmlShellRenderer::class),
+        assetRegistry: $c->get(AssetRegistry::class),
+        loader: $c->get(PhueComponentLoader::class),
+        layoutName: 'AppLayout',
+        uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+        partialRenderer: $c->get(PhuePartialRenderer::class)
+    );
+});
+```
+
+### SPA Behavior (phue-explorer)
+
+`HtmlShellRenderer` automatically injects `storage/assets/js/phue-explorer.js`. It:
+
+- Intercepts same-origin anchor clicks.
+- Fetches the target page via `fetch(url, { headers: { 'X-Phue-SPA': true } })`.
+- Replaces `#app` content, updates title/history.
+- Re-executes module scripts via blob URLs (with automatic revocation).
+
+No client-side routing library is needed — the server is the single source of truth for navigation state.
 
 ---
 
-## 11. Running & Testing Locally
+## 13. Abstract Controller Base (`App\Controllers\Controller`)
+
+All controllers extend the abstract `Controller` base class to avoid repeating the `ComponentRenderer` constructor injection:
+
+```php
+abstract class Controller
+{
+    public function __construct(protected ComponentRenderer $ui) {}
+}
+```
+
+Controllers resolve `ComponentRenderer` from the DI container with the layout already wired (see §12). Call `$this->ui->render('PageName', [...])` as usual — the layout is applied transparently.
+
+**Route concatenation:** `AttributeRouteLoader::combinePaths()` concatenates class-level `#[Route('/products')]` with method-level `#[Route('/', methods: ['GET'])]` → `/products`. Avoid duplicating the prefix in the method route (e.g., don't use `#[Route('/products/index')]` with `#[Route('/products')]` class prefix — that yields `/products/products/index`).
+
+---
+
+## 14. Running & Testing Locally
 
 ### Using Docker Wrapper (`phue-docker`)
 
