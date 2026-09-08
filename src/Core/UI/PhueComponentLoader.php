@@ -167,7 +167,7 @@ class PhueComponentLoader
      */
     private function getOrFetchStructure(string $name): array
     {
-        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]*$/', $name)) {
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_\-\/]*$/', $name) || str_contains($name, '..')) {
             throw new RuntimeException("Invalid component name format: '{$name}'");
         }
 

@@ -187,7 +187,7 @@ class Application
 
             // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
             $registry->addResolver('/assets/phue/', function (string $path): ?string {
-                if (!preg_match('/^([A-Za-z0-9_-]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
+                if (!preg_match('/^([A-Za-z0-9_\-\/]+)\.([a-f0-9]{8})\.phue\.js$/i', $path, $matches)) {
                     return null;
                 }
 

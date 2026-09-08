@@ -185,13 +185,12 @@ final class PhueExplorerAssetTest extends TestCase
         $this->assertStringContainsString('window.location.href = url', $source);
     }
 
-    public function testSourceReEvaluatesModuleScriptsWithBlobUrlRevocation(): void
+    public function testSourceReEvaluatesModuleScriptsWithDynamicImports(): void
     {
         $source = $this->explorerSource();
 
-        $this->assertStringContainsString("doc.querySelectorAll('script[type=\"module\"]')", $source);
-        $this->assertStringContainsString('URL.createObjectURL', $source);
-        $this->assertStringContainsString('URL.revokeObjectURL', $source);
+        $this->assertStringContainsString("for (const script of data.scripts)", $source);
+        $this->assertStringContainsString('import(script.url)', $source);
     }
 
     public function testSourceHandlesPopstateHistoryNavigation(): void

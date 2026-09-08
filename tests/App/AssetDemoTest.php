@@ -52,7 +52,7 @@ final class AssetDemoTest extends TestCase
         $content = $this->app->handle(new Request('GET', '/'))->getContent();
 
         $this->assertMatchesRegularExpression(
-            '/<script type="module" src="\/assets\/phue\/Home\.[a-f0-9]{8}\.phue\.js"><\/script>/',
+            '/<script type="module" src="\/assets\/phue\/Pages\/Home\.[a-f0-9]{8}\.phue\.js"><\/script>/',
             $content
         );
         $this->assertStringNotContainsString('<script type="module">', $content);
@@ -63,7 +63,7 @@ final class AssetDemoTest extends TestCase
     public function testDemoPageServesExtractedModuleScript(): void
     {
         $page = $this->app->handle(new Request('GET', '/'))->getContent();
-        preg_match('/src="(\/assets\/phue\/Home\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
+        preg_match('/src="(\/assets\/phue\/Pages\/Home\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
         $this->assertArrayHasKey(1, $module);
 
         $response = $this->app->handle(new Request('GET', $module[1]));

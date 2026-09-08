@@ -159,7 +159,16 @@ class ComponentRenderer
 
         // Layout Engine Seam
         $appContent = $this->applyLayoutIfConfigured($pageMarkup);
-
+        $isSpaRequest = \Phue\Core\Request::capture()->getHeader('X-Phue-SPA') === 'true';
+        if ($isSpaRequest) {
+            return \Phue\Core\Response::json([
+                'title'   => $title,
+                'html'    => $appContent,
+                'state'   => $view->getState(),
+                'scripts' => $this->assetRegistry->getScripts(),
+            ]);
+        }
+        
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',

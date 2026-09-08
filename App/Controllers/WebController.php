@@ -18,7 +18,7 @@ class WebController extends Controller
     #[Route('/', methods: ['GET'])]
     public function index(): Response
     {
-        return $this->ui->render('Home', [
+        return $this->ui->render('Pages/Home', [
             'testValue' => 'HomePage'
         ]);
     }
@@ -26,7 +26,7 @@ class WebController extends Controller
     #[Route('/docs', methods: ['GET'])]
     public function docs(): Response
     {
-        return $this->ui->render('Docs', [
+        return $this->ui->render('Pages/Docs', [
             'testValue' => 'DocsPage'
         ]);
     }
@@ -34,7 +34,7 @@ class WebController extends Controller
     #[Route('/ui', methods: ['GET'])]
     public function ui(): Response
     {
-        return $this->ui->render('UI', [
+        return $this->ui->render('Pages/UI', [
             'checked'      => true,
             'radioValue'   => 'option1',
             'loading'      => false,

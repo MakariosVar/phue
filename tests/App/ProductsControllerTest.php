@@ -60,9 +60,11 @@ final class ProductsControllerTest extends TestCase
         $content = $this->app->handle(new Request('GET', '/products'))->getContent();
 
         $this->assertMatchesRegularExpression(
-            '/<script type="module" src="\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js"><\/script>/',
+            '/<script type="module" src="\/assets\/phue\/Pages\/Products\.[a-f0-9]{8}\.phue\.js"><\/script>/',
             $content
         );
+        $this->assertStringNotContainsString('<script type="module">', $content);
+        $this->assertStringNotContainsString('src="/assets/app.js"', $content);
     }
 
     public function testProductsRouteEmbedsProductsData(): void
@@ -96,7 +98,7 @@ final class ProductsControllerTest extends TestCase
     public function testProductsRouteServesProductsModuleScript(): void
     {
         $page = $this->app->handle(new Request('GET', '/products'))->getContent();
-        preg_match('/src="(\/assets\/phue\/Products\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
+        preg_match('/src="(\/assets\/phue\/Pages\/Products\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
         $this->assertArrayHasKey(1, $module);
 
         $response = $this->app->handle(new Request('GET', $module[1]));

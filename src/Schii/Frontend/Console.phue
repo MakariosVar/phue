@@ -17,7 +17,7 @@ return [
 </php>
 
 <template>
-    <div class="schii-console">
+    <div v-cloak class="schii-console">
         <header class="schii-header p-4 d-flex justify-between items-center">
             <div>
                 <h1 v-text="title" class="m-0">Schii Console</h1>

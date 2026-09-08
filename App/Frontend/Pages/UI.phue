@@ -28,7 +28,7 @@
 </php>
 
 <template>
-<div id="app" class="phue-docs" style="display:flex; min-height:100vh;">
+<div class="phue-docs" style="display:flex; min-height:100vh;">
 
     <!-- Sidebar -->
     <aside class="phue-sidebar" style="

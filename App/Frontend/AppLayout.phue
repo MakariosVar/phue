@@ -29,7 +29,7 @@ if (isset($cache[$cacheKey])) {
 
 return [
     'html' => sprintf(
-        '<div class="app-layout">%s<main class="app-content">%s</main></div>',
+        '<div class="app-layout">%s<main v-cloak class="app-content">%s</main></div>',
         $navHtml,
         $content
     ),

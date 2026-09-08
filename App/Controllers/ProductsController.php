@@ -23,7 +23,7 @@ class ProductsController extends Controller
     #[Route('/', methods: ['GET'])]
     public function index(): Response
     {
-        return $this->ui->render('Products', [
+        return $this->ui->render('Pages/Products', [
             'testValue' => 'value String'
         ]);
     }
