@@ -22,6 +22,7 @@ final readonly class SchiiConfig
      * @param string $prefix Base URI Schii Admin console endpoints.
      * @param string $entityNamespace Fully qualified PHP namespace where Schii models reside.
      * @param bool $autoMigrate Whether automatic database schema migration is enabled during boot.
+     * @param bool $requireAuth Whether automatic database UI need authorized access
      * @param string $cachePrefix Cache key prefix for compiled model schema descriptors.
      * @param array<int, string|callable> $middleware Array of middleware pipeline callables/classes for Schii routes.
      */
@@ -29,6 +30,7 @@ final readonly class SchiiConfig
         public string $apiPrefix = '/api/schii',
         public string $prefix = '/schii',
         public string $entityNamespace = 'App\\Models',
+        public bool $requireAuth = false,
         public bool $autoMigrate = true,
         public string $cachePrefix = 'schii_schema_',
         public array $middleware = []
@@ -54,6 +56,7 @@ final readonly class SchiiConfig
             apiPrefix: $options['apiPrefix'] ?? '/api/schii',
             prefix: $options['prefix'] ?? '/schii',
             entityNamespace: $options['entityNamespace'] ?? 'App\\Models',
+            requireAuth: $options['requireAuth'] ?? false,
             autoMigrate: $options['autoMigrate'] ?? true,
             cachePrefix: $options['cachePrefix'] ?? 'schii_schema_',
             middleware: $options['middleware'] ?? []

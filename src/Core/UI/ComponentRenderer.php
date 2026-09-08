@@ -9,20 +9,50 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Response;
 use RuntimeException;
 
+/**
+ * Class ComponentRenderer
+ *
+ * Handles the rendering lifecycle of Phue components, layouts, and Views.
+ * Supports HTML-first server layouts and template-based client hydration.
+ *
+ * @package Phue\Core\UI
+ */
 class ComponentRenderer
 {
+    /**
+     * ComponentRenderer constructor.
+     *
+     * @param HtmlShellRenderer        $shellRenderer Service responsible for rendering the outer HTML document shell.
+     * @param AssetRegistry            $assetRegistry Global registry managing script dependencies.
+     * @param PhueComponentLoader|null  $loader        Optional component loader instance.
+     * @param string|null              $layoutName    Optional layout component name (e.g., 'AppLayout').
+     * @param callable|null            $uriResolver   Optional callable returning current request URI string: fn(): string.
+     */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
         private AssetRegistry $assetRegistry,
-        private ?PhueComponentLoader $loader = null
+        private ?PhueComponentLoader $loader = null,
+        private ?string $layoutName = null,
+        private mixed $uriResolver = null,
+        private ?PhuePartialRenderer $partialRenderer = null
     ) {}
 
     /**
-     * Overloads:
+     * Renders a component or View instance into an HTTP Response.
+     *
+     * Supported Overloads:
      * - render('Products')
      * - render('Products', ['testValue' => 'a'])
      * - render('Products', 'Title Override', ['testValue' => 'a'])
      * - render('Title', $viewInstance)
+     *
+     * @param string                 $nameOrTitle          Component name or page title override.
+     * @param View|string|array|null $viewOrTitleOrParams View instance, title override string, or context params.
+     * @param array<string, mixed>   $params               Context parameters when using title override.
+     *
+     * @return Response HTTP response containing the full HTML document.
+     *
+     * @throws RuntimeException If component loading by name is requested without a loader configured.
      */
     public function render(
         string $nameOrTitle,
@@ -55,6 +85,15 @@ class ComponentRenderer
         return $this->renderView($nameOrTitle, $viewOrTitleOrParams);
     }
 
+    /**
+     * Renders a .phue file directly from an absolute or relative file path.
+     *
+     * @param string      $filePath      Path to the .phue file.
+     * @param string|null $titleOverride Optional title override.
+     * @param array       $params        Context parameters passed into the component evaluation.
+     *
+     * @return Response HTTP response containing the compiled document.
+     */
     public function renderFile(string $filePath, ?string $titleOverride = null, array $params = []): Response
     {
         $parser = new PhueTemplateParser();
@@ -66,6 +105,15 @@ class ComponentRenderer
         return $this->renderComponentAsModule($name, $title, $component->view);
     }
 
+    /**
+     * Transforms inline component scripts into external module assets and delegates to renderView.
+     *
+     * @param string $name  Component logical name.
+     * @param string $title Document title.
+     * @param View   $view  Evaluated View entity.
+     *
+     * @return Response Compiled HTTP HTML response.
+     */
     private function renderComponentAsModule(string $name, string $title, View $view): Response
     {
         $inlineScript = $view->getInlineScript();
@@ -80,7 +128,8 @@ class ComponentRenderer
                 template: $view->getTemplate(),
                 state: $view->getState(),
                 scripts: $view->getScripts(),
-                inlineScript: null
+                inlineScript: null,
+                html: $view->getHtml()
             );
 
             return $this->renderView($title, $moduleView);
@@ -89,20 +138,63 @@ class ComponentRenderer
         return $this->renderView($title, $view);
     }
 
+    /**
+     * Renders a View instance into the final HTML shell response, wrapping content in a Layout if configured.
+     *
+     * @param string $title Page title.
+     * @param View   $view  View object containing markup and assets.
+     *
+     * @return Response HTTP 200 response with text/html content type.
+     */
     private function renderView(string $title, View $view): Response
     {
         foreach ($view->getScripts() as $script) {
             $this->assetRegistry->addScript($script, isModule: true);
         }
 
+        $pageMarkup = $view->hasHtml() 
+            ? $view->getHtml() 
+            : $view->getTemplate();
+
+        // Layout Engine Seam
+        $appContent = $this->applyLayoutIfConfigured($pageMarkup);
+
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',
             initialState: $view->getState(),
-            content: $view->getTemplate(),
+            content: $appContent,
             inlineScript: $view->getInlineScript()
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    /**
+     * Wraps the inner page markup within the configured Layout component if available.
+     *
+     * @param string $pageMarkup Evaluated page content string.
+     *
+     * @return string Wrapped HTML markup or original markup if no layout is defined.
+     */
+     private function applyLayoutIfConfigured(string $pageMarkup): string
+    {
+        if ($this->layoutName === null || $this->loader === null) {
+            return $pageMarkup;
+        }
+
+        $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
+
+        $layoutComponent = $this->loader->load($this->layoutName, [
+            'content'         => $pageMarkup,
+            'uri'             => $uri,
+            'partialRenderer' => $this->partialRenderer,
+        ]);
+
+        $layoutView = $layoutComponent->view;
+
+        return $layoutView->hasHtml() 
+            ? $layoutView->getHtml() 
+            : $layoutView->getTemplate();
     }
 }

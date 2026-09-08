@@ -13,9 +13,10 @@ use JsonException;
  */
 class HtmlShellRenderer
 {
-    public function __construct(
-        private readonly AssetRegistry $registry
-    ) {}
+    /**
+     * @param AssetRegistry $registry Underlying asset storage registry
+     */
+    public function __construct(private readonly AssetRegistry $registry) {}
 
     /**
      * Proxies style registration directly to the underlying AssetRegistry.
@@ -54,42 +55,60 @@ class HtmlShellRenderer
      * @return string Valid HTML5 document markup
      */
     public function render(
-        string $title = 'Phue App',
-        string $appId = 'app',
+        string $title = "Phue App",
+        string $appId = "app",
         array $initialState = [],
-        string $content = '',
+        string $content = "",
         ?string $inlineScript = null
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
 
-        $stylesMarkup = implode("\n    ", array_map(
-            fn(string $url) => sprintf('<link rel="stylesheet" href="%s">', $this->escape($url)),
-            $this->registry->getStyles()
-        ));
+        $stylesMarkup = implode(
+            "\n    ",
+            array_map(
+                fn(string $url) => sprintf(
+                    '<link rel="stylesheet" href="%s">',
+                    $this->escape($url)
+                ),
+                $this->registry->getStyles()
+            )
+        );
 
-        $scriptsMarkup = implode("\n    ", array_map(
-            function (array $script): string {
-                $safeUrl = $this->escape($script['url']);
-                $typeAttr = $script['isModule'] ? ' type="module"' : '';
-                return sprintf('<script%s src="%s"></script>', $typeAttr, $safeUrl);
-            },
-            $this->registry->getScripts()
-        ));
+        $scriptsMarkup = implode(
+            "\n    ",
+            array_map(function (array $script): string {
+                $safeUrl = $this->escape($script["url"]);
+                $typeAttr = $script["isModule"] ? ' type="module"' : "";
+                return sprintf(
+                    '<script%s src="%s"></script>',
+                    $typeAttr,
+                    $safeUrl
+                );
+            }, $this->registry->getScripts())
+        );
 
-        $stateMarkup = '';
+        $stateMarkup = "";
         if (!empty($initialState)) {
             try {
-                $jsonState = json_encode($initialState, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
+                $jsonState = json_encode(
+                    $initialState,
+                    JSON_HEX_TAG |
+                        JSON_HEX_AMP |
+                        JSON_HEX_APOS |
+                        JSON_HEX_QUOT |
+                        JSON_THROW_ON_ERROR
+                );
             } catch (JsonException) {
-                $jsonState = '{}';
+                $jsonState = "{}";
             }
             $stateMarkup = "<script>window.__INITIAL_STATE__ = {$jsonState};</script>\n    ";
         }
 
-        $inlineScriptMarkup = $inlineScript !== null && $inlineScript !== ''
-            ? "<script type=\"module\">\n{$inlineScript}\n</script>\n    "
-            : '';
+        $inlineScriptMarkup =
+            $inlineScript !== null && $inlineScript !== ""
+                ? "<script type=\"module\">\n{$inlineScript}\n</script>\n    "
+                : "";
 
         return <<<HTML
 <!DOCTYPE html>
@@ -107,8 +126,14 @@ class HtmlShellRenderer
 HTML;
     }
 
+    /**
+     * Safely escapes strings for HTML context output.
+     *
+     * @param string $value Unescaped value
+     * @return string Escaped output
+     */
     private function escape(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
     }
 }

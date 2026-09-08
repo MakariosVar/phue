@@ -1,0 +1,29 @@
+<php>
+
+use App\Config\NavigationConfig;
+
+/**
+ * @var string $content
+ * @var string $uri
+ * @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer
+ */
+$content = $content ?? '';
+$uri = $uri ?? '/';
+$items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems() : []);
+
+$navHtml = $partialRenderer->renderPartial('PhNavigation', [
+    'items'       => $items,
+    'activeRoute' => $uri,
+]);
+
+return [
+    'html' => sprintf(
+        '<div class="app-layout">%s<main class="app-content">%s</main></div>',
+        $navHtml,
+        $content
+    ),
+];
+</php>
+<template>
+<!-- App -->
+</template>

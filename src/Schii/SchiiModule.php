@@ -11,8 +11,9 @@ use Phue\Core\Module;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
-use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\ComponentRenderer;
+use Phue\Core\UI\PhueComponentLoader;
+use Phue\Core\UI\PhuePartialRenderer;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
@@ -120,14 +121,16 @@ class SchiiModule extends Module
             $loaderRegistry->addLoader($this->container->get('schii.loader'));
         }
 
-        $this->container->singleton(
-            'schii.renderer',
-            fn(Container $c): ComponentRenderer => new ComponentRenderer(
-                $c->get(HtmlShellRenderer::class),
-                $c->get(AssetRegistry::class),
-                $c->get('schii.loader')
-            )
-        );
+        $this->container->singleton('schii.renderer', function ($c) {
+            return new ComponentRenderer(
+                shellRenderer: $c->get(HtmlShellRenderer::class),
+                assetRegistry: $c->get(AssetRegistry::class),
+                loader: $c->get('schii.loader'),
+                layoutName: 'SchiiLayout',
+                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+                partialRenderer: $c->get(PhuePartialRenderer::class)
+            );
+        });
 
         // 6. ModelEndpoint Dependency Bindings
         $this->container->bind(

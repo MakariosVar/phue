@@ -11,11 +11,17 @@ use RuntimeException;
  * Class PhueComponentLoader
  *
  * Loads, parses, and evaluates single-file Phue components (.phue).
+ * Handles structural AST caching and dynamic runtime context evaluation.
  *
  * @package Phue\Core\UI
  */
 class PhueComponentLoader
 {
+    /**
+     * Base directory containing .phue component files.
+     *
+     * @var string
+     */
     private string $componentsDir;
 
     /**
@@ -25,8 +31,21 @@ class PhueComponentLoader
      */
     private array $cache = [];
 
+    /**
+     * Structural template parser instance.
+     *
+     * @var PhueTemplateParser
+     */
     private PhueTemplateParser $parser;
 
+    /**
+     * PhueComponentLoader constructor.
+     *
+     * @param string                  $componentsDir Absolute or relative path to component files directory.
+     * @param PhueTemplateParser|null $parser        Optional parser instance; defaults to new PhueTemplateParser.
+     *
+     * @throws RuntimeException If $componentsDir path is invalid or unreadable.
+     */
     public function __construct(string $componentsDir, ?PhueTemplateParser $parser = null)
     {
         $realBase = realpath($componentsDir);
@@ -44,7 +63,9 @@ class PhueComponentLoader
      * @param string               $name   Component logical name.
      * @param array<string, mixed> $params Parameters passed into the <php> evaluation context.
      *
-     * @return PhueComponent
+     * @return PhueComponent Evaluated component entity containing title and View instance.
+     *
+     * @throws RuntimeException If component name is invalid or file is missing/unreadable.
      */
     public function load(string $name, array $params = []): PhueComponent
     {
@@ -59,7 +80,7 @@ class PhueComponentLoader
      *
      * @param string $name Component logical name.
      *
-     * @return string|null Inline JavaScript content or null if not found/has no script.
+     * @return string|null Inline JavaScript content or null if not found or has no script block.
      */
     public function contentFor(string $name): ?string
     {
@@ -72,7 +93,7 @@ class PhueComponentLoader
     }
 
     /**
-     * Retrieves the inline script content for a component IF the hash matches.
+     * Retrieves the inline script content for a component IF the sha1 prefix hash matches.
      *
      * @param string $name Component logical name.
      * @param string $hash 8-character sha1 prefix hash.
@@ -95,12 +116,12 @@ class PhueComponentLoader
     }
 
     /**
-     * Evaluates parsed structure dynamically per-render call.
+     * Evaluates parsed structure dynamically per-render call and extracts meta declarations.
      *
-     * @param array{template: string, script: ?string, phpCode: ?string} $structure
-     * @param array<string, mixed>                                       $params
+     * @param array{template: string, script: ?string, phpCode: ?string} $structure Structural AST array.
+     * @param array<string, mixed>                                       $params    Evaluation parameters.
      *
-     * @return PhueComponent
+     * @return PhueComponent Constructed component entity.
      */
     private function evaluateStructure(array $structure, array $params): PhueComponent
     {
@@ -109,23 +130,27 @@ class PhueComponentLoader
         $title = (string) ($meta['title'] ?? 'Phue App');
         $state = is_array($meta['state'] ?? null) ? $meta['state'] : [];
         $scripts = is_array($meta['scripts'] ?? null) ? $meta['scripts'] : [];
+        $html = is_string($meta['html'] ?? null) ? $meta['html'] : null;
 
         $view = new View(
             template: $structure['template'],
             state: $state,
             scripts: $scripts,
-            inlineScript: $structure['script']
+            inlineScript: $structure['script'],
+            html: $html
         );
 
         return new PhueComponent($title, $view);
     }
 
     /**
-     * Resolves file path and returns/caches ONLY the static AST structure.
+     * Resolves file path and returns/caches ONLY the static AST structure based on mtime and size.
      *
-     * @param string $name
+     * @param string $name Component logical name.
      *
-     * @return array{template: string, script: ?string, phpCode: ?string}
+     * @return array{template: string, script: ?string, phpCode: ?string} Structural AST payload.
+     *
+     * @throws RuntimeException If component name format is invalid or file path escapes sandbox.
      */
     private function getOrFetchStructure(string $name): array
     {

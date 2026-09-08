@@ -1,0 +1,29 @@
+<php>
+use App\Config\NavigationConfig;
+
+/**
+ * @var string $content
+ * @var string $uri
+ * @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer
+ * @var array|null $items
+ */
+$content = $content ?? '';
+$uri = $uri ?? '/schii';
+$items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getSchiiItems() : []);
+
+$navHtml = $partialRenderer->renderPartial('PhNavigation', [
+    'items'       => $items,
+    'activeRoute' => $uri,
+]);
+
+return [
+    'html' => sprintf(
+        '<div class="schii-layout">%s<main class="schii-content">%s</main></div>',
+        $navHtml,
+        $content
+    ),
+];
+</php>
+<template>
+<!-- Console.phue -->
+</template>

@@ -16,6 +16,8 @@ use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Core\UI\ComponentRenderer;
+use Phue\Core\UI\PhuePartialRenderer;
 use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
@@ -126,6 +128,17 @@ class Application
             return new PhueComponentLoader($this->basePath . '/src/Core/UI/Phui');
         });
 
+        $this->container->singleton(ComponentRenderer::class, function ($c) {
+            return new ComponentRenderer(
+                shellRenderer: $c->get(HtmlShellRenderer::class),
+                assetRegistry: $c->get(AssetRegistry::class),
+                loader: $c->get(PhueComponentLoader::class),
+                layoutName: 'AppLayout',
+                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+                partialRenderer: $c->get(PhuePartialRenderer::class)
+            );
+        });
+
         // Composite Component Loader Registry Singleton
         $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
             $registry = new ComponentLoaderRegistry();
@@ -155,10 +168,16 @@ class Application
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
 
-            // Register default framework static styles path only if directory exists
+            // Register default framework static styles path if directory exists
             $stylesPath = $this->basePath . '/storage/assets/styles';
             if (is_dir($stylesPath)) {
                 $registry->registerSource('/assets/styles', $stylesPath);
+            }
+
+            // Register default framework static js path if directory exists
+            $jsPath = $this->basePath . '/storage/assets/js';
+            if (is_dir($jsPath)) {
+                $registry->registerSource('/assets/js', $jsPath);
             }
 
             // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
@@ -189,6 +208,9 @@ class Application
 
             // Automatically inject default phue.css into shell head
             $renderer->addStyle('/assets/styles/phue.css');
+
+            // Explicitly register navigation interceptor script
+            $renderer->addScript('/assets/js/phue-explorer.js', true);
 
             return $renderer;
         });

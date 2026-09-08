@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii;
 
 use Phue\Core\Application;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
+use Phue\Core\UI\PhueComponentLoader;
 use Phue\Schii\SchiiModule;
 use PHPUnit\Framework\TestCase;
 
@@ -50,8 +52,15 @@ PHP);
 return [
     'apiPrefix' => '{$schiiApiPrefix}',
     'entityNamespace' => '{$entityNamespace}',
+    'requireAuth' => true,
 ];
 PHP);
+    }
+
+    private function addPhuiLoader(Application $app): void
+    {
+        $registry = $app->getContainer()->get(ComponentLoaderRegistry::class);
+        $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
     }
 
     public function testModuleHonorsApplicationConfigPrefixAndNamespace(): void
@@ -113,6 +122,7 @@ PHP);
         $this->writeConfig('/api/schii', 'Phue\\Tests\\Schii\\Stubs');
 
         $app = new Application($this->tmpBase);
+        $this->addPhuiLoader($app);
 
         $page = $app->handle(new Request('GET', '/schii'));
         $this->assertSame(200, $page->getStatusCode());
@@ -137,6 +147,7 @@ PHP);
         $this->writeConfig('/custom/api', 'Phue\\Tests\\Schii\\Stubs');
 
         $app = new Application($this->tmpBase);
+        $this->addPhuiLoader($app);
 
         $page = $app->handle(new Request('GET', '/schii'));
         $this->assertSame(200, $page->getStatusCode());
