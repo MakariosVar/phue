@@ -597,6 +597,7 @@ Currently registered commands (all under `./bin/phue`):
 
 ```bash
 serve              # Launch dev web server (docroot public/, default host 0.0.0.0)
+serve:swoole       # Launch persistent Swoole HTTP server with coroutine support
 make:controller    # Generate App/Controllers/XxxController.php with #[Route] attribute
 make:model         # Generate App/Models/Xxx.php extending BaseActiveRecord
 make:migration     # Generate a migration file under database/migrations/
@@ -615,6 +616,18 @@ deploy             # Edge build/deploy helper (WASM targets)
 # Override port or host
 ./bin/phue serve --port=8080 --host=127.0.0.1
 ```
+
+### Launch Swoole HTTP Server (`serve:swoole`)
+
+```bash
+# Starts persistent Swoole server on 0.0.0.0:8000 with coroutine support
+./bin/phue serve:swoole
+
+# Override port, host, and Swoole-specific options
+./bin/phue serve:swoole --port=8080 --host=127.0.0.1 --worker-num=4
+```
+
+The Swoole server provides persistent connections, coroutine support, and better performance for production environments. It automatically handles request scope flushing and maintains persistent database connections.
 
 ### Generate Controller Class (`make:controller`)
 
@@ -1031,6 +1044,48 @@ $hardenedResponse = $middleware->handle($response);
 ```bash
 # Execute zero-downtime deployment script
 ./bin/phue deploy
+```
+
+### JSON-Based Hydration & Component Caching
+
+Phue now supports JSON-based hydration for component state management and persistent filesystem caching for improved performance.
+
+#### Component Caching Configuration
+
+```php
+// Enable persistent filesystem caching for component PHP blocks
+$container->set(ComponentCache::class, function () {
+    return new ComponentCache(
+        cacheDir: __DIR__ . '/../storage/cache/components',
+        opcacheEnabled: true
+    );
+});
+```
+
+#### JSON Hydration for Component State
+
+```php
+// Use JSON-based hydration for complex component state
+$jsonHydration = new JsonHydration();
+$state = $jsonHydration->hydrate($request->input('component_state'));
+
+// Return hydrated component response
+return $this->ui->render('ComplexComponent', [
+    'state' => $state,
+    'useJsonHydration' => true
+]);
+```
+
+#### Vue Cloak Integration
+
+```php
+// Enable Vue cloak loader for hydration state management
+$container->set(VcloakLoader::class, function () {
+    return new VcloakLoader(
+        templateDir: __DIR__ . '/../templates/vue',
+        cacheEnabled: true
+    );
+});
 ```
 
 ---

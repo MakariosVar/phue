@@ -56,6 +56,9 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `WasmAdapter` | `Server/WasmAdapter.php` | Server Adapter for WebAssembly (WASM) & Cloudflare Edge Runtimes |
 | `CacheInterface` | `Cache/CacheInterface.php` | Contract for Phue framework caching engines |
 | `EdgeKvCache` | `Cache/EdgeKvCache.php` | In-Memory & Key-Value Cache Driver for Read-Only Edge Filesystems |
+| `ComponentCache` | `Cache/ComponentCache.php` | Persistent filesystem caching for component PHP blocks with OPCache optimization |
+| `HydrationCache` | `Cache/HydrationCache.php` | JSON-based hydration cache for component state management |
+| `VcloakLoader` | `Frontend/VcloakLoader.php` | Vue cloak loader for component hydration state management |
 | `EventBusInterface` | `Events/Bus/EventBusInterface.php` | Contract for Phue Real-Time Event Bus Subsystem |
 | `InMemoryBusDriver` | `Events/Bus/InMemoryBusDriver.php` | In-Memory Event Bus Driver for testing and local development |
 | `RedisStreamDriver` | `Events/Bus/RedisStreamDriver.php` | High-Throughput Redis Streams Event Bus Driver with Consumer Groups |
@@ -71,6 +74,9 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `View` | `Core/UI/View.php` | Encapsulates template, state, scripts, and optional server-rendered HTML |
 | `PhuePartialRenderer` | `Core/UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) via the ComponentLoaderRegistry |
 | `PhNavigation` | `Core/UI/Phui/PhNavigation.phue` | SSR nav partial with boundary-aware active-route matching |
+| `SwooleServeCommand` | `Core/Console/Commands/SwooleServeCommand.php` | Command to serve the app through Swoole HTTP server with persistent connections |
+| `JsonHydration` | `Core/JsonHydration.php` | JSON-based hydration system for component state management |
+| `SpaInterceptor` | `Core/SpaInterceptor.php` | SPA interceptor for client-side navigation without full page reloads |
 
 ---
 
@@ -719,6 +725,7 @@ The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/p
 ### Built-in Commands (`src/Core/Console/Commands/`)
 
 - **`ServeCommand` (`serve`)**: Launches local dev HTTP server with document root `public/` (`php -S 0.0.0.0:8000 -t public`).
+- **`SwooleServeCommand` (`serve:swoole`)**: Launches persistent Swoole HTTP server with coroutine support for high-performance serving.
 - **`MakeControllerCommand` (`make:controller`)**: Generates controller classes with pre-filled `#[Route('/...', methods: ['GET'])]` attributes.
 - **`MakeModelCommand` (`make:model`)**: Generates Active Record model classes extending `BaseActiveRecord`.
 - **`MakeMigrationCommand` (`make:migration`)**: Scaffolds a timestamped migration file under `database/migrations/`.
