@@ -96,7 +96,8 @@ final class SwooleAdapter implements ServerAdapterInterface
     {
         $headers = [];
         foreach ($swRequest->header ?? [] as $key => $val) {
-            $headers[ucwords($key, '-')] = $val;
+            $normalizedKey = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', (string) $key))));
+            $headers[$normalizedKey] = (string) $val;
         }
 
         return new Request(

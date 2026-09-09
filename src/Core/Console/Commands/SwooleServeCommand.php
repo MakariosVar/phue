@@ -142,9 +142,9 @@ final class SwooleServeCommand implements CommandInterface
         $headers = [];
         if (isset($swooleRequest->header) && is_array($swooleRequest->header)) {
             foreach ($swooleRequest->header as $key => $value) {
-                $normalizedKey = str_replace('-', '_', strtoupper((string) $key));
+                $normalizedKey = ucwords(strtolower((string) $key), '-');
                 $headers[$normalizedKey] = (string) $value;
-                $server['HTTP_' . $normalizedKey] = (string) $value;
+                $server['HTTP_' . strtoupper(str_replace('-', '_', $normalizedKey))] = (string) $value;
             }
         }
 

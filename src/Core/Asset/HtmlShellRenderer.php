@@ -39,7 +39,8 @@ class HtmlShellRenderer
      */
     public function addScript(string $url, bool $isModule = true): self
     {
-        $this->registry->addScript($url, $isModule);
+        $this->registry->addGlobalScript($url, $isModule);
+
         return $this;
     }
 
@@ -77,15 +78,21 @@ class HtmlShellRenderer
 
         $scriptsMarkup = implode(
             "\n    ",
-            array_map(function (array $script): string {
-                $safeUrl = $this->escape($script["url"]);
-                $typeAttr = $script["isModule"] ? ' type="module"' : "";
-                return sprintf(
-                    '<script%s src="%s"></script>',
-                    $typeAttr,
-                    $safeUrl
-                );
-            }, $this->registry->getScripts())
+            array_map(
+                function (array $script): string {
+                    $safeUrl = $this->escape($script['url']);
+                    $typeAttr = $script['isModule']
+                        ? ' type="module"'
+                        : '';
+
+                    return sprintf(
+                        '<script%s src="%s"></script>',
+                        $typeAttr,
+                        $safeUrl
+                    );
+                },
+                $this->registry->getScripts()
+            )
         );
 
         $stateMarkup = "";

@@ -177,7 +177,8 @@ class Application
                 assetRegistry: $c->get(AssetRegistry::class),
                 loader: $c->get(PhueComponentLoader::class),
                 layoutName: 'AppLayout',
-                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+                uriResolver: fn() => $c->get(\Phue\Core\Request::class)->getUri(),
+                requestResolver: fn() => $c->get(\Phue\Core\Request::class),
                 partialRenderer: $c->get(PhuePartialRenderer::class)
             );
         });
@@ -304,6 +305,11 @@ class Application
     public function handle(?Request $request = null): Response
     {
         $request ??= Request::capture();
+
+        $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
+
+        // Reset per-request script tracking so SPA responses only include current page scripts
+        $this->container->get(\Phue\Core\Asset\AssetRegistry::class)->beginRequest();
 
         // Build the global middleware pipeline
         $pipeline = array_reduce(

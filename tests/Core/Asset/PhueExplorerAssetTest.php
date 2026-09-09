@@ -123,6 +123,50 @@ final class PhueExplorerAssetTest extends TestCase
         $this->assertSame(1, substr_count($twice, '/assets/js/phue-explorer.js'));
     }
 
+    public function testExplorerIsGlobalScriptNotRequestScript(): void
+    {
+        $registry = $this->app->getContainer()->get(\Phue\Core\Asset\AssetRegistry::class);
+        $this->app->getContainer()->get(HtmlShellRenderer::class);
+
+        $this->assertContains(
+            '/assets/js/phue-explorer.js',
+            array_column($registry->getGlobalScripts(), 'url'),
+        );
+        $this->assertNotContains(
+            '/assets/js/phue-explorer.js',
+            array_column($registry->getRequestScripts(), 'url'),
+        );
+    }
+
+    public function testShellDoesNotAccumulatePageModulesAcrossRequests(): void
+    {
+        $registry = $this->app->getContainer()->get(\Phue\Core\Asset\AssetRegistry::class);
+        $renderer = $this->app->getContainer()->get(HtmlShellRenderer::class);
+
+        // Request #1 renders the Home page module into the shell
+        $registry->beginRequest();
+        $registry->addScript('/assets/phue/Home.abcd1234.phue.js', true);
+        $homeShell = $renderer->render(title: 'Home');
+
+        // Request #2 is a fresh Swoole request navigating to Products.
+        // The previous page module must NOT leak into this shell.
+        $registry->beginRequest();
+        $registry->addScript('/assets/phue/Products.5678abcd.phue.js', true);
+        $productsShell = $renderer->render(title: 'Products');
+
+        $this->assertStringContainsString('/assets/phue/Home.abcd1234.phue.js', $homeShell);
+        $this->assertStringContainsString('/assets/phue/Products.5678abcd.phue.js', $productsShell);
+        $this->assertStringNotContainsString(
+            '/assets/phue/Home.abcd1234.phue.js',
+            $productsShell,
+            'Shell of request #2 must not include modules registered during request #1',
+        );
+        $this->assertSame(
+            1,
+            substr_count($productsShell, '/assets/js/phue-explorer.js'),
+        );
+    }
+
     public function testRendererStaysPureWithoutContainerBootstrap(): void
     {
         $registry = new \Phue\Core\Asset\AssetRegistry();
@@ -190,7 +234,8 @@ final class PhueExplorerAssetTest extends TestCase
         $source = $this->explorerSource();
 
         $this->assertStringContainsString("for (const script of data.scripts)", $source);
-        $this->assertStringContainsString('import(script.url)', $source);
+        $this->assertStringContainsString('await mountModule(script.url)', $source);
+        $this->assertStringContainsString('await import(url)', $source);
     }
 
     public function testSourceHandlesPopstateHistoryNavigation(): void

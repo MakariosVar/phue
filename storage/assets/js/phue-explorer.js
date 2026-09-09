@@ -7,6 +7,9 @@
   if (window.__phueExplorerInitialized) return;
   window.__phueExplorerInitialized = true;
 
+  /** @type {Set<string>} Tracks dynamically imported module URLs to avoid redundant fetches */
+  const importedModules = new Set();
+
   document.addEventListener('click', async (e) => {
     // Ignore modified clicks (Cmd+click, Ctrl+click, Shift+click) or non-left click events
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -46,7 +49,25 @@
     await navigateTo(window.location.href, false);
   });
 
-    /**
+  /**
+   * Mounts a module by URL: imports it (or retrieves from cache) and calls its default export.
+   *
+   * @param {string} url Module script URL
+   * @return {Promise<boolean>} true if the module was freshly imported (first time)
+   */
+  async function mountModule(url) {
+    const isNew = !importedModules.has(url);
+    const mod = await import(url);
+    importedModules.add(url);
+
+    if (typeof mod.default === 'function') {
+      mod.default();
+    }
+
+    return isNew;
+  }
+
+  /**
    * Fetches target URL content and updates DOM content and scripts.
    *
    * @param {string} url
@@ -62,7 +83,7 @@
         window.location.href = url;
         return;
       }
-      
+
       const data = await response.json();
 
       // 1. Update Document Title & Global State
@@ -80,20 +101,18 @@
       }
       document.querySelector('#app').innerHTML = data.html;
 
-      // 3. Update Browser History (Το είχες σβήσει κατά λάθος!)
+      // 3. Update Browser History
       if (pushState) {
         window.history.pushState(null, '', url);
       }
 
-      // 4. Mount Vue Components via Dynamic Imports (Πλέον με το JSON!)
+      // 4. Mount Vue Components via Dynamic Imports
       for (const script of data.scripts) {
           if (script.url.includes('/assets/vendor/')) continue;
-          
+          if (script.url.endsWith('phue-explorer.js')) continue;
+
           try {
-              const mod = await import(script.url);
-              if (typeof mod.default === 'function') {
-                  mod.default();
-              }
+              await mountModule(script.url);
           } catch (err) {
               console.error('Failed to load module:', script.url);
           }
@@ -103,5 +122,20 @@
       window.location.href = url;
     }
   }
+
+  // --- Initial Load: Mount component scripts embedded in the HTML shell ---
+  document.addEventListener('DOMContentLoaded', async () => {
+    const componentScripts = document.querySelectorAll(
+      'script[type="module"][src*="/assets/phue/"]'
+    );
+
+    for (const el of componentScripts) {
+      try {
+        await mountModule(el.src);
+      } catch (err) {
+        console.error('[Phue Explorer] Initial mount failed:', el.src, err);
+      }
+    }
+  });
 
 })();

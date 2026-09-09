@@ -26,6 +26,4 @@ export default function mountApp() {
     });
     window.__phueApp.mount('#app');
 }
-
-mountApp();
 </script>

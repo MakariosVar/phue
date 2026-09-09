@@ -35,6 +35,7 @@ class ComponentRenderer
         private ?PhueComponentLoader $loader = null,
         private ?string $layoutName = null,
         private mixed $uriResolver = null,
+        private mixed $requestResolver = null,
         private ?PhuePartialRenderer $partialRenderer = null
     ) {}
 
@@ -159,13 +160,14 @@ class ComponentRenderer
 
         // Layout Engine Seam
         $appContent = $this->applyLayoutIfConfigured($pageMarkup);
-        $isSpaRequest = \Phue\Core\Request::capture()->getHeader('X-Phue-SPA') === 'true';
+        $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
+        $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
         if ($isSpaRequest) {
             return \Phue\Core\Response::json([
                 'title'   => $title,
                 'html'    => $appContent,
                 'state'   => $view->getState(),
-                'scripts' => $this->assetRegistry->getScripts(),
+                'scripts' => $this->assetRegistry->getRequestScripts(),
             ]);
         }
         

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\Console\Commands;
 
 use Phue\Core\Console\Commands\SwooleServeCommand;
+use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
 
 #[\PHPUnit\Framework\Attributes\Group('unit')]
@@ -64,5 +65,29 @@ final class SwooleServeCommandTest extends TestCase
         
         $this->assertSame(1, $code);
         $this->assertStringContainsString("Error: Port '99999' out of range", $this->getStreamContent($this->err));
+    }
+
+    public function testTransformRequestNormalizesSpaHeaderKeyForCaseInsensitiveMatching(): void
+    {
+        if (!extension_loaded('swoole')) {
+            $this->markTestSkipped('Swoole extension is required.');
+        }
+
+        $swooleRequest = (new \ReflectionClass(\Swoole\Http\Request::class))->newInstanceWithoutConstructor();
+        $swooleRequest->server = ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/products'];
+        $swooleRequest->header = ['x-phue-spa' => 'true'];
+        $swooleRequest->get = ['page' => '2'];
+        $swooleRequest->post = [];
+        $swooleRequest->cookie = [];
+        $swooleRequest->files = [];
+
+        $method = new \ReflectionMethod(SwooleServeCommand::class, 'transformRequest');
+
+        /** @var Request $request */
+        $request = $method->invoke($this->command, $swooleRequest);
+
+        $this->assertSame('true', $request->getHeader('X-Phue-SPA'));
+        $this->assertSame('/products', $request->getUri());
+        $this->assertSame('GET', $request->getMethod());
     }
 }

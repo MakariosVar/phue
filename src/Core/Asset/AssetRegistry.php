@@ -20,8 +20,23 @@ class AssetRegistry
     /** @var array<string, callable> URL prefix => resolver callback map */
     private array $resolvers = [];
 
-    /** @var array<int, array{url: string, isModule: bool}> Registered JavaScript specifications */
-    private array $scripts = [];
+    /**
+     * Globally registered JavaScript specifications.
+     *
+     * These scripts are rendered for every HTML shell produced by the registry.
+     *
+     * @var array<int, array{url: string, isModule: bool}>
+     */
+    private array $globalScripts = [];
+
+    /**
+     * JavaScript specifications registered for the current request.
+     *
+     * This pool is cleared by {@see beginRequest()}.
+     *
+     * @var array<int, array{url: string, isModule: bool}>
+     */
+    private array $requestScripts = [];
 
     /** @var array<int, string> Registered CSS Stylesheet URLs */
     private array $styles = [];
@@ -83,6 +98,7 @@ class AssetRegistry
     public function registerSource(string $urlPrefix, string $directory): self
     {
         $realPath = realpath($directory);
+
         if ($realPath === false || !is_dir($realPath)) {
             throw new InvalidArgumentException("Asset source directory does not exist: {$directory}");
         }
@@ -98,20 +114,56 @@ class AssetRegistry
 
     /**
      * Add a JavaScript file URL to the HTML rendering queue.
+     * Checks against both per-request and global pools to prevent duplicate inclusions.
      *
      * @param string $url
-     * @param bool $isModule Set to true if script should be rendered with type="module"
+     * @param bool $isModule Set to true if the script should be rendered with type="module"
      * @return self
      */
     public function addScript(string $url, bool $isModule = false): self
     {
-        foreach ($this->scripts as $script) {
+        foreach ($this->globalScripts as $script) {
             if ($script['url'] === $url) {
                 return $this;
             }
         }
 
-        $this->scripts[] = [
+        foreach ($this->requestScripts as $script) {
+            if ($script['url'] === $url) {
+                return $this;
+            }
+        }
+
+        $this->requestScripts[] = [
+            'url' => $url,
+            'isModule' => $isModule,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Add a JavaScript file URL to the global rendering queue.
+     *
+     * Global scripts survive calls to {@see beginRequest()} and are included
+     * in every result returned by {@see getScripts()}.
+     *
+     * This is intended for application-wide dependencies such as the Phue
+     * explorer/bootstrap script.
+     *
+     * @param string $url
+     * @param bool $isModule Set to true if the script should be rendered with type="module"
+     * @return self
+     */
+    public function addGlobalScript(string $url, bool $isModule = false): self
+    {
+        foreach ($this->globalScripts as $script) {
+            if ($script['url'] === $url) {
+                return $this;
+            }
+        }
+
+        $this->globalScripts[] = [
             'url' => $url,
             'isModule' => $isModule,
         ];
@@ -121,6 +173,9 @@ class AssetRegistry
 
     /**
      * Add a CSS stylesheet URL to the HTML rendering queue.
+     *
+     * Styles remain registered on the registry and are not affected by
+     * {@see beginRequest()}.
      *
      * @param string $url
      * @return self
@@ -197,14 +252,64 @@ class AssetRegistry
     }
 
     /**
+     * Begin a new request asset collection.
+     *
+     * Global scripts are preserved, while all scripts registered for the
+     * previous request are discarded.
+     *
+     * This should be called once at the beginning of each request before
+     * request-specific scripts are registered.
+     *
+     * @return self
+     */
+    public function beginRequest(): self
+    {
+        $this->requestScripts = [];
+
+        return $this;
+    }
+
+    /**
+     * Return only scripts registered for the current request.
+     *
+     * Global scripts are intentionally excluded from this result.
+     *
+     * @return array<int, array{url: string, isModule: bool}>
+     */
+    public function getRequestScripts(): array
+    {
+        return $this->requestScripts;
+    }
+
+    /**
+     * Return all scripts that should be rendered.
+     *
+     * Global scripts are returned first, followed by scripts registered for
+     * the current request.
+     *
      * @return array<int, array{url: string, isModule: bool}>
      */
     public function getScripts(): array
     {
-        return $this->scripts;
+        return array_merge(
+            $this->globalScripts,
+            $this->requestScripts
+        );
     }
 
     /**
+     * Return globally registered scripts.
+     *
+     * @return array<int, array{url: string, isModule: bool}>
+     */
+    public function getGlobalScripts(): array
+    {
+        return $this->globalScripts;
+    }
+
+    /**
+     * Return registered CSS stylesheet URLs.
+     *
      * @return array<int, string>
      */
     public function getStyles(): array
@@ -213,6 +318,8 @@ class AssetRegistry
     }
 
     /**
+     * Return registered static asset sources.
+     *
      * @return array<string, string>
      */
     public function getSources(): array
@@ -221,6 +328,8 @@ class AssetRegistry
     }
 
     /**
+     * Return registered dynamic asset resolvers.
+     *
      * @return array<string, callable>
      */
     public function getResolvers(): array

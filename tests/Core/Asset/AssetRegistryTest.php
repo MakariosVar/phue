@@ -256,6 +256,85 @@ final class AssetRegistryTest extends TestCase
         $this->assertSame(['/assets/first.js', '/assets/second.js', '/assets/third.js'], $urls);
     }
 
+    public function testGlobalScriptsAreReturnedBeforeRequestScripts(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addGlobalScript('/assets/bootstrap.js', true)
+            ->addGlobalScript('/assets/vendor.js', false)
+            ->addScript('/assets/page.js')
+            ->addScript('/assets/other.js');
+
+        $urls = array_column($registry->getScripts(), 'url');
+        $this->assertSame(
+            ['/assets/bootstrap.js', '/assets/vendor.js', '/assets/page.js', '/assets/other.js'],
+            $urls
+        );
+    }
+
+    public function testAddGlobalScriptDeduplicatesByUrl(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addGlobalScript('/assets/bootstrap.js', true)
+            ->addGlobalScript('/assets/bootstrap.js', false);
+
+        $scripts = $registry->getGlobalScripts();
+        $this->assertCount(1, $scripts);
+        $this->assertTrue($scripts[0]['isModule']);
+    }
+
+    public function testAddScriptDoesNotDuplicateGlobalScript(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addGlobalScript('/assets/shared.js', true)
+            ->addScript('/assets/shared.js');
+
+        $this->assertCount(1, $registry->getScripts());
+        $this->assertCount(0, $registry->getRequestScripts());
+    }
+
+    public function testBeginRequestClearsOnlyRequestScripts(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addGlobalScript('/assets/explorer.js', true)
+            ->addScript('/assets/page.js');
+
+        $registry->beginRequest();
+
+        $this->assertSame([], $registry->getRequestScripts());
+        $this->assertCount(1, $registry->getGlobalScripts());
+    }
+
+    public function testReEnteringSameScriptAfterBeginRequestRegistersItAgain(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addGlobalScript('/assets/explorer.js', true);
+
+        // Request #1
+        $registry->beginRequest();
+        $registry->addScript('/assets/page.js');
+
+        // Request #2 is a re-visit of the same page in a persistent Swoole process.
+        // The old pool-based offset logic made this a no-op; the two-pool design
+        // must register the page module again so SPA navigation can mount it.
+        $registry->beginRequest();
+        $registry->addScript('/assets/page.js');
+
+        $requestScripts = $registry->getRequestScripts();
+        $this->assertCount(1, $requestScripts);
+        $this->assertSame('/assets/page.js', $requestScripts[0]['url']);
+    }
+
+    public function testBeginRequestDoesNotMergeGlobalScriptsIntoRequestPool(): void
+    {
+        $registry = (new AssetRegistry())->addGlobalScript('/assets/bootstrap.js', true);
+
+        $registry->beginRequest();
+
+        $this->assertSame([], $registry->getRequestScripts());
+        $urls = array_column($registry->getScripts(), 'url');
+        $this->assertSame(['/assets/bootstrap.js'], $urls);
+    }
+
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {

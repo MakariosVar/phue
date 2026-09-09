@@ -6,6 +6,7 @@ namespace Phue\Tests\Core\UI;
 
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\View;
@@ -102,5 +103,65 @@ final class ComponentRendererTest extends TestCase
             '<input v-model="newProduct.name" placeholder="Name" required>',
             $html
         );
+    }
+
+    private function spaRenderer(?AssetRegistry $registry = null): ComponentRenderer
+    {
+        $registry ??= new AssetRegistry();
+        $request = new Request('GET', '/products', headers: ['X-Phue-SPA' => 'true']);
+
+        return new ComponentRenderer(
+            new HtmlShellRenderer($registry),
+            $registry,
+            requestResolver: fn (): Request => $request
+        );
+    }
+
+    public function testSpaRequestReturnsJsonScriptsForCurrentPageOnly(): void
+    {
+        $registry = new AssetRegistry();
+        $registry->addGlobalScript('/assets/js/phue-explorer.js', true);
+
+        $renderer = $this->spaRenderer($registry);
+        $view = new View('<div>SPA</div>', ['page' => 'products'], ['/assets/phue/Products.abcd1234.phue.js']);
+
+        $response = $renderer->render('Products', $view);
+
+        $this->assertSame('application/json', $response->getHeader('Content-Type'));
+        $payload = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+
+        $urls = array_column($payload['scripts'], 'url');
+        $this->assertContains('/assets/phue/Products.abcd1234.phue.js', $urls);
+        $this->assertNotContains(
+            '/assets/js/phue-explorer.js',
+            $urls,
+            'Global scripts must never be re-mount targets of SPA navigation'
+        );
+    }
+
+    public function testSpaReVisitAfterBeginRequestStillMountsPageModule(): void
+    {
+        $registry = new AssetRegistry();
+        $renderer = $this->spaRenderer($registry);
+        $view = new View('<div>SPA</div>', [], ['/assets/phue/Products.abcd1234.phue.js']);
+
+        // Request #1
+        $registry->beginRequest();
+        $first = json_decode($renderer->render('Products', $view)->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertContains(
+            '/assets/phue/Products.abcd1234.phue.js',
+            array_column($first['scripts'], 'url'),
+        );
+
+        // Request #2: re-visit of the same page in a persistent Swoole process.
+        // Regression: the single-pool+offset logic returned an empty scripts
+        // array here, so the explorer never called mod.default() and the page
+        // stayed stuck in v-cloak forever.
+        $registry->beginRequest();
+        $second = json_decode($renderer->render('Products', $view)->getContent(), true, 512, JSON_THROW_ON_ERROR);
+
+        $urls = array_column($second['scripts'], 'url');
+        $this->assertNotSame([], $urls, 'Re-visited SPA page must ship its module scripts');
+        $this->assertContains('/assets/phue/Products.abcd1234.phue.js', $urls);
     }
 }
