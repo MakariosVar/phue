@@ -75,13 +75,16 @@ class Application
     private bool $debug = false;
 
     /**
-     * Initialize application with root directory path, load configs, and bootstrap infrastructure.
+     * Initialize application with root directory path, load .env file, load configs, and bootstrap infrastructure.
      *
      * @param string $basePath Application root directory path.
      */
     public function __construct(string $basePath)
     {
         $this->basePath = rtrim($basePath, '/\\');
+
+        // Load environment variables before initializing configuration manager
+        Env::load($this->basePath);
 
         $this->container = new Container();
         $this->config = new Config($this->basePath . '/config');
