@@ -1,15 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core\Database\ActiveRecord;
 
 use JsonSerializable;
 use ReflectionClass;
 use RuntimeException;
 use Phue\Core\Database\Connection;
-use Phue\Core\Database\QueryBuilder;
+use Phue\Core\Database\ActiveRecord\ActiveQuery;
+use Phue\Core\Database\ActiveRecord\Relations\Relation;
+use Phue\Core\Database\ActiveRecord\Relations\HasMany;
+use Phue\Core\Database\ActiveRecord\Relations\HasOne;
+use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
 
 /**
- * Abstract Base Active Record Model providing ORM and persistence logic.
+ * Abstract Base Active Record Model providing ORM, persistence, and relationship logic.
  *
  * @package Phue\Core\Database\ActiveRecord
  */
@@ -52,12 +58,19 @@ abstract class BaseActiveRecord implements JsonSerializable
     protected array $errors = [];
 
     /**
+     * Cached loaded relations for the instance.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $relations = [];
+
+    /**
      * Indicates if the model instance exists in the database.
      */
     protected bool $exists = false;
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param array<string, mixed> $attributes Initial model attributes.
      */
     public function __construct(array $attributes = [])
     {
@@ -66,6 +79,9 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Sets the global database connection for Active Record models.
+     *
+     * @param Connection $connection Database connection instance.
+     * @return void
      */
     public static function setConnection(Connection $connection): void
     {
@@ -74,6 +90,9 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Retrieves the active database connection manager.
+     *
+     * @throws RuntimeException If no connection has been set.
+     * @return Connection
      */
     public static function getConnection(): Connection
     {
@@ -86,6 +105,8 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Resolves the table name for the model.
+     *
+     * @return string
      */
     public function getTable(): string
     {
@@ -99,6 +120,8 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Returns the primary key column name.
+     *
+     * @return string
      */
     public function getPrimaryKey(): string
     {
@@ -108,47 +131,232 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Fills the model with an array of attributes.
      *
-     * @param array<string, mixed> $attributes
+     * @param array<string, mixed> $attributes Key-value list of attributes.
+     * @return static
      */
     public function fill(array $attributes): static
     {
         foreach ($attributes as $key => $value) {
-            $this->__set($key, $value);
+            $this->setAttribute($key, $value);
         }
 
         return $this;
     }
 
     /**
+     * Retrieve a specific attribute value from the model.
+     *
+     * @param string $key Attribute column key.
+     * @param mixed $default Fallback value if key is not set.
+     * @return mixed
+     */
+    public function getAttribute(string $key, mixed $default = null): mixed
+    {
+        return array_key_exists($key, $this->attributes) ? $this->attributes[$key] : $default;
+    }
+
+    /**
+     * Set a specific attribute value on the model.
+     *
+     * @param string $key Attribute column key.
+     * @param mixed $value Value to assign.
+     * @return static
+     */
+    public function setAttribute(string $key, mixed $value): static
+    {
+        $this->attributes[$key] = $value;
+        return $this;
+    }
+
+    /**
+     * Check if a specific attribute exists on the model.
+     *
+     * @param string $key Attribute column key.
+     * @return bool
+     */
+    public function hasAttribute(string $key): bool
+    {
+        return array_key_exists($key, $this->attributes);
+    }
+
+    /**
      * Magic setter for model attributes.
+     *
+     * @param string $name Attribute name.
+     * @param mixed $value Value to assign.
+     * @return void
      */
     public function __set(string $name, mixed $value): void
     {
-        $this->attributes[$name] = $value;
+        $this->setAttribute($name, $value);
     }
 
     /**
-     * Magic getter for model attributes.
+     * Magic getter to resolve attributes and dynamic model relation properties.
+     *
+     * @param string $key Property key name.
+     * @return mixed
      */
-    public function __get(string $name): mixed
+    public function __get(string $key): mixed
     {
-        return $this->attributes[$name] ?? null;
+        if (array_key_exists($key, $this->attributes)) {
+            return $this->attributes[$key];
+        }
+
+        if (array_key_exists($key, $this->relations)) {
+            return $this->relations[$key];
+        }
+
+        if (method_exists($this, $key)) {
+            $relation = $this->$key();
+
+            if ($relation instanceof Relation) {
+                $result = $relation->getResults();
+                $this->relations[$key] = $result;
+                return $result;
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Magic isset check for model attributes.
+     * Magic isset check for model attributes or loaded relations.
+     *
+     * @param string $name
+     * @return bool
      */
     public function __isset(string $name): bool
     {
-        return isset($this->attributes[$name]);
+        return isset($this->attributes[$name]) || isset($this->relations[$name]);
     }
 
     /**
-     * Magic unset for model attributes.
+     * Magic unset for model attributes or cached relations.
+     *
+     * @param string $name
+     * @return void
      */
     public function __unset(string $name): void
     {
-        unset($this->attributes[$name]);
+        unset($this->attributes[$name], $this->relations[$name]);
+    }
+
+    /**
+     * Defines a HasMany relationship.
+     *
+     * @param class-string<BaseActiveRecord> $related Target model class FQCN.
+     * @param string|null $foreignKey Foreign key on target table.
+     * @param string|null $localKey Local key on parent table.
+     * @return HasMany
+     */
+    public function hasMany(string $related, ?string $foreignKey = null, ?string $localKey = null): HasMany
+    {
+        $foreignKey = $foreignKey ?? $this->getForeignKey();
+        $localKey = $localKey ?? $this->getPrimaryKey();
+
+        return new HasMany($this, $related, $foreignKey, $localKey);
+    }
+
+    /**
+     * Defines a HasOne relationship.
+     *
+     * @param class-string<BaseActiveRecord> $related Target model class FQCN.
+     * @param string|null $foreignKey Foreign key on target table.
+     * @param string|null $localKey Local key on parent table.
+     * @return HasOne
+     */
+    public function hasOne(string $related, ?string $foreignKey = null, ?string $localKey = null): HasOne
+    {
+        $foreignKey = $foreignKey ?? $this->getForeignKey();
+        $localKey = $localKey ?? $this->getPrimaryKey();
+
+        return new HasOne($this, $related, $foreignKey, $localKey);
+    }
+
+    /**
+     * Defines a BelongsTo relationship.
+     *
+     * @param class-string<BaseActiveRecord> $related Target model class FQCN.
+     * @param string|null $foreignKey Foreign key on child model.
+     * @param string|null $ownerKey Primary key on parent model.
+     * @return BelongsTo
+     */
+    public function belongsTo(string $related, ?string $foreignKey = null, ?string $ownerKey = null): BelongsTo
+    {
+        /** @var BaseActiveRecord $relatedInstance */
+        $relatedInstance = new $related();
+        $foreignKey = $foreignKey ?? $relatedInstance->getForeignKey();
+        $ownerKey = $ownerKey ?? $relatedInstance->getPrimaryKey();
+
+        return new BelongsTo($this, $related, $foreignKey, $ownerKey);
+    }
+
+    /**
+     * Returns the default foreign key name for the model.
+     *
+     * @return string
+     */
+    public function getForeignKey(): string
+    {
+        $shortName = (new ReflectionClass(static::class))->getShortName();
+        return strtolower($shortName) . '_id';
+    }
+
+    /**
+     * Retrieves a cached relation result by name.
+     *
+     * @param string $name Relation name.
+     * @param mixed $default Fallback value if relation is not loaded.
+     * @return mixed
+     */
+    public function getRelation(string $name, mixed $default = null): mixed
+    {
+        return array_key_exists($name, $this->relations) ? $this->relations[$name] : $default;
+    }
+
+    /**
+     * Sets a relation result manually in the local relation cache.
+     *
+     * @param string $name Relation name.
+     * @param mixed $value Loaded relation model(s) or null.
+     * @return static
+     */
+    public function setRelation(string $name, mixed $value): static
+    {
+        $this->relations[$name] = $value;
+        return $this;
+    }
+
+    /**
+     * Check if a specific relation has been eager or lazy loaded.
+     *
+     * @param string $relation Relation name.
+     * @return bool
+     */
+    public function relationLoaded(string $relation): bool
+    {
+        return array_key_exists($relation, $this->relations);
+    }
+
+    /**
+     * Eagerly loads specified relations onto the model instance.
+     *
+     * @param string ...$relations Names of relations to load.
+     * @return static
+     */
+    public function load(string ...$relations): static
+    {
+        foreach ($relations as $relationName) {
+            if (method_exists($this, $relationName)) {
+                $relation = $this->$relationName();
+                if ($relation instanceof Relation) {
+                    $this->setRelation($relationName, $relation->getResults());
+                }
+            }
+        }
+
+        return $this;
     }
 
     /**
@@ -165,6 +373,7 @@ abstract class BaseActiveRecord implements JsonSerializable
      * Sets validation errors manually if needed.
      *
      * @param array<string, mixed> $errors
+     * @return void
      */
     public function setErrors(array $errors): void
     {
@@ -173,6 +382,8 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Creates a new ActiveQuery instance initialized for the current model class.
+     *
+     * @return ActiveQuery
      */
     public static function query(): ActiveQuery
     {
@@ -180,8 +391,11 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Magic static call handler to forward dynamic queries directly to ActiveQuery.
-     * Allows calls like User::where('status', 'active')->get()
+     * Forward static calls to ActiveQuery.
+     *
+     * @param string $method Method name.
+     * @param array<int, mixed> $arguments Method parameters.
+     * @return mixed
      */
     public static function __callStatic(string $method, array $arguments): mixed
     {
@@ -190,14 +404,17 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Finds a single model record by primary key value.
+     *
+     * @param mixed $id Primary key value.
+     * @return static|null
      */
     public static function find(mixed $id): ?static
     {
         $instance = new static();
-        
+
         /** @var static|null $result */
         $result = static::query()
-            ->where($instance->getPrimaryKey(), $id)
+            ->where($instance->getPrimaryKey(), '=', $id)
             ->first();
 
         return $result;
@@ -212,14 +429,15 @@ abstract class BaseActiveRecord implements JsonSerializable
     {
         /** @var array<int, static> $results */
         $results = static::query()->get();
-        
+
         return $results;
     }
 
     /**
      * Creates and persists a new model instance directly.
      *
-     * @param array<string, mixed> $attributes
+     * @param array<string, mixed> $attributes Attributes to assign.
+     * @return static
      */
     public static function create(array $attributes): static
     {
@@ -232,7 +450,8 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Instantiates a hydrated model instance directly from database row.
      *
-     * @param array<string, mixed> $attributes
+     * @param array<string, mixed> $attributes Raw column database values.
+     * @return static
      */
     public static function newFromBuilder(array $attributes): static
     {
@@ -264,6 +483,8 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Persists the current model state into the database (INSERT or UPDATE).
+     *
+     * @return bool
      */
     public function save(): bool
     {
@@ -277,7 +498,7 @@ abstract class BaseActiveRecord implements JsonSerializable
             }
 
             $affected = $builder
-                ->where($this->getPrimaryKey(), $this->attributes[$this->getPrimaryKey()])
+                ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
                 ->update($dirty);
 
             if ($affected > 0) {
@@ -288,7 +509,6 @@ abstract class BaseActiveRecord implements JsonSerializable
             return false;
         }
 
-        // Handle INSERT
         $inserted = $builder->insert($this->attributes);
 
         if ($inserted) {
@@ -307,6 +527,8 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Deletes the model from the database.
+     *
+     * @return bool
      */
     public function delete(): bool
     {
@@ -315,7 +537,7 @@ abstract class BaseActiveRecord implements JsonSerializable
         }
 
         $affected = static::query()
-            ->where($this->getPrimaryKey(), $this->attributes[$this->getPrimaryKey()])
+            ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
             ->delete();
 
         if ($affected > 0) {
@@ -327,13 +549,35 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Converts model attributes to array format.
+     * Converts model attributes and optional loaded relations to array format safely preventing infinite cyclic recursion.
      *
+     * @param array<int, string> $visited Call stack tracker for visited FQCNs.
      * @return array<string, mixed>
      */
-    public function toArray(): array
+    public function toArray(array $visited = []): array
     {
-        return $this->attributes;
+        $class = static::class;
+        if (in_array($class, $visited, true)) {
+            return $this->attributes;
+        }
+
+        $visited[] = $class;
+        $attributes = $this->attributes;
+
+        foreach ($this->relations as $key => $relation) {
+            if ($relation instanceof self) {
+                $attributes[$key] = $relation->toArray($visited);
+            } elseif (is_array($relation)) {
+                $attributes[$key] = array_map(
+                    fn ($item) => $item instanceof self ? $item->toArray($visited) : $item,
+                    $relation
+                );
+            } else {
+                $attributes[$key] = $relation;
+            }
+        }
+
+        return $attributes;
     }
 
     /**

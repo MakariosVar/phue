@@ -340,6 +340,96 @@ class QueryBuilderTest extends TestCase
     }
 
     /**
+     * Tests whereIn filtering returns only rows whose column matches the list.
+     */
+    public function testWhereInFiltersCorrectly(): void
+    {
+        $builder = $this->connection->table('users');
+        $builder->insert(['name' => 'Alice', 'email' => 'alice@test.com', 'age' => 25, 'status' => 'active']);
+        $builder->insert(['name' => 'Bob', 'email' => 'bob@test.com', 'age' => 17, 'status' => 'inactive']);
+        $builder->insert(['name' => 'Charlie', 'email' => 'charlie@test.com', 'age' => 30, 'status' => 'pending']);
+
+        $results = $this->connection->table('users')
+            ->whereIn('status', ['active', 'pending'])
+            ->get();
+
+        $this->assertCount(2, $results);
+        $this->assertSame(['Alice', 'Charlie'], array_column($results, 'name'));
+    }
+
+    /**
+     * Tests whereIn compiles correct SQL and bindings in order.
+     */
+    public function testWhereInCompilesSqlAndBindings(): void
+    {
+        $builder = $this->connection->table('users')
+            ->where('age', '>=', 18)
+            ->whereIn('status', ['active', 'pending']);
+
+        $expectedSql = 'SELECT * FROM `users` WHERE `age` >= ? AND `status` IN (?, ?)';
+        $this->assertSame($expectedSql, $builder->toSql());
+        $this->assertSame([18, 'active', 'pending'], $builder->getBindings());
+    }
+
+    /**
+     * Tests orWhereIn combines with existing where clauses.
+     */
+    public function testOrWhereInCombinesWithWhere(): void
+    {
+        $builder = $this->connection->table('users');
+        $builder->insert(['name' => 'Alice', 'email' => 'alice@test.com', 'age' => 25, 'status' => 'active']);
+        $builder->insert(['name' => 'Bob', 'email' => 'bob@test.com', 'age' => 17, 'status' => 'inactive']);
+        $builder->insert(['name' => 'Charlie', 'email' => 'charlie@test.com', 'age' => 30, 'status' => 'active']);
+
+        $results = $this->connection->table('users')
+            ->where('age', '>=', 18)
+            ->orWhereIn('status', ['pending', 'inactive'])
+            ->get();
+
+        $this->assertCount(3, $results);
+
+        $sql = $this->connection->table('users')
+            ->where('age', '>=', 18)
+            ->orWhereIn('status', ['pending', 'inactive'])
+            ->toSql();
+
+        $this->assertSame('SELECT * FROM `users` WHERE `age` >= ? OR `status` IN (?, ?)', $sql);
+    }
+
+    /**
+     * Tests whereIn with an empty list compiles to 1 = 0 and matches nothing.
+     */
+    public function testWhereInWithEmptyArrayReturnsNoResults(): void
+    {
+        $builder = $this->connection->table('users');
+        $builder->insert(['name' => 'Alice', 'email' => 'alice@test.com', 'age' => 25, 'status' => 'active']);
+
+        $query = $this->connection->table('users')->whereIn('status', []);
+
+        $this->assertStringContainsString('1 = 0', $query->toSql());
+        $this->assertSame([], $query->getBindings());
+        $this->assertCount(0, $query->get());
+        $this->assertSame(0, $query->count());
+    }
+
+    /**
+     * Tests whereIn with an empty array still combines with other where clauses.
+     */
+    public function testWhereInEmptyArrayCombinesWithWhere(): void
+    {
+        $builder = $this->connection->table('users');
+        $builder->insert(['name' => 'Alice', 'email' => 'alice@test.com', 'age' => 25, 'status' => 'active']);
+        $builder->insert(['name' => 'Bob', 'email' => 'bob@test.com', 'age' => 17, 'status' => 'active']);
+
+        $results = $this->connection->table('users')
+            ->where('name', 'Alice')
+            ->whereIn('status', [])
+            ->get();
+
+        $this->assertCount(0, $results);
+    }
+
+    /**
      * Tests update and delete query executions.
      */
     public function testInsertUpdateDelete(): void

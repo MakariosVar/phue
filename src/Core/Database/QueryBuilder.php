@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core\Database;
 
 use InvalidArgumentException;
@@ -11,15 +13,52 @@ use InvalidArgumentException;
  */
 class QueryBuilder
 {
+    /**
+     * Target database table name quoted for SQL execution.
+     */
     protected string $fromTable = '';
+
+    /**
+     * Selected column names or expressions.
+     *
+     * @var array<int, string>
+     */
     protected array $columns = ['*'];
+
+    /**
+     * Accumulated WHERE condition definitions.
+     *
+     * @var array<int, array{boolean: string, sql: string}>
+     */
     protected array $whereClauses = [];
+
+    /**
+     * Accumulated ORDER BY clauses.
+     *
+     * @var array<int, string>
+     */
     protected array $orderByClauses = [];
+
+    /**
+     * Prepared statement parameter bindings.
+     *
+     * @var array<int, mixed>
+     */
     protected array $bindings = [];
+
+    /**
+     * Maximum limit of records to return.
+     */
     protected ?int $limitValue = null;
+
+    /**
+     * Offset starting position for returned records.
+     */
     protected ?int $offsetValue = null;
 
     /**
+     * Initialize QueryBuilder with an active connection manager.
+     *
      * @param Connection $connection Active database connection manager.
      */
     public function __construct(
@@ -28,6 +67,9 @@ class QueryBuilder
 
     /**
      * Sets the target table for the query.
+     *
+     * @param string $table Name of table to target.
+     * @return static
      */
     public function table(string $table): static
     {
@@ -37,6 +79,9 @@ class QueryBuilder
 
     /**
      * Specifies the columns to select.
+     *
+     * @param string ...$columns List of column names to retrieve.
+     * @return static
      */
     public function select(string ...$columns): static
     {
@@ -47,6 +92,11 @@ class QueryBuilder
 
     /**
      * Adds a WHERE condition to the query (AND).
+     *
+     * @param string $column Column name to compare.
+     * @param mixed $operator Logical operator or target value if 2 arguments supplied.
+     * @param mixed $value Target comparison value.
+     * @return static
      */
     public function where(string $column, mixed $operator = null, mixed $value = null): static
     {
@@ -55,6 +105,11 @@ class QueryBuilder
 
     /**
      * Adds an OR WHERE condition to the query.
+     *
+     * @param string $column Column name to compare.
+     * @param mixed $operator Logical operator or target value if 2 arguments supplied.
+     * @param mixed $value Target comparison value.
+     * @return static
      */
     public function orWhere(string $column, mixed $operator = null, mixed $value = null): static
     {
@@ -62,7 +117,73 @@ class QueryBuilder
     }
 
     /**
+     * Adds a WHERE IN clause to the query (AND).
+     *
+     * @param string $column Column name to match against array of values.
+     * @param array<int|string, mixed> $values List of values to match.
+     * @return static
+     */
+    public function whereIn(string $column, array $values): static
+    {
+        return $this->addWhereInClause('AND', $column, $values);
+    }
+
+    /**
+     * Adds an OR WHERE IN clause to the query.
+     *
+     * @param string $column Column name to match against array of values.
+     * @param array<int|string, mixed> $values List of values to match.
+     * @return static
+     */
+    public function orWhereIn(string $column, array $values): static
+    {
+        return $this->addWhereInClause('OR', $column, $values);
+    }
+
+    /**
+     * Internal helper to handle WHERE IN clause construction.
+     *
+     * @param string $boolean Logical join boolean ('AND' or 'OR').
+     * @param string $column Column name to match.
+     * @param array<int|string, mixed> $values Array of target values.
+     * @return static
+     */
+    protected function addWhereInClause(string $boolean, string $column, array $values): static
+    {
+        $quotedColumn = $this->quoteIdentifier($column);
+
+        // An empty IN array matches no records safely
+        if (empty($values)) {
+            $this->whereClauses[] = [
+                'boolean' => $boolean,
+                'sql'     => '1 = 0',
+            ];
+            return $this;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($values), '?'));
+        $sqlClause = "{$quotedColumn} IN ({$placeholders})";
+
+        $this->whereClauses[] = [
+            'boolean' => $boolean,
+            'sql'     => $sqlClause,
+        ];
+
+        foreach ($values as $value) {
+            $this->bindings[] = $value;
+        }
+
+        return $this;
+    }
+
+    /**
      * Internal helper to handle WHERE / OR WHERE clause construction.
+     *
+     * @param string $boolean Logical join boolean ('AND' or 'OR').
+     * @param string $column Column name to compare.
+     * @param mixed $operator Comparison operator or value.
+     * @param mixed $value Target comparison value.
+     * @return static
      */
     protected function addWhereClause(string $boolean, string $column, mixed $operator = null, mixed $value = null): static
     {
@@ -84,7 +205,7 @@ class QueryBuilder
             'boolean' => $boolean,
             'sql'     => $sqlClause,
         ];
-        
+
         $this->bindings[] = $value;
 
         return $this;
@@ -92,6 +213,11 @@ class QueryBuilder
 
     /**
      * Adds an ORDER BY clause to the query.
+     *
+     * @param string $column Column name to order by.
+     * @param string $direction Ordering direction ('ASC' or 'DESC').
+     * @return static
+     * @throws InvalidArgumentException If an invalid direction is provided.
      */
     public function orderBy(string $column, string $direction = 'ASC'): static
     {
@@ -107,6 +233,9 @@ class QueryBuilder
 
     /**
      * Sets the MAX number of records to fetch.
+     *
+     * @param int $limit Maximum number of records.
+     * @return static
      */
     public function limit(int $limit): static
     {
@@ -116,6 +245,9 @@ class QueryBuilder
 
     /**
      * Sets the OFFSET starting position for records.
+     *
+     * @param int $offset Starting offset position.
+     * @return static
      */
     public function offset(int $offset): static
     {
@@ -125,6 +257,9 @@ class QueryBuilder
 
     /**
      * Compiles the SELECT query into raw SQL string with placeholders.
+     *
+     * @return string Compiled SQL string.
+     * @throws InvalidArgumentException If no table was defined.
      */
     public function toSql(): string
     {
@@ -161,7 +296,7 @@ class QueryBuilder
     /**
      * Returns parameter bindings for statement execution.
      *
-     * @return array<int, mixed>
+     * @return array<int, mixed> Positioned bindings list.
      */
     public function getBindings(): array
     {
@@ -171,7 +306,7 @@ class QueryBuilder
     /**
      * Executes the query and returns all matching records.
      *
-     * @return array<int, mixed>
+     * @return array<int, mixed> Set of fetched record rows.
      */
     public function get(): array
     {
@@ -182,7 +317,7 @@ class QueryBuilder
     /**
      * Executes the query and returns the first matching record or null.
      *
-     * @return array<string, mixed>|object|null
+     * @return array<string, mixed>|object|null Record row structure or null if missing.
      */
     public function first(): array|object|null
     {
@@ -195,6 +330,8 @@ class QueryBuilder
 
     /**
      * Retrieves the record count for the current query filters.
+     *
+     * @return int Total number of aggregate rows matching filters.
      */
     public function count(): int
     {
@@ -228,7 +365,9 @@ class QueryBuilder
     /**
      * Inserts a record into the database table.
      *
-     * @param array<string, mixed> $values
+     * @param array<string, mixed> $values Key-value map of column values to insert.
+     * @return bool True on success.
+     * @throws InvalidArgumentException If no table was defined.
      */
     public function insert(array $values): bool
     {
@@ -252,8 +391,9 @@ class QueryBuilder
     /**
      * Updates matching records in the database table.
      *
-     * @param array<string, mixed> $values
+     * @param array<string, mixed> $values Key-value map of column updates.
      * @return int Affected rows count.
+     * @throws InvalidArgumentException If no table was defined.
      */
     public function update(array $values): int
     {
@@ -289,6 +429,7 @@ class QueryBuilder
      * Deletes matching records from the database table.
      *
      * @return int Affected rows count.
+     * @throws InvalidArgumentException If no table was defined.
      */
     public function delete(): int
     {
@@ -312,6 +453,9 @@ class QueryBuilder
 
     /**
      * Safely quotes a database identifier (table or column name), bypassing wildcards and aggregates.
+     *
+     * @param string $value Unquoted identifier string.
+     * @return string Driver-quoted identifier string.
      */
     protected function quoteIdentifier(string $value): string
     {
