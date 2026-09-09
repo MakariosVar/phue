@@ -146,7 +146,7 @@ class CommandsTest extends TestCase
     public function testServeCommandMetadata(): void
     {
         $cmd = new ServeCommand();
-        $this->assertSame('serve', $cmd->getName());
+        $this->assertSame('serve:php', $cmd->getName());
         $this->assertNotEmpty($cmd->getDescription());
     }
 }

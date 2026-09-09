@@ -25,8 +25,9 @@ $app = new Application('1.0.0');
 /**
  * Register framework CLI commands into application engine container.
  */
-$app->add(new ServeCommand())
+$app
     ->add(new SwooleServeCommand())
+    ->add(new ServeCommand())
     ->add(new MakeControllerCommand())
     ->add(new MakeModelCommand())
     ->add(new SchiiMigrateCommand())

@@ -20,7 +20,7 @@ final class ServeCommand implements CommandInterface
      */
     public function getName(): string
     {
-        return 'serve';
+        return 'serve:php';
     }
 
     /**

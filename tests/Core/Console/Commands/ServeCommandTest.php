@@ -45,7 +45,7 @@ final class ServeCommandTest extends TestCase
 
         $pipes = [];
         $process = proc_open(
-            [PHP_BINARY, $phueBin, 'serve', '--host=127.0.0.1', "--port={$port}"],
+            [PHP_BINARY, $phueBin, 'serve:php', '--host=127.0.0.1', "--port={$port}"],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $this->workDir,

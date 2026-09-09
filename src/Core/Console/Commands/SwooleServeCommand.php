@@ -28,7 +28,7 @@ final class SwooleServeCommand implements CommandInterface
      */
     public function getName(): string
     {
-        return 'serve:swoole';
+        return 'serve';
     }
 
     /**

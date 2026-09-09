@@ -40,7 +40,7 @@ final class SwooleServeCommandTest extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertSame('serve:swoole', $this->command->getName());
+        $this->assertSame('serve', $this->command->getName());
     }
 
     public function testInvalidPortFormatReturnsError(): void
