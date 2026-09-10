@@ -1,45 +1,118 @@
 <php>
 
 use App\Config\NavigationConfig;
+use Phue\Auth\IdentityInterface;
 
 /**
- * @var string $content
- * @var string $uri
- * @var array $items
- * @var string $cacheKey
- * @var array $cache
- * @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer
+ * AppLayout SSR Component
+ *
+ * Master structure layout component responsible for wrapping child page markup within 
+ * configurable topbar or sidebar outer shell scaffolding.
+ *
+ * @var string                            $content         Inner page view HTML content to be injected into main content container.
+ * @var string                            $uri             Current request URI route path.
+ * @var IdentityInterface|null            $user            Authenticated identity context or null for guests.
+ * @var string|null                       $placement       Layout orientation strategy override ('topbar'|'sidebar').
+ * @var array|null                        $items           Primary navigation items array override.
+ * @var array|null                        $brand           Brand configuration array override ['label' => string, 'href' => string].
+ * @var array|null                        $actions         Right-slot user actions navigation array override.
+ * @var \Phue\Core\UI\PhuePartialRenderer $partialRenderer Component partial renderer engine instance.
+ *
+ * @return array{html: string} Fully evaluated HTML layout payload.
  */
+
+/** @var string $content */
 $content = $content ?? '';
+
+/** @var string $uri */
 $uri = $uri ?? '/';
-$items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems() : []);
+
+/** @var IdentityInterface|null $user */
+$user = $user ?? null;
+
+/** @var string $placement */
+$placement = $placement ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'topbar');
+
+/** @var array $items */
+$items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : []);
+
+/** @var array{label: string, href: string} $brand */
+$brand = $brand ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppBrand() : ['label' => 'Phue', 'href' => '/']);
+
+/** @var array $actions */
+$actions = $actions ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppActions($user) : []);
+
+/** @var array<string, array{0: string, 1: string}> Static cache pool indexed by request user signature */
 static $cache = [];
 
-$orientation = 'horizontal';
+/** @var string $orientation */
+$orientation = ($placement === 'sidebar') ? 'sidebar' : 'horizontal';
 
-$cacheKey = 'nav_html_' . md5(serialize($items) . $uri . $orientation);
+/** 
+ * Serialization-safe cache key string (prevents Closure serialization errors from dynamic visibility rules)
+ * @var string $userKey 
+ */
+$userKey = (is_object($user) && method_exists($user, 'getId')) ? (string) $user->getId() : ($user !== null ? 'authenticated' : 'guest');
+
+/** @var string $cacheKey */
+$cacheKey = 'nav_html_' . md5($userKey . '|' . $uri . '|' . $orientation);
 
 if (isset($cache[$cacheKey])) {
-    $navHtml = $cache[$cacheKey];
+    [$navHtml, $actionsHtml] = $cache[$cacheKey];
 } else {
+    /** @var string $navHtml */
     $navHtml = $partialRenderer->renderPartial('PhNavigation', [
         'items'       => $items,
         'activeRoute' => $uri,
         'orientation' => $orientation,
     ]);
-    $cache[$cacheKey] = $navHtml;
+
+    /** @var string $actionsHtml */
+    $actionsHtml = !empty($actions) ? $partialRenderer->renderPartial('PhNavigation', [
+        'items'       => $actions,
+        'activeRoute' => $uri,
+        'orientation' => 'horizontal',
+    ]) : '';
+
+    $cache[$cacheKey] = [$navHtml, $actionsHtml];
 }
 
+/** @var string $brandLabelEscaped */
+$brandLabelEscaped = htmlspecialchars($brand['label'] ?? 'Phue', ENT_QUOTES, 'UTF-8');
+
+/** @var string $brandHrefEscaped */
+$brandHrefEscaped = htmlspecialchars($brand['href'] ?? '/', ENT_QUOTES, 'UTF-8');
+
 if ($orientation === 'sidebar') {
+    /** @var string $layoutHtml */
     $layoutHtml = sprintf(
-        '<div class="app-layout d-flex">%s<main v-cloak class="app-content flex-grow-1 p-3">%s</main></div>',
+        '<div class="app-layout d-flex">' .
+            '<aside class="app-sidebar p-3 border-end flex-shrink-0">' .
+                '<a class="navbar-brand mb-3 d-inline-block" href="%s">%s</a>' .
+                '%s' .
+            '</aside>' .
+            '<main v-cloak class="app-content flex-grow-1 p-3">%s</main>' .
+        '</div>',
+        $brandHrefEscaped,
+        $brandLabelEscaped,
         $navHtml,
         $content
     );
 } else {
+    /** @var string $layoutHtml */
     $layoutHtml = sprintf(
-        '<div class="app-layout">%s<main v-cloak class="app-content">%s</main></div>',
+        '<div class="app-layout">' .
+            '<header class="app-topbar navbar navbar-expand-lg navbar-light bg-light border-bottom px-3 py-2">' .
+                '<a class="navbar-brand me-3" href="%s">%s</a>' .
+                '%s' .
+                '<div class="ms-auto d-flex align-items-center gap-2">%s</div>' .
+            '</header>' .
+            '<main v-cloak class="app-content p-3">%s</main>' .
+        '</div>',
+        $brandHrefEscaped,
+        $brandLabelEscaped,
         $navHtml,
+        $actionsHtml,
         $content
     );
 }

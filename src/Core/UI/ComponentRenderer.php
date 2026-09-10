@@ -27,7 +27,9 @@ class ComponentRenderer
      * @param PhueComponentLoader|null $loader          Optional component loader instance.
      * @param string|null              $layoutName      Optional layout component name (e.g., 'AppLayout').
      * @param mixed                    $uriResolver     Optional callable returning current request URI string: fn(): string.
+     * @param mixed                    $requestResolver Optional callable returning current Request object.
      * @param PhuePartialRenderer|null $partialRenderer Optional partial renderer for layout integration.
+     * @param mixed                    $userResolver    Optional callable returning IdentityInterface|null: fn(): ?IdentityInterface.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -36,7 +38,8 @@ class ComponentRenderer
         private ?string $layoutName = null,
         private mixed $uriResolver = null,
         private mixed $requestResolver = null,
-        private ?PhuePartialRenderer $partialRenderer = null
+        private ?PhuePartialRenderer $partialRenderer = null,
+        private mixed $userResolver = null
     ) {}
 
     /**
@@ -197,10 +200,12 @@ class ComponentRenderer
         }
 
         $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
+        $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
 
         $layoutComponent = $this->loader->load($this->layoutName, [
             'content'         => $pageMarkup,
             'uri'             => $uri,
+            'user'            => $user,
             'partialRenderer' => $this->partialRenderer,
         ]);
 

@@ -175,6 +175,15 @@ class Application
         });
 
         $this->container->singleton(ComponentRenderer::class, function ($c) {
+            $userResolver = function () use ($c) {
+                if ($c->has(\Phue\Auth\AuthManager::class)) {
+                    /** @var \Phue\Auth\AuthManager $auth */
+                    $auth = $c->get(\Phue\Auth\AuthManager::class);
+                    return $auth->getUser();
+                }
+                return null;
+            };
+
             return new ComponentRenderer(
                 shellRenderer: $c->get(HtmlShellRenderer::class),
                 assetRegistry: $c->get(AssetRegistry::class),
@@ -182,7 +191,8 @@ class Application
                 layoutName: 'AppLayout',
                 uriResolver: fn() => $c->get(\Phue\Core\Request::class)->getUri(),
                 requestResolver: fn() => $c->get(\Phue\Core\Request::class),
-                partialRenderer: $c->get(PhuePartialRenderer::class)
+                partialRenderer: $c->get(PhuePartialRenderer::class),
+                userResolver: $userResolver
             );
         });
 

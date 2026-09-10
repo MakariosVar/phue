@@ -7,39 +7,82 @@
 /**
  * PhNavigation SSR Partial (HTML-first)
  *
- * @var array<int, array{label: string, href: string, disabled?: bool}> $items
- * @var string $activeRoute
- * @var string $orientation 'horizontal'|'sidebar'|'vertical'
+ * Renders an accessible HTML navigation bar (horizontal nav-pills or vertical/sidebar navigation),
+ * automatically computing active routes, escaping attributes, and handling visual group headings.
+ *
+ * @var array<int, array{label: string, href: string, disabled?: bool, group?: string}> $items       Collection of navigation items to display.
+ * @var string                                                                           $activeRoute Current active HTTP request URI path.
+ * @var string                                                                           $orientation Structural layout direction ('horizontal'|'sidebar'|'vertical').
+ *
+ * @return array{html: string} Rendered HTML string payload enclosed in a array response.
  */
+
+/** @var array<int, array{label: string, href: string, disabled?: bool, group?: string}> $items */
 $items = is_array($items ?? null) ? $items : [];
+
+/** @var string $activeRoute */
 $activeRoute = is_string($activeRoute ?? null) ? $activeRoute : '/';
+
+/** @var string $orientation */
 $orientation = is_string($orientation ?? null) ? $orientation : 'horizontal';
 
+/** @var string $normalizedActive */
 $normalizedActive = '/' . trim($activeRoute, '/');
-$linksHtml = [];
+
+/** @var bool $isSidebarMode */
+$isSidebarMode = ($orientation === 'sidebar' || $orientation === 'vertical');
+
+/** @var array<int, string> $elementsHtml */
+$elementsHtml = [];
+
+/** @var string|null $currentGroup */
+$currentGroup = null;
 
 foreach ($items as $item) {
+    /** @var string|null $group */
+    $group = $item['group'] ?? null;
+
+    // Group Heading Rendering (sidebar/vertical mode only)
+    if ($isSidebarMode && $group !== null && $group !== $currentGroup) {
+        $elementsHtml[] = sprintf(
+            '<h6 class="phue-nav-group">%s</h6>',
+            htmlspecialchars($group, ENT_QUOTES, 'UTF-8')
+        );
+        $currentGroup = $group;
+    }
+
+    /** @var string $href */
     $href = $item['href'] ?? '#';
+
+    /** @var string $label */
     $label = htmlspecialchars($item['label'] ?? '', ENT_QUOTES, 'UTF-8');
+
+    /** @var bool $isDisabled */
     $isDisabled = !empty($item['disabled']);
 
     if ($isDisabled) {
-        $linksHtml[] = sprintf(
+        $elementsHtml[] = sprintf(
             '<span class="nav-link disabled" aria-disabled="true">%s</span>',
             $label
         );
         continue;
     }
 
+    /** @var string $normalizedHref */
     $normalizedHref = '/' . trim($href, '/');
+
+    /** @var bool $isActive */
     $isActive = ($normalizedHref === '/')
         ? ($normalizedActive === '/')
         : ($normalizedActive === $normalizedHref || str_starts_with($normalizedActive, $normalizedHref . '/'));
 
+    /** @var string $activeClass */
     $activeClass = $isActive ? ' active' : '';
+
+    /** @var string $ariaCurrent */
     $ariaCurrent = $isActive ? ' aria-current="page"' : '';
 
-    $linksHtml[] = sprintf(
+    $elementsHtml[] = sprintf(
         '<a href="%s" class="nav-link%s"%s>%s</a>',
         htmlspecialchars($href, ENT_QUOTES, 'UTF-8'),
         $activeClass,
@@ -48,12 +91,13 @@ foreach ($items as $item) {
     );
 }
 
-$navClasses = ($orientation === 'sidebar' || $orientation === 'vertical')
+/** @var string $navClasses */
+$navClasses = $isSidebarMode
     ? 'nav nav-pills flex-column'
     : 'nav nav-pills';
 
 return [
-    'html' => sprintf('<nav class="%s">%s</nav>', $navClasses, implode("\n", $linksHtml)),
+    'html' => sprintf('<nav class="%s">%s</nav>', $navClasses, implode("\n", $elementsHtml)),
 ];
 
 </php>

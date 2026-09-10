@@ -89,6 +89,60 @@ final class NavPartialTest extends TestCase
         $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
     }
 
+    public function testSidebarRendersGroupHeadingOnceBeforeGroupedItems(): void
+    {
+        $items = [
+            ['label' => 'Docs', 'href' => '/docs', 'group' => 'Learn'],
+            ['label' => 'Tutorials', 'href' => '/tutorials', 'group' => 'Learn'],
+            ['label' => 'Home', 'href' => '/'],
+        ];
+        $html = $this->render($items, '/products', 'sidebar');
+
+        $this->assertSame(1, substr_count($html, '>Learn<'));
+        $this->assertMatchesRegularExpression(
+            '/<h6 class="phue-nav-group"[^>]*>Learn<\/h6>\s*<a href="\/docs"/',
+            $html
+        );
+        $this->assertStringContainsString('<a href="/" class="nav-link">Home</a>', $html);
+    }
+
+    public function testSidebarGroupHeadingSeparatesDistinctGroups(): void
+    {
+        $items = [
+            ['label' => 'Docs', 'href' => '/docs', 'group' => 'Learn'],
+            ['label' => 'Products', 'href' => '/products', 'group' => 'Shop'],
+        ];
+        $html = $this->render($items, '/', 'sidebar');
+
+        $this->assertMatchesRegularExpression(
+            '/<h6 class="phue-nav-group"[^>]*>Learn<\/h6>\s*<a href="\/docs".*<h6 class="phue-nav-group"[^>]*>Shop<\/h6>\s*<a href="\/products"/s',
+            $html
+        );
+    }
+
+    public function testSidebarGroupHeadingLabelIsEscaped(): void
+    {
+        $items = [
+            ['label' => 'X', 'href' => '/x', 'group' => '<script>alert(1)</script>'],
+        ];
+        $html = $this->render($items, '/', 'sidebar');
+
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
+    }
+
+    public function testHorizontalOrientationIgnoresGroupHeadings(): void
+    {
+        $items = [
+            ['label' => 'Docs', 'href' => '/docs', 'group' => 'Learn'],
+        ];
+        $html = $this->render($items, '/docs', 'horizontal');
+
+        $this->assertStringNotContainsString('phue-nav-group', $html);
+        $this->assertStringNotContainsString('>Learn<', $html);
+        $this->assertStringContainsString('<a href="/docs" class="nav-link active"', $html);
+    }
+
     public function testRootUsesExactMatchOnly(): void
     {
         $html = $this->render($this->items(), '/');
