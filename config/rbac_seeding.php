@@ -26,20 +26,4 @@ return [
         1 => ['admin'],
         2 => ['editor'],
     ],
-    'seed_users' => [
-        [
-            'id' => 1,
-            'username' => 'admin',
-            'auth_key' => 'token_admin_key',
-            'password_hash' => password_hash('secret123', PASSWORD_BCRYPT),
-            'roles' => ['admin'],
-        ],
-        [
-            'id' => 2,
-            'username' => 'editor',
-            'auth_key' => 'token_editor_key',
-            'password_hash' => password_hash('secret123', PASSWORD_BCRYPT),
-            'roles' => ['editor'],
-        ],
-    ],
 ];
