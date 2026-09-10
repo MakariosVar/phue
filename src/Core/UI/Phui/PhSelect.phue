@@ -1,32 +1,30 @@
 <template>
-  <div :class="['ph-select-group', { 'ph-select-group--error': !!error, 'ph-select-group--disabled': disabled }]">
-    <label v-if="label" :for="selectId" class="ph-select-label">
+  <div class="mb-3">
+    <label v-if="label" :for="selectId" class="form-label">
       {{ label }}
-      <span v-if="required" class="ph-select-label__required">*</span>
+      <span v-if="required" class="text-danger">*</span>
     </label>
 
-    <div class="ph-select-wrapper">
-      <select
-        :id="selectId"
-        :value="modelValue"
-        :disabled="disabled"
-        class="ph-select"
-        @change="$emit('update:modelValue', $event.target.value)"
+    <select
+      :id="selectId"
+      :value="modelValue"
+      :disabled="disabled"
+      :class="['form-select', { 'is-invalid': !!error }]"
+      @change="$emit('update:modelValue', $event.target.value)"
+    >
+      <option v-if="placeholder" value="" disabled selected>{{ placeholder }}</option>
+      <option
+        v-for="option in normalizedOptions"
+        :key="option.value"
+        :value="option.value"
+        :disabled="option.disabled"
       >
-        <option v-if="placeholder" value="" disabled selected>{{ placeholder }}</option>
-        <option
-          v-for="option in normalizedOptions"
-          :key="option.value"
-          :value="option.value"
-          :disabled="option.disabled"
-        >
-          {{ option.label }}
-        </option>
-      </select>
-    </div>
+        {{ option.label }}
+      </option>
+    </select>
 
-    <p v-if="error" class="ph-select-error">{{ error }}</p>
-    <p v-else-if="helperText" class="ph-select-helper">{{ helperText }}</p>
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
   </div>
 </template>
 

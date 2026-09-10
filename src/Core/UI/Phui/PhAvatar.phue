@@ -1,7 +1,7 @@
 <template>
-  <div :class="['ph-avatar', `ph-avatar--${size}`, `ph-avatar--${shape}`]">
-    <img v-if="src && !hasError" :src="src" :alt="alt" class="ph-avatar__image" @error="hasError = true" />
-    <span v-else class="ph-avatar__initials">{{ computedInitials }}</span>
+  <div :class="['avatar', `avatar-${size}`, shapeClass]">
+    <img v-if="src && !hasError" :src="src" :alt="alt" class="avatar__image" @error="hasError = true" />
+    <span v-else class="avatar__initials">{{ computedInitials }}</span>
   </div>
 </template>
 
@@ -38,6 +38,14 @@ export default {
     };
   },
   computed: {
+    shapeClass() {
+      const map = {
+        circle: 'rounded-circle',
+        square: 'rounded-0',
+        rounded: 'rounded'
+      };
+      return map[this.shape] || 'rounded-circle';
+    },
     computedInitials() {
       if (!this.name) return '?';
       const parts = this.name.trim().split(/\s+/);

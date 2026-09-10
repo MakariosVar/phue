@@ -7,18 +7,18 @@ namespace Phue\Tests\Core\UI;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Cross-layer style contract between the SSR partial (PhNavigation) and the shared stylesheet.
+ * Cross-layer style contract between the SSR partial (PhNavigation) and
+ * Bootstrap's nav classes.
  *
- * Guarantees that every CSS class emitted by the partial is actually declared in
- * phue.css, so a server-rendered navigation element can never silently lose its
- * styling after a rename on either side.
+ * Guarantees that the navigation partial emits standard Bootstrap nav markup
+ * that is styled by bootstrap.min.css.
  *
  * @package Phue\Tests\Core\UI
  */
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class NavStyleContractTest extends TestCase
 {
-    private const CSS_PATH = __DIR__ . '/../../../storage/assets/styles/phue.css';
+    private const BS_CSS_PATH = __DIR__ . '/../../../storage/assets/vendor/bootstrap/bootstrap.min.css';
 
     private string $css;
 
@@ -26,38 +26,28 @@ final class NavStyleContractTest extends TestCase
     {
         parent::setUp();
 
-        $path = realpath(self::CSS_PATH);
-        $this->assertIsString($path, 'phue.css file not found');
+        $path = realpath(self::BS_CSS_PATH);
+        $this->assertIsString($path, 'bootstrap.min.css file not found');
         $this->css = (string) file_get_contents($path);
     }
 
     public function testNavigationWrapperClassIsStyled(): void
     {
-        $this->assertMatchesRegularExpression('/\.ph-nav\b/', $this->css, 'Missing .ph-nav selector');
+        $this->assertStringContainsString('.nav', $this->css, 'Missing .nav selector in Bootstrap');
     }
 
     public function testNavigationLinkBaseClassIsStyled(): void
     {
-        $this->assertMatchesRegularExpression('/\.ph-nav__link/', $this->css, 'Missing .ph-nav__link selector');
+        $this->assertStringContainsString('.nav-link', $this->css, 'Missing .nav-link selector in Bootstrap');
     }
 
     public function testActiveStateClassMatchesPartial(): void
     {
-        // The partial emits `<a class="ph-nav__link is-active">`.
-        $this->assertMatchesRegularExpression(
-            '/\.ph-nav__link\.is-active/',
-            $this->css,
-            'Missing .ph-nav__link.is-active compound selector (partial emits "is-active")',
-        );
+        $this->assertStringContainsString('.nav-link.active', $this->css, 'Missing .nav-link.active selector in Bootstrap');
     }
 
     public function testDisabledStateClassMatchesPartial(): void
     {
-        // The partial emits `<span class="ph-nav__link is-disabled">`.
-        $this->assertMatchesRegularExpression(
-            '/\.ph-nav__link\.is-disabled/',
-            $this->css,
-            'Missing .ph-nav__link.is-disabled compound selector (partial emits "is-disabled")',
-        );
+        $this->assertStringContainsString('.nav-link.disabled', $this->css, 'Missing .nav-link.disabled selector in Bootstrap');
     }
 }

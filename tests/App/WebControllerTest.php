@@ -191,7 +191,7 @@ final class WebControllerTest extends TestCase
         $this->assertStringContainsString('id="data"', $content);
         $this->assertStringContainsString('id="feedback"', $content);
         $this->assertStringContainsString('id="navigation"', $content);
-        $this->assertStringContainsString('ph-btn ph-btn--primary', $content);
-        $this->assertStringContainsString('--ph-color-primary', $content);
+        $this->assertStringContainsString('btn btn-primary', $content);
+        $this->assertStringContainsString('--bs-primary', $content);
     }
 }

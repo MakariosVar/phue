@@ -1092,7 +1092,7 @@ $container->set(VcloakLoader::class, function () {
 
 ## 11. PhUI Component Kit
 
-Phue ships a complete Vue 3 component library (`src/Core/UI/Phui/`) — 25 components, no build step, all consuming `--ph-*` CSS custom properties from the global `phue.css` stylesheet.
+Phue ships a complete Vue 3 component library (`src/Core/UI/Phui/`) — 25 components, no build step, all styled with Bootstrap 5 classes and CSS custom properties from the global `bootstrap.min.css` stylesheet.
 
 ### Available Components
 
@@ -1123,11 +1123,11 @@ Each component is a `.phue` single-file component (`<template>` + `<script>`). T
 - **`PhChip`** — `:variant`, `:removable`, `:disabled`
 - **`PhAvatar`** — `src`, `name`, `:size`, `:shape`
 
-All components use `--ph-*` tokens: `--ph-color-primary`, `--ph-space-1..8`, `--ph-radius-sm|md|lg`, `--ph-text-xs|sm|base|lg|xl`, etc.
+All components use Bootstrap 5 utility and component classes: `btn`, `form-control`, `form-check`, `card`, `alert`, `modal`, `badge`, etc. Custom look-and-feel is achieved by overriding `--bs-*` tokens.
 
 ### Global Stylesheet
 
-`storage/assets/styles/phue.css` (~25KB) is the global app CSS — tokens, base reset, component styles, layout + spacing utilities. Loaded automatically by `HtmlShellRenderer`. Override via CSS custom properties in your own stylesheet.
+`storage/assets/vendor/bootstrap/bootstrap.min.css` is the global app CSS — design tokens, base reset, component styles, layout + spacing utilities. Loaded automatically by `HtmlShellRenderer`. Override via Bootstrap's `--bs-*` CSS custom properties in your own stylesheet.
 
 ---
 

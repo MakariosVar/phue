@@ -1,8 +1,7 @@
 <template>
   <component
     :is="tag"
-    :class="['ph-heading', `ph-heading--${level}`, `ph-heading--${color}`]"
-    :style="headingStyles"
+    :class="[colorClass, alignClass]"
   >
     <slot />
   </component>
@@ -31,10 +30,24 @@ export default {
     tag() {
       return `h${this.level}`;
     },
-    headingStyles() {
-      return {
-        textAlign: this.align
+    colorClass() {
+      const map = {
+        default: '',
+        muted: 'text-body-secondary',
+        primary: 'text-primary',
+        secondary: 'text-secondary',
+        danger: 'text-danger'
       };
+      return map[this.color] || '';
+    },
+    alignClass() {
+      const map = {
+        left: 'text-start',
+        center: 'text-center',
+        right: 'text-end',
+        justify: 'text-justify'
+      };
+      return map[this.align] || 'text-start';
     }
   }
 };

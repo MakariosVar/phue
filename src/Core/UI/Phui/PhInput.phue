@@ -1,27 +1,25 @@
 <template>
-  <div :class="['ph-input-group', { 'ph-input-group--error': !!error, 'ph-input-group--disabled': disabled }]">
-    <label v-if="label" :for="inputId" class="ph-input-label">
+  <div class="mb-3">
+    <label v-if="label" :for="inputId" class="form-label">
       {{ label }}
-      <span v-if="required" class="ph-input-label__required">*</span>
+      <span v-if="required" class="text-danger">*</span>
     </label>
-    
-    <div class="ph-input-wrapper">
-      <input
-        :id="inputId"
-        :type="type"
-        :value="modelValue"
-        :placeholder="placeholder"
-        :disabled="disabled"
-        :readonly="readonly"
-        class="ph-input"
-        @input="$emit('update:modelValue', $event.target.value)"
-        @blur="$emit('blur', $event)"
-        @focus="$emit('focus', $event)"
-      />
-    </div>
 
-    <p v-if="error" class="ph-input-error">{{ error }}</p>
-    <p v-else-if="helperText" class="ph-input-helper">{{ helperText }}</p>
+    <input
+      :id="inputId"
+      :type="type"
+      :value="modelValue"
+      :placeholder="placeholder"
+      :disabled="disabled"
+      :readonly="readonly"
+      :class="['form-control', { 'is-invalid': !!error }]"
+      @input="$emit('update:modelValue', $event.target.value)"
+      @blur="$emit('blur', $event)"
+      @focus="$emit('focus', $event)"
+    />
+
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
   </div>
 </template>
 

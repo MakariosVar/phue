@@ -1,5 +1,5 @@
 <template>
-  <div class="ph-spacer" :style="spacerStyles" aria-hidden="true"></div>
+  <div class="flex-shrink-0" :style="spacerStyles" aria-hidden="true"></div>
 </template>
 
 <script>
@@ -17,10 +17,11 @@ export default {
   },
   computed: {
     spacerStyles() {
-      const val = typeof this.size === 'number' ? `${this.size}px` : `var(--ph-space-${this.size}, ${this.size})`;
+      const sizeMap = { none: '0', xs: '0.25rem', sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', '2xl': '2rem' };
+      const val = typeof this.size === 'number' ? `${this.size}px` : (sizeMap[this.size] || this.size);
       return this.horizontal
-        ? { width: val, height: '100%', flexShrink: 0 }
-        : { height: val, width: '100%', flexShrink: 0 };
+        ? { width: val, height: '100%' }
+        : { height: val, width: '100%' };
     }
   }
 };

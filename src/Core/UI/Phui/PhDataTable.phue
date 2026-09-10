@@ -1,57 +1,59 @@
 <template>
-  <div class="ph-data-table-container">
-    <table class="ph-data-table">
-      <thead>
-        <tr>
-          <th
-            v-for="col in columns"
-            :key="col.key"
-            :class="['ph-data-table__th', { 'ph-data-table__th--sortable': col.sortable }]"
-            @click="col.sortable ? handleSort(col.key) : null"
-          >
-            <div class="ph-data-table__th-content">
-              <span>{{ col.label || col.key }}</span>
-              <span v-if="col.sortable" class="ph-data-table__sort-icon">
-                <template v-if="sortKey === col.key">
-                  {{ sortOrder === 'asc' ? '▲' : '▼' }}
-                </template>
-                <template v-else>↕</template>
+  <div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle">
+        <thead>
+          <tr>
+            <th
+              v-for="col in columns"
+              :key="col.key"
+              :class="{ 'cursor-pointer user-select-none': col.sortable }"
+              @click="col.sortable ? handleSort(col.key) : null"
+            >
+              <span class="th-content">
+                <span>{{ col.label || col.key }}</span>
+                <span v-if="col.sortable" class="sort-icon ms-1">
+                  <template v-if="sortKey === col.key">
+                    {{ sortOrder === 'asc' ? '▲' : '▼' }}
+                  </template>
+                  <template v-else>↕</template>
+                </span>
               </span>
-            </div>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="paginatedData.length === 0">
-          <td :colspan="columns.length" class="ph-data-table__empty">
-            <slot name="empty">No data available</slot>
-          </td>
-        </tr>
-        <tr v-for="(row, rowIndex) in paginatedData" :key="row.id || rowIndex" class="ph-data-table__tr">
-          <td v-for="col in columns" :key="col.key" class="ph-data-table__td">
-            <slot :name="`cell(${col.key})`" :row="row" :value="row[col.key]">
-              {{ row[col.key] }}
-            </slot>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="paginatedData.length === 0">
+            <td :colspan="columns.length" class="text-center text-body-secondary py-4">
+              <slot name="empty">No data available</slot>
+            </td>
+          </tr>
+          <tr v-for="(row, rowIndex) in paginatedData" :key="row.id || rowIndex">
+            <td v-for="col in columns" :key="col.key">
+              <slot :name="`cell(${col.key})`" :row="row" :value="row[col.key]">
+                {{ row[col.key] }}
+              </slot>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <div v-if="paginated && totalPages > 1" class="ph-data-table__pagination">
+    <div v-if="paginated && totalPages > 1" class="d-flex justify-content-between align-items-center mt-3">
       <button
         type="button"
-        class="ph-btn ph-btn--sm ph-btn--ghost"
+        class="btn btn-sm btn-outline-secondary"
         :disabled="currentPage === 1"
         @click="currentPage--"
       >
         Previous
       </button>
-      <span class="ph-data-table__page-info">
+      <span class="text-body-secondary">
         Page {{ currentPage }} of {{ totalPages }}
       </span>
       <button
         type="button"
-        class="ph-btn ph-btn--sm ph-btn--ghost"
+        class="btn btn-sm btn-outline-secondary"
         :disabled="currentPage === totalPages"
         @click="currentPage++"
       >

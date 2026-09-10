@@ -19,7 +19,7 @@ class NavigationConfig
         return [
             ['label' => 'Home', 'href' => '/'],
             ['label' => 'Docs', 'href' => '/docs'],
-            ['label' => 'UI', 'href' => '/ui'],
+            ['label' => 'UI Components', 'href' => '/ui'],
             ['label' => 'Products', 'href' => '/products'],
         ];
     }

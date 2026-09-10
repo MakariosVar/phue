@@ -23,7 +23,7 @@ foreach ($items as $item) {
 
     if ($isDisabled) {
         $linksHtml[] = sprintf(
-            '<span class="ph-nav__link is-disabled" aria-disabled="true">%s</span>',
+            '<span class="nav-link disabled" aria-disabled="true">%s</span>',
             $label
         );
         continue;
@@ -34,11 +34,11 @@ foreach ($items as $item) {
         ? ($normalizedActive === '/')
         : ($normalizedActive === $normalizedHref || str_starts_with($normalizedActive, $normalizedHref . '/'));
 
-    $activeClass = $isActive ? ' is-active' : '';
+    $activeClass = $isActive ? ' active' : '';
     $ariaCurrent = $isActive ? ' aria-current="page"' : '';
 
     $linksHtml[] = sprintf(
-        '<a href="%s" class="ph-nav__link%s"%s>%s</a>',
+        '<a href="%s" class="nav-link%s"%s>%s</a>',
         htmlspecialchars($href, ENT_QUOTES, 'UTF-8'),
         $activeClass,
         $ariaCurrent,
@@ -47,7 +47,7 @@ foreach ($items as $item) {
 }
 
 return [
-    'html' => sprintf('<nav class="ph-nav">%s</nav>', implode("\n", $linksHtml)),
+    'html' => sprintf('<nav class="nav nav-pills flex-column">%s</nav>', implode("\n", $linksHtml)),
 ];
 
 </php>

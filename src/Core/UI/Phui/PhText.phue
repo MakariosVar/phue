@@ -2,13 +2,12 @@
   <component
     :is="as"
     :class="[
-      'ph-text',
-      `ph-text--${size}`,
-      `ph-text--${weight}`,
-      `ph-text--${color}`,
-      { 'ph-text--truncate': truncate }
+      sizeClass,
+      weightClass,
+      colorClass,
+      alignClass,
+      { 'text-truncate': truncate }
     ]"
-    :style="textStyles"
   >
     <slot />
   </component>
@@ -47,10 +46,46 @@ export default {
     }
   },
   computed: {
-    textStyles() {
-      return {
-        textAlign: this.align
+    sizeClass() {
+      const map = {
+        xs: 'small',
+        sm: 'small',
+        md: '',
+        lg: 'fs-5',
+        xl: 'fs-3'
       };
+      return map[this.size] || '';
+    },
+    weightClass() {
+      const map = {
+        light: 'fw-light',
+        normal: 'fw-normal',
+        medium: 'fw-medium',
+        semibold: 'fw-semibold',
+        bold: 'fw-bold'
+      };
+      return map[this.weight] || 'fw-normal';
+    },
+    colorClass() {
+      const map = {
+        default: '',
+        muted: 'text-body-secondary',
+        main: 'text-body-emphasis',
+        primary: 'text-primary',
+        secondary: 'text-secondary',
+        danger: 'text-danger',
+        inverse: 'text-white'
+      };
+      return map[this.color] || '';
+    },
+    alignClass() {
+      const map = {
+        left: 'text-start',
+        center: 'text-center',
+        right: 'text-end',
+        justify: 'text-justify'
+      };
+      return map[this.align] || 'text-start';
     }
   }
 };

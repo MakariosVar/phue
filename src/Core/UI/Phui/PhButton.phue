@@ -2,16 +2,16 @@
   <button
     :type="type"
     :class="[
-      'ph-btn',
-      `ph-btn--${variant}`,
-      `ph-btn--${size}`,
-      { 'ph-btn--block': block, 'ph-btn--loading': loading }
+      'btn',
+      variantClass,
+      size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : '',
+      { 'w-100': block, 'disabled': loading }
     ]"
     :disabled="disabled || loading"
     @click="$emit('click', $event)"
   >
-    <span v-if="loading" class="ph-btn__spinner" aria-hidden="true"></span>
-    <span class="ph-btn__content">
+    <span v-if="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+    <span class="btn__content">
       <slot />
     </span>
   </button>
@@ -48,6 +48,18 @@ export default {
       default: false
     }
   },
-  emits: ['click']
+  emits: ['click'],
+  computed: {
+    variantClass() {
+      const map = {
+        primary: 'btn-primary',
+        secondary: 'btn-secondary',
+        outline: 'btn-outline-primary',
+        ghost: 'btn-link',
+        danger: 'btn-danger'
+      };
+      return map[this.variant] || 'btn-primary';
+    }
+  }
 };
 </script>

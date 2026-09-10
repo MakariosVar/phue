@@ -1,8 +1,8 @@
 <template>
-  <div :class="['ph-textarea-group', { 'ph-textarea-group--error': !!error, 'ph-textarea-group--disabled': disabled }]">
-    <label v-if="label" :for="textareaId" class="ph-textarea-label">
+  <div class="mb-3">
+    <label v-if="label" :for="textareaId" class="form-label">
       {{ label }}
-      <span v-if="required" class="ph-textarea-label__required">*</span>
+      <span v-if="required" class="text-danger">*</span>
     </label>
 
     <textarea
@@ -12,15 +12,15 @@
       :rows="rows"
       :disabled="disabled"
       :readonly="readonly"
-      :style="{ resize: resize }"
-      class="ph-textarea"
+      :style="{ resize }"
+      :class="['form-control', { 'is-invalid': !!error }]"
       @input="$emit('update:modelValue', $event.target.value)"
       @blur="$emit('blur', $event)"
       @focus="$emit('focus', $event)"
     ></textarea>
 
-    <p v-if="error" class="ph-textarea-error">{{ error }}</p>
-    <p v-else-if="helperText" class="ph-textarea-helper">{{ helperText }}</p>
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
   </div>
 </template>
 

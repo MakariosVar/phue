@@ -1,24 +1,17 @@
 <template>
-  <label :class="['ph-checkbox', { 'ph-checkbox--disabled': disabled, 'ph-checkbox--checked': modelValue }]">
+  <div class="form-check">
     <input
+      ref="inputEl"
       type="checkbox"
       :checked="modelValue"
       :disabled="disabled"
-      class="ph-checkbox__input"
+      class="form-check-input"
       @change="$emit('update:modelValue', $event.target.checked)"
     />
-    <span class="ph-checkbox__box" aria-hidden="true">
-      <svg v-if="indeterminate" class="ph-checkbox__icon" viewBox="0 0 16 16" fill="currentColor">
-        <rect x="3" y="7" width="10" height="2" rx="1" />
-      </svg>
-      <svg v-else-if="modelValue" class="ph-checkbox__icon" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z"/>
-      </svg>
-    </span>
-    <span v-if="label || $slots.default" class="ph-checkbox__label">
+    <label v-if="label || $slots.default" class="form-check-label">
       <slot>{{ label }}</slot>
-    </span>
-  </label>
+    </label>
+  </div>
 </template>
 
 <script>
@@ -42,6 +35,19 @@ export default {
       default: false
     }
   },
-  emits: ['update:modelValue']
+  emits: ['update:modelValue'],
+  mounted() {
+    this.syncIndeterminate();
+  },
+  watch: {
+    indeterminate: 'syncIndeterminate'
+  },
+  methods: {
+    syncIndeterminate() {
+      if (this.$refs.inputEl) {
+        this.$refs.inputEl.indeterminate = this.indeterminate;
+      }
+    }
+  }
 };
 </script>

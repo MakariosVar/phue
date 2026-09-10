@@ -1,35 +1,44 @@
 <template>
-  <nav class="ph-pagination" aria-label="Pagination">
-    <button
-      type="button"
-      class="ph-btn ph-btn--sm ph-btn--ghost ph-pagination__prev"
-      :disabled="currentPage <= 1"
-      @click="changePage(currentPage - 1)"
-    >
-      Previous
-    </button>
+  <nav class="d-flex justify-content-center" aria-label="Pagination">
+    <ul class="pagination pagination-sm mb-0">
+      <li class="page-item" :class="{ disabled: currentPage <= 1 }">
+        <button
+          type="button"
+          class="page-link"
+          :disabled="currentPage <= 1"
+          @click="changePage(currentPage - 1)"
+        >
+          Previous
+        </button>
+      </li>
 
-    <div class="ph-pagination__pages">
-      <button
+      <li
         v-for="page in pages"
         :key="page"
-        type="button"
-        :class="['ph-btn ph-btn--sm', page === currentPage ? 'ph-btn--primary' : 'ph-btn--ghost']"
-        :disabled="page === '...'"
-        @click="typeof page === 'number' ? changePage(page) : null"
+        class="page-item"
+        :class="{ active: page === currentPage, disabled: page === '...' }"
       >
-        {{ page }}
-      </button>
-    </div>
+        <button
+          type="button"
+          class="page-link"
+          :disabled="page === '...'"
+          @click="typeof page === 'number' ? changePage(page) : null"
+        >
+          {{ page }}
+        </button>
+      </li>
 
-    <button
-      type="button"
-      class="ph-btn ph-btn--sm ph-btn--ghost ph-pagination__next"
-      :disabled="currentPage >= totalPages"
-      @click="changePage(currentPage + 1)"
-    >
-      Next
-    </button>
+      <li class="page-item" :class="{ disabled: currentPage >= totalPages }">
+        <button
+          type="button"
+          class="page-link"
+          :disabled="currentPage >= totalPages"
+          @click="changePage(currentPage + 1)"
+        >
+          Next
+        </button>
+      </li>
+    </ul>
   </nav>
 </template>
 

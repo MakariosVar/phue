@@ -1,17 +1,17 @@
 <template>
-  <div :class="['ph-card', { 'ph-card--bordered': bordered, 'ph-card--hoverable': hoverable }]">
-    <div v-if="$slots.header || title" class="ph-card__header">
+  <div :class="['card', { 'border-0': !bordered, 'card-hoverable': hoverable }]">
+    <div v-if="$slots.header || title" class="card-header bg-transparent">
       <slot name="header">
-        <h3 class="ph-card__title">{{ title }}</h3>
-        <p v-if="subtitle" class="ph-card__subtitle">{{ subtitle }}</p>
+        <h3 class="card-title mb-0">{{ title }}</h3>
+        <p v-if="subtitle" class="card-subtitle text-body-secondary mt-1 mb-0">{{ subtitle }}</p>
       </slot>
     </div>
 
-    <div class="ph-card__body">
+    <div class="card-body">
       <slot />
     </div>
 
-    <div v-if="$slots.footer" class="ph-card__footer">
+    <div v-if="$slots.footer" class="card-footer bg-transparent">
       <slot name="footer" />
     </div>
   </div>

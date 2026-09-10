@@ -1013,7 +1013,7 @@ $registry->addLoader(fn () => $this->container->get('phui.loader'));
 
 ## 18c. PhUI Component Kit (`src/Core/UI/Phui/`)
 
-25 ready-to-use Vue 3 components, each a single `.phue` file consuming `--ph-*` CSS tokens:
+25 ready-to-use Vue 3 components, each a single `.phue` file styled with Bootstrap 5 classes:
 
 | Category | Components |
 |---|---|
@@ -1024,7 +1024,7 @@ $registry->addLoader(fn () => $this->container->get('phui.loader'));
 | Navigation | `PhLink`, `PhPagination`, `PhBreadcrumb`, `PhTabs` |
 | Data | `PhDataTable` |
 
-Each component is a self-contained `.phue` file with `<template>` (Vue markup) + `<script>` (ESM module). Components consume `--ph-*` CSS custom properties from the global `storage/assets/styles/phue.css` stylesheet (tokens, base reset, component styles, layout/spacing utilities — ~25KB).
+Each component is a self-contained `.phue` file with `<template>` (Vue markup) + `<script>` (ESM module). Components use Bootstrap 5 component and utility classes from the global `storage/assets/vendor/bootstrap/bootstrap.min.css` stylesheet (design tokens, base reset, component styles, layout/spacing utilities).
 
 ---
 

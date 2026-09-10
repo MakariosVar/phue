@@ -5,7 +5,8 @@
     :to="!isAnchor ? href : undefined"
     :target="target"
     :rel="computedRel"
-    :class="['ph-link', `ph-link--${variant}`, { 'ph-link--underline': underline, 'ph-link--disabled': disabled }]"
+    :class="['link-underline', variantClass, { 'link-underline-opacity-0': !underline, 'disabled pointer-events-none text-body-secondary': disabled }]"
+    :aria-disabled="disabled ? 'true' : undefined"
     @click="handleClick"
   >
     <slot>{{ label }}</slot>
@@ -53,6 +54,15 @@ export default {
     },
     componentType() {
       return this.isAnchor ? 'a' : 'router-link';
+    },
+    variantClass() {
+      const map = {
+        primary: 'link-primary',
+        secondary: 'link-secondary',
+        neutral: 'link-body-emphasis',
+        danger: 'link-danger'
+      };
+      return map[this.variant] || 'link-primary';
     },
     computedRel() {
       if (this.rel) return this.rel;

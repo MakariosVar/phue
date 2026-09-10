@@ -1,5 +1,5 @@
 <template>
-  <div class="ph-flex" :style="flexStyles">
+  <div :class="flexClasses" :style="customStyles">
     <slot />
   </div>
 </template>
@@ -34,16 +34,52 @@ export default {
     }
   },
   computed: {
-    flexStyles() {
-      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : `var(--ph-space-${this.gap}, ${this.gap})`;
-      return {
-        display: 'flex',
-        flexDirection: this.direction,
-        flexWrap: this.wrap,
-        alignItems: this.align,
-        justifyContent: this.justify,
-        gap: gapVal
+    directionClass() {
+      const map = {
+        row: 'flex-row',
+        'row-reverse': 'flex-row-reverse',
+        column: 'flex-column',
+        'column-reverse': 'flex-column-reverse'
       };
+      return map[this.direction] || 'flex-row';
+    },
+    wrapClass() {
+      const map = {
+        nowrap: 'flex-nowrap',
+        wrap: 'flex-wrap',
+        'wrap-reverse': 'flex-wrap-reverse'
+      };
+      return map[this.wrap] || 'flex-nowrap';
+    },
+    alignClass() {
+      const map = {
+        stretch: 'align-items-stretch',
+        'flex-start': 'align-items-start',
+        center: 'align-items-center',
+        'flex-end': 'align-items-end',
+        baseline: 'align-items-baseline'
+      };
+      return map[this.align] || 'align-items-stretch';
+    },
+    justifyClass() {
+      const map = {
+        'flex-start': 'justify-content-start',
+        center: 'justify-content-center',
+        'flex-end': 'justify-content-end',
+        'space-between': 'justify-content-between',
+        'space-around': 'justify-content-around',
+        'space-evenly': 'justify-content-evenly'
+      };
+      return map[this.justify] || 'justify-content-start';
+    },
+    flexClasses() {
+      return ['d-flex', this.directionClass, this.wrapClass, this.alignClass, this.justifyClass];
+    },
+    customStyles() {
+      const gapMap = { none: '0', xs: '0.25rem', sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', '2xl': '2rem' };
+      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : (gapMap[this.gap] || this.gap);
+      if (gapVal) return { gap: gapVal };
+      return {};
     }
   }
 };

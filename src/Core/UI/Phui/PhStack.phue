@@ -1,5 +1,5 @@
 <template>
-  <div class="ph-stack" :style="stackStyles">
+  <div :class="stackClasses" :style="customStyles">
     <slot />
   </div>
 </template>
@@ -19,14 +19,24 @@ export default {
     }
   },
   computed: {
-    stackStyles() {
-      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : `var(--ph-space-${this.gap}, ${this.gap})`;
-      return {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: this.align,
-        gap: gapVal
+    alignClass() {
+      const map = {
+        stretch: 'align-items-stretch',
+        'flex-start': 'align-items-start',
+        center: 'align-items-center',
+        'flex-end': 'align-items-end',
+        baseline: 'align-items-baseline'
       };
+      return map[this.align] || 'align-items-stretch';
+    },
+    stackClasses() {
+      return ['d-flex', 'flex-column', this.alignClass];
+    },
+    customStyles() {
+      const gapMap = { none: '0', xs: '0.25rem', sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', '2xl': '2rem' };
+      const gapVal = typeof this.gap === 'number' ? `${this.gap}px` : (gapMap[this.gap] || this.gap);
+      if (gapVal) return { gap: gapVal };
+      return {};
     }
   }
 };

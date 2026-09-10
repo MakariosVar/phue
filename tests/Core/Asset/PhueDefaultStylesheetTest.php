@@ -10,19 +10,19 @@ use Phue\Core\Asset\AssetServer;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Contracts for the default phue.css stylesheet pipeline:
+ * Contracts for the default Bootstrap stylesheet pipeline:
  * - AssetServer serves it with correct MIME + security headers.
  * - HtmlShellRenderer emits it as a <link> by default when registered.
- * - Token namespace (--ph-*) and minimal utility classes exist in the file.
+ * - Token namespace (--bs-*) exists in the file.
  * - Application override seam allows replacing or appending stylesheets.
  */
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PhueDefaultStylesheetTest extends TestCase
 {
     /**
-     * The real framework stylesheet shipped under storage/assets/styles.
+     * The Bootstrap stylesheet shipped under storage/assets/vendor/bootstrap.
      */
-    private const FRAMEWORK_CSS = __DIR__ . '/../../../storage/assets/styles/phue.css';
+    private const FRAMEWORK_CSS = __DIR__ . '/../../../storage/assets/vendor/bootstrap/bootstrap.min.css';
 
     private string $baseDir;
     private string $stylesDir;
@@ -38,13 +38,19 @@ final class PhueDefaultStylesheetTest extends TestCase
 
         // Seed the temp styles dir with the real framework stylesheet so serving
         // tests exercise the actual shipped content.
+        $bsTarget = $this->baseDir . '/storage/assets/vendor/bootstrap';
+        mkdir($bsTarget, 0777, true);
+        copy(self::FRAMEWORK_CSS, $bsTarget . '/bootstrap.min.css');
+
+        // Also create a styles dir symlink so the old /assets/styles path works for tests
         copy(self::FRAMEWORK_CSS, $this->stylesDir . '/phue.css');
 
         $this->app = new Application($this->baseDir);
 
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
         $registry->registerSource('/assets/styles', $this->stylesDir);
-        $registry->addStyle('/assets/styles/phue.css');
+        $registry->registerSource('/assets/vendor/bootstrap', $bsTarget);
+        $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
     }
 
     protected function tearDown(): void
@@ -63,7 +69,7 @@ final class PhueDefaultStylesheetTest extends TestCase
             $this->app->getContainer()->get(AssetRegistry::class),
         );
 
-        $response = $server->serve('/assets/styles/phue.css');
+        $response = $server->serve('/assets/vendor/bootstrap/bootstrap.min.css');
 
         $this->assertNotNull($response);
         $this->assertSame(200, $response->getStatusCode());
@@ -77,10 +83,10 @@ final class PhueDefaultStylesheetTest extends TestCase
             $this->app->getContainer()->get(AssetRegistry::class),
         );
 
-        $response = $server->serve('/assets/styles/phue.css');
+        $response = $server->serve('/assets/vendor/bootstrap/bootstrap.min.css');
 
         $this->assertSame(
-            file_get_contents($this->stylesDir . '/phue.css'),
+            file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css'),
             $response->getContent(),
         );
     }
@@ -109,7 +115,7 @@ final class PhueDefaultStylesheetTest extends TestCase
         $html = $renderer->render(title: 'Test');
 
         $this->assertStringContainsString(
-            '<link rel="stylesheet" href="/assets/styles/phue.css">',
+            '<link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">',
             $html,
         );
     }
@@ -121,7 +127,7 @@ final class PhueDefaultStylesheetTest extends TestCase
         $html = $renderer->render(title: 'Test');
         [$head] = explode('</head>', $html, 2);
 
-        $this->assertStringContainsString('/assets/styles/phue.css', $head);
+        $this->assertStringContainsString('/assets/vendor/bootstrap/bootstrap.min.css', $head);
     }
 
     // -------------------------------------------------------------------------
@@ -139,19 +145,19 @@ final class PhueDefaultStylesheetTest extends TestCase
         $html = $renderer->render(title: 'Test');
 
         $this->assertStringContainsString('https://cdn.example.com/custom-theme.css', $html);
-        $this->assertStringContainsString('/assets/styles/phue.css', $html);
+        $this->assertStringContainsString('/assets/vendor/bootstrap/bootstrap.min.css', $html);
     }
 
     public function testMultipleStylesheetsPreserveInsertionOrder(): void
     {
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
-        $registry->addStyle('/assets/styles/phue.css');
+        $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
         $registry->addStyle('/assets/styles/override.css');
 
         $renderer = $this->app->getContainer()->get(\Phue\Core\Asset\HtmlShellRenderer::class);
         $html = $renderer->render(title: 'Test');
 
-        $defaultPos = strpos($html, '/assets/styles/phue.css');
+        $defaultPos = strpos($html, '/assets/vendor/bootstrap/bootstrap.min.css');
         $overridePos = strpos($html, '/assets/styles/override.css');
 
         $this->assertNotFalse($defaultPos);
@@ -160,32 +166,31 @@ final class PhueDefaultStylesheetTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Token Namespace Convention (--ph-*)
+    // Bootstrap Token Namespace Convention (--bs-*)
     // -------------------------------------------------------------------------
 
     public function testStylesheetContainsTokenCustomProperties(): void
     {
-        $content = file_get_contents($this->stylesDir . '/phue.css');
+        $content = file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
         $this->assertMatchesRegularExpression(
-            '/--ph-[a-z]/',
+            '/--bs-[a-z]/',
             $content,
-            'phue.css must define CSS custom properties prefixed with --ph- (design tokens)',
+            'bootstrap.min.css must define CSS custom properties prefixed with --bs-',
         );
     }
 
     public function testStylesheetDefinesCoreDesignTokenCategories(): void
     {
-        $content = file_get_contents($this->stylesDir . '/phue.css');
+        $content = file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
-        // At minimum: color tokens + spacing tokens + typography
-        $hasColorToken  = str_contains($content, '--ph-color') || str_contains($content, '--ph-bg') || str_contains($content, '--ph-text');
-        $hasSpacingToken = str_contains($content, '--ph-space') || str_contains($content, '--ph-gap') || str_contains($content, '--ph-radius');
-        $hasFontToken   = str_contains($content, '--ph-font') || str_contains($content, '--ph-text-sm') || str_contains($content, '--ph-text-lg');
+        $hasColorToken  = str_contains($content, '--bs-primary') || str_contains($content, '--bs-body-bg') || str_contains($content, '--bs-body-color');
+        $hasSpacingToken = str_contains($content, '--bs-spacer') || str_contains($content, '--bs-border-radius');
+        $hasFontToken   = str_contains($content, '--bs-font-sans-serif') || str_contains($content, '--bs-font-monospace');
 
-        $this->assertTrue($hasColorToken,  'phue.css must define color tokens (--ph-color, --ph-bg, or --ph-text)');
-        $this->assertTrue($hasSpacingToken, 'phue.css must define spacing tokens (--ph-space, --ph-gap, or --ph-radius)');
-        $this->assertTrue($hasFontToken,   'phue.css must define typography tokens (--ph-font or --ph-text-sm/lg)');
+        $this->assertTrue($hasColorToken,  'bootstrap.min.css must define color tokens (--bs-primary, --bs-body-bg, or --bs-body-color)');
+        $this->assertTrue($hasSpacingToken, 'bootstrap.min.css must define spacing tokens (--bs-spacer or --bs-border-radius)');
+        $this->assertTrue($hasFontToken,   'bootstrap.min.css must define typography tokens (--bs-font-sans-serif or --bs-font-monospace)');
     }
 
     // -------------------------------------------------------------------------
@@ -194,14 +199,14 @@ final class PhueDefaultStylesheetTest extends TestCase
 
     public function testStylesheetContainsFlexboxUtilityClasses(): void
     {
-        $content = file_get_contents($this->stylesDir . '/phue.css');
+        $content = file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
-        $this->assertStringContainsString('.flex', $content, 'Must provide .flex utility class');
+        $this->assertStringContainsString('.d-flex', $content, 'Must provide .d-flex utility class');
     }
 
     public function testStylesheetContainsDisplayUtilityClasses(): void
     {
-        $content = file_get_contents($this->stylesDir . '/phue.css');
+        $content = file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
         $hasDisplay = str_contains($content, '.d-flex')
             || str_contains($content, '.d-none')
@@ -212,7 +217,7 @@ final class PhueDefaultStylesheetTest extends TestCase
 
     public function testStylesheetContainsSpacingUtilityClasses(): void
     {
-        $content = file_get_contents($this->stylesDir . '/phue.css');
+        $content = file_get_contents($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
         $hasSpacing = preg_match('/\.(p|m)-[a-z0-9]/', $content) > 0;
 
@@ -221,10 +226,10 @@ final class PhueDefaultStylesheetTest extends TestCase
 
     public function testStylesheetSizeIsReasonable(): void
     {
-        $size = filesize($this->stylesDir . '/phue.css');
+        $size = filesize($this->baseDir . '/storage/assets/vendor/bootstrap/bootstrap.min.css');
 
-        $this->assertGreaterThan(0, $size, 'phue.css must not be empty');
-        $this->assertLessThanOrEqual(30 * 1024, $size, 'phue.css must not exceed 30KB (global app CSS like Bootstrap5, tokens + components + utilities)');
+        $this->assertGreaterThan(0, $size, 'bootstrap.min.css must not be empty');
+        $this->assertLessThanOrEqual(500 * 1024, $size, 'bootstrap.min.css must not exceed 500KB');
     }
 
     // -------------------------------------------------------------------------

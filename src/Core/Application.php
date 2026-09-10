@@ -228,8 +228,8 @@ class Application
         $this->container->singleton(HtmlShellRenderer::class, function (): HtmlShellRenderer {
             $renderer = new HtmlShellRenderer($this->container->get(AssetRegistry::class));
 
-            // Automatically inject default phue.css into shell head
-            $renderer->addStyle('/assets/styles/phue.css');
+            // Automatically inject Bootstrap CSS into shell head
+            $renderer->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
 
             // Explicitly register navigation interceptor script
             $renderer->addScript('/assets/js/phue-explorer.js', true);

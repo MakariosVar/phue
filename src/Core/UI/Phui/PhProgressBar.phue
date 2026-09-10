@@ -1,12 +1,12 @@
 <template>
-  <div class="ph-progress">
-    <div v-if="showValue || label" class="ph-progress__header">
-      <span v-if="label" class="ph-progress__label">{{ label }}</span>
-      <span v-if="showValue" class="ph-progress__value">{{ normalizedValue }}%</span>
+  <div>
+    <div v-if="showValue || label" class="d-flex justify-content-between mb-1">
+      <span v-if="label" class="progress-label">{{ label }}</span>
+      <span v-if="showValue" class="progress-value">{{ normalizedValue }}%</span>
     </div>
-    <div :class="['ph-progress__track', `ph-progress__track--${size}`]">
+    <div :class="['progress', sizeClass]">
       <div
-        :class="['ph-progress__fill', `ph-progress__fill--${variant}`, { 'ph-progress__fill--animated': animated }]"
+        :class="['progress-bar', variantClass, { 'progress-bar-striped progress-bar-animated': animated }]"
         :style="{ width: `${normalizedValue}%` }"
         role="progressbar"
         :aria-valuenow="normalizedValue"
@@ -51,6 +51,19 @@ export default {
   computed: {
     normalizedValue() {
       return Math.min(100, Math.max(0, this.value));
+    },
+    variantClass() {
+      const map = {
+        primary: '',
+        secondary: 'bg-secondary',
+        success: 'bg-success',
+        warning: 'bg-warning',
+        error: 'bg-danger'
+      };
+      return map[this.variant] || '';
+    },
+    sizeClass() {
+      return this.size === 'sm' ? 'progress-sm' : this.size === 'lg' ? 'progress-lg' : '';
     }
   }
 };

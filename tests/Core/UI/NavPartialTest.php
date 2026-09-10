@@ -55,7 +55,7 @@ final class NavPartialTest extends TestCase
     {
         $html = $this->render($this->items(), '/');
 
-        $this->assertStringContainsString('<nav class="ph-nav">', $html);
+        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
         foreach (['Home', 'Docs', 'Products'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
@@ -66,10 +66,10 @@ final class NavPartialTest extends TestCase
         $html = $this->render($this->items(), '/');
 
         $this->assertMatchesRegularExpression(
-            '/<a href="\/" class="ph-nav__link is-active" aria-current="page">Home<\/a>/',
+            '/<a href="\/" class="nav-link active" aria-current="page">Home<\/a>/',
             $html,
         );
-        $this->assertMatchesRegularExpression('/<a href="\/docs" class="ph-nav__link">Docs<\/a>/', $html);
+        $this->assertMatchesRegularExpression('/<a href="\/docs" class="nav-link">Docs<\/a>/', $html);
     }
 
     public function testChildPrefixMarksParentAsActive(): void
@@ -77,17 +77,17 @@ final class NavPartialTest extends TestCase
         $html = $this->render($this->items(), '/products/123');
 
         $this->assertMatchesRegularExpression(
-            '/<a href="\/products" class="ph-nav__link is-active" aria-current="page">Products<\/a>/',
+            '/<a href="\/products" class="nav-link active" aria-current="page">Products<\/a>/',
             $html,
         );
-        $this->assertMatchesRegularExpression('/<a href="\/" class="ph-nav__link">Home<\/a>/', $html);
+        $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);
     }
 
     public function testBoundaryDoesNotActivateSiblingPathNames(): void
     {
         $html = $this->render($this->items(), '/productivity');
 
-        $this->assertStringNotContainsString('class="ph-nav__link is-active"', $html);
+        $this->assertStringNotContainsString('class="nav-link active"', $html);
     }
 
     public function testTrailingSlashIsNormalized(): void
@@ -95,7 +95,7 @@ final class NavPartialTest extends TestCase
         $html = $this->render($this->items(), '/products/');
 
         $this->assertMatchesRegularExpression(
-            '/<a href="\/products" class="ph-nav__link is-active"/',
+            '/<a href="\/products" class="nav-link active"/',
             $html,
         );
     }
@@ -108,7 +108,7 @@ final class NavPartialTest extends TestCase
         $html = $this->render($items, '/');
 
         $this->assertStringContainsString(
-            '<span class="ph-nav__link is-disabled" aria-disabled="true">Work</span>',
+            '<span class="nav-link disabled" aria-disabled="true">Work</span>',
             $html,
         );
         $this->assertStringNotContainsString('<a ', $html);
@@ -155,6 +155,6 @@ final class NavPartialTest extends TestCase
     {
         $html = $this->render([], '/');
 
-        $this->assertSame('<nav class="ph-nav"></nav>', $html);
+        $this->assertSame('<nav class="nav nav-pills flex-column"></nav>', $html);
     }
 }

@@ -1,5 +1,5 @@
 <template>
-  <span :class="['ph-badge', `ph-badge--${variant}`, `ph-badge--${size}`, { 'ph-badge--pill': pill }]">
+  <span :class="['badge', variantClass, sizeClass, { 'rounded-pill': pill }]">
     <slot>{{ label }}</slot>
   </span>
 </template>
@@ -25,6 +25,23 @@ export default {
     pill: {
       type: Boolean,
       default: false
+    }
+  },
+  computed: {
+    variantClass() {
+      const map = {
+        primary: 'text-bg-primary',
+        secondary: 'text-bg-secondary',
+        success: 'text-bg-success',
+        warning: 'text-bg-warning',
+        error: 'text-bg-danger',
+        info: 'text-bg-info',
+        neutral: 'text-bg-secondary'
+      };
+      return map[this.variant] || 'text-bg-secondary';
+    },
+    sizeClass() {
+      return this.size === 'sm' ? 'badge-sm' : this.size === 'lg' ? 'badge-lg' : '';
     }
   }
 };

@@ -18,12 +18,12 @@ return [
 
 <template>
     <div v-cloak class="schii-console">
-        <header class="schii-header p-4 d-flex justify-between items-center">
+        <header class="schii-header p-4 d-flex justify-content-between align-items-center">
             <div>
                 <h1 v-text="title" class="m-0">Schii Console</h1>
-                <p class="m-0">Zero-Controller Dynamic REST Management Interface</p>
+                <p class="m-0 text-body-secondary">Zero-Controller Dynamic REST Management Interface</p>
             </div>
-            <button v-if="currentEntity" @click="openCreateModal" class="ph-btn ph-btn-primary">
+            <button v-if="currentEntity" @click="openCreateModal" class="btn btn-primary">
                 + New {{ currentEntity }}
             </button>
         </header>
@@ -39,7 +39,8 @@ return [
                         v-for="entity in entities"
                         :key="entity"
                         :class="{ active: currentEntity === entity }"
-                        class="p-2 d-flex justify-between items-center cursor-pointer"
+                        class="p-2 d-flex justify-content-between align-items-center"
+                        style="cursor: pointer;"
                         @click="selectEntity(entity)"
                     >
                         {{ entity }}
@@ -56,32 +57,34 @@ return [
                     <h2>{{ currentEntity }} Management</h2>
 
                     <div class="schii-table-container p-2">
-                        <table class="schii-table">
-                            <thead>
-                                <tr>
-                                    <th v-for="field in fields" :key="field.name">
-                                        {{ field.label || field.name }}
-                                    </th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="row in rows" :key="row.id || JSON.stringify(row)">
-                                    <td v-for="field in fields" :key="field.name">
-                                        {{ row[field.name] }}
-                                    </td>
-                                    <td class="d-flex gap-2">
-                                        <button @click="openEditModal(row)" class="ph-btn ph-btn-sm">Edit</button>
-                                        <button @click="deleteRecord(row.id)" class="ph-btn ph-btn-sm ph-btn-danger">Delete</button>
-                                    </td>
-                                </tr>
-                                <tr v-if="rows.length === 0">
-                                    <td :colspan="(fields.length || 1) + 1" class="schii-empty p-4">
-                                        No records found.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th v-for="field in fields" :key="field.name">
+                                            {{ field.label || field.name }}
+                                        </th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="row in rows" :key="row.id || JSON.stringify(row)">
+                                        <td v-for="field in fields" :key="field.name">
+                                            {{ row[field.name] }}
+                                        </td>
+                                        <td class="d-flex gap-2">
+                                            <button @click="openEditModal(row)" class="btn btn-sm btn-outline-secondary">Edit</button>
+                                            <button @click="deleteRecord(row.id)" class="btn btn-sm btn-danger">Delete</button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="rows.length === 0">
+                                        <td :colspan="(fields.length || 1) + 1" class="text-center text-body-secondary p-4">
+                                            No records found.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -91,47 +94,55 @@ return [
             </section>
         </main>
 
-        <!-- Dynamic Dynamic Modal for Form Store/Update -->
-        <div v-if="showModal" class="ph-modal-backdrop d-flex items-center justify-center">
-            <div class="ph-modal-content p-4">
-                <h3>{{ isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity }}</h3>
-                
-                <form @submit.prevent="submitForm" class="d-flex flex-column gap-3">
-                    <div v-for="field in writableFields" :key="field.name" class="ph-field">
-                        <label class="ph-field__label">{{ field.label || field.name }}</label>
-                        
-                        <select 
-                            v-if="field.type === 'select'" 
-                            v-model="form[field.name]" 
-                            class="ph-input ph-select"
-                        >
-                            <option v-for="(lbl, val) in field.options" :key="val" :value="val">{{ lbl }}</option>
-                        </select>
-
-                        <textarea 
-                            v-else-if="field.type === 'textarea'" 
-                            v-model="form[field.name]" 
-                            class="ph-input ph-textarea"
-                        ></textarea>
-
-                        <input 
-                            v-else 
-                            :type="field.type || 'text'" 
-                            v-model="form[field.name]" 
-                            class="ph-input" 
-                        />
+        <!-- Dynamic Modal for Form Store/Update -->
+        <div v-if="showModal" class="modal fade show d-block" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">{{ isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity }}</h3>
+                        <button type="button" class="btn-close" @click="closeModal" aria-label="Close"></button>
                     </div>
 
-                    <div v-if="formError" class="ph-field__error">{{ formError }}</div>
+                    <form @submit.prevent="submitForm">
+                        <div class="modal-body">
+                            <div v-for="field in writableFields" :key="field.name" class="mb-3">
+                                <label class="form-label">{{ field.label || field.name }}</label>
 
-                    <div class="d-flex justify-end gap-2 mt-3">
-                        <button type="button" @click="closeModal" class="ph-btn">Cancel</button>
-                        <button type="submit" :disabled="submitting" class="ph-btn ph-btn-primary">
-                            {{ submitting ? 'Saving...' : 'Save' }}
-                        </button>
-                    </div>
-                </form>
+                                <select
+                                    v-if="field.type === 'select'"
+                                    v-model="form[field.name]"
+                                    class="form-select"
+                                >
+                                    <option v-for="(lbl, val) in field.options" :key="val" :value="val">{{ lbl }}</option>
+                                </select>
+
+                                <textarea
+                                    v-else-if="field.type === 'textarea'"
+                                    v-model="form[field.name]"
+                                    class="form-control"
+                                ></textarea>
+
+                                <input
+                                    v-else
+                                    :type="field.type || 'text'"
+                                    v-model="form[field.name]"
+                                    class="form-control"
+                                />
+                            </div>
+
+                            <div v-if="formError" class="alert alert-danger">{{ formError }}</div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" @click="closeModal" class="btn btn-outline-secondary">Cancel</button>
+                            <button type="submit" :disabled="submitting" class="btn btn-primary">
+                                {{ submitting ? 'Saving...' : 'Save' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
+            <div class="modal-backdrop fade show"></div>
         </div>
     </div>
 </template>
@@ -247,7 +258,7 @@ export default function mountApp() {
                 submitting.value = true;
                 formError.value = null;
 
-                const url = isEditing.value 
+                const url = isEditing.value
                     ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
                     : `${apiPrefix}/${currentEntity.value}`;
 

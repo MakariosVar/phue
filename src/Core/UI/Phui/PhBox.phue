@@ -1,5 +1,5 @@
 <template>
-  <div class="ph-box" :style="boxStyles">
+  <div :class="boxClasses" :style="boxStyles">
     <slot />
   </div>
 </template>
@@ -30,18 +30,52 @@ export default {
     }
   },
   computed: {
+    boxClasses() {
+      const classes = [];
+      if (this.border) classes.push('border');
+      const radiusMap = {
+        none: 'rounded-0',
+        sm: 'rounded-1',
+        md: 'rounded',
+        lg: 'rounded-3',
+        full: 'rounded-pill'
+      };
+      if (radiusMap[this.radius]) classes.push(radiusMap[this.radius]);
+      const bgMap = {
+        primary: 'bg-primary',
+        secondary: 'bg-secondary',
+        success: 'bg-success',
+        danger: 'bg-danger',
+        warning: 'bg-warning',
+        light: 'bg-light',
+        dark: 'bg-dark',
+        white: 'bg-white',
+        transparent: 'bg-transparent'
+      };
+      if (bgMap[this.bg]) classes.push(bgMap[this.bg]);
+      return classes;
+    },
     boxStyles() {
-      const padVal = typeof this.padding === 'number' ? `${this.padding}px` : `var(--ph-space-${this.padding}, ${this.padding})`;
-      const marVal = typeof this.margin === 'number' ? `${this.margin}px` : `var(--ph-space-${this.margin}, ${this.margin})`;
-      const radVal = `var(--ph-radius-${this.radius}, ${this.radius})`;
-      const bgVal = `var(--ph-color-${this.bg}, ${this.bg})`;
+      const padVal = typeof this.padding === 'number' ? `${this.padding}px` : (this.paddingMap[this.padding] || this.padding);
+      const marVal = typeof this.margin === 'number' ? `${this.margin}px` : (this.marginMap[this.margin] || this.margin);
+      const bgVal = !this.bgMap[this.bg] ? this.bg : undefined;
 
+      const styles = {};
+      if (padVal) styles.padding = padVal;
+      if (marVal !== '0') styles.margin = marVal;
+      if (bgVal) styles.backgroundColor = bgVal;
+      return styles;
+    },
+    paddingMap() {
+      return { none: '0', xs: '0.25rem', sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', '2xl': '2rem' };
+    },
+    marginMap() {
+      return { none: '0', xs: '0.25rem', sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', '2xl': '2rem' };
+    },
+    bgMap() {
       return {
-        padding: padVal,
-        margin: marVal,
-        borderRadius: radVal,
-        backgroundColor: bgVal,
-        border: this.border ? '1px solid var(--ph-color-border)' : 'none'
+        primary: true, secondary: true, success: true, danger: true,
+        warning: true, light: true, dark: true, white: true, transparent: true
       };
     }
   }

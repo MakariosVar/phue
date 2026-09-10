@@ -1,8 +1,10 @@
 <template>
-  <div
-    :class="['ph-skeleton', `ph-skeleton--${variant}`, { 'ph-skeleton--animated': animated }]"
-    :style="skeletonStyles"
-  ></div>
+  <span :class="{ 'placeholder-glow': animated }">
+    <span
+      :class="['placeholder', variantClass, { 'placeholder-wave': animated }]"
+      :style="skeletonStyles"
+    ></span>
+  </span>
 </template>
 
 <script>
@@ -28,6 +30,14 @@ export default {
     }
   },
   computed: {
+    variantClass() {
+      const map = {
+        text: 'rounded',
+        circular: 'rounded-circle',
+        rectangular: 'rounded-0'
+      };
+      return map[this.variant] || 'rounded';
+    },
     skeletonStyles() {
       const w = typeof this.width === 'number' ? `${this.width}px` : this.width;
       let h = this.height;
@@ -35,7 +45,7 @@ export default {
         h = `${h}px`;
       }
       if (!h) {
-        h = this.variant === 'text' ? '1em' : '100%';
+        h = this.variant === 'text' ? '1em' : this.variant === 'circular' ? w : '100%';
       }
 
       return {
