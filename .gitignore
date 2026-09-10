@@ -3,6 +3,7 @@ AGENTS.md
 
 !storage/vendor/*
 /vendor/
+node_modules
 .phpunit.cache
 
 composer.lock
