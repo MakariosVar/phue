@@ -1,0 +1,256 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Phue\Tests\Core\Stubs;
+
+use RuntimeException;
+
+/**
+ * Fake SSR sidecar implementing the Contract 3.2 wire protocol over a Unix
+ * socket, without requiring the real Bun runtime.
+ *
+ * This fixture is a faithful wire-level double of ssr/server.ts so that the
+ * protocol contract can be exercised in CI even when `bun` is unavailable.
+ */
+final class FakeSidecar
+{
+    /** @var resource|null */
+    private $server = null;
+
+    private string $socketPath;
+
+    public function __construct(string $socketPath)
+    {
+        $this->socketPath = $socketPath;
+
+        @unlink($this->socketPath);
+
+        $this->server = @stream_socket_server(
+            'unix://' . $this->socketPath,
+            $errno,
+            $errstr
+        );
+
+        if ($this->server === false) {
+            throw new RuntimeException("Failed to bind FakeSidecar socket: {$errstr} ({$errno})");
+        }
+    }
+
+    public function __destruct()
+    {
+        $this->close();
+    }
+
+    /**
+     * Accepts the next incoming connection, applies the wire contract handler,
+     * and blocks until a single request has been fully served.
+     *
+     * @return array{method: string, path: string, body: ?string} Parsed request payload for assertions.
+     */
+    public function acceptOnce(): array
+    {
+        /* @var resource|false $client */
+        $client = @stream_socket_accept($this->server, 5.0);
+
+        if ($client === false) {
+            throw new RuntimeException('FakeSidecar timed out waiting for a client connection.');
+        }
+
+        $request = '';
+        while (!feof($client)) {
+            $chunk = fread($client, 8192);
+            if ($chunk === false) {
+                break;
+            }
+
+            $request .= $chunk;
+
+            if ($this->isComplete($request)) {
+                break;
+            }
+        }
+
+        [$head, $body] = $this->splitRequest($request);
+        [$method, $path] = $this->parseStartLine($head);
+
+        $response = $this->resolve($method, $path, $body);
+
+        fwrite($client, $response);
+        fclose($client);
+
+        return [
+            'method' => $method,
+            'path'   => $path,
+            'body'   => $body,
+        ];
+    }
+
+    public function close(): void
+    {
+        if (is_resource($this->server)) {
+            fclose($this->server);
+        }
+
+        if ($this->socketPath !== '' && is_file($this->socketPath)) {
+            @unlink($this->socketPath);
+        }
+
+        $this->server = null;
+    }
+
+    /**
+     * Determines whether a full HTTP/1.1 request (head + body honoring
+     * Content-Length) has been received.
+     */
+    private function isComplete(string $request): bool
+    {
+        $separator = strpos($request, "\r\n\r\n");
+
+        if ($separator === false) {
+            return false;
+        }
+
+        $head = substr($request, 0, $separator);
+
+        if (!preg_match('/^Content-Length:\s*(\d+)\s*$/mi', $head, $matches)) {
+            return true;
+        }
+
+        return strlen($request) - $separator - 4 >= (int) $matches[1];
+    }
+
+    /**
+     * Splits a raw HTTP/1.1 request into head and body sections.
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    private function splitRequest(string $request): array
+    {
+        $position = strpos($request, "\r\n\r\n");
+
+        if ($position === false) {
+            return [$request, null];
+        }
+
+        $head = substr($request, 0, $position);
+        $body = substr($request, $position + 4);
+
+        return [$head, $body];
+    }
+
+    /**
+     * Extracts method and path from the HTTP status line.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function parseStartLine(string $head): array
+    {
+        $line = strtok($head, "\r\n");
+        $parts = $line !== false ? explode(' ', trim((string) $line)) : [];
+
+        return [
+            strtoupper($parts[0] ?? 'GET'),
+            $parts[1] ?? '/',
+        ];
+    }
+
+    /**
+     * Resolves the fake request against Contract 3.2 and renders an HTTP response.
+     *
+     * @param string      $method HTTP method.
+     * @param string      $path   Request path.
+     * @param string|null $body   Raw request body, if any.
+     *
+     * @return string Full HTTP/1.1 response string.
+     */
+    private function resolve(string $method, string $path, ?string $body): string
+    {
+        if ($method === 'GET' && $path === '/v1/health') {
+            return $this->http(
+                200,
+                ['ok' => true, 'vue' => '3.5.42', 'bun' => '1.3.0']
+            );
+        }
+
+        if ($path !== '/v1/render' || $method !== 'POST') {
+            return $this->http(
+                404,
+                ['ok' => false, 'error' => ['code' => 'NOT_FOUND', 'message' => 'Not Found']]
+            );
+        }
+
+        $payload = json_decode((string) $body, true);
+
+        if (!is_array($payload) || !isset($payload['template']) || !is_string($payload['template'])) {
+            return $this->http(
+                400,
+                ['ok' => false, 'error' => ['code' => 'INVALID_PAYLOAD', 'message' => 'Missing template']]
+            );
+        }
+
+        try {
+            $html = $this->pretendToRender($payload['template'], $payload['data'] ?? []);
+
+            return $this->http(200, ['ok' => true, 'html' => $html]);
+        } catch (RuntimeException $exception) {
+            return $this->http(
+                500,
+                ['ok' => false, 'error' => ['code' => 'COMPILE_ERROR', 'message' => $exception->getMessage()]]
+            );
+        }
+    }
+
+    /**
+     * Simulates renderToString() for the minuscule subset the wire spec needs:
+     * interpolations. Returns stable, deterministic HTML.
+     *
+     * @param string               $template Vue template string.
+     * @param array<string, mixed> $data     SSR data scope.
+     *
+     * @return string Pretend-rendered HTML.
+     */
+    private function pretendToRender(string $template, array $data): string
+    {
+        $trimmed = trim($template);
+
+        if ($trimmed === '<div>{{ msg }}</div>') {
+            return sprintf('<div>%s</div>', htmlspecialchars((string) ($data['msg'] ?? ''), ENT_QUOTES, 'UTF-8'));
+        }
+
+        if (str_contains($trimmed, 'items.length')) {
+            return sprintf('<div>%d</div>', count($data['items'] ?? []));
+        }
+
+        throw new RuntimeException("Unsupported fake template: {$template}");
+    }
+
+    /**
+     * Builds a minimal HTTP/1.1 JSON response with Content-Length framing.
+     *
+     * @param int   $status HTTP status code.
+     * @param mixed $body   JSON-serializable payload.
+     *
+     * @return string Raw HTTP response.
+     */
+    private function http(int $status, mixed $body): string
+    {
+        $json = json_encode($body, JSON_THROW_ON_ERROR);
+
+        $reason = match ($status) {
+            200     => 'OK',
+            400     => 'Bad Request',
+            404     => 'Not Found',
+            500     => 'Internal Server Error',
+            default => 'Unknown',
+        };
+
+        return sprintf(
+            "HTTP/1.1 %d %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+            $status,
+            $reason,
+            strlen($json),
+            $json
+        );
+    }
+}
