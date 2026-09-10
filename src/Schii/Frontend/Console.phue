@@ -20,7 +20,7 @@ return [
     <div v-cloak class="schii-console">
         <header class="schii-header p-4 d-flex justify-content-between align-items-center">
             <div>
-                <h1 v-text="title" class="m-0">Schii Console</h1>
+                <h1 class="m-0">Schii Console</h1>
                 <p class="m-0 text-body-secondary">Zero-Controller Dynamic REST Management Interface</p>
             </div>
             <button v-if="currentEntity" @click="openCreateModal" class="btn btn-primary">
