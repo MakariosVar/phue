@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
  *
  * Locks:
  *  - generic presenter contract: items + activeRoute in, resolved HTML out,
+ *  - orientation contract: horizontal by default, 'sidebar'|'vertical' emit flex-column,
  *  - boundary-aware active-route matching performed server-side in PHP,
  *  - root path exact-match special case,
  *  - disabled-item handling (span + aria-disabled, never a link),
@@ -43,22 +44,49 @@ final class NavPartialTest extends TestCase
         ];
     }
 
-    private function render(array $items, string $activeRoute): string
+    private function render(array $items, string $activeRoute, ?string $orientation = null): string
     {
-        return $this->loader->load('PhNavigation', [
+        $params = [
             'items'       => $items,
             'activeRoute' => $activeRoute,
-        ])->view->getHtml();
+        ];
+        if ($orientation !== null) {
+            $params['orientation'] = $orientation;
+        }
+
+        return $this->loader->load('PhNavigation', $params)->view->getHtml();
     }
 
     public function testRendersNavWrapperWithAllItems(): void
     {
         $html = $this->render($this->items(), '/');
 
-        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
+        $this->assertStringContainsString('<nav class="nav nav-pills">', $html);
         foreach (['Home', 'Docs', 'Products'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
+    }
+
+    public function testDefaultOrientationIsHorizontalWithoutFlexColumn(): void
+    {
+        $html = $this->render($this->items(), '/docs');
+
+        $this->assertStringContainsString('<nav class="nav nav-pills">', $html);
+        $this->assertStringNotContainsString('flex-column', $html);
+    }
+
+    public function testSidebarOrientationEmitsFlexColumn(): void
+    {
+        $html = $this->render($this->items(), '/docs', 'sidebar');
+
+        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
+    }
+
+    public function testVerticalOrientationIsAcceptedAliasForSidebar(): void
+    {
+        $html = $this->render($this->items(), '/docs', 'vertical');
+
+        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
     }
 
     public function testRootUsesExactMatchOnly(): void
@@ -155,6 +183,6 @@ final class NavPartialTest extends TestCase
     {
         $html = $this->render([], '/');
 
-        $this->assertSame('<nav class="nav nav-pills flex-column"></nav>', $html);
+        $this->assertSame('<nav class="nav nav-pills"></nav>', $html);
     }
 }

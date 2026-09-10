@@ -9,9 +9,11 @@
  *
  * @var array<int, array{label: string, href: string, disabled?: bool}> $items
  * @var string $activeRoute
+ * @var string $orientation 'horizontal'|'sidebar'|'vertical'
  */
 $items = is_array($items ?? null) ? $items : [];
 $activeRoute = is_string($activeRoute ?? null) ? $activeRoute : '/';
+$orientation = is_string($orientation ?? null) ? $orientation : 'horizontal';
 
 $normalizedActive = '/' . trim($activeRoute, '/');
 $linksHtml = [];
@@ -46,8 +48,12 @@ foreach ($items as $item) {
     );
 }
 
+$navClasses = ($orientation === 'sidebar' || $orientation === 'vertical')
+    ? 'nav nav-pills flex-column'
+    : 'nav nav-pills';
+
 return [
-    'html' => sprintf('<nav class="nav nav-pills flex-column">%s</nav>', implode("\n", $linksHtml)),
+    'html' => sprintf('<nav class="%s">%s</nav>', $navClasses, implode("\n", $linksHtml)),
 ];
 
 </php>

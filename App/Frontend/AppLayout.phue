@@ -15,24 +15,37 @@ $uri = $uri ?? '/';
 $items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems() : []);
 static $cache = [];
 
-$cacheKey = 'nav_html_' . md5(serialize($items) . $uri);
-    
+$orientation = 'horizontal';
+
+$cacheKey = 'nav_html_' . md5(serialize($items) . $uri . $orientation);
+
 if (isset($cache[$cacheKey])) {
     $navHtml = $cache[$cacheKey];
 } else {
     $navHtml = $partialRenderer->renderPartial('PhNavigation', [
-        'items' => $items,
-        'uri'   => $uri
+        'items'       => $items,
+        'activeRoute' => $uri,
+        'orientation' => $orientation,
     ]);
     $cache[$cacheKey] = $navHtml;
 }
 
-return [
-    'html' => sprintf(
+if ($orientation === 'sidebar') {
+    $layoutHtml = sprintf(
+        '<div class="app-layout d-flex">%s<main v-cloak class="app-content flex-grow-1 p-3">%s</main></div>',
+        $navHtml,
+        $content
+    );
+} else {
+    $layoutHtml = sprintf(
         '<div class="app-layout">%s<main v-cloak class="app-content">%s</main></div>',
         $navHtml,
         $content
-    ),
+    );
+}
+
+return [
+    'html' => $layoutHtml,
 ];
 </php>
 <template>
