@@ -6,6 +6,7 @@ namespace Phue\Tests\App;
 
 use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
 
@@ -80,6 +81,37 @@ final class AssetDemoTest extends TestCase
 
         $this->assertSame(404, $response->getStatusCode());
         $this->assertStringNotContainsString('html', strtolower((string) $response->getHeader('content-type')));
+    }
+
+    public function testPhuiComponentModuleIsServedWithTemplateAndScript(): void
+    {
+        $registry = $this->app->getContainer()->get(ComponentLoaderRegistry::class);
+        $url = $registry->moduleUrl('PhButton');
+
+        $this->assertNotNull($url);
+
+        $response = $this->app->handle(new Request('GET', $url));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
+
+        $content = $response->getContent();
+        $this->assertStringContainsString('__phueTemplate', $content);
+        $this->assertStringContainsString("name: 'PhButton'", $content);
+        $this->assertStringContainsString('spinner-border', $content);
+    }
+
+    public function testPhuiComponentModuleHashMatchesServedContent(): void
+    {
+        $registry = $this->app->getContainer()->get(ComponentLoaderRegistry::class);
+        $url = $registry->moduleUrl('PhButton');
+        $this->assertNotNull($url);
+
+        $response = $this->app->handle(new Request('GET', $url));
+        $content = $response->getContent();
+
+        preg_match('/PhButton\.([a-f0-9]{8})\.phue\.js$/', $url, $m);
+        $this->assertSame($m[1], substr(sha1($content), 0, 8));
     }
 
     public function testDemoPageEmbedsInitialProductsState(): void

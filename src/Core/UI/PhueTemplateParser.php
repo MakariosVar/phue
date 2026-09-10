@@ -124,25 +124,63 @@ class PhueTemplateParser
         $offset = 0;
         $length = strlen($content);
 
+        // Consume initial leading whitespace
         $offset += strspn($content, " \t\r\n", $offset);
 
-        $standardPattern = '/\G\s*<(php|template)\b[^>]*>(.*?)<\/\1\s*>/smsi';
         $scriptPattern = '/\G\s*<script\b[^>]*>(.*)(<\/script\s*>)/smsi';
+        $tagStartPattern = '/\G\s*<(php|template)\b[^>]*>/i';
 
         while ($offset < $length) {
-            if (preg_match($standardPattern, $content, $match, 0, $offset)) {
+            if (preg_match($tagStartPattern, $content, $match, 0, $offset)) {
                 $tagName = strtolower($match[1]);
 
                 if (isset($blocks[$tagName])) {
                     throw new RuntimeException("Duplicate top-level <{$tagName}> section in {$filePath}");
                 }
 
+                $openingTag = $match[0];
+                $openingTagLength = strlen($openingTag);
+                $bodyStart = $offset + $openingTagLength;
+
+                // Depth-tracking scanner for nested tags matching $tagName
+                $depth = 1;
+                $cursor = $bodyStart;
+
+                $tokenPattern = '/<\/?' . preg_quote($tagName, '/') . '\b[^>]*>/i';
+
+                while ($depth > 0 && preg_match($tokenPattern, $content, $tokenMatch, PREG_OFFSET_CAPTURE, $cursor)) {
+                    $token = $tokenMatch[0][0];
+                    $tokenOffset = $tokenMatch[0][1];
+
+                    if (str_starts_with(strtolower($token), '</' . $tagName)) {
+                        $depth--;
+                    } else {
+                        $depth++;
+                    }
+
+                    if ($depth === 0) {
+                        $bodyEnd = $tokenOffset;
+                        $closingTagLength = strlen($token);
+                        break;
+                    }
+
+                    $cursor = $tokenOffset + strlen($token);
+                }
+
+                if ($depth !== 0) {
+                    throw new RuntimeException("Unclosed top-level <{$tagName}> section in {$filePath}");
+                }
+
+                $body = substr($content, $bodyStart, $bodyEnd - $bodyStart);
+                $rawLength = ($bodyEnd + $closingTagLength) - $offset;
+                $raw = substr($content, $offset, $rawLength);
+
                 $blocks[$tagName] = [
-                    'raw'  => $match[0],
-                    'body' => $match[2],
+                    'raw'  => $raw,
+                    'body' => $body,
                 ];
 
-                $offset += strlen($match[0]);
+                $offset += $rawLength;
                 $offset += strspn($content, " \t\r\n", $offset);
             } elseif (preg_match($scriptPattern, $content, $match, 0, $offset)) {
                 if (isset($blocks['script'])) {

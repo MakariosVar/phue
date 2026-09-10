@@ -121,7 +121,8 @@ class ComponentRenderer
         $inlineScript = $view->getInlineScript();
 
         if ($inlineScript !== null && trim($inlineScript) !== '') {
-            $hash = substr(sha1($inlineScript), 0, 8);
+            $module = PhueComponentLoader::buildModule($view->getTemplate(), $inlineScript);
+            $hash = substr(sha1($module), 0, 8);
             $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
 
             $this->assetRegistry->addScript($scriptUrl, isModule: true);

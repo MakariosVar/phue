@@ -233,4 +233,70 @@ class PhueComponentLoader
 
         return $structure;
     }
+
+    /**
+     * Builds the unified JavaScript SFC module containing the stringified template export and inline script.
+     *
+     * @param string      $template HTML/Vue template string.
+     * @param string|null $script   Inline JavaScript component options payload.
+     *
+     * @return string Valid JavaScript module content.
+     */
+    public static function buildModule(string $template, ?string $script): string
+    {
+        $jsonTemplate = json_encode(
+            $template,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
+        );
+
+        $scriptContent = trim($script ?? '');
+
+        return "export const __phueTemplate = {$jsonTemplate};\n" . $scriptContent;
+    }
+
+    /**
+     * Serves the compiled JS SFC module for a component IF the 8-character sha1 prefix hash matches.
+     * Performs zero PHP evaluation.
+     *
+     * @param string $name Component logical name.
+     * @param string $hash 8-character sha1 prefix hash.
+     *
+     * @return string|null JavaScript SFC module content or null if unknown or hash mismatch.
+     */
+    public function moduleFor(string $name, string $hash): ?string
+    {
+        try {
+            $structure = $this->getOrFetchStructure($name);
+        } catch (Exception) {
+            return null;
+        }
+
+        $module = self::buildModule($structure['template'], $structure['script'] ?? null);
+        $computedHash = substr(sha1($module), 0, 8);
+
+        if (!hash_equals($computedHash, $hash)) {
+            return null;
+        }
+
+        return $module;
+    }
+
+    /**
+     * Computes the 8-character SHA-1 hash prefix of the compiled JS SFC module.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character hash prefix, or null if component cannot be loaded/parsed.
+     */
+    public function moduleHash(string $name): ?string
+    {
+        try {
+            $structure = $this->getOrFetchStructure($name);
+            $module = self::buildModule($structure['template'], $structure['script'] ?? null);
+
+            return substr(sha1($module), 0, 8);
+        } catch (Exception) {
+            return null;
+        }
+    }
 }

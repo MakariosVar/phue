@@ -192,6 +192,111 @@ final class ComponentLoaderRegistryTest extends TestCase
         file_put_contents($targetDir . '/' . $name . '.phue', $content);
     }
 
+    private const BTN_SCRIPT = 'export default { name: "PhButton" }';
+    private const BTN_TEMPLATE = '<button class="btn">Go</button>';
+
+    public function testModuleUrlReturnsHashedModuleUrl(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $loader = new PhueComponentLoader($this->componentsDir);
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => $loader);
+
+        $url = $registry->moduleUrl('PhButton');
+
+        $this->assertNotNull($url);
+        $this->assertStringStartsWith('/assets/phue/PhButton.', $url);
+        $this->assertStringEndsWith('.phue.js', $url);
+
+        $expectedHash = substr(sha1(PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT)), 0, 8);
+        $this->assertStringContainsString($expectedHash, $url);
+    }
+
+    public function testModuleUrlReturnsNullWhenNotFound(): void
+    {
+        $registry = new ComponentLoaderRegistry();
+
+        $this->assertNull($registry->moduleUrl('NoSuchComponent'));
+    }
+
+    public function testModuleUrlSkipsFailedLoader(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $goodLoader = new PhueComponentLoader($this->componentsDir);
+
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => throw new \RuntimeException('boom'));
+        $registry->addLoader(fn () => $goodLoader);
+
+        $this->assertNotNull($registry->moduleUrl('PhButton'));
+    }
+
+    public function testModuleForReturnsModuleWhenHashMatches(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $loader = new PhueComponentLoader($this->componentsDir);
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => $loader);
+
+        $expected = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $hash = substr(sha1($expected), 0, 8);
+
+        $this->assertSame($expected, $registry->moduleFor('PhButton', $hash));
+    }
+
+    public function testModuleForReturnsNullWhenHashMismatch(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $loader = new PhueComponentLoader($this->componentsDir);
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => $loader);
+
+        $this->assertNull($registry->moduleFor('PhButton', 'deadbeef'));
+    }
+
+    public function testModuleForReturnsNullWhenNotFound(): void
+    {
+        $registry = new ComponentLoaderRegistry();
+
+        $this->assertNull($registry->moduleFor('NoSuchComponent', 'aaaaaaa'));
+    }
+
+    public function testModuleForSkipsFailedLoader(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $goodLoader = new PhueComponentLoader($this->componentsDir);
+
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => throw new \RuntimeException('boom'));
+        $registry->addLoader(fn () => $goodLoader);
+
+        $expected = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $hash = substr(sha1($expected), 0, 8);
+
+        $this->assertSame($expected, $registry->moduleFor('PhButton', $hash));
+    }
+
+    public function testModuleForAndModuleUrlResolveByPriority(): void
+    {
+        $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
+        $firstDir = $this->componentsDir;
+        $secondDir = $this->tmpDir . '/components_second';
+        mkdir($secondDir, 0777, true);
+        $this->writePhue('PhInput', '<template><input /></template><script>export default { name: "PhInput" }</script>', $secondDir);
+
+        $firstLoader = new PhueComponentLoader($firstDir);
+        $secondLoader = new PhueComponentLoader($secondDir);
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader(fn () => $firstLoader);
+        $registry->addLoader(fn () => $secondLoader);
+
+        $expectedBtn = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $this->assertSame($expectedBtn, $registry->moduleFor('PhButton', substr(sha1($expectedBtn), 0, 8)));
+
+        $expectedInput = PhueComponentLoader::buildModule('<input />', 'export default { name: "PhInput" }');
+        $this->assertSame($expectedInput, $registry->moduleFor('PhInput', substr(sha1($expectedInput), 0, 8)));
+    }
+
     private function rmTree(string $dir): void
     {
         if (!is_dir($dir)) {

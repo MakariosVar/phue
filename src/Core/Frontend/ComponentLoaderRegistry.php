@@ -124,4 +124,66 @@ class ComponentLoaderRegistry
 
         return null;
     }
+
+    /**
+     * Resolves SFC module content across candidate loaders and returns the hashed asset URL.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null Asset URL (e.g., "/assets/phue/PhButton.a1b2c3d4.phue.js") or null.
+     */
+    public function moduleUrl(string $name): ?string
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader === null) {
+                    continue;
+                }
+
+                $hash = $loader->moduleHash($name);
+                if ($hash !== null) {
+                    return "/assets/phue/{$name}.{$hash}.phue.js";
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Iterates candidate loaders and returns the first JS module payload matching the given hash.
+     *
+     * @param string $name Component logical name.
+     * @param string $hash SHA-1 8-character hash prefix.
+     *
+     * @return string|null JS module content or null if not found across candidates.
+     */
+    public function moduleFor(string $name, string $hash): ?string
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader === null) {
+                    continue;
+                }
+
+                $module = $loader->moduleFor($name, $hash);
+
+                if ($module !== null) {
+                    return $module;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
 }

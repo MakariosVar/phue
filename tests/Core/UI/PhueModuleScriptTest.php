@@ -98,9 +98,10 @@ PHUE;
         $this->assertStringNotContainsString("createApp", $content);
     }
 
-    public function testModuleHashIsDerivedFromScriptContent(): void
+    public function testModuleHashIsDerivedFromModuleContent(): void
     {
-        $expectedHash = substr(hash('sha1', trim(self::SCRIPT)), 0, 8);
+        $expectedModule = PhueComponentLoader::buildModule('<div id="catalog">Products</div>', trim(self::SCRIPT));
+        $expectedHash = substr(sha1($expectedModule), 0, 8);
 
         $content = $this->renderer->render('Scripted')->getContent();
 
@@ -163,6 +164,92 @@ PHUE);
         $this->assertNotSame($m1[1], $m2[1]);
 
         $this->assertNull($this->loader->scriptFor('Scripted', $m1[1]));
+    }
+
+    public function testModuleForReturnsCombinedTemplateAndScript(): void
+    {
+        $expectedModule = PhueComponentLoader::buildModule('<div id="catalog">Products</div>', trim(self::SCRIPT));
+        $hash = substr(sha1($expectedModule), 0, 8);
+
+        $module = $this->loader->moduleFor('Scripted', $hash);
+
+        $this->assertSame($expectedModule, $module);
+        $this->assertStringContainsString('export const __phueTemplate', $module);
+        $this->assertStringContainsString(trim(self::SCRIPT), $module);
+    }
+
+    public function testModuleForReturnsNullOnHashMismatch(): void
+    {
+        $this->assertNull($this->loader->moduleFor('Scripted', '0badc0de'));
+    }
+
+    public function testModuleForReturnsNullWhenNotFound(): void
+    {
+        $this->assertNull($this->loader->moduleFor('NoSuchComponent', 'deadbeef'));
+    }
+
+    public function testModuleForRejectsTraversalAndMalformedNames(): void
+    {
+        $this->assertNull($this->loader->moduleFor('../secret', 'abcdef12'));
+        $this->assertNull($this->loader->moduleFor('a/b', 'abcdef12'));
+        $this->assertNull($this->loader->moduleFor('Secret;rm', 'abcdef12'));
+    }
+
+    public function testModuleForNeverEvaluatesPhpBlock(): void
+    {
+        $script = "export default {};";
+        file_put_contents($this->componentsDir . '/NoEval.phue', <<<PHUE
+<php>echo 'PHP-LEAK'; return ['title' => 'NoEval', 'state' => []];</php>
+<template><div>NoEval</div></template>
+<script>{$script}</script>
+PHUE);
+
+        $expectedModule = PhueComponentLoader::buildModule('<div>NoEval</div>', $script);
+        $hash = substr(sha1($expectedModule), 0, 8);
+
+        ob_start();
+        $served = $this->loader->moduleFor('NoEval', $hash);
+        $leaked = ob_get_clean();
+
+        $this->assertSame($expectedModule, $served);
+        $this->assertSame('', $leaked, 'moduleFor must not evaluate the <php> block (no output side effects)');
+    }
+
+    public function testModuleForNeverCarriesStatePayload(): void
+    {
+        file_put_contents($this->componentsDir . '/Scripted.phue', <<<'PHUE'
+<php>return ['title' => 'S', 'state' => ['flag' => 'SECRET-1337']];</php>
+<template><div>StateFree</div></template>
+<script>
+export default { name: 'StateFree' };
+</script>
+PHUE);
+
+        $expectedModule = PhueComponentLoader::buildModule('<div>StateFree</div>', "export default { name: 'StateFree' };");
+        $hash = substr(sha1($expectedModule), 0, 8);
+
+        $module = $this->loader->moduleFor('Scripted', $hash);
+
+        $this->assertIsString($module);
+        $this->assertStringNotContainsString('SECRET-1337', $module);
+    }
+
+    public function testModuleHashChangesWhenTemplateChanges(): void
+    {
+        $firstHash = $this->loader->moduleHash('Scripted');
+        $pageScript = self::SCRIPT;
+
+        $name = 'Scripted';
+        file_put_contents($this->componentsDir . '/' . $name . '.phue', <<<PHUE
+<php>return ['title' => 'Scripted Page', 'state' => ['products' => []]];</php>
+<template><div id="catalog" data-changed>Products DELTA</div></template>
+<script>
+{$pageScript}
+</script>
+PHUE);
+
+        $this->assertIsString($firstHash);
+        $this->assertNotSame($firstHash, $this->loader->moduleHash('Scripted'));
     }
 
     public function testDirectViewRenderKeepsInlineModuleScript(): void

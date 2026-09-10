@@ -214,7 +214,7 @@ class Application
                 /** @var ComponentLoaderRegistry $loaderRegistry */
                 $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
 
-                return $loaderRegistry->scriptFor($name, $hash);
+                return $loaderRegistry->moduleFor($name, $hash);
             });
 
             return $registry;

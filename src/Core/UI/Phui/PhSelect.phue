@@ -72,10 +72,10 @@ export default {
   emits: ['update:modelValue'],
   computed: {
     selectId() {
-      return $props.id || `ph-select-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-select-${Math.random().toString(36).substring(2, 9)}`;
     },
     normalizedOptions() {
-      return $props.options.map((opt) => {
+      return this.options.map((opt) => {
         if (typeof opt === 'object' && opt !== null) {
           return { label: opt.label ?? opt.value, value: opt.value, disabled: !!opt.disabled };
         }

@@ -77,7 +77,7 @@ export default {
   emits: ['update:modelValue', 'blur', 'focus'],
   computed: {
     textareaId() {
-      return $props.id || `ph-textarea-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-textarea-${Math.random().toString(36).substring(2, 9)}`;
     }
   }
 };

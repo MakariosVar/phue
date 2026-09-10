@@ -180,18 +180,55 @@ final class WebControllerTest extends TestCase
         $this->assertStringContainsString('PhUI', $title[1]);
     }
 
-    public function testUiRouteIsDocsShowcaseWithSections(): void
+    public function testUiRouteIsComponentShowcase(): void
     {
         $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
 
+        // Sidebar + live component markup + usage code blocks.
         $this->assertStringContainsString('phue-nav-link', $content);
-        $this->assertStringContainsString('id="tokens"', $content);
-        $this->assertStringContainsString('id="buttons"', $content);
-        $this->assertStringContainsString('id="forms"', $content);
-        $this->assertStringContainsString('id="data"', $content);
-        $this->assertStringContainsString('id="feedback"', $content);
-        $this->assertStringContainsString('id="navigation"', $content);
-        $this->assertStringContainsString('btn btn-primary', $content);
-        $this->assertStringContainsString('--bs-primary', $content);
+        $this->assertStringContainsString('<ph-button', $content);
+        $this->assertStringContainsString('<ph-data-table', $content);
+        $this->assertStringContainsString('<ph-modal', $content);
+        $this->assertStringContainsString('loadPhueWhitelist', $content);
+        $this->assertStringContainsString('phue-code-block', $content);
+
+        // The old "style analysis" sections must be gone.
+        $this->assertStringNotContainsString('id="tokens"', $content);
+        $this->assertStringNotContainsString('--bs-primary', $content);
+        $this->assertStringNotContainsString('Design Tokens', $content);
+        $this->assertStringNotContainsString('Layout Utilities', $content);
+    }
+
+    public function testUiRouteWhitelistsOnlyShowcasedComponents(): void
+    {
+        $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
+
+        preg_match('/window\.__INITIAL_STATE__ = (\{.*?\});/s', $content, $state);
+        $this->assertArrayHasKey(1, $state);
+
+        $decoded = json_decode($state[1], true);
+        $this->assertIsArray($decoded);
+        $this->assertArrayHasKey('phuiUrls', $decoded);
+
+        $expectedWhitelist = [
+            'PhButton', 'PhInput', 'PhSelect', 'PhTextarea', 'PhCheckbox', 'PhRadio', 'PhFormField',
+            'PhDataTable', 'PhBadge', 'PhAvatar', 'PhCard', 'PhChip',
+            'PhAlert', 'PhModal', 'PhProgressBar', 'PhSkeleton',
+            'PhTabs', 'PhPagination', 'PhBreadcrumb', 'PhLink',
+            'PhText', 'PhHeading', 'PhBox', 'Spacer', 'PhStack', 'PhFlex',
+        ];
+
+        $this->assertSame($expectedWhitelist, array_keys($decoded['phuiUrls']));
+
+        foreach ($decoded['phuiUrls'] as $name => $url) {
+            $this->assertStringStartsWith("/assets/phue/{$name}.", $url);
+            $this->assertStringEndsWith('.phue.js', $url);
+        }
+
+        // HTML-first components need no client import.
+        $this->assertArrayNotHasKey('PhNavigation', $decoded['phuiUrls']);
+
+        // ...but the SSR demo IS rendered server-side.
+        $this->assertStringContainsString('nav nav-pills', $content);
     }
 }

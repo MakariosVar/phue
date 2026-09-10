@@ -71,7 +71,7 @@ export default {
   emits: ['update:modelValue', 'blur', 'focus'],
   computed: {
     inputId() {
-      return $props.id || `ph-input-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-input-${Math.random().toString(36).substring(2, 9)}`;
     }
   }
 };
