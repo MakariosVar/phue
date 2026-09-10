@@ -6,6 +6,8 @@ namespace Phue\Core\Database\ActiveRecord;
 
 use JsonSerializable;
 use ReflectionClass;
+use ReflectionObject;
+use ReflectionProperty;
 use RuntimeException;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\ActiveQuery;
@@ -15,7 +17,8 @@ use Phue\Core\Database\ActiveRecord\Relations\HasOne;
 use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
 
 /**
- * Abstract Base Active Record Model providing ORM, persistence, and relationship logic.
+ * Abstract Base Active Record Model providing ORM, persistence, relationship logic,
+ * and automatic declared typed property hydration.
  *
  * @package Phue\Core\Database\ActiveRecord
  */
@@ -23,16 +26,29 @@ abstract class BaseActiveRecord implements JsonSerializable
 {
     /**
      * Database connection manager instance.
+     *
+     * @var Connection|null
      */
     protected static ?Connection $dbConnection = null;
 
     /**
+     * Internal reflection cache for class declared properties.
+     *
+     * @var array<string, array<string, ReflectionProperty>>
+     */
+    protected static array $reflectionPropertyCache = [];
+
+    /**
      * Database table associated with the model.
+     *
+     * @var string
      */
     protected string $table = '';
 
     /**
      * Primary key column name.
+     *
+     * @var string
      */
     protected string $primaryKey = 'id';
 
@@ -66,10 +82,14 @@ abstract class BaseActiveRecord implements JsonSerializable
 
     /**
      * Indicates if the model instance exists in the database.
+     *
+     * @var bool
      */
     protected bool $exists = false;
 
     /**
+     * BaseActiveRecord constructor.
+     *
      * @param array<string, mixed> $attributes Initial model attributes.
      */
     public function __construct(array $attributes = [])
@@ -129,7 +149,7 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Fills the model with an array of attributes.
+     * Fills the model with an array of attributes and hydrates declared properties.
      *
      * @param array<string, mixed> $attributes Key-value list of attributes.
      * @return static
@@ -156,7 +176,7 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Set a specific attribute value on the model.
+     * Set a specific attribute value on the model and hydrate declared typed property if present.
      *
      * @param string $key Attribute column key.
      * @param mixed $value Value to assign.
@@ -165,6 +185,8 @@ abstract class BaseActiveRecord implements JsonSerializable
     public function setAttribute(string $key, mixed $value): static
     {
         $this->attributes[$key] = $value;
+        $this->hydrateDeclaredProperty($key, $value);
+
         return $this;
     }
 
@@ -460,7 +482,85 @@ abstract class BaseActiveRecord implements JsonSerializable
         $model->original = $attributes;
         $model->exists = true;
 
+        $model->hydrateDeclaredProperties($attributes);
+
         return $model;
+    }
+
+    /**
+     * Hydrates explicit declared typed properties from attributes.
+     *
+     * @param array<string, mixed> $attributes
+     * @return void
+     */
+    protected function hydrateDeclaredProperties(array $attributes): void
+    {
+        $declaredProps = static::getDeclaredProperties();
+
+        foreach ($attributes as $key => $value) {
+            if (!isset($declaredProps[$key])) {
+                continue;
+            }
+
+            $property = $declaredProps[$key];
+
+            if ($value === null && $property->hasType() && !$property->getType()?->allowsNull()) {
+                continue;
+            }
+
+            $property->setValue($this, $value);
+        }
+    }
+
+    /**
+     * Hydrates a single declared typed property if it exists on the class.
+     *
+     * @param string $key Property name.
+     * @param mixed $value Value to assign.
+     * @return void
+     */
+    protected function hydrateDeclaredProperty(string $key, mixed $value): void
+    {
+        $declaredProps = static::getDeclaredProperties();
+
+        if (!isset($declaredProps[$key])) {
+            return;
+        }
+
+        $property = $declaredProps[$key];
+
+        if ($value === null && $property->hasType() && !$property->getType()?->allowsNull()) {
+            return;
+        }
+
+        $property->setValue($this, $value);
+    }
+
+    /**
+     * Returns cached reflection property map for the concrete model class.
+     *
+     * @return array<string, ReflectionProperty>
+     */
+    protected static function getDeclaredProperties(): array
+    {
+        $class = static::class;
+
+        if (isset(self::$reflectionPropertyCache[$class])) {
+            return self::$reflectionPropertyCache[$class];
+        }
+
+        $refClass = new ReflectionClass($class);
+        $properties = [];
+
+        foreach ($refClass->getProperties() as $property) {
+            if ($property->isStatic() || $property->getDeclaringClass()->getName() === self::class) {
+                continue;
+            }
+
+            $properties[$property->getName()] = $property;
+        }
+
+        return self::$reflectionPropertyCache[$class] = $properties;
     }
 
     /**
@@ -514,7 +614,8 @@ abstract class BaseActiveRecord implements JsonSerializable
         if ($inserted) {
             $id = static::getConnection()->lastInsertId();
             if ($id !== false && $id !== '0') {
-                $this->attributes[$this->getPrimaryKey()] = is_numeric($id) ? (int) $id : $id;
+                $primaryKeyValue = is_numeric($id) ? (int) $id : $id;
+                $this->setAttribute($this->getPrimaryKey(), $primaryKeyValue);
             }
 
             $this->exists = true;
