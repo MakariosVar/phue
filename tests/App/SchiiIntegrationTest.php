@@ -20,20 +20,20 @@ class SchiiIntegrationTest extends TestCase
 
     public function testSchemaEndpointReturnsJsonSchema(): void
     {
-        $request = new Request('GET', '/api/schii/schema/products', ['q' => '']);
+        $request = new Request('GET', '/api/schii/schema/user', ['q' => '']);
         $response = $this->app->handle($request);
 
         $this->assertSame(200, $response->getStatusCode());
         $schema = json_decode($response->getContent(), true);
         $this->assertIsArray($schema);
-        $this->assertSame('Product', $schema['entity']);
-        $this->assertSame('Products', $schema['label']);
-        $this->assertSame('box', $schema['icon']);
+        $this->assertSame('User', $schema['entity']);
+        $this->assertSame('User', $schema['label']);
+        $this->assertArrayHasKey('icon', $schema);
     }
 
     public function testSchemaEndpointReturnsListEndpoint(): void
     {
-        $request = new Request('GET', '/api/schii/schema/products');
+        $request = new Request('GET', '/api/schii/schema/user');
         $response = $this->app->handle($request);
 
         $schema = json_decode($response->getContent(), true);
@@ -41,10 +41,10 @@ class SchiiIntegrationTest extends TestCase
         $this->assertIsArray($schema['fields']);
 
         $fieldNames = array_column($schema['fields'], 'name');
-        $this->assertContains('id', $fieldNames);
-        $this->assertContains('name', $fieldNames);
-        $this->assertContains('price', $fieldNames);
-        $this->assertContains('description', $fieldNames);
+        $this->assertContains('username', $fieldNames);
+        $this->assertContains('password_hash', $fieldNames);
+        $this->assertContains('auth_key', $fieldNames);
+        $this->assertContains('roles', $fieldNames);
     }
 
     public function testListEndpointRequiresAuthentication(): void

@@ -12,8 +12,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * End-to-end contract tests for the no-build Vue demo page: the WebController
- * renders the self-contained inline-module Products.phue via ComponentRenderer,
- * with the storage/assets vendor source served through the auto-registered
+ * renders self-contained inline-module .phue pages via ComponentRenderer, with
+ * the storage/assets vendor source served through the auto-registered
  * AssetsController.
  *
  * @package Phue\Tests\App
@@ -112,24 +112,6 @@ final class AssetDemoTest extends TestCase
 
         preg_match('/PhButton\.([a-f0-9]{8})\.phue\.js$/', $url, $m);
         $this->assertSame($m[1], substr(sha1($content), 0, 8));
-    }
-
-    public function testDemoPageEmbedsInitialProductsState(): void
-    {
-        $content = $this->app->handle(new Request('GET', '/products'))->getContent();
-
-        $this->assertStringContainsString('window.__INITIAL_STATE__', $content);
-
-        preg_match('/window\.__INITIAL_STATE__ = (\{.*?\});/s', $content, $state);
-        $this->assertArrayHasKey(1, $state);
-
-        $decoded = json_decode($state[1], true);
-        $this->assertIsArray($decoded);
-        $this->assertCount(2, $decoded['products']);
-        $this->assertSame(['id', 'name', 'price'], array_keys($decoded['products'][0]));
-        $this->assertContains('Widget A', array_column($decoded['products'], 'name'));
-        $this->assertContains('Widget B', array_column($decoded['products'], 'name'));
-        $this->assertStringNotContainsString('<', $decoded['products'][0]['name']);
     }
 
     public function testRemovedAppEntryReturns404(): void

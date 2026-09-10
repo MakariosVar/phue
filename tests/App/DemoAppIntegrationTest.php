@@ -9,7 +9,6 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use App\Controllers\HomeController;
-use App\Models\Product;
 
 /**
  * End-to-End Integration Test for the Phue Demo Web Application.
@@ -67,24 +66,6 @@ class DemoAppIntegrationTest extends TestCase
         $data = json_decode($response->getContent(), true);
         $this->assertIsArray($data);
         $this->assertEquals('Fetched products successfully!', $data['message'] ?? null);
-    }
-
-    /**
-     * Test Product ActiveRecord model properties and Schii-annotated public fields.
-     */
-    public function testProductModelConfiguration(): void
-    {
-        $product = new Product();
-        $product->name = 'Phue T-Shirt';
-        $product->price = 29.99;
-        $product->description = 'Official Phue Framework merch';
-
-        $this->assertEquals('products', $product->getTable());
-        $this->assertEquals('Phue T-Shirt', $product->name);
-        $this->assertSame(29.99, $product->price);
-        $this->assertEquals('Official Phue Framework merch', $product->description);
-        $this->assertNull($product->id);
-        $this->assertNull($product->created_at);
     }
 
     /**

@@ -77,10 +77,10 @@ final class AppLayoutTest extends TestCase
 
     public function testActiveRouteMarksCorrectItemThroughLayout(): void
     {
-        $html = $this->renderLayout(['uri' => '/products/42']);
+        $html = $this->renderLayout(['uri' => '/docs']);
 
         $this->assertStringContainsString(
-            '<a href="/products" class="nav-link active" aria-current="page">Products</a>',
+            '<a href="/docs" class="nav-link active" aria-current="page">Docs</a>',
             $html
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);
@@ -95,7 +95,7 @@ final class AppLayoutTest extends TestCase
 
         $this->assertStringContainsString('<nav class="nav nav-pills">', $html);
         $this->assertStringContainsString('Home', $html);
-        $this->assertStringContainsString('Products', $html);
+        $this->assertStringContainsString('Docs', $html);
     }
 
     public function testTopbarRendersBootstrapNavbarWithBrandAndActions(): void

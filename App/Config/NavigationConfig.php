@@ -44,7 +44,7 @@ class NavigationConfig
             self::item('Home', '/'),
             self::grouped(self::item('Docs', '/docs'), 'Explore'),
             self::grouped(self::item('UI Components', '/ui'), 'Explore'),
-            self::item('Products', '/products'),
+            self::item('Schii', '/schii'),
         ];
 
         return self::filterVisible($allItems, $user);
@@ -185,6 +185,7 @@ class NavigationConfig
         return [
             self::item('Schii - AR Dashboard', '/schii'),
             self::item('Phii - Code Generation', '/schii/phii'),
+            self::item('App', '/'),
         ];
     }
 }

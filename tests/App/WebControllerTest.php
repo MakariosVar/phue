@@ -132,22 +132,22 @@ final class WebControllerTest extends TestCase
         $this->assertSame('DocsPage', $decoded['value']);
     }
 
-    // ── Products route (ProductsController::index → Pages/Products) ──
+    // ── Docs route (WebController::docs → Docs.phue) ──
 
-    public function testProductsRouteMarksProductsNavLinkActive(): void
+    public function testDocsRouteMarksDocsNavLinkActive(): void
     {
-        $content = $this->app->handle(new Request('GET', '/products'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/docs'))->getContent();
 
         $this->assertStringContainsString(
-            '<a href="/products" class="nav-link active" aria-current="page">Products</a>',
+            '<a href="/docs" class="nav-link active" aria-current="page">Docs</a>',
             $content
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $content);
     }
 
-    public function testProductsRouteNavUsesHorizontalDefault(): void
+    public function testDocsRouteNavUsesHorizontalDefault(): void
     {
-        $content = $this->app->handle(new Request('GET', '/products'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/docs'))->getContent();
 
         $this->assertStringContainsString('<nav class="nav nav-pills">', $content);
         $this->assertStringNotContainsString('<nav class="nav nav-pills flex-column">', $content);
