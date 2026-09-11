@@ -12,6 +12,10 @@ use Phue\Cache\FileCache;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Ssr\BunSsrEngine;
+use Phue\Core\Ssr\NullSsrEngine;
+use Phue\Core\Ssr\SsrEngine;
+use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
@@ -143,6 +147,25 @@ class Application
                 viewsCacheDir: $viewsCacheDir
             );
         });
+
+        $this->container->singleton(SsrEngine::class, function (): SsrEngine {
+            if (!$this->config->get('ssr.enabled', true)) {
+                return new NullSsrEngine();
+            }
+
+            $client = new UnixSsrClient(
+                socket: (string) $this->config->get('ssr.socket', "\0phue-ssr"),
+                connectTimeoutMs: (int) $this->config->get('ssr.connect_timeout_ms', 200),
+                timeoutMs: (int) $this->config->get('ssr.timeout_ms', 500),
+                hostHeader: (string) $this->config->get('ssr.host_header', 'phue-ssr')
+            );
+
+            return new BunSsrEngine(
+                client: $client,
+                maxPayloadKb: (int) $this->config->get('ssr.max_payload_kb', 512)
+            );
+        });
+        $this->container->alias('ssr.engine', SsrEngine::class);
 
         // Composite Component Loader Registry Singleton
         $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
