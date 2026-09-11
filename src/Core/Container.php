@@ -180,14 +180,46 @@ class Container
     }
 
     /**
-     * Check whether a service factory is bound or if a target class/interface exists.
+     * Check whether a service factory is bound or if a concrete instantiable class exists.
+     *
+     * Adheres to PSR-11: Returns false for unmapped interfaces, abstract classes,
+     * or non-instantiable types where get() would fail.
      *
      * @param string $id Service identifier or class/interface FQCN.
      * @return bool True if resolvable; false otherwise.
      */
     public function has(string $id): bool
     {
-        return isset($this->factories[$id]) || class_exists($id) || interface_exists($id);
+        if (isset($this->factories[$id]) || isset($this->instances[$id]) || isset($this->scopedInstances[$id])) {
+            return true;
+        }
+
+        if (class_exists($id)) {
+            try {
+                $reflection = new ReflectionClass($id);
+                return $reflection->isInstantiable();
+            } catch (\ReflectionException) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a service or class has been explicitly bound in the container.
+     *
+     * Unlike has(), this method ignores reflection/autowiring fallbacks and only
+     * returns true if an explicit binding, instance, or factory was registered.
+     *
+     * @param string $id Service identifier or class name.
+     * @return bool True if explicitly registered, false otherwise.
+     */
+    public function bound(string $id): bool
+    {
+        return isset($this->factories[$id]) 
+            || isset($this->instances[$id]) 
+            || isset($this->scopedInstances[$id]);
     }
 
     /**

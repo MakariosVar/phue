@@ -292,8 +292,11 @@ class Router
                 return $a['paramCount'] <=> $b['paramCount'];
             }
 
-            $prefixLengthA = strpos($a['path'], '{') ?: strlen($a['path']);
-            $prefixLengthB = strpos($b['path'], '{') ?: strlen($b['path']);
+            $posA = strpos($a['path'], '{');
+            $posB = strpos($b['path'], '{');
+
+            $prefixLengthA = ($posA !== false) ? $posA : strlen($a['path']);
+            $prefixLengthB = ($posB !== false) ? $posB : strlen($b['path']);
 
             return $prefixLengthB <=> $prefixLengthA;
         });

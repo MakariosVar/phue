@@ -23,6 +23,7 @@ use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhuePartialRenderer;
+use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
@@ -114,11 +115,20 @@ class Application
      */
     private function registerCoreBindings(): void
     {
+        $this->container->singleton(LoggerInterface::class, function () {
+            $logPath = $this->basePath . '/storage/logs/app.log';
+            return new \Phue\Core\Logger($logPath, \Psr\Log\LogLevel::DEBUG);
+        });
+        $this->container->alias('logger', LoggerInterface::class);
+
         $this->container->singleton(Config::class, fn (): Config => $this->config);
         $this->container->singleton(Container::class, fn (): Container => $this->container);
         $this->container->singleton(Router::class, fn (): Router => $this->router);
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
+
+        // Register default-on global security middleware (Defense-in-depth)
+        $this->use(\Phue\Core\Security\SecurityMiddleware::class);
 
         // Directory where compiled component PHP blocks are written for OPCache execution
         $viewsCacheDir = $this->basePath . '/storage/cache/views';
@@ -310,8 +320,9 @@ class Application
             return new HtmlShellRenderer($this->container->get(AssetRegistry::class));
         });
 
-        // Auto-register AssetsController to Router
+        // Auto-register AssetsController & HealthController to Router
         $this->router->registerController(AssetsController::class);
+        $this->router->registerController(\Phue\Core\Health\HealthController::class);
     }
 
     /**
@@ -381,7 +392,6 @@ class Application
     public function handle(?Request $request = null): Response
     {
         $request ??= Request::capture();
-
         $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
 
         // Reset per-request script tracking so SPA responses only include current page scripts
@@ -395,35 +405,46 @@ class Application
                     /** @var callable $middleware */
                     $middleware = $this->container->get($middleware);
                 }
-
                 return $middleware($req, $next);
             },
             fn (Request $req): Response => $this->dispatchToRouter($req)
         );
 
+        /** @var LoggerInterface $logger */
+        $logger = $this->container->get(LoggerInterface::class);
+
         try {
             return $pipeline($request);
-        } catch (RouteNotFoundException) {
-            return new Response('Not Found', 404);
+        } catch (\InvalidArgumentException $e) {
+            $logger->warning('HTTP 400 Bad Request: ' . $e->getMessage(), ['exception' => $e]);
+            $msg = $this->debug ? $e->getMessage() : 'Bad Request';
+            $response = Response::json(['error' => $msg], 400);
+        } catch (RouteNotFoundException $e) {
+            // Keep normal 404 route matching silent to avoid log bloat on expected missing assets/routes
+            $response = new Response('Not Found', 404);
         } catch (MethodNotAllowedException $e) {
-            return (new Response('Method Not Allowed', 405))
+            $logger->warning('HTTP 405 Method Not Allowed: ' . $request->getMethod() . ' ' . $request->getUri(), ['exception' => $e]);
+            $response = (new Response('Method Not Allowed', 405))
                 ->setHeader('Allow', implode(', ', $e->getAllowedMethods()));
         } catch (Throwable $e) {
+            $logger->error('HTTP 500 Unhandled Exception: ' . $e->getMessage(), ['exception' => $e]);
             if ($this->debug) {
-                return Response::json([
+                $response = Response::json([
                     'error' => $e->getMessage(),
                     'class' => get_class($e),
                     'file'  => $e->getFile(),
                     'line'  => $e->getLine(),
                     'trace' => explode("\n", $e->getTraceAsString()),
                 ], 500);
+            } else {
+                $response = Response::json(['error' => 'Internal Server Error'], 500);
             }
-
-            return Response::json(['error' => 'Internal Server Error'], 500);
         } finally {
             // Clean request-scoped services automatically at the end of the lifecycle
             $this->container->flushScope();
         }
+
+        return \Phue\Core\Security\SecurityMiddleware::applyHeaders($response, $request);
     }
 
     /**
@@ -450,14 +471,42 @@ class Application
 
             if (is_string($resolvedHandler) && str_contains($resolvedHandler, '@')) {
                 [$class, $method] = explode('@', $resolvedHandler, 2);
-                $resolvedHandler = [$this->container->get($class), $method];
+                $resolvedHandler = [$this->container->make($class), $method];
             } elseif (is_array($resolvedHandler) && is_string($resolvedHandler[0])) {
-                $resolvedHandler[0] = $this->container->get($resolvedHandler[0]);
+                $resolvedHandler[0] = $this->container->make($resolvedHandler[0]);
             }
 
-            /** @var mixed $result */
-            $result = call_user_func($resolvedHandler, $req, $params);
+            $coercedParams = $this->resolveActionParameters($resolvedHandler, $params);
 
+            $reflection = is_array($resolvedHandler) 
+                ? new \ReflectionMethod($resolvedHandler[0], $resolvedHandler[1])
+                : new \ReflectionFunction($resolvedHandler);
+
+                $args = [];
+                foreach ($reflection->getParameters() as $param) {
+                    $paramName = $param->getName();
+                    $type = $param->getType();
+                    $typeNames = $this->extractTypeNames($type);
+    
+                    // Check for Request type (Request class or subclass/interface)
+                    if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
+                        $args[] = $req;
+                    } 
+                    // Matches $params array (e.g. array $params or array|string $params or untyped $params)
+                    elseif ($paramName === 'params' && (empty($typeNames) || in_array('array', $typeNames, true))) {
+                        $args[] = $coercedParams;
+                    } 
+                    // Matches path parameter name (e.g. $id)
+                    elseif (array_key_exists($paramName, $coercedParams)) {
+                        $args[] = $coercedParams[$paramName];
+                    } 
+                    // Fallback to default parameter value
+                    elseif ($param->isDefaultValueAvailable()) {
+                        $args[] = $param->getDefaultValue();
+                    }
+                }
+
+            $result = call_user_func_array($resolvedHandler, $args);
             return $this->normalizeResponse($result);
         };
 
@@ -481,6 +530,97 @@ class Application
         );
 
         return $routePipeline($request);
+    }
+
+    /**
+     * Helper to safely extract type names as strings from ReflectionType (handles Named, Union, and Intersection types).
+     *
+     * @return array<int, string>
+     */
+    private function extractTypeNames(?\ReflectionType $type): array
+    {
+        if ($type === null) {
+            return [];
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return [$type->getName()];
+        }
+
+        if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $subType) {
+                if ($subType instanceof \ReflectionNamedType) {
+                    $names[] = $subType->getName();
+                }
+            }
+            return $names;
+        }
+
+        return [];
+    }
+
+
+    /**
+     * Resolves and casts raw string route parameters to match action method typehints.
+     *
+     * @param callable|array<mixed> $handler
+     * @param array<string, string> $rawParams
+     * @return array<string, mixed>
+     * @throws \InvalidArgumentException If parameter coercion fails for matched constraints.
+     */
+    protected function resolveActionParameters(mixed $handler, array $rawParams): array
+    {
+        if (empty($rawParams)) {
+            return [];
+        }
+
+        try {
+            if (is_array($handler)) {
+                $reflection = new \ReflectionMethod($handler[0], $handler[1]);
+            } elseif (is_object($handler) && !$handler instanceof \Closure) {
+                $reflection = new \ReflectionMethod($handler, '__invoke');
+            } else {
+                $reflection = new \ReflectionFunction($handler);
+            }
+        } catch (\ReflectionException) {
+            return $rawParams;
+        }
+
+        $resolvedParams = $rawParams;
+
+        foreach ($reflection->getParameters() as $param) {
+            $name = $param->getName();
+
+            if (!array_key_exists($name, $rawParams)) {
+                continue;
+            }
+
+            $rawValue = $rawParams[$name];
+            $type = $param->getType();
+
+            if (!$type instanceof \ReflectionNamedType || !$type->isBuiltin()) {
+                continue;
+            }
+
+            $typeName = $type->getName();
+
+            $resolvedParams[$name] = match ($typeName) {
+                'int' => is_numeric($rawValue) 
+                    ? (int) $rawValue 
+                    : throw new \InvalidArgumentException("Parameter '{$name}' must be an integer."),
+                'float' => is_numeric($rawValue) 
+                    ? (float) $rawValue 
+                    : throw new \InvalidArgumentException("Parameter '{$name}' must be a float."),
+                'bool' => filter_var($rawValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (
+                    is_numeric($rawValue) ? (bool) (int) $rawValue : throw new \InvalidArgumentException("Parameter '{$name}' must be a boolean.")
+                ),
+                'string' => (string) $rawValue,
+                default => $rawValue,
+            };
+        }
+
+        return $resolvedParams;
     }
 
     /**

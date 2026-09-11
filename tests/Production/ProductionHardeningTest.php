@@ -43,7 +43,7 @@ final class ProductionHardeningTest extends TestCase
     public function testSecurityMiddlewareInOnionPipeline(): void
     {
         $middleware = new SecurityMiddleware();
-        $request = new Request('/test', 'GET');
+        $request = new Request('/test', 'GET', headers: ['X-Forwarded-Proto' => 'https']);
 
         $next = static fn(Request $req): Response => new Response('OK', 200);
 
@@ -228,7 +228,7 @@ final class ProductionHardeningTest extends TestCase
     public function testSecurityMiddlewareSetsAllSixHeaders(): void
     {
         $middleware = new SecurityMiddleware();
-        $request = new Request('/test', 'GET');
+        $request = new Request('/test', 'GET', serverParams: ['HTTPS' => 'on']);
 
         $next = static fn(Request $req): Response => new Response('OK', 200);
 
@@ -241,6 +241,23 @@ final class ProductionHardeningTest extends TestCase
         $this->assertStringContainsString('max-age=31536000', $headers['Strict-Transport-Security']);
         $this->assertSame('strict-origin-when-cross-origin', $headers['Referrer-Policy']);
         $this->assertStringContainsString("default-src 'self'", $headers['Content-Security-Policy']);
+    }
+
+    public function testSecurityMiddlewareOmitsHstsOnInsecureRequest(): void
+    {
+        $middleware = new SecurityMiddleware();
+        $request = new Request('/test', 'GET');
+
+        $next = static fn(Request $req): Response => new Response('OK', 200);
+
+        $response = $middleware($request, $next);
+        $headers = $response->getHeaders();
+
+        $this->assertSame('nosniff', $headers['X-Content-Type-Options']);
+        $this->assertSame('SAMEORIGIN', $headers['X-Frame-Options']);
+        $this->assertSame('1; mode=block', $headers['X-XSS-Protection']);
+        $this->assertSame('strict-origin-when-cross-origin', $headers['Referrer-Policy']);
+        $this->assertArrayNotHasKey('Strict-Transport-Security', $headers);
     }
 
     public function testSecurityMiddlewareDoesNotModifyStatusCode(): void

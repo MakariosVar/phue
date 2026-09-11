@@ -3,6 +3,9 @@ AGENTS.md
 
 !storage/vendor/*
 /vendor/
+
+/storage/logs/
+
 node_modules
 .phpunit.cache
 

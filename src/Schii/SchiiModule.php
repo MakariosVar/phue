@@ -67,8 +67,8 @@ class SchiiModule extends Module
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
-        // 2. AuthManager Singleton with Framework Zero-Config Default Resolver
-        $this->container->singleton(
+        // 2. AuthManager Scoped with Framework Zero-Config Default Resolver
+        $this->container->scoped(
             AuthManager::class,
             function (Container $c) use ($schiiConfig): AuthManager {
                 /** @var callable|null $resolver */

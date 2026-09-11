@@ -75,9 +75,6 @@ final class SwooleAdapter implements ServerAdapterInterface
             } catch (\Throwable $e) {
                 $swResponse->status(500);
                 $swResponse->end('Internal Server Error: ' . $e->getMessage());
-            } finally {
-                // Zero State Leakage: Flush request-scoped singletons at the end of coroutine cycle
-                $this->container?->flushScope();
             }
         });
 
