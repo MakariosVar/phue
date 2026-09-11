@@ -1,5 +1,5 @@
 <template>
-  <teleport to="body">
+  <teleport to="body" v-if="modelValue">
     <div
       v-if="modelValue"
       class="modal fade show d-block"

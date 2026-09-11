@@ -189,8 +189,13 @@ final class FakeSidecar
             );
         }
 
+        $components = $payload['components'] ?? [];
+        if (!is_array($components)) {
+            $components = [];
+        }
+
         try {
-            $html = $this->pretendToRender($payload['template'], $payload['data'] ?? []);
+            $html = $this->pretendToRender($payload['template'], $payload['data'] ?? [], $components);
 
             return $this->http(200, ['ok' => true, 'html' => $html]);
         } catch (RuntimeException $exception) {
@@ -203,14 +208,16 @@ final class FakeSidecar
 
     /**
      * Simulates renderToString() for the minuscule subset the wire spec needs:
-     * interpolations. Returns stable, deterministic HTML.
+     * interpolations and — when a components map is supplied — tag resolution.
+     * Returns stable, deterministic HTML.
      *
-     * @param string               $template Vue template string.
-     * @param array<string, mixed> $data     SSR data scope.
+     * @param string               $template   Vue template string.
+     * @param array<string, mixed> $data       SSR data scope.
+     * @param array<string, mixed> $components Optional map name => ESM module source.
      *
      * @return string Pretend-rendered HTML.
      */
-    private function pretendToRender(string $template, array $data): string
+    private function pretendToRender(string $template, array $data, array $components = []): string
     {
         $trimmed = trim($template);
 
@@ -222,7 +229,97 @@ final class FakeSidecar
             return sprintf('<div>%d</div>', count($data['items'] ?? []));
         }
 
+        // Vue SSR semantics for custom tags: registered components resolve to
+        // their root element, unregistered ones render as comment placeholders.
+        if ($this->hasCustomTag($trimmed)) {
+            $out = $template;
+
+            foreach ($components as $name => $source) {
+                if (!is_string($name) || !is_string($source)) {
+                    continue;
+                }
+
+                $rootTag = $this->rootTagFromModule($source);
+
+                if ($rootTag === '') {
+                    continue;
+                }
+
+                foreach ([$name, $this->kebabCase($name)] as $tag) {
+                    $out = $this->replaceComponentTag($out, $tag, $rootTag);
+                }
+            }
+
+            $out = preg_replace($this->customTagPattern(), '<!-- -->', $out);
+
+            return rtrim((string) $out);
+        }
+
         throw new RuntimeException("Unsupported fake template: {$template}");
+    }
+
+    /**
+     * Determines whether a template string contains a custom component tag
+     * (PascalCase or kebab-case), which Vue would resolve via components.
+     */
+    private function hasCustomTag(string $template): bool
+    {
+        return preg_match($this->customTagPattern(), $template) === 1;
+    }
+
+    /**
+     * Matches opening/self-closing tags of custom components: `<PhButton .../>`,
+     * `<ph-button ...>`, `</PhButton>`, `</ph-button>`.
+     */
+    private function customTagPattern(): string
+    {
+        return '~</?([A-Z][A-Za-z0-9]*|(?:[a-z][a-z0-9]*)-[a-z0-9-]+)(?=[\s/>])[^>]*>~';
+    }
+
+    /**
+     * Converts a PascalCase component name to kebab-case (`PhButton` => `ph-button`).
+     */
+    private function kebabCase(string $name): string
+    {
+        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $name));
+    }
+
+    /**
+     * Extracts the root tag name from a module source's `__phueTemplate` export.
+     *
+     * @return string Root tag name, or '' if it cannot be derived.
+     */
+    private function rootTagFromModule(string $source): string
+    {
+        if (!preg_match('/__phueTemplate\s*=\s*"\\s*<([a-zA-Z][a-zA-Z0-9]*)/', $source, $matches)) {
+            return '';
+        }
+
+        return $matches[1];
+    }
+
+    /**
+     * Replaces occurrences of a component tag (self-closing or paired) with the
+     * component root element, mirroring client-side hydration parity at a
+     * wire-test granularity.
+     */
+    private function replaceComponentTag(string $template, string $tag, string $rootTag): string
+    {
+        $quoted = preg_quote($tag, '~');
+
+        $template = (string) preg_replace(
+            '~<' . $quoted . '(?=[\s>])[^>]*/>~',
+            '<' . $rootTag . ' data-phue-fake="' . $tag . '"></' . $rootTag . '>',
+            $template
+        );
+
+        $template = (string) preg_replace(
+            '~<' . $quoted . '(?=[\s>])[^>]*>(.*?)</' . $quoted . '>~s',
+            '<' . $rootTag . ' data-phue-fake="' . $tag . '">$1</' . $rootTag . '>',
+            $template
+        );
+
+        return $template;
     }
 
     /**

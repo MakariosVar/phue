@@ -2,7 +2,7 @@
 return [
     'title' => 'Phue App',
     'state' => [
-        'value' => $testValue ?? 'none',
+        'testValue' => $testValue ?? 'none',
     ],
 ];
 </php>
@@ -15,11 +15,11 @@ return [
 </template>
 
 <script>
-import { createApp, ref } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createSSRApp, ref } from 'vue';
 export default function mountApp() {
-    window.__phueApp = createApp({
+    window.__phueApp = createSSRApp({
         setup() {
-            const testValue = ref(window.__INITIAL_STATE__.value);
+            const testValue = ref(window.__INITIAL_STATE__.testValue);
             return { testValue };
         }
     });

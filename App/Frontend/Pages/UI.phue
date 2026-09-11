@@ -246,6 +246,7 @@ return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
         // Only whitelisted components get a module URL; the client imports none else.
+        'activeSection'   => $activeSection ?? 'overview',
         'phuiUrls'        => $urls,
         'code'            => $code,
         'ssrDemos'        => $ssrDemos,
@@ -834,7 +835,7 @@ return [
 </template>
 
 <script>
-import { createApp, reactive, toRefs } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createSSRApp, reactive, toRefs } from 'vue';
 import { loadPhueWhitelist } from '/assets/js/phue-client.js';
 
 const styleText = `
@@ -880,7 +881,7 @@ export default async function mountApp() {
     // Import ONLY the components this page whitelists (server-provided URLs).
     const components = await loadPhueWhitelist(initialState.phuiUrls || {});
 
-    window.__phueApp = createApp({
+    window.__phueApp = createSSRApp({
         components,
         setup() {
             const state = reactive({

@@ -70,7 +70,7 @@ final class WebControllerTest extends TestCase
 
         $decoded = json_decode($state[1], true);
         $this->assertIsArray($decoded);
-        $this->assertSame('HomePage', $decoded['value']);
+        $this->assertSame('HomePage', $decoded['testValue'] ?? null);
     }
 
     public function testRootRouteServesHomeModuleScript(): void
@@ -83,7 +83,7 @@ final class WebControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('createApp', $response->getContent());
+        $this->assertStringContainsString('createSSRApp', $response->getContent());
         $this->assertStringContainsString(".mount('#app')", $response->getContent());
     }
 
@@ -129,7 +129,7 @@ final class WebControllerTest extends TestCase
 
         $decoded = json_decode($state[1], true);
         $this->assertIsArray($decoded);
-        $this->assertSame('DocsPage', $decoded['value']);
+        $this->assertSame('DocsPage', $decoded['testValue'] ?? null);
     }
 
     // ── Docs route (WebController::docs → Docs.phue) ──
@@ -231,7 +231,8 @@ final class WebControllerTest extends TestCase
         $this->assertArrayHasKey(1, $module);
 
         $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
-        $this->assertStringContainsString('createApp', $moduleScript);
+        $this->assertStringContainsString('createSSRApp', $moduleScript);
+        $this->assertStringContainsString(".mount('#app')", $moduleScript);
         $this->assertStringContainsString('\u003Cph-button', $moduleScript);
         $this->assertStringContainsString('\u003Cph-data-table', $moduleScript);
         $this->assertStringContainsString('\u003Cph-modal', $moduleScript);

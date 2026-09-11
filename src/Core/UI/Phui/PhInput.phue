@@ -24,6 +24,7 @@
 </template>
 
 <script>
+import { useId } from "vue";
 export default {
   name: 'PhInput',
   props: {
@@ -68,10 +69,14 @@ export default {
       default: false
     }
   },
+  setup () {
+    const HashID = useId();
+    return { HashID }
+  },
   emits: ['update:modelValue', 'blur', 'focus'],
   computed: {
     inputId() {
-      return this.id || `ph-input-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-input-${this.HashID}`;
     }
   }
 };

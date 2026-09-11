@@ -10,6 +10,26 @@
   /** @type {Set<string>} Tracks dynamically imported module URLs to avoid redundant fetches */
   const importedModules = new Set();
 
+  /**
+   * Updates active status classes and accessibility attributes on navigation links.
+   *
+   * @param {string} targetUrl The current active URL
+   */
+  function updateNavigationState(targetUrl) {
+    const targetPath = new URL(targetUrl, window.location.origin).pathname;
+
+    document.querySelectorAll('.nav-link').forEach((a) => {
+      const href = a.getAttribute('href');
+      if (!href) return;
+
+      const linkPath = new URL(href, window.location.origin).pathname;
+      const isActive = linkPath === targetPath;
+
+      a.classList.toggle('active', isActive);
+      a.toggleAttribute('aria-current', isActive);
+    });
+  }
+
   document.addEventListener('click', async (e) => {
     // Ignore modified clicks (Cmd+click, Ctrl+click, Shift+click) or non-left click events
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -61,7 +81,7 @@
     importedModules.add(url);
 
     if (typeof mod.default === 'function') {
-      mod.default();
+      await mod.default();
     }
 
     return isNew;
@@ -96,26 +116,27 @@
 
       // 2. Unmount old Vue & Update HTML
       if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
-          window.__phueApp.unmount();
-          window.__phueApp = null;
+        window.__phueApp.unmount();
+        window.__phueApp = null;
       }
       document.querySelector('#app').innerHTML = data.html;
 
-      // 3. Update Browser History
+      // 3. Update Browser History & Client-Side Navigation Active State
       if (pushState) {
         window.history.pushState(null, '', url);
       }
+      updateNavigationState(url);
 
       // 4. Mount Vue Components via Dynamic Imports
       for (const script of data.scripts) {
-          if (script.url.includes('/assets/vendor/')) continue;
-          if (script.url.endsWith('phue-explorer.js')) continue;
+        if (script.url.includes('/assets/vendor/')) continue;
+        if (script.url.endsWith('phue-explorer.js')) continue;
 
-          try {
-              await mountModule(script.url);
-          } catch (err) {
-              console.error('Failed to load module:', script.url);
-          }
+        try {
+          await mountModule(script.url);
+        } catch (err) {
+          console.error('Failed to load module:', script.url);
+        }
       }
     } catch (err) {
       console.error('[Phue Explorer] Navigation failed, falling back to full load:', err);

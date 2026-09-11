@@ -29,6 +29,7 @@
 </template>
 
 <script>
+import { useId } from "vue";
 export default {
   name: 'PhSelect',
   props: {
@@ -70,9 +71,13 @@ export default {
     }
   },
   emits: ['update:modelValue'],
+  setup () {
+    const HashID = useId();
+    return { HashID }
+  },
   computed: {
     selectId() {
-      return this.id || `ph-select-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-select-${this.HashID}`;
     },
     normalizedOptions() {
       return this.options.map((opt) => {

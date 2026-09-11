@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Core\Ssr;
 
+use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -84,6 +85,43 @@ final class BunSidecarIntegrationTest extends TestCase
         $this->assertSame('COMPILE_ERROR', $response['json']['error']['code']);
     }
 
+    public function testRenderResolvesRegisteredPhueComponent(): void
+    {
+        $template = '<div class="page"><ph-button variant="primary">Save</ph-button></div>';
+
+        $response = $this->request('POST', '/v1/render', [
+            'template'   => $template,
+            'data'       => ['title' => 'Demo'],
+            'components' => [
+                'PhButton' => $this->phuiModule('PhButton'),
+            ],
+        ]);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertTrue($response['json']['ok']);
+
+        $html = (string) $response['json']['html'];
+
+        $this->assertStringContainsString('type="button"', $html);
+        $this->assertStringContainsString('class="btn btn-primary"', $html);
+        $this->assertStringContainsString(
+            '<span class="btn__content"><!--[-->Save<!--]--></span></button>',
+            $html
+        );
+    }
+
+    public function testRenderWithUnregisteredComponentEmitsCommentPlaceholder(): void
+    {
+        $response = $this->request('POST', '/v1/render', [
+            'template' => '<div class="page"><ph-button variant="primary" /></div>',
+            'data'     => [],
+        ]);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertTrue($response['json']['ok']);
+        $this->assertStringContainsString('<!--', (string) $response['json']['html']);
+    }
+
     public function testUnknownHealthlessRouteReturnsNotFound(): void
     {
         $response = $this->request('GET', '/v1/nope', null);
@@ -107,6 +145,25 @@ final class BunSidecarIntegrationTest extends TestCase
         }
 
         return false;
+    }
+
+    /**
+     * Builds the exact ESM module source the framework ships for a Phui
+     * component (`export const __phueTemplate` + `export default {...}`), so the
+     * sidecar receives the same code the client imports.
+     */
+    private function phuiModule(string $name): string
+    {
+        $loader = new PhueComponentLoader(dirname(__DIR__, 3) . '/src/Core/UI/Phui');
+
+        $hash = $loader->moduleHash($name);
+        $module = $hash !== null ? $loader->moduleFor($name, $hash) : null;
+
+        if ($module === null) {
+            self::fail("Phui module not available for {$name}.");
+        }
+
+        return $module;
     }
 
     /**

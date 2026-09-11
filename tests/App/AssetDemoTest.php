@@ -58,7 +58,7 @@ final class AssetDemoTest extends TestCase
         );
         $this->assertStringNotContainsString('<script type="module">', $content);
         $this->assertStringNotContainsString('src="/assets/app.js"', $content);
-        $this->assertStringNotContainsString('createApp', $content);
+        $this->assertStringNotContainsString('createSSRApp', $content);
     }
 
     public function testDemoPageServesExtractedModuleScript(): void
@@ -71,7 +71,7 @@ final class AssetDemoTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('createApp', $response->getContent());
+        $this->assertStringContainsString('createSSRApp', $response->getContent());
         $this->assertStringContainsString(".mount('#app')", $response->getContent());
     }
 

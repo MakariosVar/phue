@@ -175,7 +175,8 @@ PHUE);
 
         $this->assertSame($expectedModule, $module);
         $this->assertStringContainsString('export const __phueTemplate', $module);
-        $this->assertStringContainsString(trim(self::SCRIPT), $module);
+        $this->assertStringContainsString('__phueOrigCreateApp', $module);
+        $this->assertStringContainsString('.mount(\'#app\')', $module);
     }
 
     public function testModuleForReturnsNullOnHashMismatch(): void

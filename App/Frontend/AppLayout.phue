@@ -91,7 +91,7 @@ if ($orientation === 'sidebar') {
                 '<a class="navbar-brand mb-3 d-inline-block" href="%s">%s</a>' .
                 '%s' .
             '</aside>' .
-            '<main v-cloak class="app-content flex-grow-1 p-3">%s</main>' .
+            '<main class="app-content flex-grow-1 p-3">%s</main>' .
         '</div>',
         $brandHrefEscaped,
         $brandLabelEscaped,
@@ -107,7 +107,7 @@ if ($orientation === 'sidebar') {
                 '%s' .
                 '<div class="ms-auto d-flex align-items-center gap-2">%s</div>' .
             '</header>' .
-            '<main v-cloak class="app-content p-3">%s</main>' .
+            '<main class="app-content p-3">%s</main>' .
         '</div>',
         $brandHrefEscaped,
         $brandLabelEscaped,

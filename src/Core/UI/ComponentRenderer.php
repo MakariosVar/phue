@@ -23,15 +23,16 @@ class ComponentRenderer
     /**
      * ComponentRenderer constructor.
      *
-     * @param HtmlShellRenderer        $shellRenderer   Service responsible for rendering the outer HTML document shell.
-     * @param AssetRegistry            $assetRegistry   Global registry managing script dependencies.
-     * @param PhueComponentLoader|null $loader          Optional component loader instance.
-     * @param string|null              $layoutName      Optional layout component name (e.g., 'AppLayout').
-     * @param mixed                    $uriResolver     Optional callable returning current request URI string: fn(): string.
-     * @param mixed                    $requestResolver Optional callable returning current Request object.
-     * @param PhuePartialRenderer|null $partialRenderer Optional partial renderer for layout integration.
-     * @param mixed                    $userResolver    Optional callable returning IdentityInterface|null: fn(): ?IdentityInterface.
-     * @param SsrEngine|null           $ssrEngine       Optional SSR engine for server-side component evaluation.
+     * @param HtmlShellRenderer            $shellRenderer   Service responsible for rendering the outer HTML document shell.
+     * @param AssetRegistry                $assetRegistry   Global registry managing script dependencies.
+     * @param PhueComponentLoader|null     $loader          Optional component loader instance.
+     * @param string|null                  $layoutName      Optional layout component name (e.g., 'AppLayout').
+     * @param mixed                        $uriResolver     Optional callable returning current request URI string: fn(): string.
+     * @param mixed                        $requestResolver Optional callable returning current Request object.
+     * @param PhuePartialRenderer|null     $partialRenderer Optional partial renderer for layout integration.
+     * @param mixed                        $userResolver    Optional callable returning IdentityInterface|null: fn(): ?IdentityInterface.
+     * @param SsrEngine|null               $ssrEngine       Optional SSR engine for server-side component evaluation.
+     * @param ComponentLoaderRegistry|null $loaderRegistry  Optional registry for resolving multi-source component loaders.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -42,7 +43,8 @@ class ComponentRenderer
         private mixed $requestResolver = null,
         private ?PhuePartialRenderer $partialRenderer = null,
         private mixed $userResolver = null,
-        private ?SsrEngine $ssrEngine = null
+        private ?SsrEngine $ssrEngine = null,
+        private ?\Phue\Core\Frontend\ComponentLoaderRegistry $loaderRegistry = null
     ) {}
 
     /**
@@ -115,6 +117,7 @@ class ComponentRenderer
 
     /**
      * Transforms inline component scripts into external module assets and delegates to renderView.
+     * Keeps module generation deterministic using raw page template without layout wrapping.
      *
      * @param string $name  Component logical name.
      * @param string $title Document title.
@@ -148,24 +151,61 @@ class ComponentRenderer
     }
 
     /**
-     * Renders a View instance into the final HTML shell response, wrapping content in a Layout if configured.
+     * Renders a View instance into the final HTML shell response.
+     * Places the #app container strictly around the page content and wraps it in the Layout server chrome.
      *
      * @param string $title Page title.
      * @param View   $view  View object containing markup and assets.
      *
-     * @return Response HTTP 200 response with text/html content type.
+     * @return Response HTTP 200 response with text/html content type or JSON response for SPA requests.
      */
     private function renderView(string $title, View $view): Response
     {
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
             $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
+            $state = $view->getState();
+
+            $context = [
+                'name' => $title,
+                'uri'  => $uri,
+            ];
+
+            // 1. Whitelist check: Read phuiUrls (map: name -> URL) from View state
+            $phuiUrls = $state['phuiUrls'] ?? null;
+
+            if (is_array($phuiUrls) && !empty($phuiUrls)) {
+                $components = [];
+
+                foreach ($phuiUrls as $name => $url) {
+                    if (!is_string($url)) {
+                        continue; // Fail-open on invalid URL types
+                    }
+
+                    // 2. Extract hash using the identical regex from AssetResolver (Application.php:254)
+                    if (preg_match('/^([A-Za-z0-9_\-\/]+)\.([a-f0-9]{8})\.phue\.js$/i', basename($url), $matches)) {
+                        $hash = $matches[2];
+
+                        // Resolve module source across loaders via ComponentLoaderRegistry
+                        $source = $this->loaderRegistry?->moduleFor($name, $hash);
+
+                        // 3. Ignore null/empty (fail-open)
+                        if ($source !== null && trim($source) !== '') {
+                            $components[$name] = $source;
+                        }
+                    }
+                    // Fail-open automatically if regex doesn't match
+                }
+
+                // 4. Add 'components' => $components to context ONLY if non-empty
+                if (!empty($components)) {
+                    $context['components'] = $components;
+                }
+            }
+
             $renderedHtml = $this->ssrEngine->render(
                 template: $view->getTemplate(),
-                state: $view->getState(),
-                context: [
-                    'name' => $title,
-                    'uri'  => $uri,
-                ]
+                state: $state,
+                context: $context
             );
 
             if ($renderedHtml !== null) {
@@ -187,25 +227,34 @@ class ComponentRenderer
             ? $view->getHtml() 
             : $view->getTemplate();
 
-        // Layout Engine Seam
-        $appContent = $this->applyLayoutIfConfigured($pageMarkup);
+        // Check if this is an SPA transition request
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
+
+        // 1. Early Return for SPA: Return ONLY $pageMarkup without evaluating the outer Layout chrome
         if ($isSpaRequest) {
-            return \Phue\Core\Response::json([
+            return Response::json([
                 'title'   => $title,
-                'html'    => $appContent,
+                'html'    => $pageMarkup,
                 'state'   => $view->getState(),
                 'scripts' => $this->assetRegistry->getRequestScripts(),
             ]);
         }
 
+        // 2. Full Page Load Path: Isolate page content within #app root container for Vue hydration match
+        $mountedPageContent = '<div id="app">' . $pageMarkup . '</div>';
+
+        // 3. Wrap mounted page within server chrome layout (layout stays OUTSIDE #app)
+        $appContent = $this->applyLayoutIfConfigured($mountedPageContent);
+
+        // 4. Render full HTML shell
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',
             initialState: $view->getState(),
             content: $appContent,
-            inlineScript: $view->getInlineScript()
+            inlineScript: $view->getInlineScript(),
+            wrapInAppContainer: false
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);

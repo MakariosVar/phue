@@ -7,60 +7,37 @@ namespace Phue\Core\Asset;
 use JsonException;
 
 /**
- * Renders the baseline HTML5 shell payload with registered asset dependencies and inline scripts.
+ * Class HtmlShellRenderer
+ *
+ * Renders the primary HTML5 document wrapper shell for Phue application responses.
  *
  * @package Phue\Core\Asset
  */
 class HtmlShellRenderer
 {
-    /**
-     * @param AssetRegistry $registry Underlying asset storage registry
-     */
-    public function __construct(private readonly AssetRegistry $registry) {}
-
-    /**
-     * Proxies style registration directly to the underlying AssetRegistry.
-     *
-     * @param string $url Asset URL
-     * @return self
-     */
-    public function addStyle(string $url): self
-    {
-        $this->registry->addStyle($url);
-        return $this;
-    }
-
-    /**
-     * Proxies script registration directly to the underlying AssetRegistry.
-     *
-     * @param string $url Asset URL
-     * @param bool $isModule Whether script should be treated as type="module"
-     * @return self
-     */
-    public function addScript(string $url, bool $isModule = true): self
-    {
-        $this->registry->addGlobalScript($url, $isModule);
-
-        return $this;
-    }
+    public function __construct(
+        private AssetRegistry $registry
+    ) {}
 
     /**
      * Render the full HTML document string.
      *
-     * @param string $title Page title
-     * @param string $appId Mounting root element ID (default: "app")
-     * @param array<string, mixed> $initialState Global state injected via `window.__INITIAL_STATE__`
-     * @param string $content Inner HTML content
-     * @param string|null $inlineScript Inline module script block
+     * @param string      $title              Page title.
+     * @param string      $appId              Mounting root element ID (default: "app").
+     * @param array       $initialState       Global state injected via `window.__INITIAL_STATE__`.
+     * @param string      $content            Inner HTML content.
+     * @param string|null $inlineScript       Inline module script block.
+     * @param bool        $wrapInAppContainer When true, wraps $content in `<div id="$appId">`. Set false when $content is pre-wrapped or contains outer layout chrome.
      *
-     * @return string Valid HTML5 document markup
+     * @return string Valid HTML5 document markup.
      */
     public function render(
         string $title = "Phue App",
         string $appId = "app",
         array $initialState = [],
         string $content = "",
-        ?string $inlineScript = null
+        ?string $inlineScript = null,
+        bool $wrapInAppContainer = true
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
@@ -75,6 +52,8 @@ class HtmlShellRenderer
                 $this->registry->getStyles()
             )
         );
+
+        $importMapMarkup = '<script type="importmap">{"imports":{"vue":"/assets/vendor/vue3/vue.esm-browser.js"}}</script>';
 
         $scriptsMarkup = implode(
             "\n    ",
@@ -117,6 +96,10 @@ class HtmlShellRenderer
                 ? "<script type=\"module\">\n{$inlineScript}\n</script>\n    "
                 : "";
 
+        $bodyContent = $wrapInAppContainer
+            ? "<div id=\"{$safeAppId}\">{$content}</div>"
+            : $content;
+
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -127,20 +110,18 @@ class HtmlShellRenderer
     {$stylesMarkup}
 </head>
 <body>
-    <div id="{$safeAppId}">{$content}</div>
+    {$bodyContent}
+    {$importMapMarkup}
     {$stateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
 </html>
 HTML;
     }
 
     /**
-     * Safely escapes strings for HTML context output.
-     *
-     * @param string $value Unescaped value
-     * @return string Escaped output
+     * Escape HTML special characters for shell insertion.
      */
     private function escape(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

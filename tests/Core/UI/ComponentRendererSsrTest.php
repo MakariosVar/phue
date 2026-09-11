@@ -6,6 +6,7 @@ namespace Phue\Tests\Core\UI;
 
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
 use Phue\Core\Ssr\NullSsrEngine;
 use Phue\Core\Ssr\SsrEngine;
@@ -98,7 +99,7 @@ final class ComponentRendererSsrTest extends TestCase
         $this->assertSame(['name' => 'Products', 'uri' => '/products?page=2'], $engine->lastContext);
     }
 
-    public function testSsrHtmlIsNestedInsideConfiguredLayout(): void
+    public function testConfiguredLayoutWrapsSsrHtmlOutsideAppContainer(): void
     {
         $baseDir = sys_get_temp_dir() . '/phue_ssr_layout_' . uniqid('', true);
         $viewsDir = $baseDir . '/views';
@@ -132,7 +133,7 @@ PHUE);
             $html = $renderer->render('Demo', $view)->getContent();
 
             $this->assertStringContainsString(
-                '<div class="layout-wrap"><header>NAV</header><main><h2>Rendered by Vue</h2></main></div>',
+                '<div class="layout-wrap"><header>NAV</header><main><div id="app"><h2>Rendered by Vue</h2></div></main></div>',
                 $html
             );
             $this->assertStringNotContainsString('{{ msg }}', $html);
@@ -161,6 +162,115 @@ PHUE);
         $this->assertSame(['msg' => 'hello'], $payload['state']);
         $this->assertArrayHasKey('title', $payload);
         $this->assertArrayHasKey('scripts', $payload);
+    }
+
+    public function testSpaPayloadBypassesLayoutChromeEvenWhenLayoutConfigured(): void
+    {
+        $baseDir = __DIR__ . '/../../tmp/component-ssr-spa-' . uniqid();
+        $viewsDir = $baseDir . '/views';
+        mkdir($viewsDir, 0777, true);
+
+        file_put_contents($viewsDir . '/AppLayout.phue', <<<PHUE
+<header>NAV</header>
+<main>{{ content }}</main>
+PHUE);
+
+        try {
+            $engine = RecordingSsrEngine::returning('<h2>Rendered by Vue</h2>');
+            $request = new Request('GET', '/products', headers: ['X-Phue-SPA' => 'true']);
+            $renderer = new ComponentRenderer(
+                new HtmlShellRenderer($this->registry),
+                $this->registry,
+                new PhueComponentLoader($viewsDir),
+                'AppLayout',
+                requestResolver: fn (): Request => $request,
+                ssrEngine: $engine
+            );
+
+            $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello']);
+
+            $response = $renderer->render('Demo', $view);
+
+            $payload = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+
+            $this->assertStringContainsString('<h2>Rendered by Vue</h2>', $payload['html']);
+            $this->assertStringNotContainsString('<header>NAV</header>', $payload['html']);
+            $this->assertStringNotContainsString('<div id="app">', $payload['html']);
+            $this->assertSame(['msg' => 'hello'], $payload['state']);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+    }
+
+    public function testWhitelistedComponentsAreForwardedToSsrContext(): void
+    {
+        $baseDir = sys_get_temp_dir() . '/phue_ssr_components_' . uniqid('', true);
+        $viewsDir = $baseDir . '/views';
+        mkdir($viewsDir, 0777, true);
+
+        file_put_contents($viewsDir . '/PhButton.phue', <<<'PHUE'
+<template>
+<button>{{ label }}</button>
+</template>
+
+<script>
+export default {
+    props: { label: { type: String, default: '' } }
+};
+</script>
+PHUE);
+
+        try {
+            $loader = new PhueComponentLoader($viewsDir);
+            $hash = $loader->moduleHash('PhButton');
+            $this->assertIsString($hash);
+
+            $registry = new ComponentLoaderRegistry();
+            $registry->addLoader($loader);
+
+            $engine = RecordingSsrEngine::returning('<button>ok</button>');
+            $renderer = new ComponentRenderer(
+                new HtmlShellRenderer($this->registry),
+                $this->registry,
+                $loader,
+                ssrEngine: $engine,
+                loaderRegistry: $registry
+            );
+
+            $view = new View('<div><PhButton/></div>', [
+                'phuiUrls' => [
+                    'PhButton' => "/assets/phue/PhButton.{$hash}.phue.js",
+                ],
+            ]);
+
+            $renderer->render('Demo', $view);
+
+            $this->assertArrayHasKey('components', $engine->lastContext, 'SSR context must carry the whitelisted components.');
+            $this->assertArrayHasKey('PhButton', $engine->lastContext['components']);
+            $this->assertStringStartsWith(
+                'export const __phueTemplate',
+                $engine->lastContext['components']['PhButton']
+            );
+        } finally {
+            $this->removeTree($baseDir);
+        }
+    }
+
+    public function testUnresolvableWhitelistedComponentsFailOpenWithoutComponentsKey(): void
+    {
+        $engine = RecordingSsrEngine::returning('<div>ok</div>');
+        $renderer = $this->renderer($engine);
+
+        $view = new View('<div><Missing/></div>', [
+            'phuiUrls' => [
+                'Missing' => '/assets/phue/Missing.deadbeef.phue.js',
+            ],
+        ]);
+
+        $response = $renderer->render('Demo', $view);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertArrayNotHasKey('components', $engine->lastContext, 'Unresolvable components must fail open.');
     }
 
     public function testEngineReturningNullFailsOpenToTemplatePath(): void

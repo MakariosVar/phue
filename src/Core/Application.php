@@ -216,13 +216,20 @@ class Application
                 requestResolver: fn() => $c->get(\Phue\Core\Request::class),
                 partialRenderer: $c->get(PhuePartialRenderer::class),
                 userResolver: $userResolver,
-                ssrEngine: $c->get(SsrEngine::class)
+                ssrEngine: $c->get(SsrEngine::class),
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
             );
         });
 
         // Core Asset Infrastructure Singletons
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
+
+            // Fix Trap B: Register /assets/vendor static source globally for non-Swoole environments
+            $vendorPath = __DIR__ . '/../../assets/vendor';
+            if (is_dir($vendorPath)) {
+                $registry->registerSource('/assets/vendor', $vendorPath);
+            }
 
             // Register default framework static styles path if directory exists
             $stylesPath = $this->basePath . '/storage/assets/styles';
@@ -235,6 +242,12 @@ class Application
             if (is_dir($jsPath)) {
                 $registry->registerSource('/assets/js', $jsPath);
             }
+
+            // Register global default assets directly onto AssetRegistry
+            $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
+
+            // Fix Trap A: Add phue-explorer.js as a global script so it survives beginRequest() reset
+            $registry->addGlobalScript('/assets/js/phue-explorer.js', isModule: true);
 
             // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)
             $registry->addResolver('/assets/phue/', function (string $path): ?string {
@@ -260,15 +273,7 @@ class Application
         ));
 
         $this->container->singleton(HtmlShellRenderer::class, function (): HtmlShellRenderer {
-            $renderer = new HtmlShellRenderer($this->container->get(AssetRegistry::class));
-
-            // Automatically inject Bootstrap CSS into shell head
-            $renderer->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
-
-            // Explicitly register navigation interceptor script
-            $renderer->addScript('/assets/js/phue-explorer.js', true);
-
-            return $renderer;
+            return new HtmlShellRenderer($this->container->get(AssetRegistry::class));
         });
 
         // Auto-register AssetsController to Router

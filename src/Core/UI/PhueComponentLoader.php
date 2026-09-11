@@ -251,7 +251,46 @@ class PhueComponentLoader
 
         $scriptContent = trim($script ?? '');
 
-        return "export const __phueTemplate = {$jsonTemplate};\n" . $scriptContent;
+        if ($scriptContent === '') {
+            return "export const __phueTemplate = {$jsonTemplate};\n";
+        }
+
+        // Intercept createSSRApp or createApp imports from vue
+        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
+        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+
+        $proxyBlock = '';
+
+        if ($hasSsrApp || $hasApp) {
+            // Alias imports in statement: createSSRApp -> __phueOrigCreateSSRApp
+            $scriptContent = preg_replace_callback(
+                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
+                function ($matches) {
+                    $imports = $matches[1];
+                    $source  = $matches[2];
+
+                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
+                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
+
+                    return "import {{$imports}} from {$source};";
+                },
+                $scriptContent,
+                1
+            );
+
+            // Inject the proxy functions below imports
+            $proxies = [];
+            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
+                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts }, rootProps);';
+            }
+            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
+                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts }, rootProps);';
+            }
+
+            $proxyBlock = implode("\n", $proxies) . "\n";
+        }
+
+        return "export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
     }
 
     /**

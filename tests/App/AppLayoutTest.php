@@ -69,7 +69,7 @@ final class AppLayoutTest extends TestCase
         $this->assertStringContainsString('<div class="app-layout d-flex">', $html);
         $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
         $this->assertStringContainsString(
-            '<main v-cloak class="app-content flex-grow-1 p-3">',
+            '<main class="app-content flex-grow-1 p-3">',
             $html
         );
         $this->assertStringContainsString('<p>page content</p>', $html);
@@ -151,7 +151,7 @@ final class AppLayoutTest extends TestCase
         $this->assertStringContainsString('>Shop<', $html);
         $this->assertMatchesRegularExpression('/<a class="navbar-brand[^"]*"/', $html);
         $this->assertStringContainsString(
-            '<main v-cloak class="app-content flex-grow-1 p-3">',
+            '<main class="app-content flex-grow-1 p-3">',
             $html
         );
     }

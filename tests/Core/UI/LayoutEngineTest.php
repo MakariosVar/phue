@@ -15,8 +15,9 @@ use PHPUnit\Framework\TestCase;
  *
  * Locks:
  *  - content wrapping: a configured html-first layout receives the page markup
- *    as "$content" and the current URI as "$uri", and its resolved HTML becomes
- *    the #app content,
+ *    isolated inside the `#app` container as "$content" and the current URI as
+ *    "$uri", and its resolved HTML becomes the body-level chrome that wraps
+ *    AROUND the mount container (layout stays OUTSIDE #app),
  *  - page mount scripts stay independent of the wrap (still emitted as module),
  *  - backwards compatibility: without layoutName the render path is unchanged,
  *  - uriResolver default fallback to '/'.
@@ -101,7 +102,7 @@ PHUE);
         $html = $renderer->render('Page')->getContent();
 
         $this->assertStringContainsString(
-            '<div id="app"><div class="wrap" data-uri="/products/42"><header>NAV</header><main><h1>PageContent</h1></main></div></div>',
+            '<div class="wrap" data-uri="/products/42"><header>NAV</header><main><div id="app"><h1>PageContent</h1></div></main></div>',
             $html,
         );
         $this->assertStringNotContainsString('this literal template is ignored', $html);
@@ -139,7 +140,7 @@ PHUE);
         $renderer = $this->makeRenderer('AppLayout');
         $html = $renderer->render('Page')->getContent();
 
-        $this->assertStringContainsString('<main><div class="page">{{ data }}</div></main>', $html);
+        $this->assertStringContainsString('<main><div id="app"><div class="page">{{ data }}</div></div></main>', $html);
         $this->assertMatchesRegularExpression(
             '/<script type="module" src="\/assets\/phue\/Page\.[a-f0-9]{8}\.phue\.js"><\/script>/',
             $html,
@@ -228,7 +229,7 @@ PHUE);
         $html = $renderer->render('Page')->getContent();
 
         $this->assertStringContainsString(
-            '<div id="app"><div class="wrap"><main><section>server</section></main></div></div>',
+            '<div class="wrap"><main><div id="app"><section>server</section></div></main></div>',
             $html,
         );
     }
@@ -254,10 +255,12 @@ PHUE);
         $renderer = $this->makeRenderer('FallbackLayout');
         $html = $renderer->render('Page')->getContent();
 
+        $this->assertStringNotContainsString('<p>yes</p>', $html);
         $this->assertStringContainsString(
-            '<div id="app"><div class="fallback">no-php</div></div>',
+            '<div class="fallback">no-php</div>',
             $html,
         );
+        $this->assertStringNotContainsString('<div id="app">', $html);
     }
 
     private function removeTree(string $path): void

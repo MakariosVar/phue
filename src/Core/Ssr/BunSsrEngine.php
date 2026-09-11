@@ -32,7 +32,7 @@ class BunSsrEngine implements SsrEngine
      *
      * @param string $template Template name or component path identifier.
      * @param array<string, mixed> $state Rendering props and variables context.
-     * @param array<string, mixed> $context Additional execution context parameters (reserved for future use).
+     * @param array<string, mixed> $context Additional execution context parameters (e.g. components map).
      * @return string|null Evaluated component HTML on success, or null on fail-open error.
      */
     public function render(string $template, array $state = [], array $context = []): ?string
@@ -44,6 +44,11 @@ class BunSsrEngine implements SsrEngine
                 'template' => $template,
                 'data' => $state,
             ];
+
+            // Attach components to envelope only if $context['components'] is a non-empty array
+            if (isset($context['components']) && is_array($context['components']) && $context['components'] !== []) {
+                $envelope['components'] = $context['components'];
+            }
 
             $json = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 

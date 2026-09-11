@@ -66,6 +66,37 @@ final class SsrWireSpecTest extends TestCase
         );
     }
 
+    public function testRenderRegistersComponentsForNestedTags(): void
+    {
+        $response = $this->send('POST', '/v1/render', [
+            'template'   => '<div class="page"><ph-button variant="primary" /></div>',
+            'data'       => ['title' => 'Demo'],
+            'components' => [
+                'PhButton' => 'export const __phueTemplate = "<button class=\"btn btn-primary\"></button>"; export default {};',
+            ],
+        ]);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertTrue($response['json']['ok']);
+
+        $html = (string) $response['json']['html'];
+
+        $this->assertStringContainsString('<button', $html);
+        $this->assertStringNotContainsString('<ph-button', $html);
+    }
+
+    public function testRenderWithUnregisteredComponentEmitsCommentPlaceholder(): void
+    {
+        $response = $this->send('POST', '/v1/render', [
+            'template' => '<div class="page"><ph-button variant="primary" /></div>',
+            'data'     => [],
+        ]);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertTrue($response['json']['ok']);
+        $this->assertStringContainsString('<!-- -->', (string) $response['json']['html']);
+    }
+
     public function testRenderRejectsPayloadWithoutTemplate(): void
     {
         $response = $this->send('POST', '/v1/render', ['data' => ['msg' => 'x']]);

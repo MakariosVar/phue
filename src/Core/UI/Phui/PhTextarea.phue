@@ -25,6 +25,7 @@
 </template>
 
 <script>
+import { useId } from "vue";
 export default {
   name: 'PhTextarea',
   props: {
@@ -75,9 +76,13 @@ export default {
     }
   },
   emits: ['update:modelValue', 'blur', 'focus'],
+  setup () {
+    const HashID = useId();
+    return { HashID }
+  },
   computed: {
     textareaId() {
-      return this.id || `ph-textarea-${Math.random().toString(36).substring(2, 9)}`;
+      return this.id || `ph-textarea-${this.HashID}`;
     }
   }
 };
