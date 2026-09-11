@@ -56,16 +56,22 @@ final class PhueSsrClientTest extends TestCase
         parent::tearDown();
     }
 
-    public function testSendReturnsRawHtmlOnValidRenderOverPostV1Render(): void
+    public function testSendReturnsRawEnvelopeOnValidRenderOverPostV1Render(): void
     {
         $payload = json_encode(
             ['v' => 1, 'template' => '<div>{{ msg }}</div>', 'data' => ['msg' => '<script>alert(1)</script>']],
             JSON_THROW_ON_ERROR
         );
 
-        $html = $this->client->send(method: 'POST', path: '/v1/render', payload: $payload);
+        $raw = $this->client->send(method: 'POST', path: '/v1/render', payload: $payload);
 
-        $this->assertSame('<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>', $html);
+        $this->assertIsString($raw);
+
+        $response = json_decode($raw, true);
+
+        $this->assertIsArray($response);
+        $this->assertTrue($response['ok']);
+        $this->assertSame('<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>', $response['html']);
     }
 
     public function testSendReturnsNullOnNon200Response(): void

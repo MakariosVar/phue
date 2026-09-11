@@ -29,7 +29,7 @@ return [
     /**
      * Maximum time in milliseconds to wait when reading data from the connected socket stream.
      */
-    'timeout_ms' => (int) env('SSR_TIMEOUT_MS', 500),
+    'timeout_ms' => (int) env('SSR_TIMEOUT_MS', 2000),
 
     /**
      * HTTP Host header value sent in sidecar request headers.

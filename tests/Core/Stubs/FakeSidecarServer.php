@@ -18,6 +18,10 @@ require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
 use Phue\Tests\Core\Stubs\FakeSidecar;
 
+if (realpath((string) ($_SERVER['argv'][0] ?? '')) !== __FILE__) {
+    return;
+}
+
 $socketPath = $argv[1] ?? '/tmp/phue-ssr-fake-sidecar.sock';
 
 $sidecar = new FakeSidecar($socketPath);
