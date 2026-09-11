@@ -1,0 +1,12 @@
+<template>
+<div class="card p-3">
+    <h3>Hello there</h3>
+    <ph-button label="Action"/>
+</div>
+</template>
+
+<script>
+export default {
+    name: 'Card'
+};
+</script>

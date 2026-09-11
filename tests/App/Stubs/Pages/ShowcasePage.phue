@@ -1,0 +1,16 @@
+<template>
+<div class="d-flex flex-column gap-3 p-4">
+    <h2>Showcase</h2>
+    <Card/>
+</div>
+</template>
+
+<script>
+import { createSSRApp } from 'vue';
+export default function mountApp() {
+    window.__phueApp = createSSRApp({
+        setup() { return {}; }
+    });
+    window.__phueApp.mount('#app');
+}
+</script>

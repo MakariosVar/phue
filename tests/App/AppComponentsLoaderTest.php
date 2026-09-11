@@ -8,15 +8,18 @@ use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
+use Phue\Core\UI\PhueComponentLoader;
+use Psr\SimpleCache\CacheInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Contract guards for the App Components loader (/App/Frontend/Components).
+ * Contract guards for a components-rooted loader wired into the
+ * ComponentLoaderRegistry (stub-based, no dependency on demo-app components).
  *
- * A dedicated loader rooted at /App/Frontend/Components must be wired into the
- * ComponentLoaderRegistry so tag-referenced App components such as <Card/>
- * resolve to their own .phue files — without polluting Pages/ and without
- * falling through to the Phui core library.
+ * A dedicated loader rooted at /tests/App/Stubs/Components must be wired into
+ * the ComponentLoaderRegistry so tag-referenced stub components such as
+ * <Card/> resolve to their own .phue files — without polluting the Pages
+ * loader and without falling through to the Phui core library.
  *
  * @package Phue\Tests\App
  */
@@ -33,6 +36,28 @@ final class AppComponentsLoaderTest extends TestCase
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
         $registry->registerSource('/assets', '/app/App/Frontend');
         $registry->registerSource('/assets/vendor', '/app/storage/assets/vendor');
+
+        $container = $this->app->getContainer();
+        $loaderRegistry = $container->get(ComponentLoaderRegistry::class);
+        $cache = $container->get(CacheInterface::class);
+
+        // Stub components loader rooted at /tests/App/Stubs/Components.
+        $components = new PhueComponentLoader(
+            __DIR__ . '/Stubs/Components',
+            persistentCache: $cache,
+            viewsCacheDir: '/app/storage/cache/views'
+        );
+        $components->setRegistry($loaderRegistry);
+        $loaderRegistry->addLoader($components);
+
+        // Stub pages loader rooted at /tests/App/Stubs/Pages.
+        $pages = new PhueComponentLoader(
+            __DIR__ . '/Stubs/Pages',
+            persistentCache: $cache,
+            viewsCacheDir: '/app/storage/cache/views'
+        );
+        $pages->setRegistry($loaderRegistry);
+        $loaderRegistry->addLoader($pages);
     }
 
     public function testComponentsLoaderMakesCardDiscoverable(): void
@@ -41,7 +66,7 @@ final class AppComponentsLoaderTest extends TestCase
 
         $this->assertTrue(
             $registry->hasComponent('Card'),
-            'Card must be resolvable via the App Components loader.'
+            'Card must be resolvable via the stubbed components loader.'
         );
         $this->assertNotNull($registry->rawModuleHash('Card'));
 
@@ -65,17 +90,16 @@ final class AppComponentsLoaderTest extends TestCase
         $this->assertStringContainsString('Hello there', $response->getContent());
     }
 
-    public function testHomePageAutoImportsAppCard(): void
+    public function testPageAutoImportsStubCard(): void
     {
-        $page = $this->app->handle(new Request('GET', '/'))->getContent();
+        $registry = $this->app->getContainer()->get(ComponentLoaderRegistry::class);
+        $url = $registry->moduleUrl('ShowcasePage');
+        $this->assertNotNull($url);
 
-        preg_match('/src="(\/assets\/phue\/Pages\/Home\.[a-f0-9]{8}\.phue\.js)"/', $page, $module);
-        $this->assertArrayHasKey(1, $module);
+        $moduleScript = $this->app->handle(new Request('GET', $url))->getContent();
 
-        $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
-
-        // <Card/> on the Home template is auto-discovered and imported with its
-        // template export, exactly like Phui core children.
+        // <Card/> on the stub page template is auto-discovered and imported with
+        // its template export, exactly like Phui core children.
         $this->assertStringContainsString(
             'import __phueRaw_Card, { __phueTemplate as __phueTpl_Card }',
             $moduleScript
@@ -86,8 +110,6 @@ final class AppComponentsLoaderTest extends TestCase
         );
 
         // Minting == serving: the URL the page imports MUST be servable.
-        // Any imported child (even a depth-2 parent) must resolve to the full
-        // module — otherwise the client 404s on the hydration module.
         $this->assertImportedChildServable($moduleScript, 'Card');
     }
 
@@ -95,7 +117,7 @@ final class AppComponentsLoaderTest extends TestCase
     {
         $registry = $this->app->getContainer()->get(ComponentLoaderRegistry::class);
 
-        // Card now references <ph-button/> itself: its full module must import
+        // Card references <ph-button/> itself: its full module must import
         // PhButton through the same minting == serving contract.
         $url = $registry->moduleUrl('Card');
         $this->assertNotNull($url);
