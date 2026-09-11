@@ -215,7 +215,8 @@ class Application
                 uriResolver: fn() => $c->get(\Phue\Core\Request::class)->getUri(),
                 requestResolver: fn() => $c->get(\Phue\Core\Request::class),
                 partialRenderer: $c->get(PhuePartialRenderer::class),
-                userResolver: $userResolver
+                userResolver: $userResolver,
+                ssrEngine: $c->get(SsrEngine::class)
             );
         });
 

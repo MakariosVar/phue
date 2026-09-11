@@ -18,11 +18,11 @@ class NullSsrEngine implements SsrEngine
      * Always returns null to signal client-side fallback rendering.
      *
      * @param string $template Template identifier.
-     * @param array<string, mixed> $data Context parameters.
+     * @param array<string, mixed> $staet Context parameters.
      * @param array<string, mixed> $context Additional context.
      * @return string|null Always returns null.
      */
-    public function render(string $template, array $data = [], array $context = []): ?string
+    public function render(string $template, array $state = [], array $context = []): ?string
     {
         return null;
     }

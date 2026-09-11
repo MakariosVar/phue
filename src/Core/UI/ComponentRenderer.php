@@ -7,6 +7,7 @@ namespace Phue\Core\UI;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Response;
+use Phue\Core\Ssr\SsrEngine;
 use RuntimeException;
 
 /**
@@ -30,6 +31,7 @@ class ComponentRenderer
      * @param mixed                    $requestResolver Optional callable returning current Request object.
      * @param PhuePartialRenderer|null $partialRenderer Optional partial renderer for layout integration.
      * @param mixed                    $userResolver    Optional callable returning IdentityInterface|null: fn(): ?IdentityInterface.
+     * @param SsrEngine|null           $ssrEngine       Optional SSR engine for server-side component evaluation.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -39,7 +41,8 @@ class ComponentRenderer
         private mixed $uriResolver = null,
         private mixed $requestResolver = null,
         private ?PhuePartialRenderer $partialRenderer = null,
-        private mixed $userResolver = null
+        private mixed $userResolver = null,
+        private ?SsrEngine $ssrEngine = null
     ) {}
 
     /**
@@ -51,9 +54,9 @@ class ComponentRenderer
      * - render('Products', 'Title Override', ['testValue' => 'a'])
      * - render('Title', $viewInstance)
      *
-     * @param string                 $nameOrTitle          Component name or page title override.
+     * @param string                 $nameOrTitle         Component name or page title override.
      * @param View|string|array|null $viewOrTitleOrParams View instance, title override string, or context params.
-     * @param array<string, mixed>   $params               Context parameters when using title override.
+     * @param array<string, mixed>   $params              Context parameters when using title override.
      *
      * @return Response HTTP response containing the full HTML document.
      *
@@ -154,6 +157,28 @@ class ComponentRenderer
      */
     private function renderView(string $title, View $view): Response
     {
+        if (!$view->hasHtml() && $this->ssrEngine !== null) {
+            $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
+            $renderedHtml = $this->ssrEngine->render(
+                template: $view->getTemplate(),
+                state: $view->getState(),
+                context: [
+                    'name' => $title,
+                    'uri'  => $uri,
+                ]
+            );
+
+            if ($renderedHtml !== null) {
+                $view = new View(
+                    template: $view->getTemplate(),
+                    state: $view->getState(),
+                    scripts: $view->getScripts(),
+                    inlineScript: $view->getInlineScript(),
+                    html: $renderedHtml
+                );
+            }
+        }
+
         foreach ($view->getScripts() as $script) {
             $this->assetRegistry->addScript($script, isModule: true);
         }
@@ -174,7 +199,7 @@ class ComponentRenderer
                 'scripts' => $this->assetRegistry->getRequestScripts(),
             ]);
         }
-        
+
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',

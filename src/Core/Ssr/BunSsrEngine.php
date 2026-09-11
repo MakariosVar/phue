@@ -31,18 +31,18 @@ class BunSsrEngine implements SsrEngine
      * Build standard protocol envelope, send rendering job to sidecar, and unpack HTML output.
      *
      * @param string $template Template name or component path identifier.
-     * @param array<string, mixed> $data Rendering props and variables context.
+     * @param array<string, mixed> $state Rendering props and variables context.
      * @param array<string, mixed> $context Additional execution context parameters (reserved for future use).
      * @return string|null Evaluated component HTML on success, or null on fail-open error.
      */
-    public function render(string $template, array $data = [], array $context = []): ?string
+    public function render(string $template, array $state = [], array $context = []): ?string
     {
         try {
             // Strict Contract 3.2 envelope {v, template, data}
             $envelope = [
                 'v' => 1,
                 'template' => $template,
-                'data' => $data,
+                'data' => $state,
             ];
 
             $json = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

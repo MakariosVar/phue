@@ -7,22 +7,27 @@ namespace Phue\Tests\App;
 use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Request;
+use Phue\Core\Ssr\UnixSsrClient;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
 /**
- * SsrBaselineTest — freezes the current pre-SSR behavior of the SPA/HTML
- * pipeline at /.
+ * SsrBaselineTest — locks the SSR milestone reached at the end of Phase 3:
+ * the server now renders Vue template state into the mount container instead of
+ * shipping the raw `{{ }}` template (FOUC eliminated).
  *
- * This is the Phase 0 behavior snapshot: the mount container is filled with the
- * RAW Vue template (client-side rendering), the initial state is embedded as
- * JSON, and the X-Phue-SPA request still receives the un-rendered template.
- * Once SSR lands, the raw-template assertions below are the exact seams that
- * must flip to server-rendered, hydrated markup.
+ * Before the migration this suite froze the CSR baseline: the mount container
+ * held the UN-rendered template. With the SsrEngine seam active and the Bun
+ * sidecar up, the same requests must now produce rendered, hydrated markup.
+ * The full-page path and the X-Phue-SPA JSON path are both covered.
+ *
+ * These tests require a live sidecar (the same contract as the real runtime),
+ * so they self-skip when `ssr/server.ts` is not reachable on the abstract socket.
  *
  * @package Phue\Tests\App
  */
 #[Group('ssr-baseline')]
+#[Group('integration')]
 final class SsrBaselineTest extends TestCase
 {
     private Application $app;
@@ -36,21 +41,24 @@ final class SsrBaselineTest extends TestCase
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
         $registry->registerSource('/assets', '/app/App/Frontend');
         $registry->registerSource('/assets/vendor', '/app/storage/assets/vendor');
+
+        if (!(new UnixSsrClient())->isAvailable()) {
+            self::markTestSkipped('Bun SSR sidecar is not reachable on \0phue-ssr.');
+        }
     }
 
-    public function testRootStillServesRawTemplateNotSsrHtml(): void
+    public function testRootServesRenderedHtmlWithoutFouc(): void
     {
         $response = $this->app->handle(new Request('GET', '/'));
         $content = $response->getContent();
 
         $this->assertSame(200, $response->getStatusCode());
 
-        // Mount container is filled with the UN-rendered template (client-side mount).
-        $this->assertStringContainsString('{{', $content);
+        // FOUC seam flipped: the mount container must NOT leak raw `{{ }}`.
+        $this->assertStringNotContainsString('{{', $content);
 
-        // SSR marker must NOT exist yet.
-        $this->assertStringNotContainsString('data-phue-ssr', $content);
-        $this->assertStringNotContainsString('data-server-rendered', $content);
+        // The rendered Vue output (server-side) is present instead.
+        $this->assertStringContainsString('<h2>Phue App</h2>', $content);
     }
 
     public function testRootStillEmbedsInitialStateJson(): void
@@ -63,7 +71,7 @@ final class SsrBaselineTest extends TestCase
         );
     }
 
-    public function testSpaRequestStillReturnsRawTemplateInMountContainer(): void
+    public function testSpaRequestReturnsRenderedHtmlInMountContainer(): void
     {
         $response = $this->app->handle(
             new Request('GET', '/', [], [], ['X-Phue-SPA' => 'true'])
@@ -75,7 +83,8 @@ final class SsrBaselineTest extends TestCase
         $payload = json_decode($response->getContent(), true);
 
         $this->assertIsArray($payload);
-        $this->assertStringContainsString('{{', $payload['html']);
+        $this->assertStringNotContainsString('{{', $payload['html']);
+        $this->assertStringContainsString('<h2>Phue App</h2>', $payload['html']);
         $this->assertArrayHasKey('state', $payload);
         $this->assertArrayHasKey('scripts', $payload);
     }

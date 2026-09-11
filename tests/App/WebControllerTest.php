@@ -205,19 +205,36 @@ final class WebControllerTest extends TestCase
     {
         $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
 
-        // Sidebar + live component markup + usage code blocks.
+        // Sidebar + usage code blocks still ship in the served HTML.
         $this->assertStringContainsString('phue-nav-link', $content);
-        $this->assertStringContainsString('<ph-button', $content);
-        $this->assertStringContainsString('<ph-data-table', $content);
-        $this->assertStringContainsString('<ph-modal', $content);
         $this->assertStringContainsString('loadPhueWhitelist', $content);
         $this->assertStringContainsString('phue-code-block', $content);
+
+        // SSR reality: the raw live component tags are no longer in the DOM —
+        // Phui modules are client-only (Phase 5), so the server leaves the
+        // hydration seam (`<!---->`) for their mount points instead.
+        $this->assertStringNotContainsString('<ph-button', $content);
+        $this->assertStringNotContainsString('<ph-data-table', $content);
+        $this->assertStringNotContainsString('<ph-modal', $content);
+        $this->assertStringContainsString('<!---->', $content);
 
         // The old "style analysis" sections must be gone.
         $this->assertStringNotContainsString('id="tokens"', $content);
         $this->assertStringNotContainsString('--bs-primary', $content);
         $this->assertStringNotContainsString('Design Tokens', $content);
         $this->assertStringNotContainsString('Layout Utilities', $content);
+
+        // Hydration contract: the shipped client module still carries the raw
+        // template (same template string the server rendered — Contract 3.5).
+        // The template is JSON-escaped in the module (`\u003C` = `<`).
+        preg_match('/src="(\/assets\/phue\/Pages\/UI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
+        $this->assertArrayHasKey(1, $module);
+
+        $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
+        $this->assertStringContainsString('createApp', $moduleScript);
+        $this->assertStringContainsString('\u003Cph-button', $moduleScript);
+        $this->assertStringContainsString('\u003Cph-data-table', $moduleScript);
+        $this->assertStringContainsString('\u003Cph-modal', $moduleScript);
     }
 
     public function testUiRouteWhitelistsOnlyShowcasedComponents(): void
