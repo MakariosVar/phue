@@ -202,11 +202,20 @@ PHUE);
         }
     }
 
-    public function testWhitelistedComponentsAreForwardedToSsrContext(): void
+    public function testDiscoveredComponentsAreForwardedToSsrContext(): void
     {
         $baseDir = sys_get_temp_dir() . '/phue_ssr_components_' . uniqid('', true);
         $viewsDir = $baseDir . '/views';
         mkdir($viewsDir, 0777, true);
+
+        file_put_contents($viewsDir . '/Showcase.phue', <<<'PHUE'
+<template>
+<div>
+  <PhButton label="hello"/>
+  <button>native button must be ignored</button>
+</div>
+</template>
+PHUE);
 
         file_put_contents($viewsDir . '/PhButton.phue', <<<'PHUE'
 <template>
@@ -222,13 +231,11 @@ PHUE);
 
         try {
             $loader = new PhueComponentLoader($viewsDir);
-            $hash = $loader->moduleHash('PhButton');
-            $this->assertIsString($hash);
-
             $registry = new ComponentLoaderRegistry();
+            $loader->setRegistry($registry);
             $registry->addLoader($loader);
 
-            $engine = RecordingSsrEngine::returning('<button>ok</button>');
+            $engine = RecordingSsrEngine::returning('<div>ok</div>');
             $renderer = new ComponentRenderer(
                 new HtmlShellRenderer($this->registry),
                 $this->registry,
@@ -237,16 +244,16 @@ PHUE);
                 loaderRegistry: $registry
             );
 
-            $view = new View('<div><PhButton/></div>', [
-                'phuiUrls' => [
-                    'PhButton' => "/assets/phue/PhButton.{$hash}.phue.js",
-                ],
-            ]);
+            $response = $renderer->render('Showcase', ['testValue' => 'x']);
 
-            $renderer->render('Demo', $view);
-
-            $this->assertArrayHasKey('components', $engine->lastContext, 'SSR context must carry the whitelisted components.');
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertArrayHasKey('components', $engine->lastContext, 'SSR context must carry the discovered components.');
             $this->assertArrayHasKey('PhButton', $engine->lastContext['components']);
+            $this->assertArrayNotHasKey(
+                'Showcase',
+                $engine->lastContext['components'],
+                'The page root itself must not be registered in the SSR envelope.'
+            );
             $this->assertStringStartsWith(
                 'export const __phueTemplate',
                 $engine->lastContext['components']['PhButton']
@@ -256,21 +263,40 @@ PHUE);
         }
     }
 
-    public function testUnresolvableWhitelistedComponentsFailOpenWithoutComponentsKey(): void
+    public function testUnresolvableDiscoveredComponentFailsOpenWithoutComponentsKey(): void
     {
-        $engine = RecordingSsrEngine::returning('<div>ok</div>');
-        $renderer = $this->renderer($engine);
+        $baseDir = sys_get_temp_dir() . '/phue_ssr_unresolvable_' . uniqid('', true);
+        $viewsDir = $baseDir . '/views';
+        mkdir($viewsDir, 0777, true);
 
-        $view = new View('<div><Missing/></div>', [
-            'phuiUrls' => [
-                'Missing' => '/assets/phue/Missing.deadbeef.phue.js',
-            ],
-        ]);
+        file_put_contents($viewsDir . '/MissingPage.phue', <<<'PHUE'
+<template>
+<div><Missing/></div>
+</template>
+PHUE);
 
-        $response = $renderer->render('Demo', $view);
+        try {
+            $loader = new PhueComponentLoader($viewsDir);
+            $registry = new ComponentLoaderRegistry();
+            $loader->setRegistry($registry);
+            $registry->addLoader($loader);
 
-        $this->assertSame(200, $response->getStatusCode());
-        $this->assertArrayNotHasKey('components', $engine->lastContext, 'Unresolvable components must fail open.');
+            $engine = RecordingSsrEngine::returning('<div>ok</div>');
+            $renderer = new ComponentRenderer(
+                new HtmlShellRenderer($this->registry),
+                $this->registry,
+                $loader,
+                ssrEngine: $engine,
+                loaderRegistry: $registry
+            );
+
+            $response = $renderer->render('MissingPage');
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertArrayNotHasKey('components', $engine->lastContext, 'Unknown components must fail open.');
+        } finally {
+            $this->removeTree($baseDir);
+        }
     }
 
     public function testEngineReturningNullFailsOpenToTemplatePath(): void

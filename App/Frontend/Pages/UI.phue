@@ -3,21 +3,9 @@
  * UI.phue — Built-in PhUI Component Showcase.
  *
  * Renders ONLY the framework's built-in Phui components, each with a live demo
- * and a usage snippet. The page whitelists the components it showcases and the
- * server exposes module URLs ("phuiUrls") solely for that whitelist — the client
- * imports eactly those modules and nothing else.
+ * and a usage snippet.
  */
 
-// Components this page actually uses (imported lazily, one ESM module each).
-$whitelist = [
-    'PhButton', 'PhInput', 'PhSelect', 'PhTextarea', 'PhCheckbox', 'PhRadio', 'PhFormField',
-    'PhDataTable', 'PhBadge', 'PhAvatar', 'PhCard', 'PhChip',
-    'PhAlert', 'PhModal', 'PhProgressBar', 'PhSkeleton',
-    'PhTabs', 'PhPagination', 'PhBreadcrumb', 'PhLink',
-    'PhText', 'PhHeading', 'PhBox', 'Spacer', 'PhStack', 'PhFlex',
-];
-
-$urls = [];
 $registry = null;
 $phuiDir = '/app/src/Core/UI/Phui';
 if (is_dir($phuiDir)) {
@@ -25,13 +13,6 @@ if (is_dir($phuiDir)) {
     $loaderRegistry = new \Phue\Core\Frontend\ComponentLoaderRegistry();
     $loaderRegistry->addLoader($loader);
     $registry = $loaderRegistry;
-
-    foreach ($whitelist as $name) {
-        $moduleUrl = $loaderRegistry->moduleUrl($name);
-        if ($moduleUrl !== null) {
-            $urls[$name] = $moduleUrl;
-        }
-    }
 }
 
 // Server-side rendered (HTML-first) component demo.
@@ -55,15 +36,6 @@ if ($registry !== null) {
 }
 
 $code = [
-    'Overview' => <<<'SNP'
-// The page whitelist drives the ONLY modules the client fetches:
-const used = ['PhButton', 'PhModal', 'PhDataTable'];
-
-// phuiUrls = server-side module URLs for exactly this whitelist
-const components = await loadPhueWhitelist(phuiUrls);
-
-createApp({ components }).mount('#app');
-SNP,
     'PhButton' => <<<'SNP'
 <ph-button variant="primary" :loading="loading" @click="onSave">
   Save changes
@@ -245,9 +217,7 @@ SNP,
 return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
-        // Only whitelisted components get a module URL; the client imports none else.
         'activeSection'   => $activeSection ?? 'overview',
-        'phuiUrls'        => $urls,
         'code'            => $code,
         'ssrDemos'        => $ssrDemos,
         'navItems'        => [
@@ -338,11 +308,6 @@ return [
                 @click.prevent="scrollTo(nav.id)"
             >{{ nav.label }}</a>
         </nav>
-
-        <div class="px-4 mt-4 pt-3 border-top">
-            <p class="small text-body-secondary mb-1"><strong>{{ Object.keys(phuiUrls).length }}</strong> components loaded</p>
-            <p class="small text-body-secondary mb-0">Only the whitelisted modules are fetched &mdash; no global component bundle.</p>
-        </div>
     </aside>
 
     <!-- Main -->
@@ -356,11 +321,9 @@ return [
                 snippet. Components are single Vue 3 modules served by the framework asset
                 pipeline and imported <strong>only if this page lists them</strong>.
             </p>
-
-            <div class="card border p-3 mb-3">
-                <div class="mb-2"><strong>How lazy component loading works</strong></div>
-                <pre class="phue-code-block mb-0"><code>{{ code.Overview }}</code></pre>
-            </div>
+            <p class="text-body-secondary mb-3" style="max-width: 75ch;">
+                <strong>No whitelist, no import:</strong> components are auto-discovered from the template and imported into one self-sufficient module - minted per page.
+            </p>
         </section>
 
         <!-- Form Controls -->
@@ -836,7 +799,6 @@ return [
 
 <script>
 import { createSSRApp, reactive, toRefs } from 'vue';
-import { loadPhueWhitelist } from '/assets/js/phue-client.js';
 
 const styleText = `
     [v-cloak] { display: none; }
@@ -878,11 +840,7 @@ export default async function mountApp() {
 
     const initialState = window.__INITIAL_STATE__ || {};
 
-    // Import ONLY the components this page whitelists (server-provided URLs).
-    const components = await loadPhueWhitelist(initialState.phuiUrls || {});
-
     window.__phueApp = createSSRApp({
-        components,
         setup() {
             const state = reactive({
                 ...initialState,

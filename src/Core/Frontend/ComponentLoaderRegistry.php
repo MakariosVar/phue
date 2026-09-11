@@ -94,6 +94,61 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Resolves the raw SHA-1 hash prefix across candidate loaders without dependency scanning.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null if not found across candidates.
+     */
+    public function rawModuleHash(string $name): ?string
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader === null) {
+                    continue;
+                }
+
+                $hash = $loader->rawModuleHash($name);
+
+                if ($hash !== null) {
+                    return $hash;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Checks if a component exists within any registered loader without triggering a build.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return bool
+     */
+    public function hasComponent(string $name): bool
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader !== null && $loader->hasComponent($name)) {
+                    return true;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Iterates candidate loaders and returns the first script payload matching the given hash.
      *
      * @param string $name Component logical name.
@@ -146,6 +201,36 @@ class ComponentLoaderRegistry
                 $hash = $loader->moduleHash($name);
                 if ($hash !== null) {
                     return "/assets/phue/{$name}.{$hash}.phue.js";
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolves the full SFC module SHA-1 hash prefix across candidate loaders.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null if not found across candidates.
+     */
+    public function moduleHash(string $name): ?string
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader === null) {
+                    continue;
+                }
+
+                $hash = $loader->moduleHash($name);
+                if ($hash !== null) {
+                    return $hash;
                 }
             } catch (Throwable) {
                 continue;

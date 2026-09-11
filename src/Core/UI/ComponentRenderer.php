@@ -6,6 +6,7 @@ namespace Phue\Core\UI;
 
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Response;
 use Phue\Core\Ssr\SsrEngine;
 use RuntimeException;
@@ -44,7 +45,7 @@ class ComponentRenderer
         private ?PhuePartialRenderer $partialRenderer = null,
         private mixed $userResolver = null,
         private ?SsrEngine $ssrEngine = null,
-        private ?\Phue\Core\Frontend\ComponentLoaderRegistry $loaderRegistry = null
+        private ?ComponentLoaderRegistry $loaderRegistry = null
     ) {}
 
     /**
@@ -92,7 +93,7 @@ class ComponentRenderer
         }
 
         // Path 3: Direct BC Path -> render('Title', $viewInstance)
-        return $this->renderView($nameOrTitle, $viewOrTitleOrParams);
+        return $this->renderView($nameOrTitle, $viewOrTitleOrParams, $nameOrTitle);
     }
 
     /**
@@ -130,9 +131,14 @@ class ComponentRenderer
         $inlineScript = $view->getInlineScript();
 
         if ($inlineScript !== null && trim($inlineScript) !== '') {
-            $module = PhueComponentLoader::buildModule($view->getTemplate(), $inlineScript);
-            $hash = substr(sha1($module), 0, 8);
-            $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
+            // Step 1: Mint URL via loaderRegistry or fallback to raw generation
+            $scriptUrl = $this->loaderRegistry?->moduleUrl($name);
+
+            if ($scriptUrl === null) {
+                $module = PhueComponentLoader::buildModule($view->getTemplate(), $inlineScript);
+                $hash = substr(sha1($module), 0, 8);
+                $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
+            }
 
             $this->assetRegistry->addScript($scriptUrl, isModule: true);
 
@@ -144,22 +150,23 @@ class ComponentRenderer
                 html: $view->getHtml()
             );
 
-            return $this->renderView($title, $moduleView);
+            return $this->renderView($title, $moduleView, $name);
         }
 
-        return $this->renderView($title, $view);
+        return $this->renderView($title, $view, $name);
     }
 
     /**
      * Renders a View instance into the final HTML shell response.
      * Places the #app container strictly around the page content and wraps it in the Layout server chrome.
      *
-     * @param string $title Page title.
-     * @param View   $view  View object containing markup and assets.
+     * @param string      $title         Page title.
+     * @param View        $view          View object containing markup and assets.
+     * @param string|null $componentName Component logical name if available.
      *
      * @return Response HTTP 200 response with text/html content type or JSON response for SPA requests.
      */
-    private function renderView(string $title, View $view): Response
+    private function renderView(string $title, View $view, ?string $componentName = null): Response
     {
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
             $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
@@ -170,33 +177,32 @@ class ComponentRenderer
                 'uri'  => $uri,
             ];
 
-            // 1. Whitelist check: Read phuiUrls (map: name -> URL) from View state
-            $phuiUrls = $state['phuiUrls'] ?? null;
+            // Step 2: Build SSR envelope by resolving transitive dependencies
+            if ($this->loaderRegistry !== null && $componentName !== null) {
+                $discoverer = new ComponentDiscoverer($this->loaderRegistry);
 
-            if (is_array($phuiUrls) && !empty($phuiUrls)) {
+                $deps = $discoverer->resolveTransitiveDependencies($componentName);
+
                 $components = [];
 
-                foreach ($phuiUrls as $name => $url) {
-                    if (!is_string($url)) {
-                        continue; // Fail-open on invalid URL types
+                foreach ($deps as $depName => $depHash) {
+                    $source = $this->loaderRegistry->moduleFor($depName, $depHash);
+
+                    if ($source !== null && trim($source) !== '' && $depName !== $componentName) {
+                        // Strip child imports and child const proxy definitions for SSR context safety
+                        $cleanSource = preg_replace('/^import\s+__phueRaw_.*?;$/m', '', $source);
+                        $cleanSource = preg_replace('/^const\s+\w+\s*=\s*\{\s*\.\.\.\(__phueRaw_.*?;$/m', '', $cleanSource);
+
+                        // Clean redundant components option in template-only default export (trailing)
+                        $cleanSource = preg_replace('/,\s*components:\s*\{[^}]*\}/', '', $cleanSource);
+
+                        // Clean leading components option injected in script-branch default export
+                        $cleanSource = preg_replace('/(export\s+default\s*\{\s*)components:\s*\{[^}]*\}\s*,\s*/s', '$1', $cleanSource);
+
+                        $components[$depName] = trim($cleanSource);
                     }
-
-                    // 2. Extract hash using the identical regex from AssetResolver (Application.php:254)
-                    if (preg_match('/^([A-Za-z0-9_\-\/]+)\.([a-f0-9]{8})\.phue\.js$/i', basename($url), $matches)) {
-                        $hash = $matches[2];
-
-                        // Resolve module source across loaders via ComponentLoaderRegistry
-                        $source = $this->loaderRegistry?->moduleFor($name, $hash);
-
-                        // 3. Ignore null/empty (fail-open)
-                        if ($source !== null && trim($source) !== '') {
-                            $components[$name] = $source;
-                        }
-                    }
-                    // Fail-open automatically if regex doesn't match
                 }
 
-                // 4. Add 'components' => $components to context ONLY if non-empty
                 if (!empty($components)) {
                     $context['components'] = $components;
                 }

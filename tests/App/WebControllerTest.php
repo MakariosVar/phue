@@ -207,11 +207,13 @@ final class WebControllerTest extends TestCase
 
         // Sidebar + usage code blocks still ship in the served HTML.
         $this->assertStringContainsString('phue-nav-link', $content);
-        $this->assertStringContainsString('loadPhueWhitelist', $content);
         $this->assertStringContainsString('phue-code-block', $content);
 
+        // The whitelist era is gone: no client loader call, no phuiUrls state.
+        $this->assertStringNotContainsString('loadPhueWhitelist', $content);
+
         // SSR reality: the raw live component tags are no longer in the DOM —
-        // Phui modules are client-only (Phase 5), so the server leaves the
+        // Phui modules hydrate client-side, so the server leaves the
         // hydration seam (`<!---->`) for their mount points instead.
         $this->assertStringNotContainsString('<ph-button', $content);
         $this->assertStringNotContainsString('<ph-data-table', $content);
@@ -224,9 +226,9 @@ final class WebControllerTest extends TestCase
         $this->assertStringNotContainsString('Design Tokens', $content);
         $this->assertStringNotContainsString('Layout Utilities', $content);
 
-        // Hydration contract: the shipped client module still carries the raw
-        // template (same template string the server rendered — Contract 3.5).
-        // The template is JSON-escaped in the module (`\u003C` = `<`).
+        // Hydration contract: the shipped client module is now self-sufficient —
+        // discovered children are auto-imported (wrapped with their raw template)
+        // instead of being injected via whitelist state.
         preg_match('/src="(\/assets\/phue\/Pages\/UI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
         $this->assertArrayHasKey(1, $module);
 
@@ -236,38 +238,57 @@ final class WebControllerTest extends TestCase
         $this->assertStringContainsString('\u003Cph-button', $moduleScript);
         $this->assertStringContainsString('\u003Cph-data-table', $moduleScript);
         $this->assertStringContainsString('\u003Cph-modal', $moduleScript);
+
+        // Children are auto-imported: the raw template export is merged into a wrapped const.
+        $this->assertStringContainsString(
+            'import __phueRaw_PhButton, { __phueTemplate as __phueTpl_PhButton }',
+            $moduleScript
+        );
+        $this->assertStringContainsString(
+            'const PhButton = { ...(__phueRaw_PhButton || {}), template: __phueTpl_PhButton };',
+            $moduleScript
+        );
     }
 
-    public function testUiRouteWhitelistsOnlyShowcasedComponents(): void
+    public function testUiRouteAutoDiscoversSelfSufficientModule(): void
     {
         $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
 
-        preg_match('/window\.__INITIAL_STATE__ = (\{.*?\});/s', $content, $state);
-        $this->assertArrayHasKey(1, $state);
+        // No phuiUrls state is shipped anymore.
+        $this->assertStringNotContainsString('phuiUrls', $content);
 
-        $decoded = json_decode($state[1], true);
-        $this->assertIsArray($decoded);
-        $this->assertArrayHasKey('phuiUrls', $decoded);
+        preg_match('/src="(\/assets\/phue\/Pages\/UI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
+        $this->assertArrayHasKey(1, $module);
 
-        $expectedWhitelist = [
-            'PhButton', 'PhInput', 'PhSelect', 'PhTextarea', 'PhCheckbox', 'PhRadio', 'PhFormField',
-            'PhDataTable', 'PhBadge', 'PhAvatar', 'PhCard', 'PhChip',
-            'PhAlert', 'PhModal', 'PhProgressBar', 'PhSkeleton',
-            'PhTabs', 'PhPagination', 'PhBreadcrumb', 'PhLink',
-            'PhText', 'PhHeading', 'PhBox', 'Spacer', 'PhStack', 'PhFlex',
-        ];
+        $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
 
-        $this->assertSame($expectedWhitelist, array_keys($decoded['phuiUrls']));
+        // Every showcased tag is discovered and imported with its raw template export.
+        preg_match_all(
+            "~__phueTpl_([A-Za-z0-9_]+) \} from '([^']+\.phue\.js)'~",
+            $moduleScript,
+            $matches,
+            PREG_SET_ORDER
+        );
 
-        foreach ($decoded['phuiUrls'] as $name => $url) {
-            $this->assertStringStartsWith("/assets/phue/{$name}.", $url);
-            $this->assertStringEndsWith('.phue.js', $url);
+        $imported = array_map(static fn (array $m): string => $m[1], $matches);
+
+        foreach (['PhButton', 'PhModal', 'PhDataTable'] as $required) {
+            $this->assertContains($required, $imported, "Page module must auto-import {$required}.");
         }
 
         // HTML-first components need no client import.
-        $this->assertArrayNotHasKey('PhNavigation', $decoded['phuiUrls']);
+        $this->assertNotContains('PhNavigation', $imported);
 
-        // ...but the SSR demo IS rendered server-side.
+        // Each imported child URL is servable and carries template + options
+        // (minting == serving across loaders).
+        foreach ($matches as $m) {
+            $child = $this->app->handle(new Request('GET', $m[2]));
+            $this->assertSame(200, $child->getStatusCode(), "Child module {$m[2]} must be served.");
+            $this->assertStringContainsString('export const __phueTemplate', $child->getContent());
+            $this->assertStringContainsString('export default', $child->getContent());
+        }
+
+        // The SSR demo of the HTML-first component is still rendered server-side.
         $this->assertStringContainsString('nav nav-pills', $content);
     }
 }

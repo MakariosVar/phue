@@ -19,6 +19,7 @@ use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
+use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhuePartialRenderer;
@@ -138,6 +139,16 @@ class Application
             );
         });
 
+        // App Components Subdirectory Loader Singleton (/App/Frontend/Components)
+        $this->container->singleton('app.components.loader', function () use ($viewsCacheDir): PhueComponentLoader {
+            return new PhueComponentLoader(
+                componentsDir: $this->basePath . '/App/Frontend/Components',
+                parser: null,
+                persistentCache: $this->container->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir
+            );
+        });
+
         // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
         $this->container->singleton('phui.loader', function () use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
@@ -172,24 +183,47 @@ class Application
             $registry = new ComponentLoaderRegistry();
 
             // Priority 1: Main Application Loader (/App/Frontend)
-            $registry->addLoader(function (): ?PhueComponentLoader {
+            $registry->addLoader(function () use ($registry): ?PhueComponentLoader {
                 try {
-                    return $this->container->get(PhueComponentLoader::class);
+                    /** @var PhueComponentLoader $loader */
+                    $loader = $this->container->get(PhueComponentLoader::class);
+                    $loader->setRegistry($registry);
+                    return $loader;
                 } catch (Throwable) {
                     return null;
                 }
             });
 
-            // Priority 2: PhUI Framework Core Library Loader (/src/Core/UI/Phui)
-            $registry->addLoader(function (): ?PhueComponentLoader {
+            // Priority 2: App Components Subfolder Loader (/App/Frontend/Components)
+            $registry->addLoader(function () use ($registry): ?PhueComponentLoader {
                 try {
-                    return $this->container->get('phui.loader');
+                    /** @var PhueComponentLoader $loader */
+                    $loader = $this->container->get('app.components.loader');
+                    $loader->setRegistry($registry);
+                    return $loader;
+                } catch (Throwable) {
+                    return null;
+                }
+            });
+
+            // Priority 3: PhUI Framework Core Library Loader (/src/Core/UI/Phui)
+            $registry->addLoader(function () use ($registry): ?PhueComponentLoader {
+                try {
+                    /** @var PhueComponentLoader $loader */
+                    $loader = $this->container->get('phui.loader');
+                    $loader->setRegistry($registry);
+                    return $loader;
                 } catch (Throwable) {
                     return null;
                 }
             });
 
             return $registry;
+        });
+
+        // Component Discoverer Singleton
+        $this->container->singleton(ComponentDiscoverer::class, function ($c): ComponentDiscoverer {
+            return new ComponentDiscoverer($c->get(ComponentLoaderRegistry::class));
         });
 
         // Phue Partial Renderer Singleton

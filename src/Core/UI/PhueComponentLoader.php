@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\UI;
 
 use Exception;
+use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Psr\SimpleCache\CacheInterface;
 use RuntimeException;
 
@@ -47,6 +48,20 @@ class PhueComponentLoader
     private ?CacheInterface $persistentCache;
 
     /**
+     * Optional registry instance for dependency discovery and resolution.
+     *
+     * @var ComponentLoaderRegistry|null
+     */
+    private ?ComponentLoaderRegistry $registry = null;
+
+    /**
+     * Stack tracking currently building components to detect circular dependencies in DAG.
+     *
+     * @var array<string, bool>
+     */
+    private array $buildingStack = [];
+
+    /**
      * PhueComponentLoader constructor.
      *
      * @param string                  $componentsDir   Absolute or relative path to component files directory.
@@ -70,6 +85,51 @@ class PhueComponentLoader
         $this->componentsDir = $realBase;
         $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
+    }
+
+    /**
+     * Sets the loader registry instance for resolving child component dependencies.
+     *
+     * @param ComponentLoaderRegistry $registry
+     *
+     * @return void
+     */
+    public function setRegistry(ComponentLoaderRegistry $registry): void
+    {
+        $this->registry = $registry;
+    }
+
+    /**
+     * Checks if a component with the given logical name exists and is accessible.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return bool True if component exists, false otherwise.
+     */
+    public function hasComponent(string $name): bool
+    {
+        try {
+            $this->getOrFetchStructure($name);
+            return true;
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Retrieves the structural AST of a component without throwing exceptions.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return array{template: string, script: ?string, phpCode: ?string}|null AST structure or null.
+     */
+    public function getStructure(string $name): ?array
+    {
+        try {
+            return $this->getOrFetchStructure($name);
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /**
@@ -128,6 +188,242 @@ class PhueComponentLoader
         }
 
         return $script;
+    }
+
+    /**
+     * Computes raw module SHA-1 hash (without dependency resolution or registry scanning).
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null.
+     */
+    public function rawModuleHash(string $name): ?string
+    {
+        try {
+            $structure = $this->getOrFetchStructure($name);
+            $module = self::buildModule($structure['template'], $structure['script'] ?? null);
+
+            return substr(sha1($module), 0, 8);
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * Builds the complete, dependency-aware JS SFC module for a given component name.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null Compiled JavaScript module or null if component cannot be loaded.
+     * @throws RuntimeException If a circular dependency (cycle) is detected.
+     */
+    public function buildFor(string $name): ?string
+    {
+        if (isset($this->buildingStack[$name])) {
+            $chain = implode(' -> ', array_keys($this->buildingStack)) . ' -> ' . $name;
+            throw new RuntimeException("Circular component dependency detected in build path: {$chain}");
+        }
+
+        $this->buildingStack[$name] = true;
+
+        try {
+            $structure = $this->getOrFetchStructure($name);
+        } catch (Exception) {
+            unset($this->buildingStack[$name]);
+            return null;
+        }
+
+        $children = [];
+        if ($this->registry !== null) {
+            $discoverer = new ComponentDiscoverer($this->registry);
+            $children = $discoverer->scanTemplate($structure['template']);
+        }
+
+        $imports = [];
+        $childNames = [];
+
+        try {
+            foreach ($children as $child) {
+                // Use full servable module hash via moduleHash instead of rawModuleHash
+                $servableHash = $this->registry !== null
+                    ? $this->registry->moduleHash($child)
+                    : $this->moduleHash($child);
+
+                if ($servableHash !== null) {
+                    $rawImportName = "__phueRaw_{$child}";
+                    $templateImportName = "__phueTpl_{$child}";
+
+                    $imports[] = "import {$rawImportName}, { __phueTemplate as {$templateImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
+                    $imports[] = "const {$child} = { ...({$rawImportName} || {}), template: {$templateImportName} };";
+
+                    $childNames[] = $child;
+                }
+            }
+        } finally {
+            unset($this->buildingStack[$name]);
+        }
+
+        $importStatements = !empty($imports) ? implode("\n", $imports) . "\n" : '';
+        $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
+
+        $jsonTemplate = json_encode(
+            $structure['template'],
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
+        );
+
+        $scriptContent = trim($structure['script'] ?? '');
+
+        if ($scriptContent === '') {
+            $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
+            return "{$importStatements}export const __phueTemplate = {$jsonTemplate};\nexport default { template: __phueTemplate{$componentsProp} };\n";
+        }
+
+        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
+        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+
+        $proxyBlock = '';
+
+        if ($hasSsrApp || $hasApp) {
+            $scriptContent = preg_replace_callback(
+                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
+                function ($matches) {
+                    $imports = $matches[1];
+                    $source  = $matches[2];
+
+                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
+                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
+
+                    return "import {{$imports}} from {$source};";
+                },
+                $scriptContent,
+                1
+            );
+
+            $componentsProp = !empty($componentsObj) 
+                ? ", components: { ...(opts.components || {}), {$componentsObj} }" 
+                : '';
+
+            $proxies = [];
+            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
+                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts{$componentsProp} }, rootProps);";
+            }
+            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
+                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts{$componentsProp} }, rootProps);";
+            }
+
+            $proxyBlock = implode("\n", $proxies) . "\n";
+        } elseif (!empty($componentsObj)) {
+            // Non-root script components (e.g. Card): inject child components into default export
+            $scriptContent = preg_replace_callback(
+                '/export\s+default\s*\{/s',
+                fn($matches) => "export default { components: { {$componentsObj} }, ",
+                $scriptContent,
+                1
+            );
+        }
+
+        return "{$importStatements}export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
+    }
+
+    /**
+     * Builds the unified JavaScript SFC module containing the stringified template export and inline script.
+     *
+     * @param string      $template HTML/Vue template string.
+     * @param string|null $script   Inline JavaScript component options payload.
+     *
+     * @return string Valid JavaScript module content.
+     */
+    public static function buildModule(string $template, ?string $script): string
+    {
+        $jsonTemplate = json_encode(
+            $template,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
+        );
+
+        $scriptContent = trim($script ?? '');
+
+        if ($scriptContent === '') {
+            return "export const __phueTemplate = {$jsonTemplate};\nexport default { template: __phueTemplate };\n";
+        }
+
+        // Intercept createSSRApp or createApp imports from vue
+        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
+        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+
+        $proxyBlock = '';
+
+        if ($hasSsrApp || $hasApp) {
+            // Alias imports in statement: createSSRApp -> __phueOrigCreateSSRApp
+            $scriptContent = preg_replace_callback(
+                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
+                function ($matches) {
+                    $imports = $matches[1];
+                    $source  = $matches[2];
+
+                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
+                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
+
+                    return "import {{$imports}} from {$source};";
+                },
+                $scriptContent,
+                1
+            );
+
+            // Inject the proxy functions below imports
+            $proxies = [];
+            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
+                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts }, rootProps);';
+            }
+            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
+                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts }, rootProps);';
+            }
+
+            $proxyBlock = implode("\n", $proxies) . "\n";
+        }
+
+        return "export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
+    }
+
+    /**
+     * Serves the compiled JS SFC module for a component IF the 8-character sha1 prefix hash matches.
+     * Performs zero PHP evaluation.
+     *
+     * @param string $name Component logical name.
+     * @param string $hash 8-character sha1 prefix hash.
+     *
+     * @return string|null JavaScript SFC module content or null if unknown or hash mismatch.
+     */
+    public function moduleFor(string $name, string $hash): ?string
+    {
+        $module = $this->buildFor($name);
+        if ($module === null) {
+            return null;
+        }
+
+        $computedHash = substr(sha1($module), 0, 8);
+
+        if (!hash_equals($computedHash, $hash)) {
+            return null;
+        }
+
+        return $module;
+    }
+
+    /**
+     * Computes the 8-character SHA-1 hash prefix of the compiled JS SFC module.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character hash prefix, or null if component cannot be loaded/parsed.
+     */
+    public function moduleHash(string $name): ?string
+    {
+        $module = $this->buildFor($name);
+        if ($module === null) {
+            return null;
+        }
+
+        return substr(sha1($module), 0, 8);
     }
 
     /**
@@ -232,110 +528,5 @@ class PhueComponentLoader
         }
 
         return $structure;
-    }
-
-    /**
-     * Builds the unified JavaScript SFC module containing the stringified template export and inline script.
-     *
-     * @param string      $template HTML/Vue template string.
-     * @param string|null $script   Inline JavaScript component options payload.
-     *
-     * @return string Valid JavaScript module content.
-     */
-    public static function buildModule(string $template, ?string $script): string
-    {
-        $jsonTemplate = json_encode(
-            $template,
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
-        );
-
-        $scriptContent = trim($script ?? '');
-
-        if ($scriptContent === '') {
-            return "export const __phueTemplate = {$jsonTemplate};\n";
-        }
-
-        // Intercept createSSRApp or createApp imports from vue
-        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
-        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
-
-        $proxyBlock = '';
-
-        if ($hasSsrApp || $hasApp) {
-            // Alias imports in statement: createSSRApp -> __phueOrigCreateSSRApp
-            $scriptContent = preg_replace_callback(
-                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
-                function ($matches) {
-                    $imports = $matches[1];
-                    $source  = $matches[2];
-
-                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
-                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
-
-                    return "import {{$imports}} from {$source};";
-                },
-                $scriptContent,
-                1
-            );
-
-            // Inject the proxy functions below imports
-            $proxies = [];
-            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts }, rootProps);';
-            }
-            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts }, rootProps);';
-            }
-
-            $proxyBlock = implode("\n", $proxies) . "\n";
-        }
-
-        return "export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
-    }
-
-    /**
-     * Serves the compiled JS SFC module for a component IF the 8-character sha1 prefix hash matches.
-     * Performs zero PHP evaluation.
-     *
-     * @param string $name Component logical name.
-     * @param string $hash 8-character sha1 prefix hash.
-     *
-     * @return string|null JavaScript SFC module content or null if unknown or hash mismatch.
-     */
-    public function moduleFor(string $name, string $hash): ?string
-    {
-        try {
-            $structure = $this->getOrFetchStructure($name);
-        } catch (Exception) {
-            return null;
-        }
-
-        $module = self::buildModule($structure['template'], $structure['script'] ?? null);
-        $computedHash = substr(sha1($module), 0, 8);
-
-        if (!hash_equals($computedHash, $hash)) {
-            return null;
-        }
-
-        return $module;
-    }
-
-    /**
-     * Computes the 8-character SHA-1 hash prefix of the compiled JS SFC module.
-     *
-     * @param string $name Component logical name.
-     *
-     * @return string|null 8-character hash prefix, or null if component cannot be loaded/parsed.
-     */
-    public function moduleHash(string $name): ?string
-    {
-        try {
-            $structure = $this->getOrFetchStructure($name);
-            $module = self::buildModule($structure['template'], $structure['script'] ?? null);
-
-            return substr(sha1($module), 0, 8);
-        } catch (Exception) {
-            return null;
-        }
     }
 }
