@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 
 /**
  * CLI Command to boot the local PHP built-in development web server.
@@ -54,13 +55,10 @@ final class ServeCommand implements CommandInterface
             }
         }
 
-        $baseDir = getcwd();
-        if ($baseDir === false) {
-            fwrite($errorStream, "Error: Unable to determine current working directory.\n");
-            return 1;
-        }
+        $baseDir = PathResolver::resolveBasePath();
+        $publicDir = $baseDir . '/public';
+        $docRoot = is_dir($publicDir) ? $publicDir : $baseDir;
 
-        $docRoot = is_dir($baseDir . '/public') ? 'public' : '.';
         $command = sprintf('php -S %s:%s -t %s', escapeshellarg($host), escapeshellarg($port), escapeshellarg($docRoot));
 
         fwrite($outputStream, sprintf("\033[32mPhue Development Server started:\033[0m http://%s:%s\n", $host, $port));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 use Phue\Core\Database\Migrator;
 
 /**
@@ -43,7 +44,7 @@ final class MigrateRollbackCommand extends AbstractDatabaseCommand implements Co
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         $db = $this->resolveConnection();
-        $path = getcwd() . '/database/migrations';
+        $path = PathResolver::resolveBasePath() . "/database/migrations";
 
         $migrator = new Migrator($db, $path);
 

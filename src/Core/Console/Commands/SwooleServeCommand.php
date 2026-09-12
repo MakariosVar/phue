@@ -11,6 +11,7 @@ use Phue\Core\Response as PhueResponse;
 use Swoole\Http\Request as SwooleRequest;
 use Swoole\Http\Response as SwooleResponse;
 use Swoole\Http\Server as SwooleServer;
+use Phue\Core\Console\PathResolver;
 
 /**
  * Class SwooleServeCommand
@@ -78,11 +79,7 @@ final class SwooleServeCommand implements CommandInterface
             return 1;
         }
 
-        $baseDir = getcwd();
-        if ($baseDir === false) {
-            fwrite($errorStream, "Error: Unable to determine current working directory.\n");
-            return 1;
-        }
+        $baseDir = PathResolver::resolveBasePath();
 
         // Instantiate Application once outside the request loop (Memory-Resident Architecture)
         $app = new PhueApplication($baseDir);

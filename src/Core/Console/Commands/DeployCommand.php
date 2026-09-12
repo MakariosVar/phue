@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 
 /**
  * Zero-Downtime Atomic Release Deployment Handler.
@@ -44,7 +45,7 @@ final class DeployCommand implements CommandInterface
      */
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
-        $baseDir = getcwd();
+        $baseDir = PathResolver::resolveBasePath();
         $keepReleases = 5;
 
         // Parse command flags: --dir=/path/to/project --keep=5

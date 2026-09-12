@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 
 /**
  * CLI Command to generate a new Controller class boilerplate.
@@ -54,7 +55,7 @@ class MakeControllerCommand implements CommandInterface
             $name .= 'Controller';
         }
 
-        $basePath = defined('PHUE_BASE_PATH') ? PHUE_BASE_PATH : getcwd();
+        $basePath = PathResolver::resolveBasePath();
         $dir = $basePath . '/App/Controllers';
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);

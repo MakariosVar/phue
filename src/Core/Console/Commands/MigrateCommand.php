@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 use Phue\Core\Database\Migrator;
 
 /**
@@ -46,7 +47,7 @@ final class MigrateCommand extends AbstractDatabaseCommand implements CommandInt
         $errorStream = \STDERR,
     ): int {
         $db = $this->resolveConnection();
-        $path = getcwd() . "/database/migrations";
+        $path = PathResolver::resolveBasePath() . "/database/migrations";
 
         $migrator = new Migrator($db, $path);
 

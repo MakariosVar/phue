@@ -3,6 +3,7 @@
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 
 /**
  * CLI Command to generate a new Active Record Model class boilerplate.
@@ -47,7 +48,7 @@ class MakeModelCommand implements CommandInterface
         $name = ucfirst($args[0]);
         $table = strtolower($name) . 's';
 
-        $dir = getcwd() . '/App/Models';
+        $dir = PathResolver::resolveBasePath() . '/App/Models';
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }

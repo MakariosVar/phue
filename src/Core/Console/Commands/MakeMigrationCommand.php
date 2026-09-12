@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 
 /**
  * CLI Command to generate boilerplate database migration files with timestamps.
@@ -51,10 +52,10 @@ final class MakeMigrationCommand implements CommandInterface
         $timestamp = date('Y_m_d_His');
         $cleanName = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($name));
         $filename = "m{$timestamp}_{$cleanName}.php";
-        
+
         $className = implode('', array_map('ucfirst', explode('_', "m{$timestamp}_{$cleanName}")));
 
-        $migrationsDir = getcwd() . '/database/migrations';
+        $migrationsDir = PathResolver::resolveBasePath() . "/database/migrations";
 
         if (!is_dir($migrationsDir)) {
             mkdir($migrationsDir, 0755, true);

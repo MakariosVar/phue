@@ -6,6 +6,7 @@ namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Config;
 use Phue\Core\Console\CommandInterface;
+use Phue\Core\Console\PathResolver;
 use Phue\Core\Database\Connection;
 use RuntimeException;
 
@@ -25,7 +26,7 @@ abstract class AbstractDatabaseCommand implements CommandInterface
      */
     protected function resolveConnection(): Connection
     {
-        $basePath = defined('PHUE_BASE_PATH') ? PHUE_BASE_PATH : getcwd();
+        $basePath = PathResolver::resolveBasePath();
         $configPath = $basePath . '/config';
 
         if (!is_dir($configPath)) {
