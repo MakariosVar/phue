@@ -167,7 +167,7 @@ class SchiiModule extends Module
         $middleware = $schiiConfig->middleware ?? [];
 
         /** @var bool $requireAuth */
-        $requireAuth = $schiiConfig->requireAuth ?? true;
+        $requireAuth = $schiiConfig->requireAuth;
 
         /** @var class-string $crudHandler */
         $crudHandler = $requireAuth 

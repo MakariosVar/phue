@@ -6,7 +6,6 @@ namespace Phue\Tests\Core\Database;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Cache\EdgeKvCache;
-use Phue\Core\Container;
 use Phue\Core\Database\Drivers\NeonDriver;
 use Phue\Core\Database\Drivers\TursoDriver;
 use Phue\Core\Request;
@@ -44,14 +43,13 @@ final class EdgeDriverTest extends TestCase
     }
 
     /**
-     * Tests WasmAdapter HTTP lifecycle processing and container scope flushing.
+     * Tests WasmAdapter HTTP lifecycle transformation into a native Request/Response round-trip.
      *
      * @return void
      */
-    public function testWasmAdapterLifecycleAndMemoryFlush(): void
+    public function testWasmAdapterLifecycleAndHttpTransformation(): void
     {
-        $container = new Container();
-        $adapter = new WasmAdapter($container);
+        $adapter = new WasmAdapter();
 
         $env = [
             'REQUEST_METHOD' => 'POST',

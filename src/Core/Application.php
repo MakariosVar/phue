@@ -12,6 +12,7 @@ use Phue\Cache\FileCache;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Security\SecurityMiddleware;
 use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Core\Ssr\NullSsrEngine;
 use Phue\Core\Ssr\SsrEngine;
@@ -127,8 +128,13 @@ class Application
         $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
         $this->container->singleton(self::class, fn (): self => $this);
 
+        // Explicitly register SecurityMiddleware singleton with trusted proxies configuration
+        $this->container->singleton(SecurityMiddleware::class, function (): SecurityMiddleware {
+            return new SecurityMiddleware((array) $this->config->get('app.trustedProxies', []));
+        });
+
         // Register default-on global security middleware (Defense-in-depth)
-        $this->use(\Phue\Core\Security\SecurityMiddleware::class);
+        $this->use(SecurityMiddleware::class);
 
         // Directory where compiled component PHP blocks are written for OPCache execution
         $viewsCacheDir = $this->basePath . '/storage/cache/views';
@@ -414,7 +420,7 @@ class Application
         $logger = $this->container->get(LoggerInterface::class);
 
         try {
-            return $pipeline($request);
+            $response = $pipeline($request);
         } catch (\InvalidArgumentException $e) {
             $logger->warning('HTTP 400 Bad Request: ' . $e->getMessage(), ['exception' => $e]);
             $msg = $this->debug ? $e->getMessage() : 'Bad Request';
@@ -444,7 +450,10 @@ class Application
             $this->container->flushScope();
         }
 
-        return \Phue\Core\Security\SecurityMiddleware::applyHeaders($response, $request);
+        /** @var SecurityMiddleware $security */
+        $security = $this->container->get(SecurityMiddleware::class);
+
+        return $security->applyHeaders($response, $request);
     }
 
     /**
@@ -478,33 +487,39 @@ class Application
 
             $coercedParams = $this->resolveActionParameters($resolvedHandler, $params);
 
-            $reflection = is_array($resolvedHandler) 
-                ? new \ReflectionMethod($resolvedHandler[0], $resolvedHandler[1])
-                : new \ReflectionFunction($resolvedHandler);
+            if (is_array($resolvedHandler)) {
+                $reflection = new \ReflectionMethod($resolvedHandler[0], $resolvedHandler[1]);
+            } elseif (is_object($resolvedHandler) && !($resolvedHandler instanceof \Closure)) {
+                // Invokable object: Reflect over the __invoke method
+                $reflection = new \ReflectionMethod($resolvedHandler, '__invoke');
+            } else {
+                // Closures and global/namespaced functions
+                $reflection = new \ReflectionFunction($resolvedHandler);
+            }
 
-                $args = [];
-                foreach ($reflection->getParameters() as $param) {
-                    $paramName = $param->getName();
-                    $type = $param->getType();
-                    $typeNames = $this->extractTypeNames($type);
-    
-                    // Check for Request type (Request class or subclass/interface)
-                    if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
-                        $args[] = $req;
-                    } 
-                    // Matches $params array (e.g. array $params or array|string $params or untyped $params)
-                    elseif ($paramName === 'params' && (empty($typeNames) || in_array('array', $typeNames, true))) {
-                        $args[] = $coercedParams;
-                    } 
-                    // Matches path parameter name (e.g. $id)
-                    elseif (array_key_exists($paramName, $coercedParams)) {
-                        $args[] = $coercedParams[$paramName];
-                    } 
-                    // Fallback to default parameter value
-                    elseif ($param->isDefaultValueAvailable()) {
-                        $args[] = $param->getDefaultValue();
-                    }
+            $args = [];
+            foreach ($reflection->getParameters() as $param) {
+                $paramName = $param->getName();
+                $type = $param->getType();
+                $typeNames = $this->extractTypeNames($type);
+
+                // 1. Check for Request type (Request class or subclass/interface)
+                if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
+                    $args[] = $req;
+                } 
+                // 2. Direct route path parameter match by name (e.g. $id)
+                elseif (array_key_exists($paramName, $coercedParams)) {
+                    $args[] = $coercedParams[$paramName];
+                } 
+                // 3. Any array-typed parameter receives the full route params map
+                elseif (in_array('array', $typeNames, true)) {
+                    $args[] = $coercedParams;
+                } 
+                // 4. Fallback to default parameter value if available
+                elseif ($param->isDefaultValueAvailable()) {
+                    $args[] = $param->getDefaultValue();
                 }
+            }
 
             $result = call_user_func_array($resolvedHandler, $args);
             return $this->normalizeResponse($result);
@@ -535,7 +550,8 @@ class Application
     /**
      * Helper to safely extract type names as strings from ReflectionType (handles Named, Union, and Intersection types).
      *
-     * @return array<int, string>
+     * @param \ReflectionType|null $type Reflection type instance to extract names from.
+     * @return array<int, string> List of type names.
      */
     private function extractTypeNames(?\ReflectionType $type): array
     {
@@ -560,13 +576,12 @@ class Application
         return [];
     }
 
-
     /**
      * Resolves and casts raw string route parameters to match action method typehints.
      *
-     * @param callable|array<mixed> $handler
-     * @param array<string, string> $rawParams
-     * @return array<string, mixed>
+     * @param mixed $handler Target callable or controller action handler.
+     * @param array<string, string> $rawParams Raw URI parameter key-value map.
+     * @return array<string, mixed> Coerced parameters map.
      * @throws \InvalidArgumentException If parameter coercion fails for matched constraints.
      */
     protected function resolveActionParameters(mixed $handler, array $rawParams): array

@@ -6,7 +6,6 @@ namespace Phue\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
-use Phue\Core\Container;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
@@ -141,11 +140,7 @@ final class PersistentServerAdapterTest extends TestCase
 
     public function testRoadRunnerRunLoopsUntilWorkerExhausted(): void
     {
-        $container = $this->createMock(Container::class);
-        $container->expects($this->exactly(2))->method('flushScope');
-
         $app = $this->createMock(Application::class);
-        $app->method('getContainer')->willReturn($container);
         $app->expects($this->exactly(2))->method('handle')
             ->willReturn(new Response('pong', 200));
 
@@ -165,11 +160,7 @@ final class PersistentServerAdapterTest extends TestCase
 
     public function testRoadRunnerRunResponds500OnException(): void
     {
-        $container = $this->createMock(Container::class);
-        $container->expects($this->once())->method('flushScope');
-
         $app = $this->createMock(Application::class);
-        $app->method('getContainer')->willReturn($container);
         $app->method('handle')
             ->willThrowException(new \RuntimeException('kaboom'));
 
@@ -186,11 +177,7 @@ final class PersistentServerAdapterTest extends TestCase
 
     public function testRoadRunnerRunWithEmptyWorkerDoesNothing(): void
     {
-        $container = $this->createMock(Container::class);
-        $container->expects($this->never())->method('flushScope');
-
         $app = $this->createMock(Application::class);
-        $app->method('getContainer')->willReturn($container);
 
         $worker = new FakePsr7Worker([]);
         $adapter = new RoadRunnerAdapter($worker);
@@ -202,11 +189,8 @@ final class PersistentServerAdapterTest extends TestCase
 
     public function testRoadRunnerRunWithNoWorkerIsNoOp(): void
     {
-        $container = $this->createMock(Container::class);
-        $container->expects($this->never())->method('flushScope');
-
         $app = $this->createMock(Application::class);
-        $app->method('getContainer')->willReturn($container);
+        $app->expects($this->never())->method('handle');
 
         $adapter = new RoadRunnerAdapter();
         $adapter->boot($app);

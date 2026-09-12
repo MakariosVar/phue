@@ -36,11 +36,12 @@ final class ProductionHardeningTest extends TestCase
     }
 
     /**
-     * Tests that SecurityMiddleware operates correctly within the Onion callable pipeline.
+     * Tests that SecurityMiddleware operates correctly within the Onion callable pipeline
+     * and refuses to emit HSTS when X-Forwarded-Proto arrives from an untrusted source.
      *
      * @return void
      */
-    public function testSecurityMiddlewareInOnionPipeline(): void
+    public function testSecurityMiddlewareInOnionPipelineBlocksSpoofedHsts(): void
     {
         $middleware = new SecurityMiddleware();
         $request = new Request('/test', 'GET', headers: ['X-Forwarded-Proto' => 'https']);
@@ -53,7 +54,7 @@ final class ProductionHardeningTest extends TestCase
         $this->assertSame('nosniff', $headers['X-Content-Type-Options']);
         $this->assertSame('SAMEORIGIN', $headers['X-Frame-Options']);
         $this->assertSame('1; mode=block', $headers['X-XSS-Protection']);
-        $this->assertStringContainsString('max-age=31536000', $headers['Strict-Transport-Security']);
+        $this->assertArrayNotHasKey('Strict-Transport-Security', $headers);
     }
 
     /**
@@ -258,6 +259,57 @@ final class ProductionHardeningTest extends TestCase
         $this->assertSame('1; mode=block', $headers['X-XSS-Protection']);
         $this->assertSame('strict-origin-when-cross-origin', $headers['Referrer-Policy']);
         $this->assertArrayNotHasKey('Strict-Transport-Security', $headers);
+    }
+
+    public function testSecurityMiddlewareEmitsHstsFromTrustedProxy(): void
+    {
+        $middleware = new SecurityMiddleware(['*']);
+        $request = new Request(
+            '/test',
+            'GET',
+            headers: ['X-Forwarded-Proto' => 'https'],
+            serverParams: ['REMOTE_ADDR' => '10.0.0.5'],
+        );
+
+        $next = static fn(Request $req): Response => new Response('OK', 200);
+
+        $response = $middleware($request, $next);
+
+        $this->assertStringContainsString('max-age=31536000', (string) $response->getHeader('Strict-Transport-Security'));
+    }
+
+    public function testSecurityMiddlewareWithSpecificTrustedProxyOnlyAcceptsMatchingIp(): void
+    {
+        $middleware = new SecurityMiddleware(['192.168.1.10']);
+        $request = new Request(
+            '/test',
+            'GET',
+            headers: ['X-Forwarded-Proto' => 'https'],
+            serverParams: ['REMOTE_ADDR' => '203.0.113.9'],
+        );
+
+        $next = static fn(Request $req): Response => new Response('OK', 200);
+
+        $response = $middleware($request, $next);
+
+        $this->assertNull($response->getHeader('Strict-Transport-Security'));
+    }
+
+    public function testSecurityMiddlewareAcceptsTrustedProxySpecificIp(): void
+    {
+        $middleware = new SecurityMiddleware(['10.0.0.5']);
+        $request = new Request(
+            '/test',
+            'GET',
+            headers: ['X-Forwarded-Proto' => 'https'],
+            serverParams: ['REMOTE_ADDR' => '10.0.0.5'],
+        );
+
+        $next = static fn(Request $req): Response => new Response('OK', 200);
+
+        $response = $middleware($request, $next);
+
+        $this->assertStringContainsString('max-age=31536000', (string) $response->getHeader('Strict-Transport-Security'));
     }
 
     public function testSecurityMiddlewareDoesNotModifyStatusCode(): void

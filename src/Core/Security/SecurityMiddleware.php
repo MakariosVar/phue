@@ -18,6 +18,23 @@ use Phue\Core\Response;
 final class SecurityMiddleware
 {
     /**
+     * List of trusted proxy IP addresses or wildcard ['*'].
+     *
+     * @var array<int, string>
+     */
+    private array $trustedProxies;
+
+    /**
+     * Initializes the security middleware with trusted proxies configuration.
+     *
+     * @param array<int, string> $trustedProxies List of trusted IP addresses or ['*'] for all proxies.
+     */
+    public function __construct(array $trustedProxies = [])
+    {
+        $this->trustedProxies = $trustedProxies;
+    }
+
+    /**
      * Process an incoming server request and apply security headers to the resulting response.
      *
      * @param Request $request Current HTTP request instance.
@@ -30,7 +47,7 @@ final class SecurityMiddleware
         /** @var Response $response */
         $response = $next($request);
 
-        return self::applyHeaders($response, $request);
+        return $this->applyHeaders($response, $request);
     }
 
     /**
@@ -43,7 +60,7 @@ final class SecurityMiddleware
      * 
      * @return Response Modified response instance containing default security headers.
      */
-    public static function applyHeaders(Response $response, ?Request $request = null): Response
+    public function applyHeaders(Response $response, ?Request $request = null): Response
     {
         // Note: 'unsafe-inline' is required for Client-side Hydration state (__INITIAL_STATE__)
         $securityHeaders = [
@@ -55,7 +72,7 @@ final class SecurityMiddleware
         ];
 
         // HSTS must only be emitted over secure HTTPS connections
-        if ($request !== null && self::isSecure($request)) {
+        if ($request !== null && $this->isSecure($request)) {
             $securityHeaders['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
         }
 
@@ -69,19 +86,48 @@ final class SecurityMiddleware
     /**
      * Detect whether the incoming HTTP request is operating over a secure connection (HTTPS).
      *
-     * Checks both direct server attributes and reverse-proxy protocol headers.
+     * Checks direct HTTPS status or validates X-Forwarded-Proto against configured trusted proxies.
      *
      * @param Request $request Request object to inspect.
      * 
      * @return bool True if the connection is HTTPS/secure, false otherwise.
      */
-    private static function isSecure(Request $request): bool
+    private function isSecure(Request $request): bool
     {
         $server = $request->getServerParams();
         $https = $server['HTTPS'] ?? '';
+
+        if (!empty($https) && strtolower((string) $https) !== 'off') {
+            return true;
+        }
+
+        $remoteAddr = (string) ($server['REMOTE_ADDR'] ?? '');
         $proto = $request->getHeader('X-Forwarded-Proto');
 
-        return (!empty($https) && strtolower((string) $https) !== 'off') 
-            || strtolower((string) ($proto ?? '')) === 'https';
+        if (strtolower((string) ($proto ?? '')) === 'https') {
+            return $this->isTrustedProxy($remoteAddr);
+        }
+
+        return false;
+    }
+
+    /**
+     * Verify whether the given client/proxy IP address is trusted.
+     *
+     * @param string $ip Remote client or proxy IP address.
+     * 
+     * @return bool True if the IP is trusted or if wildcard '*' is set, false otherwise.
+     */
+    private function isTrustedProxy(string $ip): bool
+    {
+        if (empty($this->trustedProxies)) {
+            return false;
+        }
+
+        if (in_array('*', $this->trustedProxies, true)) {
+            return true;
+        }
+
+        return in_array($ip, $this->trustedProxies, true);
     }
 }

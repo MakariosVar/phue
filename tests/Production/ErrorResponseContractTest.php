@@ -41,11 +41,19 @@ class ErrorResponseContractTest extends TestCase
         $plain = $this->app->handle(new Request('GET', '/missing-route-xyz'));
         $this->assertNull($plain->getHeader('Strict-Transport-Security'));
 
-        $secure = new Request('GET', '/missing-route-xyz', [], [], ['X-Forwarded-Proto' => 'https']);
-        $secureResponse = $this->app->handle($secure);
+        // Direct TLS termination: HSTS must be emitted
+        $tls = new Request('GET', '/missing-route-xyz', [], [], [], ['HTTPS' => 'on']);
+        $tlsResponse = $this->app->handle($tls);
 
-        $this->assertSame(404, $secureResponse->getStatusCode());
-        $this->assertStringContainsString('max-age=31536000', (string) $secureResponse->getHeader('Strict-Transport-Security'));
+        $this->assertSame(404, $tlsResponse->getStatusCode());
+        $this->assertStringContainsString('max-age=31536000', (string) $tlsResponse->getHeader('Strict-Transport-Security'));
+
+        // Spoofed X-Forwarded-Proto from an untrusted source: HSTS must NOT be emitted
+        $spoof = new Request('GET', '/missing-route-xyz', [], [], ['X-Forwarded-Proto' => 'https']);
+        $spoofResponse = $this->app->handle($spoof);
+
+        $this->assertSame(404, $spoofResponse->getStatusCode());
+        $this->assertNull($spoofResponse->getHeader('Strict-Transport-Security'));
     }
 
     public function test405CarriesSecurityHeadersAndAllowHeader(): void

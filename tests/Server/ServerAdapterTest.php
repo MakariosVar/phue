@@ -46,16 +46,25 @@ class ServerAdapterTest extends TestCase
         $adapter->handleRequest($request);
     }
 
-    public function testRoadRunnerAdapterBootStoresContainer(): void
+    public function testRoadRunnerAdapterBootDelegatesToApplication(): void
     {
-        $container = $this->createMock(Container::class);
-        $container->expects($this->never())->method('flushScope');
+        $request = new Request('/test', 'GET');
+        $expectedResponse = Response::json(['status' => 'ok']);
 
         $app = $this->createMock(Application::class);
-        $app->expects($this->once())->method('getContainer')->willReturn($container);
+        $app->expects($this->never())->method('getContainer');
+        $app->expects($this->once())
+            ->method('handle')
+            ->with($request)
+            ->willReturn($expectedResponse);
 
         $adapter = new RoadRunnerAdapter();
         $adapter->boot($app);
+
+        $response = $adapter->handleRequest($request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('{"status":"ok"}', $response->getContent());
     }
 
     public function testSwooleAdapterHandlesRequestAndDelegatesToApp(): void

@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Phue\Server;
 
-use Phue\Core\Container;
+use Closure;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Closure;
 
 /**
  * Server Adapter for WebAssembly (WASM) & Cloudflare Edge Runtimes.
@@ -19,19 +18,10 @@ use Closure;
 final class WasmAdapter
 {
     /**
-     * Initializes the WASM server adapter with the dependency container.
-     *
-     * @param Container $container Application dependency injection container instance.
-     */
-    public function __construct(
-        private readonly Container $container
-    ) {}
-
-    /**
      * Handles an incoming WASM HTTP invocation context.
      *
-     * Transmutes the host environment parameters into a Phue HTTP Request, passes it through
-     * the kernel pipeline, flushes memory scopes, and returns a formatted execution response.
+     * Transmutes host environment parameters into a Phue HTTP Request, executes
+     * the request through the kernel pipeline handler, and returns a formatted array response.
      *
      * @param array<string, mixed> $wasmEnvironment Standardized environment array containing HTTP metadata.
      * @param Closure $kernelHandler Application Request-to-Response pipeline closure.
@@ -52,12 +42,8 @@ final class WasmAdapter
             parsedBody: is_array($parsedBody) ? $parsedBody : []
         );
 
-        try {
-            /** @var Response $response */
-            $response = $kernelHandler($request);
-        } finally {
-            $this->container->flushScope();
-        }
+        /** @var Response $response */
+        $response = $kernelHandler($request);
 
         return [
             'status' => $response->getStatusCode(),

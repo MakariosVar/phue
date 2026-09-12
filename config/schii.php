@@ -10,5 +10,5 @@ return [
     'cachePrefix' => 'schii_schema_',
     'requireAuth' => true,
     'middleware' => [],
-    'authResolver'    => ['App\\Models\\User', 'findIdentityByAuthKey'],
+    'authResolver' => ['App\\Models\\User', 'findIdentityByAuthKey'],
 ];

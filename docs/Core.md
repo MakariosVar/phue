@@ -506,6 +506,37 @@ Global.before → ClassMiddleware.before → MethodMiddleware.before → Handler
 
 Route middleware resolution is **lazy**: if a route-level middleware returns an early `Response` (e.g. `401 Unauthorized`), execution short-circuits and the target Controller is never instantiated by the DI Container.
 
+### Security middleware & HTTPS detection
+
+`SecurityMiddleware` is registered as a global middleware and applied last — the
+outermost layer — on every response (including 404/405/500 paths).
+
+Header emission is driven by **`Phue\Core\Security\SecurityMiddleware`**:
+
+| Header | Rule |
+|---|---|
+| `X-Content-Type-Options: nosniff` | always |
+| `X-Frame-Options: SAMEORIGIN` | always |
+| `X-XSS-Protection: 1; mode=block` | always |
+| `Referrer-Policy: strict-origin-when-cross-origin` | always |
+| `Strict-Transport-Security` | **only when the request is deemed secure** |
+
+A request counts as secure when either:
+
+1. **Direct TLS termination** — `$_SERVER['HTTPS'] === 'on'`.
+2. **Forwarded over a trusted proxy** — `X-Forwarded-Proto: https` **and** the
+   connecting remote address (`REMOTE_ADDR`) is listed in `app.trustedProxies`.
+
+`app.trustedProxies` defaults to `[]` (trust no proxy). A spooled
+`X-Forwarded-Proto` from an untrusted or unknown source is **ignored**, so a
+plain-HTTP request can never be tricked into advertising HSTS. Use `'*'` when
+every connecting peer is a trusted reverse proxy:
+
+```php
+// config/app.php
+'trustedProxies' => ['10.0.0.0/8', '192.168.1.10'],  // or ['*'] behind a CDN
+```
+
 ### Handling a request (`handle()`)
 
 ```php
@@ -529,16 +560,42 @@ The router allows handlers in several forms, and `Application` normalizes them:
 - **`'Controller@method'`** → `Controller` is resolved from the container and the
   method called on it.
 - **`[Controller::class, 'method']`** → same container-based resolution.
+- **Invokable object** → `Application` reflects over its `__invoke()` method
+  (`ReflectionMethod($handler, '__invoke')`), so handler objects work exactly like
+  controller actions or closures.
 
-Every handler is invoked with **two positional arguments**:
+Unlike reflection on a closure, the invokable-object form performs no signature
+rewrite: `Request` and route params are bound by the same rules below.
+
+### Handler argument binding
+
+`Application` reflects the handler's signature and passes arguments in priority order:
+
+1. **`Request`-typed parameter** → the current request instance.
+2. **Name match against route params** → the raw (string) value coerced to the
+   declared builtin type (`int`, `float`, `bool`, `string`). Non-numeric values
+   against an `int`/`float` hint turn into a `400 Bad Request`.
+3. **`array`-typed parameter** → the full route params map. The name does NOT have
+   to be `$params`; e.g. `function (Request $request, array $routeArgs)` works.
+4. **Fallback** → the parameter's reflected default value is left untouched.
 
 ```php
 function (Request $request, array $params) {
-    // $params holds the route parameters, e.g. ['id' => '42']
+    // $params holds ALL route parameters, e.g. ['id' => '42']
+}
+
+function (int $id) {
+    // 'id' is matched by name and coerced to a real int
 }
 ```
 
 So a route `/users/{id}` yields `$params = ['id' => '42']`.
+
+**Union types skip coercion.** A parameter typed `int|string` cannot be coerced,
+because the framework would have to *choose* a target type for you; instead the raw
+string is passed through untouched and no `400` is triggered. This is intentional:
+coercion only ever targets a single `ReflectionNamedType`. If you need an `int`,
+declare the param as `int`.
 
 ### Response normalization (`normalizeResponse()`)
 
@@ -892,9 +949,9 @@ Phue supports persistent high-performance runtimes and ahead-of-time (AOT) stati
 ### Persistent Server Adapters (`src/Server/`)
 - **`ServerAdapterInterface` (`src/Server/ServerAdapterInterface.php`)**: Universal lifecycle contract (`boot()`, `handleRequest()`, `run()`, `shutdown()`).
 - **`FpmAdapter` (`src/Server/FpmAdapter.php`)**: Standard CGI/FPM adapter for stateless single-request execution.
-- **`RoadRunnerAdapter` (`src/Server/RoadRunnerAdapter.php`)**: Persistent Go server worker loop using PSR-7 conversion helpers (`Request::fromPsr7()`, `$response->toPsr7()`).
+- **`RoadRunnerAdapter` (`src/Server/RoadRunnerAdapter.php`)**: Persistent Go server worker loop using PSR-7 conversion helpers (`Request::fromPsr7()`, `$response->toPsr7()`). Does not hold a `Container` reference.
 - **`SwooleAdapter` (`src/Server/SwooleAdapter.php`)**: Async Coroutine HTTP Server adapter (`Swoole\Http\Server`).
-- **Zero State Leakage**: All persistent worker adapters run `$container->flushScope()` inside `finally` blocks to purge request-scoped singletons between request iterations.
+- **Zero State Leakage**: `Application::handle()` is the **single flush point** — its `finally` block calls `$container->flushScope()` exactly once per request. Persistent worker adapters therefore perform *no* flushing of their own: they just delegate `handle()`-equivalent work to the app and rely on the app to purge request-scoped singletons between iterations.
 
 ### TypePHP AOT Engine (`src/Compiler/`)
 - **`WiringGenerator` (`src/Compiler/WiringGenerator.php`)**: Build-phase scanner emitting zero-reflection static dependency and routing maps:
@@ -915,7 +972,7 @@ Phue supports execution inside WebAssembly (WASM) micro-VMs, Cloudflare Workers,
 - **`NeonDriver` (`src/Core/Database/Drivers/NeonDriver.php`)**: Serverless PostgreSQL HTTP driver for Neon REST API (`/sql`), returning dialect name `'pgsql'`.
 
 ### WASM Server Adapter & Edge Storage (`src/Server/` & `src/Cache/`)
-- **`WasmAdapter` (`src/Server/WasmAdapter.php`)**: Adapter for executing Phue inside WebAssembly contexts. Transmutes WASM environment arrays into `Phue\Core\Request` objects, flushes container scopes via `$container->flushScope()`, and returns standard status/headers/body arrays.
+- **`WasmAdapter` (`src/Server/WasmAdapter.php`)**: Adapter for executing Phue inside WebAssembly contexts. Is stateless (no `Container` in its constructor); it transmutes WASM environment arrays into `Phue\Core\Request` objects, and returns standard status/headers/body arrays. Scope flushing lives in `Application::handle()`, not here.
 - **`CacheInterface` (`src/Cache/CacheInterface.php`)**: Framework caching interface.
 - **`EdgeKvCache` (`src/Cache/EdgeKvCache.php`)**: Memory-backed key-value cache driver for read-only Edge filesystems.
 
@@ -949,7 +1006,7 @@ Enterprise-grade production readiness features ensuring high availability, secur
   - Filesystem disk space availability (supports custom `$basePath` for mounts).
 
 ### Security Hardening (`src/Core/Security/`)
-- **`SecurityMiddleware` (`src/Core/Security/SecurityMiddleware.php`)**: Production defense middleware implementing the invokable Onion pipeline (`__invoke(Request $request, callable $next): Response`) and injecting strict OWASP HTTP headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, HSTS `Strict-Transport-Security`, `Content-Security-Policy`).
+- **`SecurityMiddleware` (`src/Core/Security/SecurityMiddleware.php`)**: Production defense middleware implementing the invokable Onion pipeline. Constructor takes `app.trustedProxies`; `applyHeaders()` runs on every response. Emits OWASP headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, `Referrer-Policy`) plus **HSTS only for requests proved secure** (direct HTTPS, or `X-Forwarded-Proto: https` from a trusted `REMOTE_ADDR` — see §6).
 
 ### Zero-Downtime Deployment (`src/Core/Console/Commands/`)
 - **`DeployCommand` (`src/Core/Console/Commands/DeployCommand.php`)**: Atomic release manager executing codebase synchronization, dependency builds (`composer install --no-dev --optimize-autoloader`), database migrations, atomic symlink swapping (`current_temp` -> `current`), and historical release retention cleanup (`pruneOldReleases`).
