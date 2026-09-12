@@ -5,10 +5,6 @@ frontend toolkit (`PhUI`). Components live in `src/Core/UI/Phui/*.phue` and are
 single-file Vue 3 modules styled with Bootstrap 5 utility classes. There is no
 build step, no npm, and no component whitelist to maintain.
 
-> **Source of truth.** The tables below are derived directly from the
-> `src/Core/UI/Phui/*.phue` sources. If a prop's behavior is described here, it
-> is also implemented there.
-
 ---
 
 ## 1. How components are used
