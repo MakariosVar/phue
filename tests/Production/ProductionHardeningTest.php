@@ -242,6 +242,7 @@ final class ProductionHardeningTest extends TestCase
         $this->assertStringContainsString('max-age=31536000', $headers['Strict-Transport-Security']);
         $this->assertSame('strict-origin-when-cross-origin', $headers['Referrer-Policy']);
         $this->assertStringContainsString("default-src 'self'", $headers['Content-Security-Policy']);
+        $this->assertStringContainsString("img-src 'self' data:", $headers['Content-Security-Policy']);
     }
 
     public function testSecurityMiddlewareOmitsHstsOnInsecureRequest(): void

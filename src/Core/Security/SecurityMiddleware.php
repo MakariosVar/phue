@@ -63,12 +63,13 @@ final class SecurityMiddleware
     public function applyHeaders(Response $response, ?Request $request = null): Response
     {
         // Note: 'unsafe-inline' is required for Client-side Hydration state (__INITIAL_STATE__)
+        // Note: 'data:' is required under img-src for Bootstrap inline SVG sprites (.form-select, .btn-close, etc.)
         $securityHeaders = [
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'SAMEORIGIN',
             'X-XSS-Protection' => '1; mode=block',
             'Referrer-Policy' => 'strict-origin-when-cross-origin',
-            'Content-Security-Policy' => "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';",
+            'Content-Security-Policy' => "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;",
         ];
 
         // HSTS must only be emitted over secure HTTPS connections
