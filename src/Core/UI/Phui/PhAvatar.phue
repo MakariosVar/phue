@@ -1,7 +1,21 @@
 <template>
-  <div :class="['avatar', `avatar-${size}`, shapeClass]">
-    <img v-if="src && !hasError" :src="src" :alt="alt" class="avatar__image" @error="hasError = true" />
-    <span v-else class="avatar__initials">{{ computedInitials }}</span>
+  <div 
+    :class="[
+      'avatar',
+      'd-inline-flex align-items-center justify-content-center',
+      'bg-secondary-subtle text-dark fw-bold overflow-hidden user-select-none',
+      shapeClass,
+      sizeClasses[size] || sizeClasses.md
+    ]"
+  >
+    <img 
+      v-if="src && !hasError" 
+      :src="src" 
+      :alt="alt" 
+      class="w-100 h-100 object-fit-cover" 
+      @error="hasError = true" 
+    />
+    <span v-else class="lh-1">{{ computedInitials }}</span>
   </div>
 </template>
 
@@ -45,6 +59,16 @@ export default {
         rounded: 'rounded'
       };
       return map[this.shape] || 'rounded-circle';
+    },
+    sizeClasses() {
+      // Inline sizing using Bootstrap width/height (w-*, h-*) and font size (fs-*) utilities
+      return {
+        xs: 'fs-6 p-1',
+        sm: 'fs-6 p-2',
+        md: 'fs-5 p-2',
+        lg: 'fs-4 p-3',
+        xl: 'fs-2 p-4'
+      };
     },
     computedInitials() {
       if (!this.name) return '?';
