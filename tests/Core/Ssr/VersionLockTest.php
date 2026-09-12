@@ -21,7 +21,7 @@ final class VersionLockTest extends TestCase
 {
     private const APP_ROOT = '/app';
 
-    private const MANIFEST = 'storage/assets/vendor/vue3/vue.esm-browser.js';
+    private const MANIFEST = 'storage/assets/vendor/vue3/vue.runtime.esm-browser.js';
 
     private const SIDE_PACKAGE = 'ssr/package.json';
 

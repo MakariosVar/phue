@@ -9,12 +9,18 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\View;
+use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Contract tests for extracted per-component ESM module scripts
  * (option 1b): content-hash URLs served statelessly, with the direct
  * render(title, view) path keeping inline-module behaviour (BC).
+ *
+ * The extracted module carries a precompiled render function: it must expose
+ * `__phueRender` (not the raw JSON template), wire it into the app factory
+ * proxy, remain valid ESM, and be served through the same minting == serving
+ * hashing it was built with.
  *
  * @package Phue\Tests\Core\UI
  */
@@ -174,9 +180,12 @@ PHUE);
         $module = $this->loader->moduleFor('Scripted', $hash);
 
         $this->assertSame($expectedModule, $module);
-        $this->assertStringContainsString('export const __phueTemplate', $module);
+        $this->assertStringContainsString('export const __phueRender', $module);
+        $this->assertStringContainsString('render: __phueRender', $module);
         $this->assertStringContainsString('__phueOrigCreateApp', $module);
         $this->assertStringContainsString('.mount(\'#app\')', $module);
+
+        AssertsPhueJsModuleContract::assertEmittedModuleIsLoadableJs($this, $module, 'Scripted page module');
     }
 
     public function testModuleForReturnsNullOnHashMismatch(): void

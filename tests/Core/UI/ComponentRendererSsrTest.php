@@ -254,8 +254,13 @@ PHUE);
                 $engine->lastContext['components'],
                 'The page root itself must not be registered in the SSR envelope.'
             );
+            // The forwarded module must ship the precompiled render binding.
             $this->assertStringStartsWith(
-                'export const __phueTemplate',
+                'import ',
+                $engine->lastContext['components']['PhButton']
+            );
+            $this->assertStringContainsString(
+                'export const __phueRender',
                 $engine->lastContext['components']['PhButton']
             );
         } finally {

@@ -62,12 +62,20 @@ class PhueComponentLoader
     private array $buildingStack = [];
 
     /**
+     * Template to JS render function compiler bridge instance.
+     *
+     * @var TemplateCompilerBridge
+     */
+    private TemplateCompilerBridge $compilerBridge;
+
+    /**
      * PhueComponentLoader constructor.
      *
      * @param string                  $componentsDir   Absolute or relative path to component files directory.
      * @param PhueTemplateParser|null $parser          Optional parser instance.
      * @param CacheInterface|null     $persistentCache Optional PSR-16 cache implementation.
      * @param string|null             $viewsCacheDir   Optional compiled PHP views cache directory for OPCache optimization.
+     * @param TemplateCompilerBridge|null $compilerBridge Optional template compiler bridge instance.
      *
      * @throws RuntimeException If $componentsDir path is invalid or unreadable.
      */
@@ -75,7 +83,8 @@ class PhueComponentLoader
         string $componentsDir,
         ?PhueTemplateParser $parser = null,
         ?CacheInterface $persistentCache = null,
-        ?string $viewsCacheDir = null
+        ?string $viewsCacheDir = null,
+        ?TemplateCompilerBridge $compilerBridge = null
     ) {
         $realBase = realpath($componentsDir);
         if ($realBase === false || !is_dir($realBase)) {
@@ -85,6 +94,7 @@ class PhueComponentLoader
         $this->componentsDir = $realBase;
         $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
+        $this->compilerBridge = $compilerBridge ?? new TemplateCompilerBridge();
     }
 
     /**
@@ -251,10 +261,10 @@ class PhueComponentLoader
 
                 if ($servableHash !== null) {
                     $rawImportName = "__phueRaw_{$child}";
-                    $templateImportName = "__phueTpl_{$child}";
+                    $renderImportName = "__phueRender_{$child}";
 
-                    $imports[] = "import {$rawImportName}, { __phueTemplate as {$templateImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
-                    $imports[] = "const {$child} = { ...({$rawImportName} || {}), template: {$templateImportName} };";
+                    $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
+                    $imports[] = "const {$child} = { ...({$rawImportName} || {}), render: {$renderImportName} };";
 
                     $childNames[] = $child;
                 }
@@ -266,16 +276,16 @@ class PhueComponentLoader
         $importStatements = !empty($imports) ? implode("\n", $imports) . "\n" : '';
         $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
 
-        $jsonTemplate = json_encode(
-            $structure['template'],
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
-        );
+        // Precompile HTML template string into JS render function (Runtime-only compatible)
+        $renderFnCode = $this->compilerBridge->compile($structure['template']);
 
         $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
             $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
-            return "{$importStatements}export const __phueTemplate = {$jsonTemplate};\nexport default { template: __phueTemplate{$componentsProp} };\n";
+            return "{$importStatements}{$renderFnCode}\n"
+                 . "export const __phueRender = render;\n"
+                 . "export default { render: __phueRender{$componentsProp} };\n";
         }
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
@@ -305,10 +315,10 @@ class PhueComponentLoader
 
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps);";
             }
             if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps);";
             }
 
             $proxyBlock = implode("\n", $proxies) . "\n";
@@ -322,11 +332,13 @@ class PhueComponentLoader
             );
         }
 
-        return "{$importStatements}export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
+        return "{$importStatements}{$renderFnCode}\n"
+             . "export const __phueRender = render;\n"
+             . "{$proxyBlock}{$scriptContent}";
     }
 
     /**
-     * Builds the unified JavaScript SFC module containing the stringified template export and inline script.
+     * Builds the unified JavaScript SFC module containing the precompiled render function export and inline script.
      *
      * @param string      $template HTML/Vue template string.
      * @param string|null $script   Inline JavaScript component options payload.
@@ -335,15 +347,15 @@ class PhueComponentLoader
      */
     public static function buildModule(string $template, ?string $script): string
     {
-        $jsonTemplate = json_encode(
-            $template,
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS | JSON_THROW_ON_ERROR
-        );
+        $compiler = new TemplateCompilerBridge();
+        $renderFnCode = $compiler->compile($template);
 
         $scriptContent = trim($script ?? '');
 
         if ($scriptContent === '') {
-            return "export const __phueTemplate = {$jsonTemplate};\nexport default { template: __phueTemplate };\n";
+            return "{$renderFnCode}\n"
+                 . "export const __phueRender = render;\n"
+                 . "export default { render: __phueRender };\n";
         }
 
         // Intercept createSSRApp or createApp imports from vue
@@ -372,16 +384,18 @@ class PhueComponentLoader
             // Inject the proxy functions below imports
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ template: __phueTemplate, ...opts }, rootProps);';
+                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ render: __phueRender, ...opts }, rootProps);';
             }
             if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ template: __phueTemplate, ...opts }, rootProps);';
+                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ render: __phueRender, ...opts }, rootProps);';
             }
 
             $proxyBlock = implode("\n", $proxies) . "\n";
         }
 
-        return "export const __phueTemplate = {$jsonTemplate};\n{$proxyBlock}{$scriptContent}";
+        return "{$renderFnCode}\n"
+             . "export const __phueRender = render;\n"
+             . "{$proxyBlock}{$scriptContent}";
     }
 
     /**

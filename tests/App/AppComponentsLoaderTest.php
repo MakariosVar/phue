@@ -85,7 +85,7 @@ final class AppComponentsLoaderTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('export const __phueTemplate', $response->getContent());
+        $this->assertStringContainsString('export const __phueRender', $response->getContent());
         $this->assertStringContainsString('export default', $response->getContent());
         $this->assertStringContainsString('Hello there', $response->getContent());
     }
@@ -99,13 +99,13 @@ final class AppComponentsLoaderTest extends TestCase
         $moduleScript = $this->app->handle(new Request('GET', $url))->getContent();
 
         // <Card/> on the stub page template is auto-discovered and imported with
-        // its template export, exactly like Phui core children.
+        // its render export, exactly like Phui core children.
         $this->assertStringContainsString(
-            'import __phueRaw_Card, { __phueTemplate as __phueTpl_Card }',
+            'import __phueRaw_Card, { __phueRender as __phueRender_Card }',
             $moduleScript
         );
         $this->assertStringContainsString(
-            'const Card = { ...(__phueRaw_Card || {}), template: __phueTpl_Card };',
+            'const Card = { ...(__phueRaw_Card || {}), render: __phueRender_Card };',
             $moduleScript
         );
 
@@ -125,11 +125,11 @@ final class AppComponentsLoaderTest extends TestCase
         $cardModule = $this->app->handle(new Request('GET', $url))->getContent();
         $this->assertSame(200, $this->app->handle(new Request('GET', $url))->getStatusCode());
         $this->assertStringContainsString(
-            'import __phueRaw_PhButton, { __phueTemplate as __phueTpl_PhButton }',
+            'import __phueRaw_PhButton, { __phueRender as __phueRender_PhButton }',
             $cardModule
         );
         $this->assertStringContainsString(
-            'const PhButton = { ...(__phueRaw_PhButton || {}), template: __phueTpl_PhButton };',
+            'const PhButton = { ...(__phueRaw_PhButton || {}), render: __phueRender_PhButton };',
             $cardModule
         );
 
@@ -148,7 +148,7 @@ final class AppComponentsLoaderTest extends TestCase
     private function assertImportedChildServable(string $parentModule, string $child): void
     {
         preg_match_all(
-            "~^import __phueRaw_{$child}, \{ __phueTemplate as __phueTpl_{$child} \} from '([^']+\.phue\.js)';~m",
+            "~^import __phueRaw_{$child}, \{ __phueRender as __phueRender_{$child} \} from '([^']+\.phue\.js)';~m",
             $parentModule,
             $matches,
             PREG_SET_ORDER
@@ -162,7 +162,7 @@ final class AppComponentsLoaderTest extends TestCase
                 $response->getStatusCode(),
                 "Imported URL {$url} of {$child} must be servable (minting == serving)."
             );
-            $this->assertStringContainsString('export const __phueTemplate', $response->getContent());
+            $this->assertStringContainsString('export const __phueRender', $response->getContent());
             $this->assertStringContainsString('export default', $response->getContent());
         }
     }

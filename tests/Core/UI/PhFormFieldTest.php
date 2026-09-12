@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\UI;
 
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,7 +17,11 @@ use PHPUnit\Framework\TestCase;
  *  - its template must never leak PHP short-tags (`<?=`, `<?php`) into the
  *    compiled ESM module — that was the original defect that made the
  *    component unresolvable via moduleFor()/moduleHash(),
- *  - it resolves as a module (template + script) so it can join the
+ *  - the shipped module carries a precompiled render function (`__phueRender`)
+ *    whose body translates the template's Vue directives to imperative
+ *    runtime helpers (ternaries, _renderSlot, _normalizeClass) instead of
+ *    emitting a raw template payload,
+ *  - it resolves as a module (render + script) so it can join the
  *    /ui showcase whitelist and be imported per-page.
  *
  * @package Phue\Tests\Core\UI
@@ -46,24 +51,16 @@ final class PhFormFieldTest extends TestCase
         return $module;
     }
 
-    private function templateFromModule(string $module): string
-    {
-        preg_match('/export const __phueTemplate = ("[^"]*");/s', $module, $match);
-        $this->assertArrayHasKey(1, $match, 'module must expose a __phueTemplate const');
-
-        $template = json_decode($match[1], true);
-        $this->assertIsString($template, 'template const must contain a valid JSON string');
-
-        return $template;
-    }
-
-    public function testModuleResolvesWithTemplateAndScript(): void
+    public function testModuleResolvesWithRenderFunctionAndScript(): void
     {
         $module = $this->module();
 
-        $this->assertStringStartsWith('export const __phueTemplate', $module);
+        $this->assertStringStartsWith('import ', $module);
+        $this->assertStringContainsString('export const __phueRender', $module);
         $this->assertStringContainsString("name: 'PhFormField'", $module);
         $this->assertStringContainsString('export default', $module);
+
+        AssertsPhueJsModuleContract::assertEmittedModuleIsLoadableJs($this, $module, 'PhFormField module');
     }
 
     public function testModuleLeaksNoPhpShortTags(): void
@@ -74,17 +71,19 @@ final class PhFormFieldTest extends TestCase
         $this->assertStringNotContainsString('htmlspecialchars', $module);
     }
 
-    public function testTemplateUsesVueDirectivesNotPhpConditionals(): void
+    public function testTemplateCompilesToVueDirectivesNotPhpConditionals(): void
     {
-        $template = $this->templateFromModule($this->module());
+        $module = $this->module();
 
-        $this->assertStringContainsString(':class="fieldClasses"', $template);
-        $this->assertStringContainsString('v-if="label"', $template);
-        $this->assertStringContainsString('<slot>', $template);
-        $this->assertStringContainsString('v-if="error"', $template);
-        $this->assertStringContainsString('v-else-if="helperText"', $template);
-        $this->assertStringContainsString('class="form-label"', $template);
-        $this->assertStringContainsString('class="invalid-feedback d-block"', $template);
+        // The template's bindings/directives must surface as imperative render code.
+        $this->assertStringContainsString('_normalizeClass(_ctx.fieldClasses)', $module);
+        $this->assertStringContainsString('(_ctx.label)', $module);
+        $this->assertStringContainsString('"form-label"', $module);
+        $this->assertStringContainsString('_renderSlot(_ctx.$slots, "default")', $module);
+        $this->assertStringContainsString('(_ctx.error)', $module);
+        $this->assertStringContainsString('(_ctx.helperText)', $module);
+        $this->assertStringContainsString('"invalid-feedback d-block"', $module);
+        $this->assertStringContainsString('"form-text"', $module);
     }
 
     public function testScriptDeclaresWrapperContract(): void

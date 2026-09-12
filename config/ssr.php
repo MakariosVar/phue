@@ -19,7 +19,7 @@ return [
      * Unix domain socket path for communicating with the SSR sidecar service.
      * Note: Abstract sockets starting with "\0" must remain hardcoded in config files.
      */
-    'socket' => "\0phue-ssr",
+    'socket' => "/tmp/phue-ssr.sock",
 
     /**
      * Maximum time in milliseconds to wait when opening a socket connection.

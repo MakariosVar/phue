@@ -9,13 +9,14 @@ SERVICE_NAME="app"
 usage() {
     echo "Phue - Docker Compose Wrapper"
     echo ""
-    echo "Usage: phue {up|down|build|restart|shell|logs|status|clean}"
+    echo "Usage: phue {up|start|down|build|restart|shell|logs|status|clean}"
     echo ""
     echo "Commands:"
     echo "  up      : Safely start containers in detached mode"
+    echo "  start   : Start containers and run Phue HTTP + Bun SSR servers"
     echo "  down    : Safely stop and remove containers"
     echo "  build   : Rebuild images without cache and recreate containers"
-    echo "  restart : Safely restart all running services"
+    echo "  restart : Safely stop containers (down) and start them back up"
     echo "  shell   : Attach to interactive bash shell inside '$SERVICE_NAME' container"
     echo "  logs    : Stream live logs (tail 100)"
     echo "  status  : View current container states"
@@ -40,12 +41,35 @@ if [ ! -f "$COMPOSE_FILE" ]; then
 fi
 
 ACTION="$1"
+shift || true
+
+run_start() {
+    echo "🚀 Starting containers..."
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+    # Pre-clean stale socket inside container before starting servers
+    docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" rm -f /tmp/phue-ssr.sock
+
+    echo "⚡ Launching Phue HTTP & Bun SSR dev servers..."
+
+    # CWD fix: run bun inside /app/ssr subshell
+    docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" bash -c '
+        trap "kill 0" EXIT SIGINT SIGTERM
+        ./bin/phue serve 2>&1 | sed "s/^/[PHUE SERVE] /" &
+        (cd /app/ssr && bun server.ts) 2>&1 | sed "s/^/[BUN SSR]    /" &
+        wait -n
+    '
+}
 
 case "$ACTION" in
     up)
         echo "🚀 Starting containers..."
         docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
         echo "✅ Containers started successfully."
+        ;;
+
+    start)
+        run_start "$@"
         ;;
 
     down)
@@ -62,9 +86,10 @@ case "$ACTION" in
         ;;
 
     restart)
-        echo "🔄 Restarting containers..."
-        docker compose -f "$COMPOSE_FILE" restart
-        echo "✅ Containers restarted."
+        echo "🔄 Stopping containers..."
+        docker compose -f "$COMPOSE_FILE" down --remove-orphans
+        echo "✅ Containers stopped."
+        run_start "$@"
         ;;
 
     shell)

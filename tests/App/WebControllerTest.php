@@ -235,17 +235,19 @@ final class WebControllerTest extends TestCase
         $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
         $this->assertStringContainsString('createSSRApp', $moduleScript);
         $this->assertStringContainsString(".mount('#app')", $moduleScript);
-        $this->assertStringContainsString('\u003Cph-button', $moduleScript);
-        $this->assertStringContainsString('\u003Cph-data-table', $moduleScript);
-        $this->assertStringContainsString('\u003Cph-modal', $moduleScript);
 
-        // Children are auto-imported: the raw template export is merged into a wrapped const.
+        // Showcased components resolve through the precompiled render path.
+        $this->assertStringContainsString('resolveComponent("ph-button")', $moduleScript);
+        $this->assertStringContainsString('resolveComponent("ph-data-table")', $moduleScript);
+        $this->assertStringContainsString('resolveComponent("ph-modal")', $moduleScript);
+
+        // Children are auto-imported: the raw render export is merged into a wrapped const.
         $this->assertStringContainsString(
-            'import __phueRaw_PhButton, { __phueTemplate as __phueTpl_PhButton }',
+            'import __phueRaw_PhButton, { __phueRender as __phueRender_PhButton }',
             $moduleScript
         );
         $this->assertStringContainsString(
-            'const PhButton = { ...(__phueRaw_PhButton || {}), template: __phueTpl_PhButton };',
+            'const PhButton = { ...(__phueRaw_PhButton || {}), render: __phueRender_PhButton };',
             $moduleScript
         );
     }
@@ -262,9 +264,9 @@ final class WebControllerTest extends TestCase
 
         $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
 
-        // Every showcased tag is discovered and imported with its raw template export.
+        // Every showcased tag is discovered and imported with its raw render export.
         preg_match_all(
-            "~__phueTpl_([A-Za-z0-9_]+) \} from '([^']+\.phue\.js)'~",
+            "~__phueRender_([A-Za-z0-9_]+) \} from '([^']+\.phue\.js)'~",
             $moduleScript,
             $matches,
             PREG_SET_ORDER
@@ -279,12 +281,12 @@ final class WebControllerTest extends TestCase
         // HTML-first components need no client import.
         $this->assertNotContains('PhNavigation', $imported);
 
-        // Each imported child URL is servable and carries template + options
+        // Each imported child URL is servable and carries render + options
         // (minting == serving across loaders).
         foreach ($matches as $m) {
             $child = $this->app->handle(new Request('GET', $m[2]));
             $this->assertSame(200, $child->getStatusCode(), "Child module {$m[2]} must be served.");
-            $this->assertStringContainsString('export const __phueTemplate', $child->getContent());
+            $this->assertStringContainsString('export const __phueRender', $child->getContent());
             $this->assertStringContainsString('export default', $child->getContent());
         }
 

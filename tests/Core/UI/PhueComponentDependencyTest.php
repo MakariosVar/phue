@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
@@ -14,14 +15,17 @@ use PHPUnit\Framework\TestCase;
  * PhueComponentDependencyTest — locks the auto-import module contract:
  *  - children are discovered in the page template and imported by the
  *    registry-resolved RAW hash, so children may live in another loader,
- *  - each import wraps the raw default export + raw template export into a
+ *  - each import wraps the raw default export + raw render export into a
  *    merged const that browsers can register directly,
  *  - the proxy merge keeps `components` LAST so discovery never overrides
  *    the author's explicit component options,
  *  - minting == serving: the module minted for a URL is what that URL returns,
  *    and a child content change propagates to the parent full-module hash
  *    while the parent raw hash stays stable,
- *  - template-only components get a functioning default export,
+ *  - template-only components get a functioning default export shipping a
+ *    precompiled render function (`__phueRender`) instead of a raw template,
+ *  - every emitted module must parse as valid ESM and must not leak the
+ *    compiler's function-mode preamble,
  *  - unknown components / wrong hashes are rejected (null).
  *
  * @package Phue\Tests\Core\UI
@@ -100,7 +104,7 @@ PHUE);
 
         foreach (['PhButton', 'Bare'] as $child) {
             preg_match(
-                "/__phueRaw_{$child}, \{ __phueTemplate as __phueTpl_{$child} \} from '([^']+)'/",
+                "/__phueRaw_{$child}, \{ __phueRender as __phueRender_{$child} \} from '([^']+)'/",
                 $module,
                 $matches
             );
@@ -112,10 +116,12 @@ PHUE);
             $this->assertSame("/assets/phue/{$child}.{$rawHash}.phue.js", $matches[1]);
 
             $this->assertStringContainsString(
-                "const {$child} = { ...(__phueRaw_{$child} || {}), template: __phueTpl_{$child} };",
+                "const {$child} = { ...(__phueRaw_{$child} || {}), render: __phueRender_{$child} };",
                 $module
             );
         }
+
+        AssertsPhueJsModuleContract::assertEmittedModuleIsLoadableJs($this, $module, 'Home');
     }
 
     public function testServingUrlMatchesMintedLeafModule(): void
@@ -136,14 +142,16 @@ PHUE);
         $this->assertNotNull($module);
 
         $this->assertStringContainsString(
-            'template: __phueTemplate, ...opts, components: { ...(opts.components || {}), Bare, PhButton }',
+            'render: __phueRender, ...opts, components: { ...(opts.components || {}), Bare, PhButton }',
             $module,
             'Component options from discovery must merge strictly after ...opts.'
         );
 
         $this->assertStringStartsWith("import __phueRaw_Bare", $module);
-        $this->assertStringContainsString('export const __phueTemplate = ', $module);
+        $this->assertStringContainsString('export const __phueRender', $module);
         $this->assertStringContainsString('const mountApp = async', $module);
+
+        AssertsPhueJsModuleContract::assertEmittedModuleIsLoadableJs($this, $module, 'Home proxy');
     }
 
     public function testChildContentChangePropagatesToParentFullHashOnly(): void
@@ -188,8 +196,11 @@ PHUE);
         $module = $this->comps->buildFor('Bare');
         $this->assertNotNull($module);
 
-        $this->assertStringStartsWith('export const __phueTemplate = ', $module);
-        $this->assertStringContainsString('export default { template: __phueTemplate };', $module);
+        $this->assertStringStartsWith('import ', $module);
+        $this->assertStringContainsString('export const __phueRender', $module);
+        $this->assertStringContainsString('export default { render: __phueRender };', $module);
+
+        AssertsPhueJsModuleContract::assertEmittedModuleIsLoadableJs($this, $module, 'Bare template-only');
     }
 
     public function testUnknownComponentAndWrongHashAreRejected(): void

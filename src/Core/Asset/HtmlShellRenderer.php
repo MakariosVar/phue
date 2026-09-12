@@ -53,7 +53,7 @@ class HtmlShellRenderer
             )
         );
 
-        $importMapMarkup = '<script type="importmap">{"imports":{"vue":"/assets/vendor/vue3/vue.esm-browser.js"}}</script>';
+        $importMapMarkup = '<script type="importmap">{"imports":{"vue":"/assets/vendor/vue3/vue.runtime.esm-browser.js"}}</script>';
 
         $scriptsMarkup = implode(
             "\n    ",

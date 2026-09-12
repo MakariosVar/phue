@@ -96,7 +96,7 @@ final class AssetDemoTest extends TestCase
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
 
         $content = $response->getContent();
-        $this->assertStringContainsString('__phueTemplate', $content);
+        $this->assertStringContainsString('__phueRender', $content);
         $this->assertStringContainsString("name: 'PhButton'", $content);
         $this->assertStringContainsString('spinner-border', $content);
     }
@@ -124,7 +124,7 @@ final class AssetDemoTest extends TestCase
 
     public function testVendorVueModuleIsServed(): void
     {
-        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue3/vue.esm-browser.js'));
+        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue3/vue.runtime.esm-browser.js'));
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
