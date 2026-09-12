@@ -1,0 +1,65 @@
+<template>
+  <component :is="tag" :class="rowClasses">
+    <slot />
+  </component>
+</template>
+
+<script>
+export default {
+  name: 'PhRow',
+  props: {
+    tag: {
+      type: String,
+      default: 'div'
+    },
+    gutter: {
+      type: [String, Number],
+      default: null
+    },
+    gutterX: {
+      type: [String, Number],
+      default: null
+    },
+    gutterY: {
+      type: [String, Number],
+      default: null
+    },
+    align: {
+      type: String,
+      default: null
+    },
+    justify: {
+      type: String,
+      default: null
+    },
+    cols: {
+      type: [String, Number, Object],
+      default: null
+    }
+  },
+  computed: {
+    rowClasses() {
+      const classes = ['row'];
+
+      if (this.gutter !== null) classes.push(`g-${this.gutter}`);
+      if (this.gutterX !== null) classes.push(`gx-${this.gutterX}`);
+      if (this.gutterY !== null) classes.push(`gy-${this.gutterY}`);
+
+      if (this.align) classes.push(`align-items-${this.align}`);
+      if (this.justify) classes.push(`justify-content-${this.justify}`);
+
+      if (this.cols) {
+        if (typeof this.cols === 'object') {
+          Object.entries(this.cols).forEach(([bp, val]) => {
+            classes.push(bp === 'cols' ? `row-cols-${val}` : `row-cols-${bp}-${val}`);
+          });
+        } else {
+          classes.push(`row-cols-${this.cols}`);
+        }
+      }
+
+      return classes;
+    }
+  }
+};
+</script>

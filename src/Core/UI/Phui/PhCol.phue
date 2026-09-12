@@ -1,0 +1,107 @@
+<template>
+  <component :is="tag" :class="colClasses">
+    <slot />
+  </component>
+</template>
+
+<script>
+const BREAKPOINTS = ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'];
+
+export default {
+  name: 'PhCol',
+  props: {
+    tag: {
+      type: String,
+      default: 'div'
+    },
+    span: {
+      type: [String, Number, Boolean],
+      default: null
+    },
+    offset: {
+      type: [String, Number, Object],
+      default: null
+    },
+    order: {
+      type: [String, Number, Object],
+      default: null
+    },
+    cols: {
+      type: Object,
+      default: () => ({})
+    },
+    ...BREAKPOINTS.reduce((acc, bp) => {
+      acc[bp] = { type: [String, Number, Boolean], default: null };
+      return acc;
+    }, {})
+  },
+  computed: {
+    colClasses() {
+      const classes = [];
+      let hasResponsiveBreakpoints = false;
+
+      // 1. Process responsive breakpoint props & cols object
+      BREAKPOINTS.forEach((bp) => {
+        const val = this[bp];
+        if (val !== null) {
+          hasResponsiveBreakpoints = true;
+          classes.push(this.formatColClass(bp, val));
+        }
+      });
+
+      if (this.cols && Object.keys(this.cols).length > 0) {
+        Object.entries(this.cols).forEach(([bp, val]) => {
+          hasResponsiveBreakpoints = true;
+          classes.push(this.formatColClass(bp, val));
+        });
+      }
+
+      // 2. Process base span class
+      if (this.span !== null) {
+        classes.unshift(this.formatColClass('xs', this.span));
+      } else if (!hasResponsiveBreakpoints) {
+        // Bare component `<ph-col>` defaults to `col`
+        classes.unshift('col');
+      }
+
+      // 3. Process offsets independently
+      if (this.offset !== null) {
+        if (typeof this.offset === 'object') {
+          Object.entries(this.offset).forEach(([bp, val]) => {
+            classes.push(bp === 'xs' ? `offset-${val}` : `offset-${bp}-${val}`);
+          });
+        } else {
+          classes.push(`offset-${this.offset}`);
+        }
+      }
+
+      // 4. Process order independently
+      if (this.order !== null) {
+        if (typeof this.order === 'object') {
+          Object.entries(this.order).forEach(([bp, val]) => {
+            classes.push(bp === 'xs' ? `order-${val}` : `order-${bp}-${val}`);
+          });
+        } else {
+          classes.push(`order-${this.order}`);
+        }
+      }
+
+      return classes;
+    }
+  },
+  methods: {
+    formatColClass(bp, val) {
+      const prefix = bp === 'xs' ? 'col' : `col-${bp}`;
+
+      // Handles boolean true and empty string "" from bare attrs (e.g., <ph-col md>)
+      if (val === true || val === '') {
+        return prefix;
+      }
+      if (val === 'auto') {
+        return `${prefix}-auto`;
+      }
+      return `${prefix}-${val}`;
+    }
+  }
+};
+</script>

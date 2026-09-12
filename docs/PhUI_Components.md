@@ -588,6 +588,67 @@ No emits.
 </ph-flex>
 ```
 
+### `<ph-row>`
+
+Bootstrap 12-column grid row: the container for `<ph-col>` grid cells. Serves as
+its own (new) grid system, separate from `PhFlex`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `tag` | `String` | `'div'` | Host element |
+| `gutter` | `String \| Number` | `null` | `g-*` gutters (`g-0`…`g-5`, old `2`-`20`/`30`-`90` gutters also accepted) |
+| `gutterX` | `String \| Number` | `null` | `gx-*` horizontal gutters |
+| `gutterY` | `String \| Number` | `null` | `gy-*` vertical gutters |
+| `align` | `String` | `null` | `start` \| `end` \| `center` \| `baseline` \| `stretch` → `align-items-*` |
+| `justify` | `String` | `null` | `start` \| `end` \| `center` \| `between` \| `around` \| `evenly` → `justify-content-*` |
+| `cols` | `String \| Number \| Object` | `null` | `row-cols-*`; per-breakpoint via object (`{ cols: 2, md: 3 }`) |
+
+The `gutter`/`gutterX`/`gutterY` props accept Bootstrap's named classes
+(`g-0`…`g-5`), raw spacing values like `'3rem'` (→ inline `gap`), or legacy
+escape-grid values (`'2'`→`8px`, `'90'`→`90px`). `cols` applies `row-cols-*` so
+children auto-fill the row at equal widths. Breakpoints for `cols` come from the
+object keys, with `cols` as the base key (`{ cols: 2, md: 3 }` → `row-cols-2
+row-cols-md-3`).
+
+No emits.
+
+```
+<ph-row gutter="3" align="center">
+  <ph-col span="4">A</ph-col>
+  <ph-col span="4">B</ph-col>
+  <ph-col span="4">C</ph-col>
+</ph-row>
+```
+
+### `<ph-col>`
+
+Bootstrap 12-column grid column. `span` is **cumulative** with breakpoint props —
+`span="12" md="6"` renders `col-12 col-md-6`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `tag` | `String` | `'div'` | Host element |
+| `span` | `String \| Number \| Boolean` | `null` | Base `col-*`; bare attr → `col`, `"auto"` → `col-auto` |
+| `xs`…`xxl` | `String \| Boolean` | `null` | `sm` \| `md` \| `lg` \| `xl` \| `xxl` → `col-md-*`; bare → auto, `"auto"` → `col-md-auto` |
+| `cols` | `Object` | `{}` | Per-breakpoint spans, `xs` as base key (`{ xs: 12, md: 6 }` → `col-12 col-md-6`) |
+| `offset` | `String \| Number \| Object` | `null` | `offset-*`; per-breakpoint via object (`xs` base key, `0`→`offset-0`) |
+| `order` | `String \| Number \| Object` | `null` | `order-*`; per-breakpoint via object, `xs` base key |
+
+`span` + breakpoint props accumulate, so `<ph-col span="12" md="6" lg="4">` yields
+`col-12 col-md-6 col-lg-4`. `cols` is the object form of the same set and can be
+combined with bare `span`. `offset`/`order` accept scalars, `"auto"`, or
+breakpoint objects (`offset-{md}-*`, `order-{md}-*`).
+
+No emits.
+
+```
+<ph-row gutter="2">
+  <ph-col span="12" md="6" lg="4">Full → half → third</ph-col>
+  <ph-col span="12" md="6" lg="4">Full → half → third</ph-col>
+  <ph-col span="12" lg="4">Full → full → third</ph-col>
+</ph-row>
+```
+
 ### `<spacer>`
 
 Tiny non-collapsing spacer (`flex-shrink-0`, `aria-hidden`). `horizontal` swaps
@@ -665,6 +726,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhCard | `<ph-card>` | Data display |
 | PhCheckbox | `<ph-checkbox>` | Form control |
 | PhChip | `<ph-chip>` | Data display |
+| PhCol | `<ph-col>` | Layout |
 | PhDataTable | `<ph-data-table>` | Data display |
 | PhFlex | `<ph-flex>` | Layout |
 | PhFormField | `<ph-form-field>` | Form control |
@@ -676,6 +738,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhPagination | `<ph-pagination>` | Navigation |
 | PhProgressBar | `<ph-progress-bar>` | Feedback |
 | PhRadio | `<ph-radio>` | Form control |
+| PhRow | `<ph-row>` | Layout |
 | PhSelect | `<ph-select>` | Form control |
 | PhSkeleton | `<ph-skeleton>` | Feedback |
 | PhStack | `<ph-stack>` | Layout |

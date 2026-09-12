@@ -202,6 +202,20 @@ SNP,
   <ph-button variant="ghost">Ghost</ph-button>
 </ph-flex>
 SNP,
+    'PhRow' => <<<'SNP'
+<ph-row gutter="3" align="center">
+  <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">1</div></ph-col>
+  <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">2</div></ph-col>
+  <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">3</div></ph-col>
+</ph-row>
+SNP,
+    'PhCol' => <<<'SNP'
+<ph-row gutter="2">
+  <ph-col span="12" md="6" lg="4">Full → half → third</ph-col>
+  <ph-col span="12" md="6" lg="4">Full → half → third</ph-col>
+  <ph-col span="12" lg="4">Full → full → third</ph-col>
+</ph-row>
+SNP,
     'PhNavigation' => <<<'SNP'
 <?php
 // HTML-first components need no client import:
@@ -763,6 +777,36 @@ return [
                             </ph-flex>
                         </div>
                         <pre class="phue-code-block mb-0"><code>{{ code.PhFlex }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-row&gt;</code></h5>
+                        <p class="small text-body-secondary">Bootstrap grid row container — gutters, alignment, <code>row-cols</code>.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-row gutter="3" align="center">
+                                <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">1</div></ph-col>
+                                <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">2</div></ph-col>
+                                <ph-col span="4"><div class="border rounded p-2 bg-body-secondary text-center">3</div></ph-col>
+                            </ph-row>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhRow }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-col&gt;</code></h5>
+                        <p class="small text-body-secondary">Responsive grid column — cumulative base <code>span</code> plus breakpoints.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-row gutter="2">
+                                <ph-col span="12" md="6" lg="4"><div class="border rounded p-2 bg-body-secondary text-center">Full → half → third</div></ph-col>
+                                <ph-col span="12" md="6" lg="4"><div class="border rounded p-2 bg-body-secondary text-center">Full → half → third</div></ph-col>
+                                <ph-col span="12" lg="4"><div class="border rounded p-2 bg-body-secondary text-center">Full → full → third</div></ph-col>
+                            </ph-row>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhCol }}</code></pre>
                     </div>
                 </div>
             </div>
