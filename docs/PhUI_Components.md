@@ -1,0 +1,692 @@
+# Phue PhUI — Built-in Components
+
+This document is the reference API for every component shipped with the Phue
+frontend toolkit (`PhUI`). Components live in `src/Core/UI/Phui/*.phue` and are
+single-file Vue 3 modules styled with Bootstrap 5 utility classes. There is no
+build step, no npm, and no component whitelist to maintain.
+
+> **Source of truth.** The tables below are derived directly from the
+> `src/Core/UI/Phui/*.phue` sources. If a prop's behavior is described here, it
+> is also implemented there.
+
+---
+
+## 1. How components are used
+
+### 1.1 No imports, no registration
+
+Pages are `.phue` templates. When the framework compiles a page it scans the
+template with `PhueComponentLoader` (`src/Core/UI/ComponentDiscoverer.php`) and
+auto-imports every component the template actually references — and only those:
+**no whitelist, no import; auto-discovered
+from the template and imported into one self-sufficient module, minted per page.**
+
+You just write the tag in kebab-case:
+
+```
+<ph-button variant="primary" @click="save">Save</ph-button>
+<ph-input v-model="email" label="Email" />
+```
+
+The loader builds the `components: { PhButton, PhInput, ... }` map itself and
+only ships the JS module for the referenced components.
+
+### 1.2 `v-model` is wired per component
+
+| Form | Prop updated | Trigger |
+|---|---|---|
+| `v-model` | `modelValue` | `update:modelValue` |
+| `v-model:current-page` | `currentPage` | `update:currentPage` |
+
+### 1.3 Shared conventions
+
+**Spacing scale** (used by `gap`, `size`, `padding`, `margin` props):
+
+| Token  | Value  |
+|--------|--------|
+| `none` | `0`    |
+| `xs`   | `0.25rem` |
+| `sm`   | `0.5rem` |
+| `md`   | `0.75rem` |
+| `lg`   | `1rem`  |
+| `xl`   | `1.5rem` |
+| `2xl`  | `2rem` |
+
+Numeric values are interpreted as **pixels**. An unknown string is passed
+through as a raw CSS value (e.g. `gap="1.25rem"`).
+
+**Variants.** Components that read `variant` map the neutral/error names onto
+Bootstrap classes: `error` → `bg-danger`/`alert-danger`, `neutral` →
+`text-bg-secondary`, and so on. Valid values are enumerated per component below.
+
+**Slots.** Where a component has both a `label` prop and a default slot, the
+slot wins when present.
+
+---
+
+## 2. Form Controls
+
+### `<ph-input>`
+
+Single-line text input with label, helper/error text, disabled/readonly states.
+The id is auto-generated with Vue's `useId()` unless you pass your own.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number` | `''` | Bound via `v-model` |
+| `id` | `String` | `null` | Falls back to `ph-input-<id>` |
+| `type` | `String` | `'text'` | Any native input type |
+| `label` | `String` | `''` | Rendered with `form-label`; `*` marker when `required` |
+| `placeholder` | `String` | `''` | |
+| `helperText` | `String` | `''` | Shown as `form-text` |
+| `error` | `String` | `''` | Non-empty → `is-invalid` + red `form-text` |
+| `disabled` | `Boolean` | `false` | |
+| `readonly` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | Only visual (`*`); validation is your job |
+
+Emits: `update:modelValue` (on `input`), `blur`, `focus`.
+
+```
+<ph-input v-model="email" label="Email" placeholder="you@example.com"
+          helper-text="We never share your email." :error="emailError" />
+```
+
+### `<ph-select>`
+
+Native select bound to `modelValue`. Options accept either objects
+`{ label, value, disabled? }` or plain primitives (normalized internally).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number` | `''` | |
+| `options` | `Array` | `[]` | `{label, value, disabled?}` or primitive values |
+| `id` | `String` | `null` | Falls back to `ph-select-<id>` |
+| `label` | `String` | `''` | `*` marker when `required` |
+| `placeholder` | `String` | `''` | Rendered as a disabled, selected option |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | `is-invalid` + red `form-text` |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | Visual only |
+
+Emits: `update:modelValue` (on `change`).
+
+```
+<ph-select v-model="framework" label="Framework"
+           :options="[
+             { label: 'Vue 3', value: 'vue' },
+             { label: 'React', value: 'react', disabled: true }
+           ]" />
+```
+
+### `<ph-textarea>`
+
+Multi-line textarea. Emits on `input` as you type.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | |
+| `id` | `String` | `null` | Falls back to `ph-textarea-<id>` |
+| `rows` | `Number` | `4` | |
+| `resize` | `String` | `'vertical'` | `none` \| `both` \| `horizontal` \| `vertical` |
+| `label` | `String` | `''` | `*` marker when `required` |
+| `placeholder` | `String` | `''` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | `is-invalid` + red `form-text` |
+| `disabled` | `Boolean` | `false` | |
+| `readonly` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | Visual only |
+
+Emits: `update:modelValue`, `blur`, `focus`.
+
+```
+<ph-textarea v-model="message" label="Message" :rows="5" resize="vertical"
+             helper-text="Max 500 characters." />
+```
+
+### `<ph-checkbox>`
+
+Boolean checkbox with optional indeterminate visual state.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | |
+| `label` | `String` | `''` | Falls back to default slot |
+| `indeterminate` | `Boolean` | `false` | Applied live via the DOM property |
+| `disabled` | `Boolean` | `false` | |
+
+Emits: `update:modelValue` (on `change`, emits `$event.target.checked`).
+
+```
+<ph-checkbox v-model="accepted" label="I agree to the terms" />
+<ph-checkbox v-model="partial" indeterminate>Parent has children</ph-checkbox>
+```
+
+### `<ph-radio>`
+
+Radio input. A group is created by sharing the same `name`; equality with the
+group's `modelValue` drives `checked`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number \| Boolean` | `null` | |
+| `value` | `String \| Number \| Boolean` | **required** | Emitted value; `checked` when `modelValue === value` |
+| `name` | `String` | `''` | Grouping |
+| `label` | `String` | `''` | Or default slot |
+| `disabled` | `Boolean` | `false` | |
+
+Emits: `update:modelValue` (emits the radio's `value`).
+
+```
+<ph-radio v-model="plan" name="plan" value="free" label="Free" />
+<ph-radio v-model="plan" name="plan" value="pro" label="Pro" />
+```
+
+### `<ph-form-field>`
+
+Layout wrapper around any control: label, slot, and error-or-helper text. Adds
+`was-validated` to the wrapper when an error is present (used by Bootstrap for
+feedback styling on the slotted control).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `''` | `form-label` |
+| `error` | `String` | `''` | `valid-feedback d-block` |
+| `helperText` | `String` | `''` | `form-text`; shown only when `error` is empty |
+
+Slots: default. No emits.
+
+```
+<ph-form-field label="Email" :error="error">
+  <ph-input v-model="email" placeholder="you@example.com" />
+</ph-form-field>
+```
+
+---
+
+## 3. Data Display
+
+### `<ph-data-table>`
+
+Client-side sortable, paginatable table. Sorting toggles `asc`/`desc` on the
+last clicked column (arrow `▲`/`▼`, `↕` when inactive).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `columns` | `Array` | **required** | `{ key, label?, sortable? }` |
+| `items` | `Array` | `[]` | Row objects; keys correspond to `columns[].key` |
+| `paginated` | `Boolean` | `false` | Toggles the pager row |
+| `pageSize` | `Number` | `10` | `<= 0` collapses to a single page |
+
+Internal state: `sortKey`, `sortOrder`, `currentPage` (client-side; the
+component does **not** emit page changes).
+
+Slots:
+- `empty` (default "No data available")
+- `cell(<col.key>)` — scoped `{ row, value }` for per-cell rendering
+
+No emits.
+
+```
+<ph-data-table :columns="[
+    { key: 'name', label: 'Product', sortable: true },
+    { key: 'price', label: 'Price', sortable: true },
+  ]" :items="rows" paginated :page-size="4">
+  <template #cell(price)="{ value }">€{{ value }}</template>
+</ph-data-table>
+```
+
+### `<ph-badge>`
+
+Small status label.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `''` | Or default slot |
+| `variant` | `String` | `'neutral'` | `primary` \| `secondary` \| `success` \| `warning` \| `error` \| `info` \| `neutral` |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `pill` | `Boolean` | `false` | `rounded-pill` |
+
+No emits.
+
+```
+<ph-badge variant="success" pill label="Deployed" />
+```
+
+### `<ph-chip>`
+
+Pill-shaped removable tag, built on `badge rounded-pill`. Disabled chips are
+visually dimmed (`opacity-50`) and non-interactive (`pe-none`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `''` | Or default slot |
+| `variant` | `String` | `'neutral'` | Same values as `<ph-badge>` |
+| `removable` | `Boolean` | `false` | Renders the close button |
+| `disabled` | `Boolean` | `false` | Hides remove button, dims chip |
+
+Emits: `remove`.
+
+```
+<ph-chip v-for="(chip, i) in chips" :key="chip" :label="chip"
+         variant="primary" removable @remove="chips.splice(i, 1)" />
+```
+
+### `<ph-avatar>`
+
+Image avatar with initials fallback. `name` produces initials: first + last
+word initials, or the first two characters of a single-word name. Falls back to
+`?` when empty.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `src` | `String` | `''` | Image URL; on load error → initials |
+| `name` | `String` | `''` | Drives fallback initials |
+| `alt` | `String` | `'Avatar'` | |
+| `size` | `String` | `'md'` | `xs` \| `sm` \| `md` \| `lg` \| `xl` |
+| `shape` | `String` | `'circle'` | `circle` \| `square` \| `rounded` |
+
+No emits.
+
+```
+<ph-avatar name="Makarios Varoutsos" size="lg" shape="circle" />
+<ph-avatar src="/uploads/u.png" name="Ada Lovelace" alt="Ada" />
+```
+
+### `<ph-card>`
+
+Content card. Header (title/subtitle or custom), body (default slot), footer.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `title` | `String` | `''` | |
+| `subtitle` | `String` | `''` | |
+| `bordered` | `Boolean` | `true` | `false` → `border-0` |
+| `hoverable` | `Boolean` | `false` | Adds the `card-hoverable` class |
+
+Slots: `header` (default: title + subtitle), default (body), `footer`
+(rendered only if provided).
+
+```
+<ph-card title="Weekly Report" subtitle="Last 7 days" hoverable>
+  Revenue grew 12% week over week.
+  <template #footer>
+    <ph-button variant="outline" size="sm">View details</ph-button>
+  </template>
+</ph-card>
+```
+
+---
+
+## 4. Feedback
+
+### `<ph-alert>`
+
+Dismissible alert with optional title. Internal `visible` state — dismiss hides
+the whole alert; re-showing is your job (e.g. a `v-if`/`v-else` with the
+`dismiss` event).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `title` | `String` | `''` | Bold `alert-heading` |
+| `message` | `String` | `''` | Default slot content wins |
+| `variant` | `String` | `'info'` | `info` \| `success` \| `warning` \| `error` |
+| `dismissible` | `Boolean` | `false` | Shows the `btn-close` |
+
+Emits: `dismiss`.
+
+```
+<ph-alert variant="success" title="Deployed"
+         dismissible @dismiss="alertVisible = false">
+  v2.4.0 is now live.
+</ph-alert>
+```
+
+### `<ph-modal>`
+
+Teleported to `body`, shown when `modelValue` is truthy. Closable via the ✕,
+the backdrop, or a parent flipping `modelValue`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | Controls visibility |
+| `title` | `String` | `''` | Shown in default header |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` \| `xl` \| `full` |
+| `closable` | `Boolean` | `true` | Shows the ✕ and enables state-affecting close actions |
+| `closeOnBackdrop` | `Boolean` | `true` | Backdrop click closes only when `closable` too |
+
+Emits: `update:modelValue` (`false`), `close`.
+
+Slots: `header` (default: `<h3>{{ title }}</h3>`), default (body), `footer`
+(rendered only if provided).
+
+```
+<ph-modal v-model="open" title="Confirm" size="md" closable>
+  Are you sure you want to continue?
+  <template #footer>
+    <ph-button variant="ghost" @click="open = false">Cancel</ph-button>
+    <ph-button variant="primary" @click="open = false">Confirm</ph-button>
+  </template>
+</ph-modal>
+```
+
+### `<ph-progress-bar>`
+
+Clamped to 0–100. Optional label row and live value.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `value` | `Number` | `0` | Clamped via `min(100, max(0, value))` |
+| `label` | `String` | `''` | Left of the value row |
+| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `success` \| `warning` \| `error` |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` (extra small/large progress) |
+| `showValue` | `Boolean` | `false` | Shows `{{ value }}%` |
+| `animated` | `Boolean` | `false` | Striped + animated |
+
+No emits.
+
+```
+<ph-progress-bar :value="syncProgress" label="Syncing"
+                 variant="success" show-value animated />
+```
+
+### `<ph-skeleton>`
+
+Loading placeholder. Width/height accept scale tokens, `%`, px numbers, or any
+CSS length.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `variant` | `String` | `'text'` | `text` \| `circular` \| `rectangular` |
+| `width` | `String \| Number` | `'100%'` | Number → px |
+| `height` | `String \| Number` | `null` | Auto: text `1em`, circular = width, rectangular `100%` |
+| `animated` | `Boolean` | `true` | `placeholder-glow` + `placeholder-wave` |
+
+No emits.
+
+```
+<ph-skeleton variant="text" width="240" height="12" />
+<ph-skeleton variant="circular" width="48" />
+<ph-skeleton variant="rectangular" width="200" height="120" />
+```
+
+---
+
+## 5. Navigation
+
+### `<ph-breadcrumb>`
+
+Crumbs; the last item is `active` with `aria-current="page"`. Only non-active
+items with an `href` render as links.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `items` | `Array` | **required** | `{ label }` (required) + optional `href` |
+
+No emits.
+
+```
+<ph-breadcrumb :items="[
+  { label: 'Home', href: '/' },
+  { label: 'Docs', href: '/docs' },
+  { label: 'UI Components' },
+]" />
+```
+
+### `<ph-link>`
+
+Switches between native `<a>` and `router-link` based on `href` type:
+
+- string starting with `http`, `mailto:`, or `#` → native anchor;
+- any other string or an object → `router-link` bound through `to`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `href` | `String \| Object` | `'#'` | Drives element + `href`/`to` |
+| `label` | `String` | `''` | Default slot wins |
+| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `neutral` \| `danger` |
+| `target` | `String` | `'_self'` | |
+| `rel` | `String` | `null` | Auto `noopener noreferrer` when `target="_blank"` |
+| `underline` | `Boolean` | `true` | `false` → `link-underline-opacity-0` |
+| `disabled` | `Boolean` | `false` | `preventDefault` on click, dimmed, `aria-disabled` |
+
+Emits: `click` (suppressed when disabled).
+
+```
+<ph-link href="mailto:hi@example.com" variant="danger" underline>Contact</ph-link>
+<ph-link :href="{ name: 'product', params: { id: 7 } }" target="_blank">Buy</ph-link>
+```
+
+### `<ph-pagination>`
+
+Ellipsised pager (`…`) when `totalPages > maxVisible`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `currentPage` | `Number` | `1` | |
+| `totalPages` | `Number` | **required** | |
+| `maxVisible` | `Number` | `5` | Window of page buttons around current |
+
+Emits: `update:currentPage`, `page-change` (both with the new page).
+
+```
+<ph-pagination v-model:current-page="page" :total-pages="lastPage" />
+```
+
+### `<ph-tabs>`
+
+Tab headers + a scoped-slot panel where you render content for the active tab.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number` | **required** | Active tab `value` |
+| `items` | `Array` | **required** | `{ label, value, disabled? }` |
+
+Emits: `update:modelValue`, `change` (both with the tab value).
+
+Slots: default — scoped `{ activeTab }`, rendered inside `.tab-content`.
+
+```
+<ph-tabs v-model="active" :items="items">
+  <template #default="{ activeTab }">
+    <p v-if="activeTab === 'overview'">Overview…</p>
+    <p v-else-if="activeTab === 'settings'">Settings…</p>
+  </template>
+</ph-tabs>
+```
+
+---
+
+## 6. Content & Layout
+
+### `<ph-text>`
+
+Typography via props instead of utility classes. Renders a dynamic element
+(`:is="as"`, default `p`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `as` | `String` | `'p'` | Any tag name |
+| `size` | `String` | `'md'` | `xs` \| `sm` \| `md` \| `lg` \| `xl` |
+| `weight` | `String` | `'normal'` | `light` \| `normal` \| `medium` \| `semibold` \| `bold` |
+| `color` | `String` | `'default'` | `default` \| `muted` \| `main` \| `primary` \| `secondary` \| `danger` \| `inverse` |
+| `align` | `String` | `'left'` | `left` \| `center` \| `right` \| `justify` |
+| `truncate` | `Boolean` | `false` | `text-truncate` |
+
+No emits.
+
+```
+<ph-text size="xl" weight="bold" color="main">Hero line</ph-text>
+```
+
+### `<ph-heading>`
+
+Semantic `h1`–`h6` through the `level` prop.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `level` | `String \| Number` | `1` | `1`–`6` |
+| `color` | `String` | `'default'` | `default` \| `muted` \| `primary` \| `secondary` \| `danger` |
+| `align` | `String` | `'left'` | `left` \| `center` \| `right` \| `justify` |
+
+No emits.
+
+```
+<ph-heading :level="2" color="primary">Section title</ph-heading>
+```
+
+### `<ph-box>`
+
+Themed spacing/radius/border/background div.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `padding` | `String \| Number` | `'md'` | Scale token, px, or raw CSS |
+| `margin` | `String \| Number` | `'0'` | Same; `'0'` stays unset |
+| `border` | `Boolean` | `false` | |
+| `radius` | `String` | `'md'` | `none` \| `sm` \| `md` \| `lg` \| `full` |
+| `bg` | `String` | `'surface'` | Named: `primary` \| `secondary` \| `success` \| `danger` \| `warning` \| `light` \| `dark` \| `white` \| `transparent`; any other string → inline `background-color` (e.g. `'surface'`, `'info'`) |
+
+No emits.
+
+```
+<ph-box padding="lg" radius="lg" border bg="surface">
+  Surfaced, rounded box.
+</ph-box>
+```
+
+### `<ph-stack>`
+
+Vertical flex flow.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `gap` | `String \| Number` | `'md'` | Scale / px / raw CSS |
+| `align` | `String` | `'stretch'` | `stretch` \| `flex-start` \| `center` \| `flex-end` \| `baseline` |
+
+No emits.
+
+```
+<ph-stack gap="lg" align="center">
+  <div>A</div><div>B</div>
+</ph-stack>
+```
+
+### `<ph-flex>`
+
+Full flex container via props.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `direction` | `String` | `'row'` | `row` \| `row-reverse` \| `column` \| `column-reverse` |
+| `wrap` | `String` | `'nowrap'` | `nowrap` \| `wrap` \| `wrap-reverse` |
+| `align` | `String` | `'stretch'` | `stretch` \| `flex-start` \| `center` \| `flex-end` \| `baseline` |
+| `justify` | `String` | `'flex-start'` | `flex-start` \| `center` \| `flex-end` \| `space-between` \| `space-around` \| `space-evenly` |
+| `gap` | `String \| Number` | `'0'` | Scale / px / raw CSS |
+
+No emits.
+
+```
+<ph-flex direction="row" justify="space-between" align="center" gap="lg" wrap="wrap">
+  <ph-button variant="primary">Primary</ph-button>
+  <ph-button variant="ghost">Ghost</ph-button>
+</ph-flex>
+```
+
+### `<spacer>`
+
+Tiny non-collapsing spacer (`flex-shrink-0`, `aria-hidden`). `horizontal` swaps
+the dominant axis.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `size` | `String \| Number` | `'md'` | Scale / px / raw CSS |
+| `horizontal` | `Boolean` | `false` | Width vs height |
+
+No emits.
+
+```
+<ph-stack gap="none">
+  <span>Above the gap</span>
+  <spacer size="lg" />
+  <span>Below the gap</span>
+</ph-stack>
+```
+
+---
+
+## 7. Server-Side, HTML-first components
+
+### `<ph-navigation>`
+
+Unlike the rest of PhUI, **PhNavigation has no client template**. It renders in
+PHP — an SSR partial that returns ready HTML. It is invoked through
+`PhuePartialRenderer::renderPartial()` (or `ComponentLoaderRegistry::load()`)
+and injected into the page with `v-html`. Attributes are escaped with
+`htmlspecialchars(…, ENT_QUOTES, 'UTF-8')`.
+
+Params:
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `items` | `Array` | `[]` | `{ label, href, disabled?, group? }` |
+| `activeRoute` | `String` | `'/'` | Current request URI |
+| `orientation` | `String` | `'horizontal'` | `horizontal` \| `sidebar` \| `vertical` |
+
+Behavior:
+- **Group headings** render as `<h6 class="phue-nav-group">` in sidebar/vertical
+  mode only, keyed to consecutive `group` values.
+- **Active detection**: the item whose normalized href equals `activeRoute`, or
+  is a prefix (`/docs` matches `/docs/guide`). The root `/` matches only
+  `activeRoute === '/'`.
+- **Disabled** items render as `<span class="nav-link disabled">` with
+  `aria-disabled="true"`.
+
+Usage from PHP:
+
+```php
+<?php
+$navHtml = $partialRenderer->renderPartial('PhNavigation', [
+    'items'       => $navItems,
+    'activeRoute' => $uri,
+    'orientation' => 'sidebar',
+]);
+?>
+<div v-html="navHtml"></div>
+```
+
+---
+
+## 8. Component index
+
+| Component | Tag | Kind |
+|---|---|---|
+| PhAlert | `<ph-alert>` | Feedback |
+| PhAvatar | `<ph-avatar>` | Data display |
+| PhBadge | `<ph-badge>` | Data display |
+| PhBox | `<ph-box>` | Layout |
+| PhBreadcrumb | `<ph-breadcrumb>` | Navigation |
+| PhButton | `<ph-button>` | Action |
+| PhCard | `<ph-card>` | Data display |
+| PhCheckbox | `<ph-checkbox>` | Form control |
+| PhChip | `<ph-chip>` | Data display |
+| PhDataTable | `<ph-data-table>` | Data display |
+| PhFlex | `<ph-flex>` | Layout |
+| PhFormField | `<ph-form-field>` | Form control |
+| PhHeading | `<ph-heading>` | Typography |
+| PhInput | `<ph-input>` | Form control |
+| PhLink | `<ph-link>` | Navigation |
+| PhModal | `<ph-modal>` | Feedback |
+| PhNavigation | `<ph-navigation>` | Navigation (SSR partial) |
+| PhPagination | `<ph-pagination>` | Navigation |
+| PhProgressBar | `<ph-progress-bar>` | Feedback |
+| PhRadio | `<ph-radio>` | Form control |
+| PhSelect | `<ph-select>` | Form control |
+| PhSkeleton | `<ph-skeleton>` | Feedback |
+| PhStack | `<ph-stack>` | Layout |
+| PhTabs | `<ph-tabs>` | Navigation |
+| PhText | `<ph-text>` | Typography |
+| PhTextarea | `<ph-textarea>` | Form control |
+| Spacer | `<spacer>` | Layout |
+
+Live demonstrations of every component live on the built-in `/ui` showcase page
+(`App/Frontend/Pages/UI.phue`).
