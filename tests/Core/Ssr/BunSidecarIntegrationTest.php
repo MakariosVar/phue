@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Core\Ssr;
 
+use Phue\Core\Config;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -19,16 +20,21 @@ use RuntimeException;
 #[Group('integration')]
 final class BunSidecarIntegrationTest extends TestCase
 {
-    private const ABSTRACT_SOCKET = "\0phue-ssr";
-
     private const DEFAULT_VUE = '3.5.42';
+
+    private static function socketPath(): string
+    {
+        $config = new Config('/app/config');
+
+        return (string) $config->get('ssr.socket', "\0phue-ssr");
+    }
 
     protected function setUp(): void
     {
         parent::setUp();
 
         if (!self::sidecarReachable()) {
-            self::markTestSkipped('Bun sidecar is not reachable on "\0phue-ssr".');
+            self::markTestSkipped(sprintf('Bun sidecar is not reachable on "%s".', self::socketPath()));
         }
     }
 
@@ -136,7 +142,7 @@ final class BunSidecarIntegrationTest extends TestCase
      */
     private static function sidecarReachable(): bool
     {
-        $client = @stream_socket_client('unix://' . self::ABSTRACT_SOCKET, $errno, $errstr, 0.5);
+        $client = @stream_socket_client('unix://' . self::socketPath(), $errno, $errstr, 0.5);
 
         if ($client !== false) {
             fclose($client);
@@ -179,7 +185,7 @@ final class BunSidecarIntegrationTest extends TestCase
     private function request(string $method, string $path, ?array $body): array
     {
         /* @var resource|false $socket */
-        $socket = @stream_socket_client('unix://' . self::ABSTRACT_SOCKET, $errno, $errstr, 2.0);
+        $socket = @stream_socket_client('unix://' . self::socketPath(), $errno, $errstr, 2.0);
 
         if ($socket === false) {
             throw new RuntimeException("Cannot connect to Bun sidecar: {$errstr} ({$errno})");

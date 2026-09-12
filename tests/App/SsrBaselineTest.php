@@ -6,6 +6,7 @@ namespace Phue\Tests\App;
 
 use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
+use Phue\Core\Config;
 use Phue\Core\Request;
 use Phue\Core\Ssr\UnixSsrClient;
 use PHPUnit\Framework\Attributes\Group;
@@ -42,9 +43,18 @@ final class SsrBaselineTest extends TestCase
         $registry->registerSource('/assets', '/app/App/Frontend');
         $registry->registerSource('/assets/vendor', '/app/storage/assets/vendor');
 
-        if (!(new UnixSsrClient())->isAvailable()) {
-            self::markTestSkipped('Bun SSR sidecar is not reachable on \0phue-ssr.');
+        if (!$this->ssrClient()->isAvailable()) {
+            self::markTestSkipped('Bun SSR sidecar is not reachable.');
         }
+    }
+
+    private function ssrClient(): UnixSsrClient
+    {
+        $config = $this->app->getContainer()->get(Config::class);
+
+        return new UnixSsrClient(
+            socket: (string) $config->get('ssr.socket', "\0phue-ssr"),
+        );
     }
 
     public function testRootServesRenderedHtmlWithoutFouc(): void
