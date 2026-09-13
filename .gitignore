@@ -19,3 +19,4 @@ tests/Production/_tmp_conftest/storage/logs
 
 .env
 !.env.example
+/ssr/.cache/

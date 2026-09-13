@@ -154,19 +154,17 @@ final class BunSidecarIntegrationTest extends TestCase
     }
 
     /**
-     * Builds the exact ESM module source the framework ships for a Phui
-     * component (`export const __phueTemplate` + `export default {...}`), so the
-     * sidecar receives the same code the client imports.
+     * Builds the SSR-ready ESM module source the framework ships for a Phui
+     * component (`export const __phueSsrRender` + `export default {...}`),
+     * so the sidecar receives SSR-capable code.
      */
     private function phuiModule(string $name): string
     {
         $loader = new PhueComponentLoader(dirname(__DIR__, 3) . '/src/Core/UI/Phui');
+        $module = $loader->buildForSsr($name);
 
-        $hash = $loader->moduleHash($name);
-        $module = $hash !== null ? $loader->moduleFor($name, $hash) : null;
-
-        if ($module === null) {
-            self::fail("Phui module not available for {$name}.");
+        if ($module === null || trim($module) === '') {
+            self::fail("SSR module not available for {$name}.");
         }
 
         return $module;

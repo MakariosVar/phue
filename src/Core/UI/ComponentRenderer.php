@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Core\UI;
 
+use App\Config\NavigationConfig;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
@@ -12,28 +13,22 @@ use Phue\Core\Ssr\SsrEngine;
 use RuntimeException;
 
 /**
- * Class ComponentRenderer
- *
- * Handles the rendering lifecycle of Phue components, layouts, and Views.
- * Supports HTML-first server layouts and template-based client hydration.
- *
- * @package Phue\Core\UI
+ * Renders Phue components into HTTP responses.
  */
 class ComponentRenderer
 {
     /**
-     * ComponentRenderer constructor.
-     *
-     * @param HtmlShellRenderer            $shellRenderer   Service responsible for rendering the outer HTML document shell.
-     * @param AssetRegistry                $assetRegistry   Global registry managing script dependencies.
-     * @param PhueComponentLoader|null     $loader          Optional component loader instance.
-     * @param string|null                  $layoutName      Optional layout component name (e.g., 'AppLayout').
-     * @param mixed                        $uriResolver     Optional callable returning current request URI string: fn(): string.
-     * @param mixed                        $requestResolver Optional callable returning current Request object.
-     * @param PhuePartialRenderer|null     $partialRenderer Optional partial renderer for layout integration.
-     * @param mixed                        $userResolver    Optional callable returning IdentityInterface|null: fn(): ?IdentityInterface.
-     * @param SsrEngine|null               $ssrEngine       Optional SSR engine for server-side component evaluation.
-     * @param ComponentLoaderRegistry|null $loaderRegistry  Optional registry for resolving multi-source component loaders.
+     * @param HtmlShellRenderer $shellRenderer The HTML shell renderer.
+     * @param AssetRegistry $assetRegistry The asset registry.
+     * @param PhueComponentLoader|null $loader The component loader.
+     * @param string|null $layoutName Optional layout name to wrap components.
+     * @param callable|null $uriResolver Optional callable returning current request URI string.
+     * @param callable|null $requestResolver Optional callable returning current Request object.
+     * @param PhuePartialRenderer|null $partialRenderer Optional partial renderer.
+     * @param callable|null $userResolver Optional callable returning authenticated user.
+     * @param SsrEngine|null $ssrEngine Optional Vue SSR engine.
+     * @param ComponentLoaderRegistry|null $loaderRegistry Optional loader registry.
+     * @param array $themeConfig Theme configuration options.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -45,25 +40,18 @@ class ComponentRenderer
         private ?PhuePartialRenderer $partialRenderer = null,
         private mixed $userResolver = null,
         private ?SsrEngine $ssrEngine = null,
-        private ?ComponentLoaderRegistry $loaderRegistry = null
+        private ?ComponentLoaderRegistry $loaderRegistry = null,
+        private array $themeConfig = []
     ) {}
 
     /**
-     * Renders a component or View instance into an HTTP Response.
+     * Renders a component by name or title, returning a Response.
      *
-     * Supported Overloads:
-     * - render('Products')
-     * - render('Products', ['testValue' => 'a'])
-     * - render('Products', 'Title Override', ['testValue' => 'a'])
-     * - render('Title', $viewInstance)
-     *
-     * @param string                 $nameOrTitle         Component name or page title override.
-     * @param View|string|array|null $viewOrTitleOrParams View instance, title override string, or context params.
-     * @param array<string, mixed>   $params              Context parameters when using title override.
-     *
-     * @return Response HTTP response containing the full HTML document.
-     *
-     * @throws RuntimeException If component loading by name is requested without a loader configured.
+     * @param string $nameOrTitle Component name or page title.
+     * @param View|string|array|null $viewOrTitleOrParams View instance, page title, or parameters array.
+     * @param array $params Data parameters if first argument is component name.
+     * @return Response
+     * @throws RuntimeException If loader is required but not configured.
      */
     public function render(
         string $nameOrTitle,
@@ -97,13 +85,12 @@ class ComponentRenderer
     }
 
     /**
-     * Renders a .phue file directly from an absolute or relative file path.
+     * Renders a .phue template file directly.
      *
-     * @param string      $filePath      Path to the .phue file.
-     * @param string|null $titleOverride Optional title override.
-     * @param array       $params        Context parameters passed into the component evaluation.
-     *
-     * @return Response HTTP response containing the compiled document.
+     * @param string $filePath Full path to the .phue file.
+     * @param string|null $titleOverride Optional title to override template metadata.
+     * @param array $params Parameters for template execution.
+     * @return Response
      */
     public function renderFile(string $filePath, ?string $titleOverride = null, array $params = []): Response
     {
@@ -117,14 +104,7 @@ class ComponentRenderer
     }
 
     /**
-     * Transforms inline component scripts into external module assets and delegates to renderView.
-     * Keeps module generation deterministic using raw page template without layout wrapping.
-     *
-     * @param string $name  Component logical name.
-     * @param string $title Document title.
-     * @param View   $view  Evaluated View entity.
-     *
-     * @return Response Compiled HTTP HTML response.
+     * Handles module-based inline scripts, registering them as dynamic assets.
      */
     private function renderComponentAsModule(string $name, string $title, View $view): Response
     {
@@ -157,52 +137,31 @@ class ComponentRenderer
     }
 
     /**
-     * Renders a View instance into the final HTML shell response.
-     * Places the #app container strictly around the page content and wraps it in the Layout server chrome.
-     *
-     * @param string      $title         Page title.
-     * @param View        $view          View object containing markup and assets.
-     * @param string|null $componentName Component logical name if available.
-     *
-     * @return Response HTTP 200 response with text/html content type or JSON response for SPA requests.
+     * Builds and returns the final HTML response.
      */
     private function renderView(string $title, View $view, ?string $componentName = null): Response
     {
+        $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
+
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
-            $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
             $state = $view->getState();
+            $context = ['name' => $title, 'uri' => $uri];
 
-            $context = [
-                'name' => $title,
-                'uri'  => $uri,
-            ];
-
-            // Step 2: Build SSR envelope by resolving transitive dependencies
             if ($this->loaderRegistry !== null && $componentName !== null) {
                 $discoverer = new ComponentDiscoverer($this->loaderRegistry);
-
                 $deps = $discoverer->resolveTransitiveDependencies($componentName);
-
                 $components = [];
 
                 foreach ($deps as $depName => $depHash) {
-                    $source = $this->loaderRegistry->moduleFor($depName, $depHash);
+                    $source = method_exists($this->loaderRegistry, 'buildForSsr') 
+                        ? $this->loaderRegistry->buildForSsr($depName) 
+                        : $this->loaderRegistry->moduleFor($depName, $depHash);
 
                     if ($source !== null && trim($source) !== '' && $depName !== $componentName) {
-                        // Strip child imports and child const proxy definitions for SSR context safety
-                        $cleanSource = preg_replace('/^import\s+__phueRaw_.*?;$/m', '', $source);
-                        $cleanSource = preg_replace('/^const\s+\w+\s*=\s*\{\s*\.\.\.\(__phueRaw_.*?;$/m', '', $cleanSource);
-
-                        // Clean redundant components option in template-only default export (trailing)
-                        $cleanSource = preg_replace('/,\s*components:\s*\{[^}]*\}/', '', $cleanSource);
-
-                        // Clean leading components option injected in script-branch default export
-                        $cleanSource = preg_replace('/(export\s+default\s*\{\s*)components:\s*\{[^}]*\}\s*,\s*/s', '$1', $cleanSource);
-
-                        $components[$depName] = trim($cleanSource);
+                        $components[$depName] = trim($source);
                     }
                 }
-
+                
                 if (!empty($components)) {
                     $context['components'] = $components;
                 }
@@ -229,61 +188,159 @@ class ComponentRenderer
             $this->assetRegistry->addScript($script, isModule: true);
         }
 
-        $pageMarkup = $view->hasHtml() 
-            ? $view->getHtml() 
-            : $view->getTemplate();
+        $pageMarkup = $view->hasHtml() ? $view->getHtml() : $view->getTemplate();
 
-        // Check if this is an SPA transition request
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
 
-        // 1. Early Return for SPA: Return ONLY $pageMarkup without evaluating the outer Layout chrome
         if ($isSpaRequest) {
+            $requestScripts = $this->assetRegistry->getRequestScripts();
+            $flatScriptUrls = array_map(
+                static fn(mixed $script) => is_array($script) ? ($script['url'] ?? '') : (string) $script,
+                $requestScripts
+            );
+
             return Response::json([
                 'title'   => $title,
                 'html'    => $pageMarkup,
                 'state'   => $view->getState(),
-                'scripts' => $this->assetRegistry->getRequestScripts(),
+                'scripts' => array_values(array_filter($flatScriptUrls)),
             ]);
         }
 
-        // 2. Full Page Load Path: Isolate page content within #app root container for Vue hydration match
-        $mountedPageContent = '<div id="app">' . $pageMarkup . '</div>';
+        $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
+        $navState = [
+            'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
+            'activeRoute' => $uri,
+            'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal'
+        ];
 
-        // 3. Wrap mounted page within server chrome layout (layout stays OUTSIDE #app)
+        $mountedPageContent = '<div id="app">' . $pageMarkup . '</div>';
         $appContent = $this->applyLayoutIfConfigured($mountedPageContent);
 
-        // 4. Render full HTML shell
+        $storageKey = $this->themeConfig['storageKey'] ?? 'phue-theme';
+        $defaultTheme = $this->themeConfig['defaultTheme'] ?? 'system';
+
+        $themeInitScript = sprintf(
+            <<<'JS'
+(function() {
+    var saved = localStorage.getItem('%s');
+    var theme = saved ? saved : ('%s' === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : '%s');
+    document.documentElement.setAttribute('data-bs-theme', theme);
+})();
+JS,
+            addslashes($storageKey),
+            addslashes($defaultTheme),
+            addslashes($defaultTheme)
+        );
+
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',
             initialState: $view->getState(),
             content: $appContent,
             inlineScript: $view->getInlineScript(),
-            wrapInAppContainer: false
+            wrapInAppContainer: false,
+            headScript: $themeInitScript,
+            navState: $navState
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 
     /**
-     * Wraps the inner page markup within the configured Layout component if available.
-     *
-     * @param string $pageMarkup Evaluated page content string.
-     *
-     * @return string Wrapped HTML markup or original markup if no layout is defined.
+     * Applies configured layout template around page markup.
      */
-    private function applyLayoutIfConfigured(string $pageMarkup): string
+    private function applyLayoutIfConfigured(string $pageMarkup, string $navHtml = ''): string
     {
-        if ($this->layoutName === null || $this->loader === null) {
+        if ($this->layoutName === null) {
+            return $pageMarkup;
+        }
+
+        $loader = $this->loaderRegistry ?? $this->loader;
+        if ($loader === null) {
             return $pageMarkup;
         }
 
         $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
         $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
 
-        $layoutComponent = $this->loader->load($this->layoutName, [
+        // Load navigation conditionally if requested by layout and loader supports it
+        $hasNavComponent = method_exists($loader, 'hasComponent') 
+            ? $loader->hasComponent('PhNavigation') 
+            : true;
+
+        if ($navHtml === '' && $hasNavComponent && class_exists(NavigationConfig::class)) {
+            $navState = [
+                'items'       => NavigationConfig::getAppItems($user),
+                'activeRoute' => $uri,
+                'orientation' => NavigationConfig::getAppPlacement(),
+            ];
+
+            try {
+                $navComponent = $loader->load('PhNavigation', $navState);
+
+                if ($this->ssrEngine !== null) {
+                    $context = ['name' => 'PhNavigation', 'uri' => $uri];
+
+                    if ($this->loaderRegistry !== null) {
+                        $discoverer = new ComponentDiscoverer($this->loaderRegistry);
+                        $deps = $discoverer->resolveTransitiveDependencies('PhNavigation');
+                        $components = [];
+
+                        // Include PhNavigation itself as root entry in components map using buildForSsr if available
+                        $navSource = method_exists($this->loaderRegistry, 'buildForSsr') 
+                            ? $this->loaderRegistry->buildForSsr('PhNavigation') 
+                            : null;
+
+                        if ($navSource !== null && trim($navSource) !== '') {
+                            $components['PhNavigation'] = trim($navSource);
+                        } else {
+                            $navHash = $this->loaderRegistry->moduleHash('PhNavigation');
+                            if ($navHash !== null) {
+                                $fallbackNavSource = $this->loaderRegistry->moduleFor('PhNavigation', $navHash);
+                                if ($fallbackNavSource !== null && trim($fallbackNavSource) !== '') {
+                                    $components['PhNavigation'] = trim($fallbackNavSource);
+                                }
+                            }
+                        }
+
+                        // Include transitive dependencies
+                        foreach ($deps as $depName => $depHash) {
+                            $source = method_exists($this->loaderRegistry, 'buildForSsr') 
+                                ? $this->loaderRegistry->buildForSsr($depName) 
+                                : $this->loaderRegistry->moduleFor($depName, $depHash);
+
+                            if ($source !== null && trim($source) !== '' && $depName !== 'PhNavigation') {
+                                $components[$depName] = trim($source);
+                            }
+                        }
+
+                        if (!empty($components)) {
+                            $context['components'] = $components;
+                        }
+                    }
+
+                    $navHtml = $this->ssrEngine->render(
+                        template: $navComponent->view->getTemplate(),
+                        state: $navState,
+                        context: $context
+                    ) ?? '';
+                }
+
+                $navScriptUrl = $this->loaderRegistry?->moduleUrl('PhNavigation');
+                if ($navScriptUrl !== null) {
+                    $this->assetRegistry->addScript($navScriptUrl, isModule: true);
+                }
+            } catch (\Throwable) {
+                // Fall back gracefully if PhNavigation template is absent or rendering fails
+                $navHtml = '';
+            }
+        }
+
+        $layoutComponent = $loader->load($this->layoutName, [
             'content'         => $pageMarkup,
+            'navHtml'         => $navHtml,
             'uri'             => $uri,
             'user'            => $user,
             'partialRenderer' => $this->partialRenderer,

@@ -1,5 +1,4 @@
 <php>
-
 use App\Config\NavigationConfig;
 use Phue\Auth\IdentityInterface;
 
@@ -24,6 +23,9 @@ use Phue\Auth\IdentityInterface;
 /** @var string $content */
 $content = $content ?? '';
 
+/** @var string $navHtml */
+$navHtml = $navHtml ?? '';
+
 /** @var string $uri */
 $uri = $uri ?? '/';
 
@@ -33,49 +35,17 @@ $user = $user ?? null;
 /** @var string $placement */
 $placement = $placement ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'topbar');
 
-/** @var array $items */
-$items = $items ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : []);
+/** @var array $layoutConfig */
+$layoutConfig = class_exists(NavigationConfig::class) ? NavigationConfig::getAppLayout() : ['sticky' => true];
+
+/** @var bool $sticky */
+$sticky = $sticky ?? ($layoutConfig['sticky'] ?? true);
 
 /** @var array{label: string, href: string} $brand */
 $brand = $brand ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppBrand() : ['label' => 'Phue', 'href' => '/']);
 
-/** @var array $actions */
-$actions = $actions ?? (class_exists(NavigationConfig::class) ? NavigationConfig::getAppActions($user) : []);
-
-/** @var array<string, array{0: string, 1: string}> Static cache pool indexed by request user signature */
-static $cache = [];
-
 /** @var string $orientation */
 $orientation = ($placement === 'sidebar') ? 'sidebar' : 'horizontal';
-
-/** 
- * Serialization-safe cache key string (prevents Closure serialization errors from dynamic visibility rules)
- * @var string $userKey 
- */
-$userKey = (is_object($user) && method_exists($user, 'getId')) ? (string) $user->getId() : ($user !== null ? 'authenticated' : 'guest');
-
-/** @var string $cacheKey */
-$cacheKey = 'nav_html_' . md5($userKey . '|' . $uri . '|' . $orientation);
-
-if (isset($cache[$cacheKey])) {
-    [$navHtml, $actionsHtml] = $cache[$cacheKey];
-} else {
-    /** @var string $navHtml */
-    $navHtml = $partialRenderer->renderPartial('PhNavigation', [
-        'items'       => $items,
-        'activeRoute' => $uri,
-        'orientation' => $orientation,
-    ]);
-
-    /** @var string $actionsHtml */
-    $actionsHtml = !empty($actions) ? $partialRenderer->renderPartial('PhNavigation', [
-        'items'       => $actions,
-        'activeRoute' => $uri,
-        'orientation' => 'horizontal',
-    ]) : '';
-
-    $cache[$cacheKey] = [$navHtml, $actionsHtml];
-}
 
 /** @var string $brandLabelEscaped */
 $brandLabelEscaped = htmlspecialchars($brand['label'] ?? 'Phue', ENT_QUOTES, 'UTF-8');
@@ -83,36 +53,37 @@ $brandLabelEscaped = htmlspecialchars($brand['label'] ?? 'Phue', ENT_QUOTES, 'UT
 /** @var string $brandHrefEscaped */
 $brandHrefEscaped = htmlspecialchars($brand['href'] ?? '/', ENT_QUOTES, 'UTF-8');
 
+/** @var string $stickyStyle */
+$stickyStyle = $sticky ? ' style="position: sticky; top: 0; z-index: 1020;"' : '';
+
 if ($orientation === 'sidebar') {
-    /** @var string $layoutHtml */
     $layoutHtml = sprintf(
-        '<div class="app-layout d-flex">' .
-            '<aside class="app-sidebar p-3 border-end flex-shrink-0">' .
+        '<div class="app-layout d-flex align-items-start">' .
+            '<aside class="app-sidebar align-self-start p-3 border-end flex-shrink-0"%s>' .
                 '<a class="navbar-brand mb-3 d-inline-block" href="%s">%s</a>' .
-                '%s' .
+                '<div id="nav">%s</div>' .
             '</aside>' .
             '<main class="app-content flex-grow-1 p-3">%s</main>' .
         '</div>',
+        $stickyStyle,
         $brandHrefEscaped,
         $brandLabelEscaped,
         $navHtml,
         $content
     );
 } else {
-    /** @var string $layoutHtml */
     $layoutHtml = sprintf(
         '<div class="app-layout">' .
-            '<header class="app-topbar navbar navbar-expand-lg navbar-light bg-light border-bottom px-3 py-2">' .
+            '<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2"%s>' .
                 '<a class="navbar-brand me-3" href="%s">%s</a>' .
-                '%s' .
-                '<div class="ms-auto d-flex align-items-center gap-2">%s</div>' .
+                '<div id="nav" class="flex-grow-1 me-auto">%s</div>' .
             '</header>' .
             '<main class="app-content p-3">%s</main>' .
         '</div>',
+        $stickyStyle,
         $brandHrefEscaped,
         $brandLabelEscaped,
         $navHtml,
-        $actionsHtml,
         $content
     );
 }
@@ -122,5 +93,5 @@ return [
 ];
 </php>
 <template>
-<!-- App -->
+<!-- Layout Container -->
 </template>

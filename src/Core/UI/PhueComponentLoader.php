@@ -276,9 +276,8 @@ class PhueComponentLoader
         $importStatements = !empty($imports) ? implode("\n", $imports) . "\n" : '';
         $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
 
-        // Precompile HTML template string into JS render function (Runtime-only compatible)
-        $renderFnCode = $this->compilerBridge->compile($structure['template']);
-
+        // Precompile ONLY client DOM render function
+        $renderFnCode = $this->compilerBridge->compile($structure['template'], ssr: false);
         $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
@@ -338,34 +337,49 @@ class PhueComponentLoader
     }
 
     /**
-     * Builds the unified JavaScript SFC module containing the precompiled render function export and inline script.
+     * Builds SSR-only JS module for Sidecar V8 execution.
      *
-     * @param string      $template HTML/Vue template string.
-     * @param string|null $script   Inline JavaScript component options payload.
-     *
-     * @return string Valid JavaScript module content.
+     * @param string $name
+     * @return string|null
      */
-    public static function buildModule(string $template, ?string $script): string
+    public function buildForSsr(string $name): ?string
     {
-        $compiler = new TemplateCompilerBridge();
-        $renderFnCode = $compiler->compile($template);
-
-        $scriptContent = trim($script ?? '');
-
-        if ($scriptContent === '') {
-            return "{$renderFnCode}\n"
-                 . "export const __phueRender = render;\n"
-                 . "export default { render: __phueRender };\n";
+        try {
+            $structure = $this->getOrFetchStructure($name);
+        } catch (Exception) {
+            return null;
         }
 
-        // Intercept createSSRApp or createApp imports from vue
+        $children = [];
+        if ($this->registry !== null) {
+            $discoverer = new ComponentDiscoverer($this->registry);
+            $children = $discoverer->scanTemplate($structure['template']);
+        }
+
+        $childNames = [];
+        foreach ($children as $child) {
+            $childNames[] = $child;
+        }
+
+        $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
+
+        // Precompile ONLY SSR render function
+        $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
+        $scriptContent = trim($structure['script'] ?? '');
+
+        if ($scriptContent === '') {
+            $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
+            return "{$ssrRenderFnCode}\n"
+                 . "export const __phueSsrRender = ssrRender;\n"
+                 . "export default { ssrRender: __phueSsrRender{$componentsProp} };\n";
+        }
+
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
         $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
 
         $proxyBlock = '';
 
         if ($hasSsrApp || $hasApp) {
-            // Alias imports in statement: createSSRApp -> __phueOrigCreateSSRApp
             $scriptContent = preg_replace_callback(
                 '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
                 function ($matches) {
@@ -381,7 +395,74 @@ class PhueComponentLoader
                 1
             );
 
-            // Inject the proxy functions below imports
+            $componentsProp = !empty($componentsObj) 
+                ? ", components: { ...(opts.components || {}), {$componentsObj} }" 
+                : '';
+
+            $proxies = [];
+            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
+                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ ssrRender: __phueSsrRender, ...opts{$componentsProp} }, rootProps);";
+            }
+            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
+                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts{$componentsProp} }, rootProps);";
+            }
+
+            $proxyBlock = implode("\n", $proxies) . "\n";
+        } elseif (!empty($componentsObj)) {
+            $scriptContent = preg_replace_callback(
+                '/export\s+default\s*\{/s',
+                fn($matches) => "export default { components: { {$componentsObj} }, ",
+                $scriptContent,
+                1
+            );
+        }
+
+        return "{$ssrRenderFnCode}\n"
+             . "export const __phueSsrRender = ssrRender;\n"
+             . "{$proxyBlock}{$scriptContent}";
+    }
+
+    /**
+     * Builds a module string given a template and script.
+     *
+     * @param string      $template
+     * @param string|null $script
+     * @return string
+     */
+    public static function buildModule(string $template, ?string $script): string
+    {
+        $compiler = new TemplateCompilerBridge();
+        $renderFnCode = $compiler->compile($template, ssr: false);
+
+        $scriptContent = trim($script ?? '');
+
+        if ($scriptContent === '') {
+            return "{$renderFnCode}\n"
+                 . "export const __phueRender = render;\n"
+                 . "export default { render: __phueRender };\n";
+        }
+
+        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
+        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+
+        $proxyBlock = '';
+
+        if ($hasSsrApp || $hasApp) {
+            $scriptContent = preg_replace_callback(
+                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
+                function ($matches) {
+                    $imports = $matches[1];
+                    $source  = $matches[2];
+
+                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
+                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
+
+                    return "import {{$imports}} from {$source};";
+                },
+                $scriptContent,
+                1
+            );
+
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
                 $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ render: __phueRender, ...opts }, rootProps);';
@@ -399,13 +480,11 @@ class PhueComponentLoader
     }
 
     /**
-     * Serves the compiled JS SFC module for a component IF the 8-character sha1 prefix hash matches.
-     * Performs zero PHP evaluation.
+     * Returns the built module if the hash matches.
      *
-     * @param string $name Component logical name.
-     * @param string $hash 8-character sha1 prefix hash.
-     *
-     * @return string|null JavaScript SFC module content or null if unknown or hash mismatch.
+     * @param string $name
+     * @param string $hash
+     * @return string|null
      */
     public function moduleFor(string $name, string $hash): ?string
     {
@@ -424,11 +503,10 @@ class PhueComponentLoader
     }
 
     /**
-     * Computes the 8-character SHA-1 hash prefix of the compiled JS SFC module.
+     * Returns the module hash for a component.
      *
-     * @param string $name Component logical name.
-     *
-     * @return string|null 8-character hash prefix, or null if component cannot be loaded/parsed.
+     * @param string $name
+     * @return string|null
      */
     public function moduleHash(string $name): ?string
     {
@@ -441,12 +519,11 @@ class PhueComponentLoader
     }
 
     /**
-     * Evaluates parsed structure dynamically per-render call and extracts meta declarations.
+     * Evaluates a component structure with parameters to return a PhueComponent.
      *
-     * @param array{template: string, script: ?string, phpCode: ?string} $structure Structural AST array.
-     * @param array<string, mixed>                                       $params    Evaluation parameters.
-     *
-     * @return PhueComponent Constructed component entity.
+     * @param array $structure
+     * @param array $params
+     * @return PhueComponent
      */
     private function evaluateStructure(array $structure, array $params): PhueComponent
     {
@@ -469,13 +546,10 @@ class PhueComponentLoader
     }
 
     /**
-     * Resolves file path and returns/caches ONLY the static AST structure based on mtime and size.
+     * Fetches component structure from disk or cache.
      *
-     * @param string $name Component logical name.
-     *
-     * @return array{template: string, script: ?string, phpCode: ?string} Structural AST payload.
-     *
-     * @throws RuntimeException If component name format is invalid or file path escapes sandbox.
+     * @param string $name
+     * @return array
      */
     private function getOrFetchStructure(string $name): array
     {
@@ -485,7 +559,6 @@ class PhueComponentLoader
 
         $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . $name . '.phue';
 
-        // Fast preliminary check to avoid unneeded realpath() & stat() calls
         if (!file_exists($targetPath)) {
             throw new RuntimeException("Phue component file not found: '{$name}'");
         }
@@ -503,7 +576,6 @@ class PhueComponentLoader
         $mtime = $stat['mtime'];
         $size = $stat['size'];
 
-        // 1. In-Memory Request Cache Hit
         if (isset($this->cache[$resolvedPath])) {
             $cached = $this->cache[$resolvedPath];
             if ($cached['mtime'] === $mtime && $cached['size'] === $size) {
@@ -511,7 +583,6 @@ class PhueComponentLoader
             }
         }
 
-        // 2. PSR-16 Persistent Cache Hit
         $cacheKey = 'phue_structure_' . md5($resolvedPath);
         if ($this->persistentCache !== null) {
             $persistentData = $this->persistentCache->get($cacheKey);
@@ -526,7 +597,6 @@ class PhueComponentLoader
             }
         }
 
-        // 3. Cache Miss — Parse file from disk
         $structure = $this->parser->parseStructure($resolvedPath);
 
         $payload = [

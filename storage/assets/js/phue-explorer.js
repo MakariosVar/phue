@@ -1,102 +1,79 @@
 /**
  * Phue Explorer - Single Page Navigation Interceptor
  * Intercepts same-origin anchor clicks, fetches page HTML, updates #app & title,
- * and re-evaluates module scripts safely to mount Vue components without memory leaks.
+ * and leaves the autonomous #nav root mounted without unmounting.
  */
 (() => {
   if (window.__phueExplorerInitialized) return;
   window.__phueExplorerInitialized = true;
 
-  /** @type {Set<string>} Tracks dynamically imported module URLs to avoid redundant fetches */
+  /** @type {Set<string>} Tracks dynamically imported module URLs */
   const importedModules = new Set();
 
   /**
-   * Updates active status classes and accessibility attributes on navigation links.
+   * Updates active status classes and accessibility attributes on nav links during client transitions
    *
    * @param {string} targetUrl The current active URL
    */
   function updateNavigationState(targetUrl) {
     const targetPath = new URL(targetUrl, window.location.origin).pathname;
 
-    document.querySelectorAll('.nav-link').forEach((a) => {
+    document.querySelectorAll('#nav .nav-link, #nav .dropdown-item').forEach((a) => {
       const href = a.getAttribute('href');
-      if (!href) return;
+      if (!href || href === '#') return;
 
       const linkPath = new URL(href, window.location.origin).pathname;
-      const isActive = linkPath === targetPath;
+      const isActive = linkPath === '/' ? targetPath === '/' : (targetPath === linkPath || targetPath.startsWith(linkPath + '/'));
 
       a.classList.toggle('active', isActive);
-      a.toggleAttribute('aria-current', isActive);
+      if (isActive) {
+        a.setAttribute('aria-current', 'page');
+      } else {
+        a.removeAttribute('aria-current');
+      }
     });
   }
 
-  document.addEventListener('click', async (e) => {
-    // Ignore modified clicks (Cmd+click, Ctrl+click, Shift+click) or non-left click events
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-
-    const link = e.target.closest('a[href]');
-    if (!link) return;
-
-    const href = link.getAttribute('href');
-    const target = link.getAttribute('target');
-
-    // Safe origin check using new URL construction
-    let isSameOrigin = false;
-    try {
-      const resolvedUrl = new URL(link.href, window.location.href);
-      isSameOrigin = resolvedUrl.origin === window.location.origin;
-    } catch {
-      isSameOrigin = false;
-    }
-
-    // Skip external, new tab, download, fragment, or cross-origin links
-    if (
-      !href ||
-      href.startsWith('#') ||
-      href.startsWith('javascript:') ||
-      target === '_blank' ||
-      link.hasAttribute('download') ||
-      !isSameOrigin
-    ) {
+  /**
+   * Dynamically loads a script module and executes its default/mount export
+   * 
+   * @param {string} scriptUrl Module URL to import
+   */
+  async function loadAndMountModule(scriptUrl) {
+    if (importedModules.has(scriptUrl) || scriptUrl.includes('PhNavigation') || scriptUrl.includes('phue-explorer')) {
       return;
     }
 
-    e.preventDefault();
-    await navigateTo(href);
-  });
+    importedModules.add(scriptUrl);
+    const mod = await import(scriptUrl);
 
-  window.addEventListener('popstate', async () => {
-    await navigateTo(window.location.href, false);
-  });
-
-  /**
-   * Mounts a module by URL: imports it (or retrieves from cache) and calls its default export.
-   *
-   * @param {string} url Module script URL
-   * @return {Promise<boolean>} true if the module was freshly imported (first time)
-   */
-  async function mountModule(url) {
-    const isNew = !importedModules.has(url);
-    const mod = await import(url);
-    importedModules.add(url);
-
+    // Invoke default export or explicit mount hook if present
     if (typeof mod.default === 'function') {
-      await mod.default();
+      mod.default();
+    } else if (typeof mod.mountApp === 'function') {
+      mod.mountApp();
     }
-
-    return isNew;
   }
 
   /**
-   * Fetches target URL content and updates DOM content and scripts.
-   *
-   * @param {string} url
-   * @param {boolean} pushState
+   * Initial page mount handler for full page loads
    */
-  async function navigateTo(url, pushState = true) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const scripts = document.querySelectorAll('script[type="module"][src*="/assets/phue/"]');
+    scripts.forEach((script) => {
+      const src = script.getAttribute('src');
+      if (src) {
+        loadAndMountModule(src);
+      }
+    });
+  });
+
+  async function navigate(url, pushState = true) {
     try {
       const response = await fetch(url, {
-        headers: { 'X-Phue-SPA': 'true' }
+        headers: {
+          'X-Phue-SPA': 'true'
+        }
       });
 
       if (!response.ok) {
@@ -104,59 +81,65 @@
         return;
       }
 
-      const data = await response.json();
+      const payload = await response.json();
 
-      // 1. Update Document Title & Global State
-      if (data.title) {
-        document.title = data.title;
-      }
-      if (data.state) {
-        window.__INITIAL_STATE__ = data.state;
+      // Update Document Title
+      if (payload.title) {
+        document.title = payload.title;
       }
 
-      // 2. Unmount old Vue & Update HTML
-      if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
-        window.__phueApp.unmount();
-        window.__phueApp = null;
+      // Update #app content
+      const appContainer = document.getElementById('app');
+      if (appContainer && payload.html) {
+        if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
+          window.__phueApp.unmount();
+          window.__phueApp = null;
+        }
+
+        appContainer.innerHTML = payload.html;
+        window.__INITIAL_STATE__ = payload.state || {};
       }
-      document.querySelector('#app').innerHTML = data.html;
 
-      // 3. Update Browser History & Client-Side Navigation Active State
-      if (pushState) {
-        window.history.pushState(null, '', url);
-      }
-      updateNavigationState(url);
-
-      // 4. Mount Vue Components via Dynamic Imports
-      for (const script of data.scripts) {
-        if (script.url.includes('/assets/vendor/')) continue;
-        if (script.url.endsWith('phue-explorer.js')) continue;
-
-        try {
-          await mountModule(script.url);
-        } catch (err) {
-          console.error('Failed to load module:', script.url);
+      // Load new page scripts and execute module entrypoint
+      if (Array.isArray(payload.scripts)) {
+        for (const scriptUrl of payload.scripts) {
+          await loadAndMountModule(scriptUrl);
         }
       }
+
+      // Sync Navigation active state
+      updateNavigationState(url);
+
+      if (pushState) {
+        window.history.pushState({}, '', url);
+      }
     } catch (err) {
-      console.error('[Phue Explorer] Navigation failed, falling back to full load:', err);
+      console.error('SPA Navigation error:', err);
       window.location.href = url;
     }
   }
 
-  // --- Initial Load: Mount component scripts embedded in the HTML shell ---
-  document.addEventListener('DOMContentLoaded', async () => {
-    const componentScripts = document.querySelectorAll(
-      'script[type="module"][src*="/assets/phue/"]'
-    );
+  document.addEventListener('click', async (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
 
-    for (const el of componentScripts) {
-      try {
-        await mountModule(el.src);
-      } catch (err) {
-        console.error('[Phue Explorer] Initial mount failed:', el.src, err);
+    const link = e.target.closest('a[href]');
+    if (!link) return;
+
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+    try {
+      const resolvedUrl = new URL(href, window.location.href);
+      if (resolvedUrl.origin === window.location.origin) {
+        e.preventDefault();
+        await navigate(resolvedUrl.href);
       }
+    } catch {
+      // Fallback to standard browser navigation
     }
   });
 
+  window.addEventListener('popstate', () => {
+    navigate(window.location.href, false);
+  });
 })();

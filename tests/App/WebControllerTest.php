@@ -139,7 +139,11 @@ final class WebControllerTest extends TestCase
         $content = $this->app->handle(new Request('GET', '/docs'))->getContent();
 
         $this->assertStringContainsString(
-            '<a href="/docs" class="nav-link active" aria-current="page">Docs</a>',
+            '<li><a href="/docs" class="dropdown-item active" aria-current="page">Docs</a></li>',
+            $content
+        );
+        $this->assertStringContainsString(
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Explore</a>',
             $content
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $content);
@@ -149,8 +153,46 @@ final class WebControllerTest extends TestCase
     {
         $content = $this->app->handle(new Request('GET', '/docs'))->getContent();
 
-        $this->assertStringContainsString('<nav class="nav nav-pills">', $content);
-        $this->assertStringNotContainsString('<nav class="nav nav-pills flex-column">', $content);
+        $this->assertStringContainsString('<ul class="navbar-nav me-auto mb-2 mb-lg-0">', $content);
+        $this->assertStringContainsString('nav-item dropdown', $content);
+        $this->assertStringNotContainsString('<nav class="nav nav-pills flex-column', $content);
+    }
+
+    public function testEveryFullPageEmbedsThemeBootScriptInHead(): void
+    {
+        foreach (['/', '/docs', '/ui'] as $route) {
+            $content = $this->app->handle(new Request('GET', $route))->getContent();
+
+            $this->assertMatchesRegularExpression(
+                '/<head>.*?data-bs-theme.*?<\/head>/s',
+                $content,
+                "Route {$route} must embed the anti-FOUC theme boot script in <head>."
+            );
+            $this->assertStringContainsString("localStorage.getItem('phue-theme')", $content);
+        }
+    }
+
+    public function testThemeBootScriptPrecedesStylesheetsInHead(): void
+    {
+        $content = $this->app->handle(new Request('GET', '/'))->getContent();
+
+        $themePos  = strpos($content, 'data-bs-theme');
+        $stylePos  = strpos($content, 'bootstrap.min.css');
+
+        $this->assertNotFalse($themePos, 'Theme boot script is present.');
+        $this->assertNotFalse($stylePos, 'Bootstrap stylesheet is present.');
+        $this->assertLessThan($stylePos, $themePos, 'Theme boot must run before CSS boot to avoid FOUC.');
+    }
+
+    public function testSpaResponseDoesNotCarryThemeBootScript(): void
+    {
+        $response = $this->app->handle(
+            new Request('GET', '/', [], [], ['X-Phue-SPA' => 'true'])
+        );
+
+        $payload = json_decode($response->getContent(), true);
+        $this->assertIsArray($payload);
+        $this->assertStringNotContainsString('data-bs-theme', json_encode($payload));
     }
 
     // ── UI route (WebController::ui → UI.phue) ──
@@ -291,6 +333,6 @@ final class WebControllerTest extends TestCase
         }
 
         // The SSR demo of the HTML-first component is still rendered server-side.
-        $this->assertStringContainsString('nav nav-pills', $content);
+        $this->assertStringContainsString('navbar-nav', $content);
     }
 }

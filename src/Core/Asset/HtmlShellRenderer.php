@@ -7,29 +7,27 @@ namespace Phue\Core\Asset;
 use JsonException;
 
 /**
- * Class HtmlShellRenderer
- *
- * Renders the primary HTML5 document wrapper shell for Phue application responses.
- *
- * @package Phue\Core\Asset
+ * Renders the HTML document shell wrapping page content, styles, and scripts.
  */
 class HtmlShellRenderer
 {
-    public function __construct(
-        private AssetRegistry $registry
-    ) {}
+    /**
+     * @param AssetRegistry $registry The asset registry containing assets to load.
+     */
+    public function __construct(private AssetRegistry $registry) {}
 
     /**
-     * Render the full HTML document string.
+     * Renders a complete HTML document shell.
      *
-     * @param string      $title              Page title.
-     * @param string      $appId              Mounting root element ID (default: "app").
-     * @param array       $initialState       Global state injected via `window.__INITIAL_STATE__`.
-     * @param string      $content            Inner HTML content.
-     * @param string|null $inlineScript       Inline module script block.
-     * @param bool        $wrapInAppContainer When true, wraps $content in `<div id="$appId">`. Set false when $content is pre-wrapped or contains outer layout chrome.
-     *
-     * @return string Valid HTML5 document markup.
+     * @param string $title Page title.
+     * @param string $appId DOM element ID for application root (default: 'app').
+     * @param array $initialState Initial state object to inject into window.__INITIAL_STATE__.
+     * @param string $content Inner HTML content.
+     * @param string|null $inlineScript Optional inline module script.
+     * @param bool $wrapInAppContainer Wrap content in div#app (default: true).
+     * @param string|null $headScript Script to inject at the top of <head>.
+     * @param array $navState State object for PhNavigation injected into window.__NAV_STATE__.
+     * @return string Complete HTML document markup.
      */
     public function render(
         string $title = "Phue App",
@@ -37,10 +35,17 @@ class HtmlShellRenderer
         array $initialState = [],
         string $content = "",
         ?string $inlineScript = null,
-        bool $wrapInAppContainer = true
+        bool $wrapInAppContainer = true,
+        ?string $headScript = null,
+        array $navState = []
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
+
+        $headScriptMarkup =
+            $headScript !== null && trim($headScript) !== ""
+                ? "<script>\n{$headScript}\n</script>\n    "
+                : "";
 
         $stylesMarkup = implode(
             "\n    ",
@@ -60,15 +65,8 @@ class HtmlShellRenderer
             array_map(
                 function (array $script): string {
                     $safeUrl = $this->escape($script['url']);
-                    $typeAttr = $script['isModule']
-                        ? ' type="module"'
-                        : '';
-
-                    return sprintf(
-                        '<script%s src="%s"></script>',
-                        $typeAttr,
-                        $safeUrl
-                    );
+                    $typeAttr = $script['isModule'] ? ' type="module"' : '';
+                    return sprintf('<script%s src="%s"></script>', $typeAttr, $safeUrl);
                 },
                 $this->registry->getScripts()
             )
@@ -79,16 +77,25 @@ class HtmlShellRenderer
             try {
                 $jsonState = json_encode(
                     $initialState,
-                    JSON_HEX_TAG |
-                        JSON_HEX_AMP |
-                        JSON_HEX_APOS |
-                        JSON_HEX_QUOT |
-                        JSON_THROW_ON_ERROR
+                    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
                 );
             } catch (JsonException) {
                 $jsonState = "{}";
             }
             $stateMarkup = "<script>window.__INITIAL_STATE__ = {$jsonState};</script>\n    ";
+        }
+
+        $navStateMarkup = "";
+        if (!empty($navState)) {
+            try {
+                $jsonNavState = json_encode(
+                    $navState,
+                    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+                );
+            } catch (JsonException) {
+                $jsonNavState = "{}";
+            }
+            $navStateMarkup = "<script>window.__NAV_STATE__ = {$jsonNavState};</script>\n    ";
         }
 
         $inlineScriptMarkup =
@@ -101,27 +108,27 @@ class HtmlShellRenderer
             : $content;
 
         return <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$safeTitle}</title>
-    {$stylesMarkup}
-</head>
-<body>
-    {$bodyContent}
-    {$importMapMarkup}
-    {$stateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
-</html>
-HTML;
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{$safeTitle}</title>
+            {$headScriptMarkup}{$stylesMarkup}
+        </head>
+        <body>
+            {$bodyContent}
+            {$importMapMarkup}
+            {$stateMarkup}{$navStateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
+        </html>
+        HTML;
     }
 
     /**
-     * Escape HTML special characters for shell insertion.
+     * Escapes a string for safe output in HTML.
      */
     private function escape(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
     }
 }

@@ -271,4 +271,35 @@ class ComponentLoaderRegistry
 
         return null;
     }
+
+    /**
+     * Builds SSR-only JS module across candidate loaders.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null JS SSR module content or null if not found across candidates.
+     */
+    public function buildForSsr(string $name): ?string
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader === null) {
+                    continue;
+                }
+
+                $module = $loader->buildForSsr($name);
+
+                if ($module !== null) {
+                    return $module;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
 }

@@ -1,103 +1,158 @@
 <template>
-  <!-- SSR Partial: Rendered via <php> block -->
+  <div class="d-flex align-items-center w-100">
+    <component :is="isSidebar ? 'nav' : 'ul'" :class="navClasses">
+      <!-- Sidebar Mode -->
+      <template v-if="isSidebar">
+        <template v-for="(item, idx) in items" :key="idx">
+          <h6 
+            v-if="item.group && item.group !== (items[idx - 1]?.group)" 
+            class="phue-nav-group sidebar-heading px-3 mt-3 mb-1 text-muted text-uppercase small"
+          >
+            {{ item.group }}
+          </h6>
+          
+          <span v-if="item.disabled" class="nav-link disabled" aria-disabled="true">
+            {{ item.label }}
+          </span>
+          <a 
+            v-else 
+            :href="item.href || '#'" 
+            :class="['nav-link', { active: isRouteActive(item.href) }]" 
+            :aria-current="isRouteActive(item.href) ? 'page' : null"
+          >
+            {{ item.label }}
+          </a>
+        </template>
+      </template>
+
+      <!-- Topbar Mode -->
+      <template v-else>
+        <template v-for="(node, idx) in groupedNodes" :key="idx">
+          <!-- Single Nav Item -->
+          <li v-if="node.type === 'single'" class="nav-item">
+            <span v-if="node.item.disabled" class="nav-link disabled" aria-disabled="true">
+              {{ node.item.label }}
+            </span>
+            <a 
+              v-else 
+              :href="node.item.href || '#'" 
+              :class="['nav-link', { active: isRouteActive(node.item.href) }]" 
+              :aria-current="isRouteActive(node.item.href) ? 'page' : null"
+            >
+              {{ node.item.label }}
+            </a>
+          </li>
+
+          <!-- Dropdown Group -->
+          <li v-else class="nav-item dropdown">
+            <a 
+              href="#" 
+              :class="['nav-link', 'dropdown-toggle', { active: node.items.some(child => isRouteActive(child.href)) }]" 
+              role="button" 
+              data-bs-toggle="dropdown" 
+              aria-expanded="false"
+            >
+              {{ node.name }}
+            </a>
+            <ul class="dropdown-menu">
+              <li v-for="(child, cIdx) in node.items" :key="cIdx">
+                <span v-if="child.disabled" class="dropdown-item disabled" aria-disabled="true">
+                  {{ child.label }}
+                </span>
+                <a 
+                  v-else 
+                  :href="child.href || '#'" 
+                  :class="['dropdown-item', { active: isRouteActive(child.href) }]" 
+                  :aria-current="isRouteActive(child.href) ? 'page' : null"
+                >
+                  {{ child.label }}
+                </a>
+              </li>
+            </ul>
+          </li>
+        </template>
+      </template>
+    </component>
+
+    <!-- Header Actions (Mounted inside Vue Subtree) -->
+    <div v-if="!isSidebar" class="ms-auto d-flex align-items-center gap-2">
+      <ph-theme aria-label="Toggle theme"></ph-theme>
+    </div>
+  </div>
 </template>
 
-<php>
+<script>
+import { createSSRApp, computed } from 'vue';
 
-/**
- * PhNavigation SSR Partial (HTML-first)
- *
- * Renders an accessible HTML navigation bar (horizontal nav-pills or vertical/sidebar navigation),
- * automatically computing active routes, escaping attributes, and handling visual group headings.
- *
- * @var array<int, array{label: string, href: string, disabled?: bool, group?: string}> $items       Collection of navigation items to display.
- * @var string                                                                           $activeRoute Current active HTTP request URI path.
- * @var string                                                                           $orientation Structural layout direction ('horizontal'|'sidebar'|'vertical').
- *
- * @return array{html: string} Rendered HTML string payload enclosed in a array response.
- */
+const options = {
+  props: {
+    items: { type: Array, default: () => [] },
+    activeRoute: { type: String, default: '/' },
+    orientation: { type: String, default: 'horizontal' },
+    themeConfig: { type: Object, default: () => ({}) }
+  },
+  setup(props) {
+    const isSidebar = computed(() => props.orientation === 'sidebar' || props.orientation === 'vertical');
+    const navClasses = computed(() => isSidebar.value ? 'nav nav-pills flex-column gap-1' : 'navbar-nav me-auto mb-2 mb-lg-0');
 
-/** @var array<int, array{label: string, href: string, disabled?: bool, group?: string}> $items */
-$items = is_array($items ?? null) ? $items : [];
+    const normalize = (path) => '/' + (path || '').replace(/^\/+|\/+$/g, '');
 
-/** @var string $activeRoute */
-$activeRoute = is_string($activeRoute ?? null) ? $activeRoute : '/';
+    const isRouteActive = (href) => {
+      const active = normalize(props.activeRoute);
+      const target = normalize(href);
+      return target === '/' ? active === '/' : (active === target || active.startsWith(target + '/'));
+    };
 
-/** @var string $orientation */
-$orientation = is_string($orientation ?? null) ? $orientation : 'horizontal';
+    const groupedNodes = computed(() => {
+      const nodes = [];
+      (props.items || []).forEach((item) => {
+        const group = item.group;
+        if (!group) {
+          nodes.push({ type: 'single', item });
+        } else {
+          const last = nodes[nodes.length - 1];
+          if (last && last.type === 'group' && last.name === group) {
+            last.items.push(item);
+          } else {
+            nodes.push({ type: 'group', name: group, items: [item] });
+          }
+        }
+      });
+      return nodes;
+    });
 
-/** @var string $normalizedActive */
-$normalizedActive = '/' . trim($activeRoute, '/');
+    return {
+      isSidebar,
+      navClasses,
+      isRouteActive,
+      groupedNodes
+    };
+  }
+};
 
-/** @var bool $isSidebarMode */
-$isSidebarMode = ($orientation === 'sidebar' || $orientation === 'vertical');
+export default options;
 
-/** @var array<int, string> $elementsHtml */
-$elementsHtml = [];
-
-/** @var string|null $currentGroup */
-$currentGroup = null;
-
-foreach ($items as $item) {
-    /** @var string|null $group */
-    $group = $item['group'] ?? null;
-
-    // Group Heading Rendering (sidebar/vertical mode only)
-    if ($isSidebarMode && $group !== null && $group !== $currentGroup) {
-        $elementsHtml[] = sprintf(
-            '<h6 class="phue-nav-group">%s</h6>',
-            htmlspecialchars($group, ENT_QUOTES, 'UTF-8')
-        );
-        $currentGroup = $group;
-    }
-
-    /** @var string $href */
-    $href = $item['href'] ?? '#';
-
-    /** @var string $label */
-    $label = htmlspecialchars($item['label'] ?? '', ENT_QUOTES, 'UTF-8');
-
-    /** @var bool $isDisabled */
-    $isDisabled = !empty($item['disabled']);
-
-    if ($isDisabled) {
-        $elementsHtml[] = sprintf(
-            '<span class="nav-link disabled" aria-disabled="true">%s</span>',
-            $label
-        );
-        continue;
-    }
-
-    /** @var string $normalizedHref */
-    $normalizedHref = '/' . trim($href, '/');
-
-    /** @var bool $isActive */
-    $isActive = ($normalizedHref === '/')
-        ? ($normalizedActive === '/')
-        : ($normalizedActive === $normalizedHref || str_starts_with($normalizedActive, $normalizedHref . '/'));
-
-    /** @var string $activeClass */
-    $activeClass = $isActive ? ' active' : '';
-
-    /** @var string $ariaCurrent */
-    $ariaCurrent = $isActive ? ' aria-current="page"' : '';
-
-    $elementsHtml[] = sprintf(
-        '<a href="%s" class="nav-link%s"%s>%s</a>',
-        htmlspecialchars($href, ENT_QUOTES, 'UTF-8'),
-        $activeClass,
-        $ariaCurrent,
-        $label
-    );
+if (typeof window !== 'undefined') {
+  const initialState = window.__NAV_STATE__ || {};
+  const el = document.getElementById('nav');
+  if (el) {
+    const app = createSSRApp(options, initialState);
+    app.mount(el);
+  }
 }
+</script>
 
-/** @var string $navClasses */
-$navClasses = $isSidebarMode
-    ? 'nav nav-pills flex-column'
-    : 'nav nav-pills';
-
+<php>
+/**
+ * Metadata provider block for PhNavigation
+ */
 return [
-    'html' => sprintf('<nav class="%s">%s</nav>', $navClasses, implode("\n", $elementsHtml)),
+    'title' => 'Navigation',
+    'state' => [
+        'items'       => $items ?? [],
+        'activeRoute' => $activeRoute ?? '/',
+        'orientation' => $orientation ?? 'horizontal',
+        'themeConfig' => $themeConfig ?? []
+    ]
 ];
-
 </php>

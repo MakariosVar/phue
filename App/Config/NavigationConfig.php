@@ -51,6 +51,22 @@ class NavigationConfig
     }
 
     /**
+     * Returns theme toggle configuration settings.
+     *
+     * @return array{enabled: bool, storageKey: string, defaultTheme: string, position: string, ariaLabel: string}
+     */
+    public static function getAppThemeToggle(): array
+    {
+        return [
+            'enabled'      => true,
+            'storageKey'   => 'phue-theme',
+            'defaultTheme' => 'system', // 'system' | 'light' | 'dark'
+            'position'     => 'actions_prefix', // 'actions_prefix' | 'actions_suffix' | 'standalone'
+            'ariaLabel'    => 'Toggle theme',
+        ];
+    }
+
+    /**
      * Builder helper that constructs a baseline navigation item data structure.
      *
      * @param string $label Visible display title for the link.
@@ -148,6 +164,18 @@ class NavigationConfig
     public static function getAppPlacement(): string
     {
         return self::PLACEMENT_TOP;
+    }
+
+    /**
+     * Returns the application layout configuration options including sticky positioning defaults.
+     *
+     * @return array{sticky: bool} Layout configuration map.
+     */
+    public static function getAppLayout(): array
+    {
+        return [
+            'sticky' => true,
+        ];
     }
 
     /**

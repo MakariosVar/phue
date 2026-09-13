@@ -26,6 +26,8 @@ use PHPUnit\Framework\TestCase;
 final class AppLayoutTest extends TestCase
 {
     private PhueComponentLoader $loader;
+    private PhueComponentLoader $phuiLoader;
+    private ComponentLoaderRegistry $registry;
     private PhuePartialRenderer $partialRenderer;
 
     protected function setUp(): void
@@ -34,14 +36,64 @@ final class AppLayoutTest extends TestCase
 
         $root = realpath(__DIR__ . '/../..') ?: '..';
 
-        $registry = new ComponentLoaderRegistry();
-        $registry->addLoader(new PhueComponentLoader($root . '/src/Core/UI/Phui'));
-        $this->partialRenderer = new PhuePartialRenderer($registry);
+        $this->registry = new ComponentLoaderRegistry();
+        $this->phuiLoader = new PhueComponentLoader($root . '/src/Core/UI/Phui');
+        $this->registry->addLoader($this->phuiLoader);
+        $this->partialRenderer = new PhuePartialRenderer($this->registry);
         $this->loader = new PhueComponentLoader($root . '/App/Frontend');
     }
 
     private function renderLayout(array $params): string
     {
+        $uri = $params['uri'] ?? '/';
+        $user = $params['user'] ?? null;
+        $placement = $params['placement'] ?? 'topbar';
+        $orientation = ($placement === 'sidebar') ? 'sidebar' : 'horizontal';
+
+        if (!array_key_exists('navHtml', $params)) {
+            $items = $params['items'] ?? (\App\Config\NavigationConfig::getAppItems($user));
+
+            $ssrClient = new \Phue\Core\Ssr\UnixSsrClient('/tmp/phue-ssr.sock');
+            $ssrEngine = new \Phue\Core\Ssr\BunSsrEngine($ssrClient);
+
+            $navComponent = $this->phuiLoader->load('PhNavigation', [
+                'items'       => $items,
+                'activeRoute' => $uri,
+                'orientation' => $orientation,
+            ]);
+
+            $context = ['name' => 'PhNavigation', 'uri' => $uri];
+            $discoverer = new \Phue\Core\UI\ComponentDiscoverer($this->registry);
+            $deps = $discoverer->resolveTransitiveDependencies('PhNavigation');
+            $components = [];
+
+            $navSource = $this->registry->buildForSsr('PhNavigation');
+            if ($navSource !== null) {
+                $components['PhNavigation'] = trim($navSource);
+            }
+            foreach ($deps as $depName => $depHash) {
+                $source = $this->registry->buildForSsr($depName);
+                if ($source !== null && $depName !== 'PhNavigation') {
+                    $components[$depName] = trim($source);
+                }
+            }
+            if (!empty($components)) {
+                $context['components'] = $components;
+            }
+
+            $navState = [
+                'items'       => $items,
+                'activeRoute' => $uri,
+                'orientation' => $orientation,
+            ];
+
+            $params['navHtml'] = $ssrEngine->render(
+                $navComponent->view->getTemplate(),
+                $navState,
+                $context
+            ) ?? '';
+        }
+
         $params += [
             'content'         => '<p>page content</p>',
             'uri'             => '/',
@@ -57,7 +109,7 @@ final class AppLayoutTest extends TestCase
         $html = $this->renderLayout([]);
 
         $this->assertStringContainsString('<div class="app-layout">', $html);
-        $this->assertStringContainsString('<nav class="nav nav-pills">', $html);
+        $this->assertStringContainsString('<ul class="navbar-nav me-auto mb-2 mb-lg-0">', $html);
         $this->assertStringNotContainsString('flex-column', $html);
         $this->assertStringContainsString('<p>page content</p>', $html);
     }
@@ -66,8 +118,8 @@ final class AppLayoutTest extends TestCase
     {
         $html = $this->renderLayout(['placement' => 'sidebar']);
 
-        $this->assertStringContainsString('<div class="app-layout d-flex">', $html);
-        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
+        $this->assertStringContainsString('<div class="app-layout d-flex align-items-start">', $html);
+        $this->assertStringContainsString('<nav class="nav nav-pills flex-column gap-1">', $html);
         $this->assertStringContainsString(
             '<main class="app-content flex-grow-1 p-3">',
             $html
@@ -80,7 +132,11 @@ final class AppLayoutTest extends TestCase
         $html = $this->renderLayout(['uri' => '/docs']);
 
         $this->assertStringContainsString(
-            '<a href="/docs" class="nav-link active" aria-current="page">Docs</a>',
+            '<li><a href="/docs" class="dropdown-item active" aria-current="page">Docs</a></li>',
+            $html
+        );
+        $this->assertStringContainsString(
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Explore</a>',
             $html
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);
@@ -93,12 +149,43 @@ final class AppLayoutTest extends TestCase
             'user' => $this->identity('admin'),
         ]);
 
-        $this->assertStringContainsString('<nav class="nav nav-pills">', $html);
+        $this->assertStringContainsString('<ul class="navbar-nav me-auto mb-2 mb-lg-0">', $html);
         $this->assertStringContainsString('Home', $html);
         $this->assertStringContainsString('Docs', $html);
     }
 
-    public function testTopbarRendersBootstrapNavbarWithBrandAndActions(): void
+    public function testTopbarStickyIsAppliedByDefault(): void
+    {
+        $html = $this->renderLayout([]);
+
+        $this->assertStringContainsString(
+            '<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2" style="position: sticky; top: 0; z-index: 1020;">',
+            $html
+        );
+    }
+
+    public function testTopbarStickyCanBeDisabled(): void
+    {
+        $html = $this->renderLayout(['sticky' => false]);
+
+        $this->assertMatchesRegularExpression(
+            '/<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2">/',
+            $html
+        );
+        $this->assertStringNotContainsString('position: sticky', $html);
+    }
+
+    public function testSidebarStickyIsAppliedWithAlignSelf(): void
+    {
+        $html = $this->renderLayout(['placement' => 'sidebar']);
+
+        $this->assertStringContainsString(
+            '<aside class="app-sidebar align-self-start p-3 border-end flex-shrink-0" style="position: sticky; top: 0; z-index: 1020;">',
+            $html
+        );
+    }
+
+    public function testTopbarRendersBootstrapNavbarWithBrandAndThemeAction(): void
     {
         $html = $this->renderLayout([]);
 
@@ -108,8 +195,7 @@ final class AppLayoutTest extends TestCase
             $html
         );
         $this->assertStringContainsString('<div class="ms-auto', $html);
-        $this->assertStringContainsString('Login', $html);
-        $this->assertStringNotContainsString('Profile', $html);
+        $this->assertStringContainsString('aria-label="Toggle theme"', $html);
     }
 
     public function testTopbarBrandValuesAreEscaped(): void
@@ -123,17 +209,6 @@ final class AppLayoutTest extends TestCase
         $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
     }
 
-    public function testTopbarActionsRespectIdentityVisibility(): void
-    {
-        $html = $this->renderLayout([
-            'uri'  => '/',
-            'user' => $this->identity('admin'),
-        ]);
-
-        $this->assertStringContainsString('Profile', $html);
-        $this->assertStringNotContainsString('Login', $html);
-    }
-
     public function testSidebarRendersAsideWithBrandAndGroupHeadings(): void
     {
         $html = $this->renderLayout([
@@ -145,8 +220,8 @@ final class AppLayoutTest extends TestCase
         ]);
 
         $this->assertStringContainsString('<aside class="app-sidebar', $html);
-        $this->assertStringContainsString('<nav class="nav nav-pills flex-column">', $html);
-        $this->assertStringContainsString('<h6 class="phue-nav-group"', $html);
+        $this->assertStringContainsString('<nav class="nav nav-pills flex-column gap-1">', $html);
+        $this->assertStringContainsString('<h6 class="phue-nav-group', $html);
         $this->assertStringContainsString('>Learn<', $html);
         $this->assertStringContainsString('>Shop<', $html);
         $this->assertMatchesRegularExpression('/<a class="navbar-brand[^"]*"/', $html);

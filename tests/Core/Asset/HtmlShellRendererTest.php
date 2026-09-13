@@ -198,4 +198,67 @@ final class HtmlShellRendererTest extends TestCase
 
         $this->assertStringContainsString('<div id="app"></div>', $html);
     }
+
+    public function testHeadScriptIsInjectedAsClassicInlineScriptInHead(): void
+    {
+        $html = $this->renderer->render(
+            'T',
+            'app',
+            [],
+            '',
+            null,
+            true,
+            "(function() { document.documentElement.setAttribute('data-bs-theme', 'dark'); })();",
+        );
+
+        $this->assertMatchesRegularExpression('/<head>.*<script>(.*?)<\/script>/s', $html);
+        $this->assertStringContainsString(
+            "document.documentElement.setAttribute('data-bs-theme', 'dark');",
+            $html
+        );
+        $this->assertStringNotContainsString('type="module"', $html);
+    }
+
+    public function testHeadScriptAppearsBeforeStylesAndBody(): void
+    {
+        $this->registry->addStyle('/assets/theme.css');
+
+        $html = $this->renderer->render(
+            title: 'T',
+            headScript: "document.documentElement.setAttribute('data-bs-theme', 'dark');",
+        );
+
+        $this->assertTrue(
+            strpos($html, 'data-bs-theme') < strpos($html, '/assets/theme.css'),
+            'headScript must precede stylesheets to prevent theme FOUC.'
+        );
+        $this->assertTrue(
+            strpos($html, 'data-bs-theme') < strpos($html, '<body>')
+        );
+    }
+
+    public function testHeadScriptIsOmittedWhenNullOrEmpty(): void
+    {
+        $html = $this->renderer->render('T', 'app', [], '', null, true, null);
+
+        $this->assertStringNotContainsString('data-bs-theme', $html);
+        $this->assertStringNotContainsString('<head>', '');
+        $this->assertMatchesRegularExpression('/<head>\s*<meta/', $html);
+    }
+
+    public function testHeadScriptBlockIsSynchronousWithoutDeferAttr(): void
+    {
+        $html = $this->renderer->render(
+            'T',
+            'app',
+            [],
+            '',
+            null,
+            true,
+            'window.__phueThemeBoot = true;',
+        );
+
+        $this->assertStringNotContainsString('defer', $html);
+        $this->assertStringNotContainsString('async', $html);
+    }
 }

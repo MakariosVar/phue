@@ -260,7 +260,7 @@ PHUE);
                 $engine->lastContext['components']['PhButton']
             );
             $this->assertStringContainsString(
-                'export const __phueRender',
+                'export const __phueSsrRender',
                 $engine->lastContext['components']['PhButton']
             );
         } finally {

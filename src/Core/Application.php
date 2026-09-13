@@ -267,7 +267,8 @@ class Application
                 partialRenderer: $c->get(PhuePartialRenderer::class),
                 userResolver: $userResolver,
                 ssrEngine: $c->get(SsrEngine::class),
-                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class),
+                themeConfig: \App\Config\NavigationConfig::getAppThemeToggle()
             );
         });
 
@@ -295,6 +296,9 @@ class Application
 
             // Register global default assets directly onto AssetRegistry
             $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
+
+            // Register Bootstrap JS bundle globally for interactive elements (Dropdowns, Modals, Tooltips)
+            $registry->addGlobalScript('/assets/vendor/bootstrap/bootstrap.bundle.min.js');
 
             // Fix Trap A: Add phue-explorer.js as a global script so it survives beginRequest() reset
             $registry->addGlobalScript('/assets/js/phue-explorer.js', isModule: true);

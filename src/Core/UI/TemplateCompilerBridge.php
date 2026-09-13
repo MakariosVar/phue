@@ -47,19 +47,18 @@ class TemplateCompilerBridge
     /**
      * Compiles a raw Vue HTML template string into JavaScript render function code.
      *
-     * First checks the persistent PSR-16 cache using a SHA-1 hash of the template.
-     * On cache miss, sends a POST request over the Unix socket to the Bun compiler service.
-     *
      * @param string $template Raw Vue HTML component template.
+     * @param bool   $ssr      Whether to compile for SSR using @vue/compiler-ssr.
      *
      * @return string Valid JavaScript code defining the render function.
      *
-     * @throws RuntimeException If socket communication fails, times out, or returns a compile error (Fail-Closed).
+     * @throws RuntimeException If socket communication fails, times out, or returns a compile error.
      */
-    public function compile(string $template): string
+    public function compile(string $template, bool $ssr = false): string
     {
         $templateHash = sha1($template);
-        $cacheKey = 'phue_compiled_render_v2_' . $templateHash;
+        $prefix = $ssr ? 'phue_compiled_ssr_render_v1_' : 'phue_compiled_render_v2_';
+        $cacheKey = $prefix . $templateHash;
 
         // 1. Hit PSR-16 cache to avoid Socket RTT
         if ($this->cache !== null) {
@@ -70,7 +69,10 @@ class TemplateCompilerBridge
             }
         }
 
-        $payload = json_encode(['template' => $template], JSON_THROW_ON_ERROR);
+        $payload = json_encode([
+            'template' => $template,
+            'ssr'      => $ssr,
+        ], JSON_THROW_ON_ERROR);
 
         $ch = curl_init('http://localhost/v1/compile-template');
         curl_setopt_array($ch, [
@@ -88,7 +90,7 @@ class TemplateCompilerBridge
         $error = curl_error($ch);
         $ch = null;
 
-        // Fail-Closed: Throw Exception instead of silent empty render function
+        // Fail-Closed
         if ($response === false || $statusCode !== 200) {
             throw new RuntimeException("SSR Compiler service failure (Status {$statusCode}): {$error}");
         }

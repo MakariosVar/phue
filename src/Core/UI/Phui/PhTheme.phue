@@ -1,0 +1,67 @@
+<template>
+  <button
+    type="button"
+    class="btn btn-link nav-link px-2 d-flex align-items-center"
+    :aria-label="resolvedAriaLabel"
+    @click="toggleTheme"
+  >
+    <span v-if="currentTheme === 'dark'" style="font-size: 1.1rem; line-height: 1;">☀️</span>
+    <span v-else style="font-size: 1.1rem; line-height: 1;">🌙</span>
+  </button>
+</template>
+
+<script>
+export default {
+  name: 'PhTheme',
+  props: {
+    storageKey: {
+      type: String,
+      default: null
+    },
+    ariaLabel: {
+      type: String,
+      default: null
+    },
+    themeConfig: {
+      type: Object,
+      default: () => ({})
+    }
+  },
+  data() {
+    return {
+      // Always start with 'light' on both server and initial client render to prevent mismatch
+      currentTheme: 'light'
+    };
+  },
+  computed: {
+    resolvedStorageKey() {
+      return this.storageKey || this.themeConfig?.storageKey || 'phue-theme';
+    },
+    resolvedAriaLabel() {
+      if (this.ariaLabel) return this.ariaLabel;
+      if (this.themeConfig?.ariaLabel) return this.themeConfig.ariaLabel;
+      return `Switch to ${this.currentTheme === 'dark' ? 'light' : 'dark'} mode`;
+    }
+  },
+  mounted() {
+    this.syncTheme();
+  },
+  methods: {
+    syncTheme() {
+      const activeTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      this.currentTheme = activeTheme;
+    },
+    toggleTheme() {
+      this.currentTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+
+      try {
+        localStorage.setItem(this.resolvedStorageKey, this.currentTheme);
+      } catch {
+        // Fallback for sandboxed or restricted storage contexts
+      }
+
+      document.documentElement.setAttribute('data-bs-theme', this.currentTheme);
+    }
+  }
+};
+</script>
