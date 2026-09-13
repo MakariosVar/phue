@@ -148,7 +148,7 @@ return [
 </template>
 
 <script type="module">
-import { createApp, ref, computed, onMounted } from '/assets/vendor/vue3/vue.esm-browser.js';
+import { createApp, ref, computed, onMounted } from 'vue';
 
 /**
  * Custom inline composable for managing dynamic entity reactive state & operations
