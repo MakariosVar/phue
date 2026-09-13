@@ -56,9 +56,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `WasmAdapter` | `Server/WasmAdapter.php` | Server Adapter for WebAssembly (WASM) & Cloudflare Edge Runtimes |
 | `CacheInterface` | `Cache/CacheInterface.php` | Contract for Phue framework caching engines |
 | `EdgeKvCache` | `Cache/EdgeKvCache.php` | In-Memory & Key-Value Cache Driver for Read-Only Edge Filesystems |
-| `ComponentCache` | `Cache/ComponentCache.php` | Persistent filesystem caching for component PHP blocks with OPCache optimization |
-| `HydrationCache` | `Cache/HydrationCache.php` | JSON-based hydration cache for component state management |
-| `VcloakLoader` | `Frontend/VcloakLoader.php` | Vue cloak loader for component hydration state management |
+| `ComponentCache` | `Cache/ComponentCache.php` *(planned)* | Persistent filesystem caching for component PHP blocks with OPCache optimization — **not yet implemented** |
+| `HydrationCache` | `Cache/HydrationCache.php` *(planned)* | JSON-based hydration cache for component state management — **not yet implemented** |
 | `EventBusInterface` | `Events/Bus/EventBusInterface.php` | Contract for Phue Real-Time Event Bus Subsystem |
 | `InMemoryBusDriver` | `Events/Bus/InMemoryBusDriver.php` | In-Memory Event Bus Driver for testing and local development |
 | `RedisStreamDriver` | `Events/Bus/RedisStreamDriver.php` | High-Throughput Redis Streams Event Bus Driver with Consumer Groups |
@@ -73,10 +72,8 @@ relies on. At this stage they are intentionally small and testable; larger conce
 | `HtmlShellRenderer` | `Core/Asset/HtmlShellRenderer.php` | Renders the outer HTML5 shell with styles, scripts, state, and layout content |
 | `View` | `Core/UI/View.php` | Encapsulates template, state, scripts, and optional server-rendered HTML |
 | `PhuePartialRenderer` | `Core/UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) via the ComponentLoaderRegistry |
-| `PhNavigation` | `Core/UI/Phui/PhNavigation.phue` | SSR nav partial with boundary-aware active-route matching |
+| `PhNavigation` | `Core/UI/Phui/PhNavigation.phue` | SSR-fed Vue nav component with boundary-aware active-route matching (hybrid partial + client template) |
 | `SwooleServeCommand` | `Core/Console/Commands/SwooleServeCommand.php` | Command to serve the app through Swoole HTTP server with persistent connections |
-| `JsonHydration` | `Core/JsonHydration.php` | JSON-based hydration system for component state management |
-| `SpaInterceptor` | `Core/SpaInterceptor.php` | SPA interceptor for client-side navigation without full page reloads |
 
 ---
 
@@ -767,6 +764,73 @@ $allUsers   = User::all();                       // Returns array of User instan
 - **Primary Key Assignment**: Automatically assigns the newly generated ID from `$connection->lastInsertId()` to the model upon insertion.
 - **Validation error bag**: `getErrors()` / `setErrors()` expose a validation error store that higher layers (e.g. `ModelEndpoint`) populate when schema rules fail and serialise back to the client.
 
+### 9a. Data Mapper ORM Architecture (`Phue\Core\Database\DataMapper`)
+
+Where Active Record couples models to the query builder, the **Data Mapper** subsystem keeps domain entities pure and delegates persistence to a dedicated mapper layer. It comprises four collaborators:
+
+| Class | File | Responsibility |
+|---|---|---|
+| `DataMapper\Entity` | `Database/DataMapper/Entity.php` | Abstract domain base: static `tableName()` (abstract) and `primaryKey()` (defaults to `'id'`) |
+| `DataMapper\Mapper` | `Database/DataMapper/Mapper.php` | Bidirectional row↔entity conversion: camelCase props ↔ snake_case columns |
+| `DataMapper\Repository` | `Database/DataMapper/Repository.php` | Query-builder integration, identity-map lookup, hydration & persistence queueing |
+| `DataMapper\UnitOfWork` | `Database/DataMapper/UnitOfWork.php` | Identity map, dirty tracking snapshots, and atomic commit/rollback |
+
+**Entity (pure domain):**
+
+Entities may be plain POPO classes extending `Entity`; they carry no persistence logic:
+
+```php
+class UserEntity extends \Phue\Core\Database\DataMapper\Entity
+{
+    public ?int    $id       = null;
+    public string  $username = '';
+    public ?string $email    = null;
+
+    public static function tableName(): string { return 'users'; }
+    // primaryKey() defaults to 'id'
+}
+```
+
+**Mapper (`Mapper::hydrate()` / `Mapper::dehydrate()`):**
+
+- `hydrate(array $row, string $entityClass, UnitOfWork $uow): object` — instantiates without a constructor, maps snake_case row keys onto camelCase properties (`stock_level` → `stockLevel`), and registers the entity in the identity map when the PK is present.
+- `dehydrate(object $entity): array` — maps initialized camelCase properties back to snake_case keys. **Uninitialized** properties are skipped; explicit `= null` defaults are included.
+- Name helpers: `toSnakeCase(camelCase)` and `toCamelCase(snake_case)` (stable round-trip).
+
+**Repository (identity map + query integration):**
+
+```php
+$repo = new Repository($connection, $uow, new Mapper(), UserEntity::class);
+
+$repo->findById(7);      // identity map → DB fallback; same instance on repeat calls
+$repo->findAll();        // every row → hydrated entity
+$repo->query()           // fluent QueryBuilder pre-scoped to the entity table
+     ->where('status', 'active')->get();
+$repo->persist($entity); // queue for INSERT (deferred until UnitOfWork::commit())
+$repo->remove($entity);  // queue for DELETE
+```
+
+**UnitOfWork (atomic persistence):**
+
+`registerNew()` / `registerRemoved()` / `commit()`:
+
+- `commit()` wraps inserts, dirty updates, and deletes in one DB transaction (`beginTransaction` → … → `commit`, with `rollback` on any failure).
+- **Identity map** keyed `"{table}:{pk}"` guarantees at most one live instance per row.
+- **Dirty tracking** compares the current `dehydrate()` output against the original snapshot (`array_diff_assoc`) and issues `UPDATE` only for changed columns.
+- **Auto-increment vs exogenous PKs**: when the dehydrated data has no PK value, `lastInsertId()` is read back and assigned to the entity; if the PK is already present (e.g. a string customer code), it is left untouched.
+- New entities can be cancelled pre-commit via `registerRemoved()` (removed from the insert queue).
+
+```php
+$entity = new UserEntity();
+$entity->username = 'ada';
+$uow->registerNew($entity);
+
+$uow->commit();            // INSERT + lastInsertId() assignment, atomic
+
+$entity->email = 'ada@example.com';
+$uow->commit();            // dirty UPDATE on changed columns only
+```
+
 ---
 
 ## 10. CLI Console Subsystem Architecture
@@ -788,6 +852,7 @@ The CLI Subsystem (`Phue\Core\Console`) powers the framework executable `./bin/p
 - **`MakeMigrationCommand` (`make:migration`)**: Scaffolds a timestamped migration file under `database/migrations/`.
 - **`MigrateCommand` (`migrate`)**, **`MigrateRollbackCommand` (`migrate:rollback`)**: Apply / roll back pending migrations; the DB connection is resolved from `config/database.php` (never a hardcoded path).
 - **`SchiiMigrateCommand` (`schii:migrate`)**: Runs Schii's auto-migration for configured entities.
+- **`NpmInstallCommand` (`npm:install`)**, **`NpmRemoveCommand` (`npm:remove`)**, **`NpmListCommand` (`npm:list`)**: Manage JS vendor packages (via Bun) that back the no-build frontend (see §12).
 - **`DeployCommand` (`deploy`)**: Zero-downtime atomic release deployment (see §17).
 
 ---
@@ -884,12 +949,13 @@ They return an `html` key whose value replaces the page markup inside the shell.
 
 ### SSR navigation partial (`PhNavigation`)
 
-`src/Core/UI/Phui/PhNavigation.phue` is an HTML-first SSR partial that renders a `<nav class="ph-nav">` list. It accepts `items` and `activeRoute` and computes active state in PHP:
+`src/Core/UI/Phui/PhNavigation.phue` is a **hybrid** navigation component: a full Vue 3 client template plus an SSR data path. In layouts it is typically hydrated into a `<div id="nav">` placeholder via `PhuePartialRenderer::renderPartial('PhNavigation', [...])` (see `App/Frontend/AppLayout.phue`), which injects an initial state (`window.__NAV_STATE__`) and lets the client app mount without a FOUC.
 
-- Root path (`/`) uses exact match only.
-- Child paths activate their parent via `/`-delimited prefix matching (`str_starts_with`).
-- Disabled items render as `<span class="ph-nav__link is-disabled" aria-disabled="true">`.
-- Labels and hrefs are escaped with `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`.
+- Props: `items` (`{label, href, disabled?, group?}`), `actions` (topbar right-slot links), `activeRoute` (default `/`), `orientation` (`horizontal` | `sidebar` | `vertical`).
+- Root path (`/`) uses exact match only; child paths activate their parent via `/`-delimited **prefix** matching (`isRouteActive`).
+- Groups render as `<h6 class="phue-nav-group">` headings in sidebar/vertical modes, or `<li class="nav-item dropdown">` dropdowns in horizontal mode.
+- Disabled items render as `<span class="nav-link disabled" aria-disabled="true">`.
+- Labels and hrefs are escaped with `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')` on the SSR path.
 
 ### SPA interceptor (`phue-explorer.js`)
 

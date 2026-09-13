@@ -583,6 +583,110 @@ $user->delete();
 
 ---
 
+## 8a. Data Mapper ORM Usage (`Phue\Core\Database\DataMapper`)
+
+For domain models that should stay free of persistence logic, Phue provides a **Data Mapper** layer: `Entity` (pure domain), `Mapper` (row↔entity conversion), `Repository` (query + identity map), and `UnitOfWork` (atomic commit / dirty tracking).
+
+### Defining a Domain Entity
+
+```php
+use Phue\Core\Database\DataMapper\Entity;
+
+class UserEntity extends Entity
+{
+    public ?int    $id          = null;
+    public string  $username    = '';
+    public ?string $email       = null;
+    public ?string $lastLoginAt = null;
+
+    public static function tableName(): string { return 'users'; }
+    // primaryKey() default 'id' — override if the PK is not 'id'
+}
+```
+
+### Repository & UnitOfWork in Action
+
+```php
+use Phue\Core\Database\Connection;
+use Phue\Core\Database\DataMapper\Mapper;
+use Phue\Core\Database\DataMapper\Repository;
+use Phue\Core\Database\DataMapper\UnitOfWork;
+
+$connection = new Connection(['driver' => 'sqlite', 'database' => ':memory:']);
+$mapper     = new Mapper();
+$uow        = new UnitOfWork($connection, $mapper);
+$users      = new Repository($connection, $uow, $mapper, UserEntity::class);
+
+// Insert — deferred until commit
+$ada = new UserEntity();
+$ada->username = 'ada';
+$users->persist($ada);
+$uow->commit();                  // atomic; $ada->id gets the auto-increment value
+
+// Identity map — the same object is returned for the same row
+$again = $users->findById($ada->id);
+// $again === $ada
+
+// Dirty tracking — only changed columns are written
+$ada->email = 'ada@example.com';
+$uow->commit();
+
+// Filtered query scoped to the entity table
+$result     = $users->query()->where('username', 'like', 'ad%')->get();
+
+// Delete
+$users->remove($ada);
+$uow->commit();
+```
+
+### Custom / String Primary Keys
+
+String primary keys work transparently — no `lastInsertId()` is involved, so the value you set is the value persisted:
+
+```php
+class CustomerEntity extends Entity
+{
+    public ?string $customerCode = null;
+    public string  $fullName     = '';
+
+    public static function tableName(): string { return 'customers'; }
+    public static function primaryKey(): string { return 'customer_code'; }
+}
+```
+
+```php
+$repo   = new Repository($connection, $uow, new Mapper(), CustomerEntity::class);
+$cus    = new CustomerEntity();
+$cus->customerCode = 'C-200';
+$cus->fullName     = 'John Smith';
+$repo->persist($cus);
+$uow->commit();
+
+$found = $repo->findById('C-200');    // $found === $cus (identity map hit)
+```
+
+### Atomicity & Rollback
+
+A single `commit()` wraps all inserts, dirty updates, and deletes in a transaction:
+
+```php
+try {
+    $uow->commit(); // transaction: DB::commit() on success
+} catch (\Throwable $e) {
+    // transaction rolled back — nothing from this batch persisted
+}
+```
+
+New (not-yet-committed) entities can be cancelled by registering them for removal instead:
+
+```php
+$uow->registerNew($entity);
+$uow->registerRemoved($entity); // cancels the pending insert
+$uow->commit();                 // nothing persisted, no DELETE issued
+```
+
+---
+
 ## 9. CLI Console Tool (`bin/phue`)
 
 Phue provides a terminal executable `./bin/phue` for managing dev servers and generating code.
@@ -604,6 +708,9 @@ make:migration     # Generate a migration file under database/migrations/
 schii:migrate      # Apply migrations for Schii entities
 migrate            # Apply pending migrations
 migrate:rollback   # Roll back the last applied batch of migrations
+npm:install        # Install a JS vendor package (e.g. vue, bootstrap) via Bun
+npm:remove         # Remove an installed JS vendor package
+npm:list           # List currently installed JS vendor packages
 deploy             # Edge build/deploy helper (WASM targets)
 ```
 
@@ -1046,64 +1153,32 @@ $hardenedResponse = $middleware->handle($response);
 ./bin/phue deploy
 ```
 
-### JSON-Based Hydration & Component Caching
+### Component Caching, JSON Hydration & Vue Cloak (planned)
 
-Phue now supports JSON-based hydration for component state management and persistent filesystem caching for improved performance.
-
-#### Component Caching Configuration
+Phue's roadmap includes JSON-based hydration for component state, a filesystem `ComponentCache` with OPCache integration, a `HydrationCache`, and a `VcloakLoader` for the no-build Vue client. **These facilities are not yet implemented** — `src/Cache/` currently ships `CacheInterface`, `FileCache`, and `EdgeKvCache`. Tentative configuration shapes once available:
 
 ```php
-// Enable persistent filesystem caching for component PHP blocks
-$container->set(ComponentCache::class, function () {
-    return new ComponentCache(
-        cacheDir: __DIR__ . '/../storage/cache/components',
-        opcacheEnabled: true
-    );
-});
-```
-
-#### JSON Hydration for Component State
-
-```php
-// Use JSON-based hydration for complex component state
-$jsonHydration = new JsonHydration();
-$state = $jsonHydration->hydrate($request->input('component_state'));
-
-// Return hydrated component response
-return $this->ui->render('ComplexComponent', [
-    'state' => $state,
-    'useJsonHydration' => true
-]);
-```
-
-#### Vue Cloak Integration
-
-```php
-// Enable Vue cloak loader for hydration state management
-$container->set(VcloakLoader::class, function () {
-    return new VcloakLoader(
-        templateDir: __DIR__ . '/../templates/vue',
-        cacheEnabled: true
-    );
-});
+// Planned — not yet usable
+// $container->set(ComponentCache::class, fn () => new ComponentCache(cacheDir: ..., opcacheEnabled: true));
+// $container->set(HydrationCache::class, fn () => new HydrationCache(cacheDir: ..., maxSize: 1000));
+// $container->set(VcloakLoader::class, fn () => new VcloakLoader(templateDir: ..., cacheEnabled: true));
 ```
 
 ---
 
 ## 11. PhUI Component Kit
 
-Phue ships a complete Vue 3 component library (`src/Core/UI/Phui/`) — 25 components, no build step, all styled with Bootstrap 5 classes and CSS custom properties from the global `bootstrap.min.css` stylesheet.
+Phue ships a complete Vue 3 component library (`src/Core/UI/Phui/`) — 30 components, no build step, all styled with Bootstrap 5 classes and CSS custom properties from the global `bootstrap.min.css` stylesheet.
 
 ### Available Components
 
 | Category | Components |
 |---|---|
-| Form Controls | `PhButton`, `PhInput`, `PhSelect`, `PhTextarea`, `PhCheckbox`, `PhRadio` |
-| Data Display | `PhBadge`, `PhChip`, `PhAvatar`, `PhCard` |
-| Layout | `PhBox`, `PhStack`, `PhFlex`, `PhHeading`, `PhText`, `Spacer` |
+| Form Controls | `PhButton`, `PhInput`, `PhSelect`, `PhTextarea`, `PhCheckbox`, `PhRadio`, `PhFormField` |
+| Data Display | `PhBadge`, `PhChip`, `PhAvatar`, `PhCard`, `PhDataTable` |
+| Layout | `PhBox`, `PhStack`, `PhFlex`, `PhRow`, `PhCol`, `PhHeading`, `PhText`, `Spacer` |
 | Feedback | `PhAlert`, `PhModal`, `PhProgressBar`, `PhSkeleton` |
-| Navigation | `PhLink`, `PhPagination`, `PhBreadcrumb`, `PhTabs` |
-| Data | `PhDataTable` |
+| Navigation | `PhLink`, `PhPagination`, `PhBreadcrumb`, `PhTabs`, `PhNavigation`, `PhTheme` |
 
 ### How PhUI Works
 

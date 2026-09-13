@@ -695,30 +695,36 @@ No emits.
 
 ### `<ph-navigation>`
 
-Unlike the rest of PhUI, **PhNavigation has no client template**. It renders in
-PHP — an SSR partial that returns ready HTML. It is invoked through
-`PhuePartialRenderer::renderPartial()` (or `ComponentLoaderRegistry::load()`)
-and injected into the page with `v-html`. Attributes are escaped with
+PhNavigation is the **hybrid** navigation component: a full Vue 3 client
+template plus an SSR data path. It is typically injected into a layout
+placeholder (`<div id="nav">`, see `App/Frontend/AppLayout.phue`) via
+`PhuePartialRenderer::renderPartial()` (or `ComponentLoaderRegistry::load()`),
+which seeds `window.__NAV_STATE__` and lets the client app take over on mount —
+no flash-of-unstyled content. On the SSR path, attributes are escaped with
 `htmlspecialchars(…, ENT_QUOTES, 'UTF-8')`.
 
-Params:
+Props:
 
-| Param | Type | Default | Notes |
+| Prop | Type | Default | Notes |
 |---|---|---|---|
 | `items` | `Array` | `[]` | `{ label, href, disabled?, group? }` |
+| `actions` | `Array` | `[]` | Right-slot topbar links (horizontal mode) |
 | `activeRoute` | `String` | `'/'` | Current request URI |
 | `orientation` | `String` | `'horizontal'` | `horizontal` \| `sidebar` \| `vertical` |
+| `themeConfig` | `Object` | `{}` | `{ position: 'actions_prefix' \| 'actions_suffix' }` controls whether `<ph-theme>` precedes or follows `actions` |
 
 Behavior:
-- **Group headings** render as `<h6 class="phue-nav-group">` in sidebar/vertical
-  mode only, keyed to consecutive `group` values.
+- **Sidebar/vertical mode** renders a `nav.nav-pills.flex-column`; **horizontal**
+  renders `navbar-nav` and groups as `li.nav-item.dropdown` Bootstrap dropdowns.
+- **Group headings** render as `<h6 class="phue-nav-group sidebar-heading">` in
+  sidebar/vertical mode only, keyed to consecutive `group` values.
 - **Active detection**: the item whose normalized href equals `activeRoute`, or
   is a prefix (`/docs` matches `/docs/guide`). The root `/` matches only
   `activeRoute === '/'`.
 - **Disabled** items render as `<span class="nav-link disabled">` with
   `aria-disabled="true"`.
 
-Usage from PHP:
+Seeding from PHP (layout `<php>` block):
 
 ```php
 <?php
@@ -728,7 +734,6 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
     'orientation' => 'sidebar',
 ]);
 ?>
-<div v-html="navHtml"></div>
 ```
 
 ---
@@ -754,7 +759,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhInput | `<ph-input>` | Form control |
 | PhLink | `<ph-link>` | Navigation |
 | PhModal | `<ph-modal>` | Feedback |
-| PhNavigation | `<ph-navigation>` | Navigation (SSR partial) |
+| PhNavigation | `<ph-navigation>` | Navigation (hybrid SSR partial + client Vue) |
 | PhPagination | `<ph-pagination>` | Navigation |
 | `<ph-theme>` | Navigation / Utility | Theme switch toggle button (SSR-safe) |
 | PhProgressBar | `<ph-progress-bar>` | Feedback |
