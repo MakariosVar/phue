@@ -241,8 +241,9 @@ class PhueTemplateParser
 
         $preparedCode = "<?php\n" . $phpCode;
         $cacheDir = $this->cacheDir;
+        $codeHash = md5($phpCode);
 
-        $evaluator = function (string $code, array $params, ?string $filePath, int $startLine) use ($cacheDir): array {
+        $evaluator = function (string $code, array $params, ?string $filePath, int $startLine) use ($cacheDir, $codeHash): array {
             extract($params, EXTR_SKIP);
 
             $targetFile = null;
@@ -254,8 +255,7 @@ class PhueTemplateParser
                         throw new RuntimeException("Failed to create views cache directory: {$cacheDir}");
                     }
 
-                    $hash = md5($code);
-                    $targetFile = $cacheDir . DIRECTORY_SEPARATOR . 'phue_' . $hash . '.php';
+                    $targetFile = $cacheDir . DIRECTORY_SEPARATOR . 'phue_' . $codeHash . '.php';
 
                     if (!file_exists($targetFile)) {
                         file_put_contents($targetFile, $code, LOCK_EX);
