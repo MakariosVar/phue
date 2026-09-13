@@ -50,6 +50,9 @@ SNP,
   :error="inputError"
 />
 SNP,
+    'PhTheme' => <<<'SNP'
+<ph-theme aria-label="Toggle theme" />
+SNP,
     'PhSelect' => <<<'SNP'
 <ph-select
   v-model="selectValue"
@@ -630,6 +633,18 @@ return [
             <h2 class="h4 fw-semibold mb-3">Navigation</h2>
 
             <div class="row g-4">
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-theme&gt;</code></h5>
+                        <p class="small text-body-secondary">Light/Dark mode toggle with local storage persistence and SSR hydration safety.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex align-items-center gap-2">
+                            <ph-theme aria-label="Toggle theme" />
+                            <span class="text-body-secondary small">Click to toggle color scheme</span>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhTheme }}</code></pre>
+                    </div>
+                </div>
+
                 <div class="col-12 col-xl-6">
                     <div class="card p-3 h-100">
                         <h5 class="mb-1"><code>&lt;ph-tabs&gt;</code></h5>

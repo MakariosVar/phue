@@ -490,6 +490,26 @@ Slots: default — scoped `{ activeTab }`, rendered inside `.tab-content`.
 </ph-tabs>
 ```
 
+### `<ph-theme>`
+
+Interactive dark/light theme switcher toggle button. Automatically synchronizes with Bootstrap 5 `data-bs-theme` attribute on `<html>` and persists selection to `localStorage`. Designed for zero-hydration mismatch in SSR environments.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `storageKey` | `String` | `null` | LocalStorage key name (defaults to `'phue-theme'`) |
+| `ariaLabel` | `String` | `null` | Accessible button label override |
+| `themeConfig` | `Object` | `{}` | Optional config fallback dictionary |
+
+Emits: None (handles internal DOM theme mutation and storage).
+
+**Hydration Contract:**
+Initializes with `'light'` state identically on server and initial client render, deferring the active DOM/OS reading to `mounted()` to prevent SSR hydration mismatches.
+
+```html
+<ph-theme aria-label="Toggle theme" storage-key="my-app-theme" />
+```
+
+
 ---
 
 ## 6. Content & Layout
@@ -736,6 +756,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhModal | `<ph-modal>` | Feedback |
 | PhNavigation | `<ph-navigation>` | Navigation (SSR partial) |
 | PhPagination | `<ph-pagination>` | Navigation |
+| `<ph-theme>` | Navigation / Utility | Theme switch toggle button (SSR-safe) |
 | PhProgressBar | `<ph-progress-bar>` | Feedback |
 | PhRadio | `<ph-radio>` | Form control |
 | PhRow | `<ph-row>` | Layout |
