@@ -29,7 +29,7 @@ class PhueComponentLoader
     /**
      * Caches ONLY static raw structure per file path in-memory for the current request.
      *
-     * @var array<string, array{mtime: int, size: int, structure: array{template: string, script: ?string, phpCode: ?string}}>
+     * @var array<string, array{mtime: int, size: int, structure: array{template: string, script: ?string, phpCode: ?string, filePath?: string}}>
      */
     private array $cache = [];
 
@@ -131,7 +131,7 @@ class PhueComponentLoader
      *
      * @param string $name Component logical name.
      *
-     * @return array{template: string, script: ?string, phpCode: ?string}|null AST structure or null.
+     * @return array{template: string, script: ?string, phpCode: ?string, filePath?: string}|null AST structure or null.
      */
     public function getStructure(string $name): ?array
     {
@@ -521,13 +521,18 @@ class PhueComponentLoader
     /**
      * Evaluates a component structure with parameters to return a PhueComponent.
      *
-     * @param array $structure
-     * @param array $params
+     * @param array{template: string, script: ?string, phpCode: ?string, phpStartLine?: int, filePath?: string} $structure
+     * @param array<string, mixed> $params
      * @return PhueComponent
      */
     private function evaluateStructure(array $structure, array $params): PhueComponent
     {
-        $meta = $this->parser->evaluatePhpBlock($structure['phpCode'] ?? '', $params);
+        $meta = $this->parser->evaluatePhpBlock(
+            $structure['phpCode'] ?? '', 
+            $params, 
+            $structure['filePath'] ?? null, 
+            $structure['phpStartLine'] ?? 1
+        );
 
         $title = (string) ($meta['title'] ?? 'Phue App');
         $state = is_array($meta['state'] ?? null) ? $meta['state'] : [];
@@ -579,6 +584,7 @@ class PhueComponentLoader
         if (isset($this->cache[$resolvedPath])) {
             $cached = $this->cache[$resolvedPath];
             if ($cached['mtime'] === $mtime && $cached['size'] === $size) {
+                $cached['structure']['filePath'] = $resolvedPath;
                 return $cached['structure'];
             }
         }
@@ -593,11 +599,13 @@ class PhueComponentLoader
                 $persistentData['size'] === $size
             ) {
                 $this->cache[$resolvedPath] = $persistentData;
+                $persistentData['structure']['filePath'] = $resolvedPath;
                 return $persistentData['structure'];
             }
         }
 
         $structure = $this->parser->parseStructure($resolvedPath);
+        $structure['filePath'] = $resolvedPath;
 
         $payload = [
             'mtime'     => $mtime,
