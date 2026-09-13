@@ -5,5 +5,5 @@ schema_version = 1
 
 [grammars.phue]
 repository = "file:///home/trc/mak-dev/phue"
-rev = "0a2783883196772976520f3e6525410e89b87dab"
+rev = "6086a18ecb74258993df0fe4e34488d9626719b2"
 path = "tools/tree-sitter-phue"
