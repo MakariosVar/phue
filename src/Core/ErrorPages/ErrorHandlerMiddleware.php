@@ -65,7 +65,7 @@ class ErrorHandlerMiddleware
 
                 $response = Response::json(['error' => $errorMsg], $statusCode);
             } else {
-                $html = $this->renderer->render($e, $this->debug);
+                $html = $this->renderer->render($e, $this->debug, $statusCode);
                 $response = (new Response($html, $statusCode))
                     ->setHeader('Content-Type', 'text/html; charset=utf-8');
             }

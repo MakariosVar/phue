@@ -16,21 +16,63 @@ use Throwable;
  */
 class ErrorPageRenderer
 {
+    public function __construct(
+        private string $basePath = ''
+    ) {}
+
+    private function getCustomPage(int $statusCode, Throwable $e, bool $debug): ?string
+    {
+        if ($this->basePath === '') {
+            return null;
+        }
+
+        $vars = [
+            'e'     => $e,
+            'debug' => $debug,
+            'code'  => $statusCode,
+        ];
+
+        $path = $this->basePath . '/App/Errors/' . $statusCode . '.php';
+        if (is_file($path)) {
+            extract($vars);
+            ob_start();
+            include $path;
+            return ob_get_clean();
+        }
+
+        $default = $this->basePath . '/App/Errors/default.php';
+        if (is_file($default)) {
+            extract($vars);
+            ob_start();
+            include $default;
+            return ob_get_clean();
+        }
+
+        return null;
+    }
+
     /**
      * Render HTML error page based on exception and debug flag.
      *
-     * @param Throwable $e The caught exception.
-     * @param bool $debug Whether application is in debug mode.
+     * @param Throwable $e          The caught exception.
+     * @param bool      $debug      Whether application is in debug mode.
+     * @param int       $statusCode The HTTP status code.
      * @return string Rendered HTML.
      */
-    public function render(Throwable $e, bool $debug): string
+    public function render(Throwable $e, bool $debug, int $statusCode = 500): string
     {
+        $custom = $this->getCustomPage($statusCode, $e, $debug);
+        if ($custom !== null) {
+            return $custom;
+        }
+
         if ($debug) {
             $className = htmlspecialchars(get_class($e), ENT_QUOTES, 'UTF-8');
             $trace = nl2br(htmlspecialchars($e->getTraceAsString(), ENT_QUOTES, 'UTF-8'));
             $message = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
             $file = htmlspecialchars($e->getFile(), ENT_QUOTES, 'UTF-8');
             $line = $e->getLine();
+            $logo = '<img src="/Phue.svg" alt="Phue" width="32" height="32" style="margin-bottom: 16px;">';
 
             return <<<HTML
             <!DOCTYPE html>
@@ -46,6 +88,7 @@ class ErrorPageRenderer
                 </style>
             </head>
             <body>
+                {$logo}
                 <div class="card">
                     <h1>{$className}: {$message}</h1>
                     <p><strong>File:</strong> {$file} : line {$line}</p>

@@ -152,7 +152,7 @@ class Application
 
         // Register ErrorPageRenderer and ErrorHandlerMiddleware
         $this->container->singleton(\Phue\Core\ErrorPages\ErrorPageRenderer::class, function (): \Phue\Core\ErrorPages\ErrorPageRenderer {
-            return new \Phue\Core\ErrorPages\ErrorPageRenderer();
+            return new \Phue\Core\ErrorPages\ErrorPageRenderer($this->basePath);
         });
 
         $this->container->singleton(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class, function ($c): \Phue\Core\ErrorPages\ErrorHandlerMiddleware {
@@ -703,8 +703,6 @@ class Application
         }
     }
 
-    // Μέσα στην Application.php:
-
     /**
      * Renders and formats unhandled exceptions into a 500 Internal Server Error response.
      *
@@ -743,7 +741,7 @@ class Application
         // HTML Error Page Rendering
         /** @var \Phue\Core\ErrorPages\ErrorPageRenderer $renderer */
         $renderer = $this->container->get(\Phue\Core\ErrorPages\ErrorPageRenderer::class);
-        $html = $renderer->render($e, $this->debug);
+        $html = $renderer->render($e, $this->debug, 500);
 
         return new Response($html, 500);
     }
