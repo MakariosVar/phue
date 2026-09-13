@@ -20,3 +20,7 @@ tests/Production/_tmp_conftest/storage/logs
 .env
 !.env.example
 /ssr/.cache/
+
+/storage/assets/vendor/*
+!/storage/assets/vendor/vue3/
+!/storage/assets/vendor/bootstrap/

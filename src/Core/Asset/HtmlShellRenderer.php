@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Core\Asset;
 
+use Phue\Core\Console\PathResolver;
 use JsonException;
 
 /**
@@ -11,10 +12,18 @@ use JsonException;
  */
 class HtmlShellRenderer
 {
+    private ImportMapManager $importMapManager;
+
     /**
      * @param AssetRegistry $registry The asset registry containing assets to load.
+     * @param ImportMapManager|null $importMapManager The import map manager for import maps and CSS links.
      */
-    public function __construct(private AssetRegistry $registry) {}
+    public function __construct(
+        private AssetRegistry $registry,
+        ?ImportMapManager $importMapManager = null
+    ) {
+        $this->importMapManager = $importMapManager ?? new ImportMapManager(PathResolver::resolveBasePath());
+    }
 
     /**
      * Renders a complete HTML document shell.
@@ -58,7 +67,12 @@ class HtmlShellRenderer
             )
         );
 
-        $importMapMarkup = '<script type="importmap">{"imports":{"vue":"/assets/vendor/vue3/vue.runtime.esm-browser.js"}}</script>';
+        $manifestStylesheetLinks = $this->importMapManager->renderStylesheetLinks();
+        $combinedStyles = trim($manifestStylesheetLinks) !== ''
+            ? ($stylesMarkup !== '' ? $manifestStylesheetLinks . "\n    " . $stylesMarkup : $manifestStylesheetLinks)
+            : $stylesMarkup;
+
+        $importMapMarkup = $this->importMapManager->renderImportMapTag();
 
         $scriptsMarkup = implode(
             "\n    ",
@@ -114,7 +128,7 @@ class HtmlShellRenderer
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{$safeTitle}</title>
-            {$headScriptMarkup}{$stylesMarkup}
+            {$headScriptMarkup}{$combinedStyles}
         </head>
         <body>
             {$bodyContent}

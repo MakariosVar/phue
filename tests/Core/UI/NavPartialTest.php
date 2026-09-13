@@ -40,10 +40,13 @@ final class NavPartialTest extends TestCase
 
         $this->loader = new PhueComponentLoader(self::PHUI_DIR);
 
-        self::markTestSkipped(
-            'NavPartialTest requires the SSR sidecar to render PhNavigation server-side '
-            . '(PhNavigation is SSR-only after the module split). Re-enable when the Bun SSR engine is confirmed reachable and PhNavigation renders via socket.'
-        );
+        if (!file_exists('/tmp/phue-ssr.sock')) {
+            self::markTestSkipped(
+                'NavPartialTest requires the SSR sidecar to render PhNavigation server-side '
+                . '(PhNavigation is SSR-only after the module split). Skipped because the Bun SSR socket '
+                . '(/tmp/phue-ssr.sock) is not active.'
+            );
+        }
     }
 
     private function items(): array
@@ -65,7 +68,19 @@ final class NavPartialTest extends TestCase
             $params['orientation'] = $orientation;
         }
 
-        return $this->loader->load('PhNavigation', $params)->view->getHtml();
+        $source = $this->loader->buildForSsr('PhNavigation');
+        $this->assertNotNull($source, 'PhNavigation must compile for SSR.');
+
+        $ssrEngine = new \Phue\Core\Ssr\BunSsrEngine(new \Phue\Core\Ssr\UnixSsrClient('/tmp/phue-ssr.sock'));
+        $html = $ssrEngine->render(
+            '<ph-navigation></ph-navigation>',
+            $params,
+            ['components' => ['PhNavigation' => $source]]
+        );
+
+        $this->assertNotNull($html, 'SSR render of PhNavigation must return HTML.');
+
+        return (string) $html;
     }
 
     public function testRendersNavWrapperWithAllItems(): void
@@ -115,7 +130,7 @@ final class NavPartialTest extends TestCase
             $html
         );
         $this->assertMatchesRegularExpression(
-            '/<\/h6>\n<a href="\/docs" class="nav-link"/',
+            '/<\/h6><a href="\/docs" class="nav-link"/',
             $html
         );
         $this->assertStringContainsString('<a href="/" class="nav-link">Home</a>', $html);
@@ -134,7 +149,7 @@ final class NavPartialTest extends TestCase
             $html
         );
         $this->assertMatchesRegularExpression(
-            '/>Shop<\/h6>\n<a href="\/products" class="nav-link"/',
+            '/<\/h6><a href="\/products" class="nav-link"/',
             $html
         );
     }
@@ -302,14 +317,21 @@ final class NavPartialTest extends TestCase
     {
         $html = $this->render([], '/');
 
-        $this->assertSame('<ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>', $html);
+        $this->assertSame(
+            '<div class="d-flex align-items-center w-100"><ul class="navbar-nav me-auto mb-2 mb-lg-0"><!--[--><!--]--></ul>'
+                . '<div class="ms-auto d-flex align-items-center gap-2"><!--[--><!----><!--[--><!--]--><!--]--></div></div>',
+            $html
+        );
     }
 
     public function testMissingOrEmptyItemsSidebarProducesEmptyNav(): void
     {
         $html = $this->render([], '/', 'sidebar');
 
-        $this->assertSame('<nav class="nav nav-pills flex-column gap-1"></nav>', $html);
+        $this->assertSame(
+            '<div class="d-flex align-items-center w-100"><nav class="nav nav-pills flex-column gap-1"><!--[--><!--]--></nav><!----></div>',
+            $html
+        );
     }
 
     public function testDisabledDropdownItemRendersAsSpan(): void

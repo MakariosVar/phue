@@ -19,6 +19,9 @@ use Phue\Core\Console\Commands\MigrateRollbackCommand;
 use Phue\Core\Console\Commands\SchiiMigrateCommand;
 use Phue\Core\Console\Commands\ServeCommand;
 use Phue\Core\Console\Commands\SwooleServeCommand;
+use Phue\Core\Console\Commands\NpmInstallCommand;
+use Phue\Core\Console\Commands\NpmRemoveCommand;
+use Phue\Core\Console\Commands\NpmListCommand;
 
 $app = new Application('1.0.0');
 
@@ -34,6 +37,9 @@ $app
     ->add(new MakeMigrationCommand())
     ->add(new MigrateCommand())
     ->add(new DeployCommand())
-    ->add(new MigrateRollbackCommand());
+    ->add(new MigrateRollbackCommand())
+    ->add(new NpmInstallCommand())
+    ->add(new NpmRemoveCommand())
+    ->add(new NpmListCommand());
 
 exit($app->run($_SERVER['argv']));

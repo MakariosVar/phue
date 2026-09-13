@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\Asset;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Asset\ImportMapManager;
 
 /**
  * Unit tests for the HtmlShellRenderer: document structure, module script
@@ -260,5 +261,79 @@ final class HtmlShellRendererTest extends TestCase
 
         $this->assertStringNotContainsString('defer', $html);
         $this->assertStringNotContainsString('async', $html);
+    }
+
+    public function testImportMapTagIsAlwaysRenderedWithVueCore(): void
+    {
+        $html = $this->renderer->render('T');
+
+        $this->assertStringContainsString(
+            '<script type="importmap">',
+            $html
+        );
+        $this->assertStringContainsString(
+            '"vue": "/assets/vendor/vue3/vue.runtime.esm-browser.js"',
+            $html
+        );
+    }
+
+    public function testInjectedManagerAppendsInstalledPackagesToImportMap(): void
+    {
+        $baseDir = sys_get_temp_dir() . '/srctest_' . bin2hex(random_bytes(6));
+        mkdir($baseDir, 0777, true);
+        file_put_contents(
+            $baseDir . '/phue-packages.json',
+            json_encode([
+                'packages' => [
+                    'chart.js' => ['esm_file' => 'chart.js.esm.js'],
+                    'date-fns' => ['esm_file' => 'date-fns.esm.js'],
+                ],
+            ])
+        );
+
+        try {
+            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir));
+            $html = $renderer->render('T');
+
+            $this->assertStringContainsString(
+                '"chart.js": "/assets/vendor/chart.js/chart.js.esm.js"',
+                $html
+            );
+            $this->assertStringContainsString(
+                '"date-fns": "/assets/vendor/date-fns/date-fns.esm.js"',
+                $html
+            );
+        } finally {
+            @unlink($baseDir . '/phue-packages.json');
+            @rmdir($baseDir);
+        }
+    }
+
+    public function testInjectedManagerEmitsManifestStylesheetsBeforeRegistryStyles(): void
+    {
+        $baseDir = sys_get_temp_dir() . '/srctest_' . bin2hex(random_bytes(6));
+        mkdir($baseDir, 0777, true);
+        file_put_contents(
+            $baseDir . '/phue-packages.json',
+            json_encode(['packages' => [], 'css_files' => ['/assets/vendor/chart.js/chart.js.css']])
+        );
+        $this->registry->addStyle('/assets/theme.css');
+
+        try {
+            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir));
+            $html = $renderer->render('T');
+
+            $this->assertStringContainsString(
+                '<link rel="stylesheet" href="/assets/vendor/chart.js/chart.js.css">',
+                $html
+            );
+            $this->assertTrue(
+                strpos($html, 'chart.js.css') < strpos($html, 'theme.css'),
+                'Manifest stylesheets must precede registry styles.'
+            );
+        } finally {
+            @unlink($baseDir . '/phue-packages.json');
+            @rmdir($baseDir);
+        }
     }
 }
