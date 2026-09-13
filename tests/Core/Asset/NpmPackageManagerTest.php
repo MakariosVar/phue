@@ -62,7 +62,7 @@ final class NpmPackageManagerTest extends TestCase
         @rmdir($dir);
     }
 
-    public function testInstallBuildsBundleWritesManifestAndLists(): void
+    public function testInstallMirrorsEsmMainAndWritesManifestAndLists(): void
     {
         $manager = $this->manager();
         $manager->install('lodash-es', 'latest');
@@ -79,16 +79,15 @@ final class NpmPackageManagerTest extends TestCase
         $entry = $manifest['packages']['lodash-es'];
         $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', (string) $entry['version']);
         $this->assertSame('latest', $entry['resolved_from']);
-        $this->assertSame('lodash-es.esm.js', $entry['esm_file']);
-        $this->assertStringStartsWith('sha256-', $entry['esm_integrity']);
+
+        $this->assertIsString($entry['main'], 'main URL must be a string, never an array.');
+        $this->assertStringStartsWith('/assets/vendor/lodash-es/', $entry['main']);
+        $this->assertIsArray($entry['subpaths']);
         $this->assertIsArray($entry['css_files']);
         $this->assertIsString($entry['installed_at']);
 
-        $bundle = $this->dir . '/storage/assets/vendor/lodash-es/lodash-es.esm.js';
-        $this->assertFileExists($bundle);
-
-        $actual = 'sha256-' . base64_encode(hash_file('sha256', $bundle, true));
-        $this->assertSame($entry['esm_integrity'], $actual, 'Recorded integrity must match the built file.');
+        $mainOnDisk = $this->dir . str_replace('/assets/vendor', '/storage/assets/vendor', $entry['main']);
+        $this->assertFileExists($mainOnDisk, 'main URL must point to a real vendor file.');
 
         $this->assertSame(['lodash-es'], array_keys($manager->listPackages()));
     }
@@ -126,6 +125,78 @@ final class NpmPackageManagerTest extends TestCase
         $manager->restore();
 
         $this->assertDirectoryExists($this->dir . '/storage/assets/vendor/lodash-es');
-        $this->assertFileExists($this->dir . '/storage/assets/vendor/lodash-es/lodash-es.esm.js');
+
+        $manifest = json_decode((string) file_get_contents($this->dir . '/phue-packages.json'), true);
+        $main = $manifest['packages']['lodash-es']['main'];
+        $this->assertFileExists($this->dir . str_replace('/assets/vendor', '/storage/assets/vendor', $main));
+    }
+
+    public function testInstallMirrorsNestedEsmRootAtVendorRoot(): void
+    {
+        $manager = $this->manager();
+        $manager->install('dayjs');
+
+        $vendorPkgDir = $this->dir . '/storage/assets/vendor/dayjs';
+
+        $this->assertFileExists($vendorPkgDir . '/index.js', 'ESM tree root must become the vendor package root.');
+        $this->assertDirectoryDoesNotExist($vendorPkgDir . '/esm', 'Nested esm/ dir must NOT be mirrored when esm root is detected.');
+        $this->assertFileDoesNotExist($vendorPkgDir . '/esm/index.js');
+    }
+
+    public function testRewriteRemovesExtensionlessRelativeImports(): void
+    {
+        $manager = $this->manager();
+        $manager->install('dayjs');
+
+        $violations = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->dir . '/storage/assets/vendor/dayjs', \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'js') {
+                continue;
+            }
+
+            $content = (string) file_get_contents($file->getPathname());
+            preg_match_all('/(?:from\s+|import\s*\(\s*)[\'"](\.{1,2}\/[^\'"]+)[\'"]/', $content, $matches);
+            foreach ($matches[1] as $spec) {
+                if (!preg_match('/\.(js|mjs|cjs|json|css)$/i', $spec)) {
+                    $violations[] = $file->getPathname() . ': ' . $spec;
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $violations,
+            'Every relative import in the mirrored tree must carry an explicit extension.'
+        );
+    }
+
+    public function testSubpathKeysAreClientRelativeAndUrlsAreNotDoubleVendored(): void
+    {
+        $manager = $this->manager();
+        $manager->install('dayjs');
+
+        $manifest = json_decode((string) file_get_contents($this->dir . '/phue-packages.json'), true);
+        $subpaths = $manifest['packages']['dayjs']['subpaths'];
+
+        $this->assertIsArray($subpaths);
+        $this->assertNotSame([], $subpaths);
+
+        foreach ($subpaths as $key => $url) {
+            $this->assertFalse(str_starts_with((string) $key, 'esm/'), 'Subpath keys must be client-relative, trimmed of the esm root.');
+            $this->assertStringNotContainsString('vendor/vendor', (string) $url, 'Subpath URLs must not contain a doubled vendor segment.');
+        }
+
+        $this->assertArrayHasKey('plugin/relativeTime', $subpaths);
+        $this->assertStringEndsWith(
+            '/plugin/relativeTime/index.js',
+            $subpaths['plugin/relativeTime'],
+            'Directory-style subpaths must map to their /index.js file.'
+        );
+        $this->assertArrayHasKey('locale/el', $subpaths);
+        $this->assertStringEndsWith('/locale/el.js', $subpaths['locale/el'], 'Flat subpaths must map to the concrete .js file.');
     }
 }

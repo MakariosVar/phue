@@ -285,8 +285,13 @@ final class HtmlShellRendererTest extends TestCase
             $baseDir . '/phue-packages.json',
             json_encode([
                 'packages' => [
-                    'chart.js' => ['esm_file' => 'chart.js.esm.js'],
-                    'date-fns' => ['esm_file' => 'date-fns.esm.js'],
+                    'chart.js' => ['main' => '/assets/vendor/chart.js/index.js'],
+                    'date-fns' => [
+                        'main' => '/assets/vendor/date-fns/index.js',
+                        'subpaths' => [
+                            'locale/el' => '/assets/vendor/date-fns/locale/el.js',
+                        ],
+                    ],
                 ],
             ])
         );
@@ -296,12 +301,17 @@ final class HtmlShellRendererTest extends TestCase
             $html = $renderer->render('T');
 
             $this->assertStringContainsString(
-                '"chart.js": "/assets/vendor/chart.js/chart.js.esm.js"',
+                '"chart.js": "/assets/vendor/chart.js/index.js"',
                 $html
             );
             $this->assertStringContainsString(
-                '"date-fns": "/assets/vendor/date-fns/date-fns.esm.js"',
+                '"date-fns": "/assets/vendor/date-fns/index.js"',
                 $html
+            );
+            $this->assertStringContainsString(
+                '"date-fns/locale/el": "/assets/vendor/date-fns/locale/el.js"',
+                $html,
+                'Subpaths must appear in the rendered import map JSON.'
             );
         } finally {
             @unlink($baseDir . '/phue-packages.json');

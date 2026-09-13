@@ -20,7 +20,7 @@ class ImportMapManager
     }
 
     /**
-     * Generates the import map array.
+     * Generates the import map array supporting main entries and subpaths.
      * 
      * Decision on missing manifest: If the manifest file does not exist, 
      * it gracefully falls back to returning only the core 'vue' mapping.
@@ -48,28 +48,35 @@ class ImportMapManager
             throw new \RuntimeException('Manifest file is corrupted or contains malformed JSON: ' . json_last_error_msg());
         }
 
-        // Expected manifest structure expectation: packages or items mapping
-        // e.g., packages: [ {"name": "@vue/reactivity", "esm_file": "x.esm.js"}, ... ] 
-        // or key-value pairs depending on structure. Let's support a flexible robust structure.
         $packages = $data['packages'] ?? $data;
 
         if (is_array($packages)) {
             foreach ($packages as $pkgName => $pkgData) {
-                // Handle cases where package name is key or property
                 $name = is_string($pkgName) ? $pkgName : ($pkgData['name'] ?? null);
-                $esmFile = $pkgData['esm_file'] ?? (is_string($pkgName) ? $pkgData : null);
-
-                if (!$name || !$esmFile) {
+                if (!$name) {
                     continue;
                 }
 
-                // Clean and normalize package path safely (preventing path traversal while allowing scoped packages like @vue/reactivity)
                 $safeName = ltrim($name, '/');
                 if (str_contains($safeName, '..')) {
-                    continue; // Disallow path traversal attempts
+                    continue;
                 }
 
-                $imports[$name] = "/assets/vendor/{$safeName}/{$esmFile}";
+                // Consume main entry instead of esm_file
+                if (isset($pkgData['main']) && is_string($pkgData['main'])) {
+                    $imports[$name] = $pkgData['main'];
+                }
+
+                // Consume subpaths contract (e.g. package/subpath -> URL mapping)
+                if (isset($pkgData['subpaths']) && is_array($pkgData['subpaths'])) {
+                    foreach ($pkgData['subpaths'] as $subpathKey => $subpathUrl) {
+                        $subpathKeyClean = ltrim($subpathKey, '/');
+                        if (str_contains($subpathKeyClean, '..')) {
+                            continue;
+                        }
+                        $imports[$name . '/' . $subpathKeyClean] = $subpathUrl;
+                    }
+                }
             }
         }
 

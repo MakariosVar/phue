@@ -63,29 +63,55 @@ final class ImportMapManagerTest extends TestCase
     {
         $manager = $this->manager([
             'packages' => [
-                'chart.js' => ['esm_file' => 'chart.js.esm.js'],
-                'date-fns' => ['esm_file' => 'date-fns.esm.js'],
+                'chart.js' => ['main' => '/assets/vendor/chart.js/index.js'],
+                'date-fns' => ['main' => '/assets/vendor/date-fns/index.js'],
             ],
         ]);
 
         $imports = $manager->getImportMap()['imports'];
 
         $this->assertSame('/assets/vendor/vue3/vue.runtime.esm-browser.js', $imports['vue']);
-        $this->assertSame('/assets/vendor/chart.js/chart.js.esm.js', $imports['chart.js']);
-        $this->assertSame('/assets/vendor/date-fns/date-fns.esm.js', $imports['date-fns']);
+        $this->assertSame('/assets/vendor/chart.js/index.js', $imports['chart.js']);
+        $this->assertSame('/assets/vendor/date-fns/index.js', $imports['date-fns']);
     }
 
     public function testScopedPackageMapsToScaffoldedVendorPath(): void
     {
         $manager = $this->manager([
             'packages' => [
-                '@vue/reactivity' => ['esm_file' => 'reactivity.esm.js'],
+                '@vue/reactivity' => ['main' => '/assets/vendor/@vue/reactivity/index.js'],
             ],
         ]);
 
         $imports = $manager->getImportMap()['imports'];
 
-        $this->assertSame('/assets/vendor/@vue/reactivity/reactivity.esm.js', $imports['@vue/reactivity']);
+        $this->assertSame('/assets/vendor/@vue/reactivity/index.js', $imports['@vue/reactivity']);
+    }
+
+    public function testManifestMainAndSubpathsEmitExactMappingWithoutArrays(): void
+    {
+        $manager = $this->manager([
+            'packages' => [
+                'dayjs' => [
+                    'main' => '/assets/vendor/dayjs/index.js',
+                    'subpaths' => [
+                        'plugin/relativeTime' => '/assets/vendor/dayjs/plugin/relativeTime/index.js',
+                        'locale/el' => '/assets/vendor/dayjs/locale/el.js',
+                    ],
+                ],
+            ],
+        ]);
+
+        $imports = $manager->getImportMap()['imports'];
+
+        $this->assertSame('/assets/vendor/dayjs/index.js', $imports['dayjs']);
+        $this->assertSame(
+            '/assets/vendor/dayjs/plugin/relativeTime/index.js',
+            $imports['dayjs/plugin/relativeTime'],
+            'Each subpath must be emitted as its own string mapping, never a boxed array.'
+        );
+        $this->assertSame('/assets/vendor/dayjs/locale/el.js', $imports['dayjs/locale/el']);
+        $this->assertIsString($imports['dayjs'], 'main value must remain a plain string (no array-to-string corruption).');
     }
 
     public function testCorruptedManifestThrowsRuntimeException(): void
@@ -100,7 +126,7 @@ final class ImportMapManagerTest extends TestCase
     {
         $manager = $this->manager([
             'packages' => [
-                'chart.js' => ['esm_file' => 'chart.js.esm.js'],
+                'chart.js' => ['main' => '/assets/vendor/chart.js/index.js'],
             ],
         ]);
 
@@ -114,7 +140,7 @@ final class ImportMapManagerTest extends TestCase
         $decoded = json_decode($json, true);
 
         $this->assertIsArray($decoded);
-        $this->assertSame('/assets/vendor/chart.js/chart.js.esm.js', $decoded['imports']['chart.js']);
+        $this->assertSame('/assets/vendor/chart.js/index.js', $decoded['imports']['chart.js']);
     }
 
     public function testRenderStylesheetLinksEmitsAllTopLevelCssFiles(): void
@@ -136,7 +162,7 @@ final class ImportMapManagerTest extends TestCase
     public function testRenderStylesheetLinksReturnsEmptyWithoutCssFiles(): void
     {
         $manager = $this->manager([
-            'packages' => ['chart.js' => ['esm_file' => 'chart.js.esm.js']],
+            'packages' => ['chart.js' => ['main' => '/assets/vendor/chart.js/index.js']],
             'css_files' => [],
         ]);
 
