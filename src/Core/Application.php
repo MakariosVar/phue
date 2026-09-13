@@ -99,6 +99,11 @@ class Application
         $this->events = new EventDispatcher();
         $this->debug = (bool) $this->config->get('app.debug', false);
 
+        // Enable debug middleware if in debug mode and it's enabled
+        if ($this->debug && $this->config->get('app.devTool', false)) {
+            $this->use(\Phue\Core\DevTool\DevToolMiddleware::class);
+        }
+
         // Register core framework singletons into DI container
         $this->registerCoreBindings();
 
@@ -144,6 +149,22 @@ class Application
             return new FileCache($this->basePath . '/storage/cache');
         });
         $this->container->alias('cache', CacheInterface::class);
+
+        // Register ErrorPageRenderer and ErrorHandlerMiddleware
+        $this->container->singleton(\Phue\Core\ErrorPages\ErrorPageRenderer::class, function (): \Phue\Core\ErrorPages\ErrorPageRenderer {
+            return new \Phue\Core\ErrorPages\ErrorPageRenderer();
+        });
+
+        $this->container->singleton(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class, function ($c): \Phue\Core\ErrorPages\ErrorHandlerMiddleware {
+            return new \Phue\Core\ErrorPages\ErrorHandlerMiddleware(
+                renderer: $c->get(\Phue\Core\ErrorPages\ErrorPageRenderer::class),
+                logger: $c->get(LoggerInterface::class),
+                debug: $this->debug
+            );
+        });
+
+        // Enable ErrorHandlerMiddleware at global middleware stack
+        $this->use(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class);
 
         // Primary App Component Loader Singleton (/App/Frontend)
         $this->container->singleton(PhueComponentLoader::class, function () use ($viewsCacheDir): PhueComponentLoader {
@@ -428,29 +449,18 @@ class Application
         } catch (\InvalidArgumentException $e) {
             $logger->warning('HTTP 400 Bad Request: ' . $e->getMessage(), ['exception' => $e]);
             $msg = $this->debug ? $e->getMessage() : 'Bad Request';
-            $response = Response::json(['error' => $msg], 400);
+            $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
+                || $request->isXmlHttpRequest();
+            $response = $acceptsJson ? Response::json(['error' => $msg], 400) : new Response($msg, 400);
         } catch (RouteNotFoundException $e) {
-            // Keep normal 404 route matching silent to avoid log bloat on expected missing assets/routes
             $response = new Response('Not Found', 404);
         } catch (MethodNotAllowedException $e) {
             $logger->warning('HTTP 405 Method Not Allowed: ' . $request->getMethod() . ' ' . $request->getUri(), ['exception' => $e]);
             $response = (new Response('Method Not Allowed', 405))
                 ->setHeader('Allow', implode(', ', $e->getAllowedMethods()));
         } catch (Throwable $e) {
-            $logger->error('HTTP 500 Unhandled Exception: ' . $e->getMessage(), ['exception' => $e]);
-            if ($this->debug) {
-                $response = Response::json([
-                    'error' => $e->getMessage(),
-                    'class' => get_class($e),
-                    'file'  => $e->getFile(),
-                    'line'  => $e->getLine(),
-                    'trace' => explode("\n", $e->getTraceAsString()),
-                ], 500);
-            } else {
-                $response = Response::json(['error' => 'Internal Server Error'], 500);
-            }
+            $response = $this->renderExceptionResponse($e, $request);
         } finally {
-            // Clean request-scoped services automatically at the end of the lifecycle
             $this->container->flushScope();
         }
 
@@ -691,6 +701,51 @@ class Application
 
             $this->modules[] = $module;
         }
+    }
+
+    // Μέσα στην Application.php:
+
+    /**
+     * Renders and formats unhandled exceptions into a 500 Internal Server Error response.
+     *
+     * Logs the exception details using the configured logger. Detects if the client 
+     * expects a JSON response via the 'Accept' or 'X-Requested-With' headers. 
+     * If JSON is requested, it returns a detailed JSON payload (in debug mode) or a 
+     * generic error message. Otherwise, it renders a custom HTML error page.
+     *
+     * @param Throwable $e       The unhandled exception or error instance.
+     * @param Request   $request The current HTTP request instance.
+     * 
+     * @return Response A JSON or HTML HTTP response with a 500 status code.
+     */
+    private function renderExceptionResponse(Throwable $e, Request $request): Response
+    {
+        /** @var LoggerInterface $logger */
+        $logger = $this->container->get(LoggerInterface::class);
+        $logger->error('HTTP 500 Unhandled Exception: ' . $e->getMessage(), ['exception' => $e]);
+
+        $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
+            || $request->getHeader('X-Requested-With', '') === 'XMLHttpRequest';
+
+        if ($acceptsJson) {
+            if ($this->debug) {
+                return Response::json([
+                    'error' => $e->getMessage(),
+                    'class' => get_class($e),
+                    'file'  => $e->getFile(),
+                    'line'  => $e->getLine(),
+                    'trace' => explode("\n", $e->getTraceAsString()),
+                ], 500);
+            }
+            return Response::json(['error' => 'Internal Server Error'], 500);
+        }
+
+        // HTML Error Page Rendering
+        /** @var \Phue\Core\ErrorPages\ErrorPageRenderer $renderer */
+        $renderer = $this->container->get(\Phue\Core\ErrorPages\ErrorPageRenderer::class);
+        $html = $renderer->render($e, $this->debug);
+
+        return new Response($html, 500);
     }
 
     /**

@@ -143,6 +143,16 @@ class Request
     }
 
     /**
+     * Check if the request was made via AJAX / XmlHttpRequest.
+     *
+     * @return bool
+     */
+    public function isXmlHttpRequest(): bool
+    {
+        return strtolower($this->getHeader('X-Requested-With', '')) === 'xmlhttprequest';
+    }
+
+    /**
      * Retrieve input parameter checking body first, then fallback to query parameters.
      *
      * @param string $key Parameter key

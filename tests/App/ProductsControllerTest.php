@@ -38,6 +38,8 @@ final class ProductsControllerTest extends TestCase
         $response = $this->app->handle(new Request('GET', '/products'));
 
         $this->assertSame(404, $response->getStatusCode());
-        $this->assertStringContainsString('Not Found', $response->getContent());
+        $content = $response->getContent();
+        $this->assertStringContainsString('<!DOCTYPE html>', $content);
+        $this->assertStringContainsString('<h1', $content);
     }
 }

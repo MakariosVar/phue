@@ -119,7 +119,8 @@ class RouteParameterBindingTest extends TestCase
             return Response::json(['id' => $id]);
         });
 
-        $response = $this->handle('GET', '/binding/int/abc');
+        $request = new Request('GET', '/binding/int/abc', [], [], ['Accept' => 'application/json']);
+        $response = $this->app->handle($request);
         $body = json_decode($response->getContent(), true);
 
         $this->assertSame(400, $response->getStatusCode());

@@ -78,8 +78,9 @@ class ErrorResponseContractTest extends TestCase
         $this->assertSame(500, $response->getStatusCode());
         $this->assertSame('nosniff', $response->getHeader('X-Content-Type-Options'));
         $this->assertSame('SAMEORIGIN', $response->getHeader('X-Frame-Options'));
-        $body = json_decode($response->getContent(), true);
-        $this->assertArrayHasKey('error', $body);
+        $content = $response->getContent();
+        $this->assertStringContainsString('<!DOCTYPE html>', $content);
+        $this->assertStringContainsString('<html', $content);
     }
 
     public function test400MessageMaskedInProductionMode(): void
@@ -89,7 +90,7 @@ class ErrorResponseContractTest extends TestCase
             return Response::json(['id' => $id]);
         });
 
-        $response = $app->handle(new Request('GET', '/int/abc'));
+        $response = $app->handle(new Request('GET', '/int/abc', [], [], ['Accept' => 'application/json']));
         $body = json_decode($response->getContent(), true);
 
         $this->assertSame(400, $response->getStatusCode());
