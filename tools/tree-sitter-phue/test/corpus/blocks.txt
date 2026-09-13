@@ -1,0 +1,119 @@
+===============================================================================
+min: single empty template block
+===============================================================================
+<template></template>
+---
+(source_file
+  (template_block
+    (template_open)
+    (template_close)))
+
+===============================================================================
+template with content
+===============================================================================
+<template><div>x</div></template>
+---
+(source_file
+  (template_block
+    (template_open)
+    (template_inner
+      (content)
+      (content))
+    (template_close)))
+
+===============================================================================
+script block
+===============================================================================
+<script>const a = 1;</script>
+---
+(source_file
+  (script_block
+    (script_open)
+    (script_inner
+      (content))
+    (script_close)))
+
+===============================================================================
+php block (no <?php marker — phue style)
+===============================================================================
+<php>$x = 1;</php>
+---
+(source_file
+  (php_block
+    (php_open)
+    (php_inner
+      (content))
+    (php_close)))
+
+===============================================================================
+all three blocks in one file
+===============================================================================
+<template><h1>x</h1></template>
+<script>let n = 1;</script>
+<php>echo $n;</php>
+---
+(source_file
+  (template_block
+    (template_open)
+    (template_inner
+      (content)
+      (content))
+    (template_close))
+  (script_block
+    (script_open)
+    (script_inner
+      (content))
+    (script_close))
+  (php_block
+    (php_open)
+    (php_inner
+      (content))
+    (php_close)))
+
+===============================================================================
+empty blocks adjacent: no ambiguity
+===============================================================================
+<template></template><php></php><script></script>
+---
+(source_file
+  (template_block
+    (template_open)
+    (template_close))
+  (php_block
+    (php_open)
+    (php_close))
+  (script_block
+    (script_open)
+    (script_close)))
+
+===============================================================================
+close-looking content must not close the block early
+===============================================================================
+<template>not</template>a close</template>
+---
+(source_file
+  (template_block
+    (template_open)
+    (template_inner
+      (content))
+    (template_close))
+  (text_nodes
+    (content)))
+
+===============================================================================
+text outside blocks
+===============================================================================
+hello
+<php>ok</php>
+world
+---
+(source_file
+  (text_nodes
+    (content))
+  (php_block
+    (php_open)
+    (php_inner
+      (content))
+    (php_close))
+  (text_nodes
+    (content)))

@@ -1,0 +1,182 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
+  "name": "phue",
+  "rules": {
+    "source_file": {
+      "type": "REPEAT",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "template_block"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "script_block"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "php_block"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "text_nodes"
+          }
+        ]
+      }
+    },
+    "text_nodes": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "content"
+      }
+    },
+    "template_block": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "template_open"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "template_inner"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "template_close"
+        }
+      ]
+    },
+    "template_inner": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "content"
+      }
+    },
+    "script_block": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "script_open"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "script_inner"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "script_close"
+        }
+      ]
+    },
+    "script_inner": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "content"
+      }
+    },
+    "php_block": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "php_open"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "php_inner"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "php_close"
+        }
+      ]
+    },
+    "php_inner": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "content"
+      }
+    }
+  },
+  "extras": [
+    {
+      "type": "PATTERN",
+      "value": "\\s+"
+    },
+    {
+      "type": "STRING",
+      "value": "﻿"
+    }
+  ],
+  "conflicts": [
+    [
+      "text_nodes"
+    ]
+  ],
+  "precedences": [],
+  "externals": [
+    {
+      "type": "SYMBOL",
+      "name": "template_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "template_close"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "script_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "script_close"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "php_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "php_close"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "content"
+    }
+  ],
+  "inline": [],
+  "supertypes": [],
+  "reserved": {}
+}

@@ -1,0 +1,22 @@
+{
+  "name": "tree-sitter-phue",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for .phue single-file components (phue framework).",
+  "license": "MIT",
+  "main": "bindings/node",
+  "types": "bindings/node",
+  "files": [
+    "grammar.js",
+    "src/**",
+    "bindings/**",
+    "test/**",
+    "queries/**"
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "dependencies": {
+    "nan": "^2.17.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "grammars": [
+    {
+      "name": "phue",
+      "camelcase": "Phue",
+      "title": "Phue",
+      "scope": "source.phue",
+      "file-types": ["phue"],
+      "injection-regex": "^phue$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Tree-sitter grammar for .phue single-file components (phue framework).",
+    "authors": [
+      {
+        "name": "phue"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/phue"
+    }
+  }
+}

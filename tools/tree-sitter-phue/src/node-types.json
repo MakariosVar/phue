@@ -1,0 +1,187 @@
+[
+  {
+    "type": "php_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "php_close",
+          "named": true
+        },
+        {
+          "type": "php_inner",
+          "named": true
+        },
+        {
+          "type": "php_open",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "php_inner",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "content",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "script_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "script_close",
+          "named": true
+        },
+        {
+          "type": "script_inner",
+          "named": true
+        },
+        {
+          "type": "script_open",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "script_inner",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "content",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "php_block",
+          "named": true
+        },
+        {
+          "type": "script_block",
+          "named": true
+        },
+        {
+          "type": "template_block",
+          "named": true
+        },
+        {
+          "type": "text_nodes",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "template_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "template_close",
+          "named": true
+        },
+        {
+          "type": "template_inner",
+          "named": true
+        },
+        {
+          "type": "template_open",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "template_inner",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "content",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "text_nodes",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "content",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "content",
+    "named": true
+  },
+  {
+    "type": "php_close",
+    "named": true
+  },
+  {
+    "type": "php_open",
+    "named": true
+  },
+  {
+    "type": "script_close",
+    "named": true
+  },
+  {
+    "type": "script_open",
+    "named": true
+  },
+  {
+    "type": "template_close",
+    "named": true
+  },
+  {
+    "type": "template_open",
+    "named": true
+  }
+]

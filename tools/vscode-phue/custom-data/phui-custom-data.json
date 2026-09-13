@@ -1,0 +1,836 @@
+{
+    "tags": [
+        {
+            "name": "ph-alert",
+            "description": "Dismissible alert with optional title. Internal visible state — dismiss hides",
+            "attributes": [
+                {
+                    "name": "dismissible",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Shows the btn-close"
+                },
+                {
+                    "name": "message",
+                    "description": "Default slot content wins"
+                },
+                {
+                    "name": "title",
+                    "description": "Bold alert-heading"
+                },
+                {
+                    "name": "variant",
+                    "description": "info | success | warning | error"
+                }
+            ]
+        },
+        {
+            "name": "ph-avatar",
+            "description": "Image avatar with initials fallback. name produces initials: first + last",
+            "attributes": [
+                {
+                    "name": "alt"
+                },
+                {
+                    "name": "name",
+                    "description": "Drives fallback initials"
+                },
+                {
+                    "name": "shape",
+                    "description": "circle | square | rounded"
+                },
+                {
+                    "name": "size",
+                    "description": "xs | sm | md | lg | xl"
+                },
+                {
+                    "name": "src",
+                    "description": "Image URL; on load error → initials"
+                }
+            ]
+        },
+        {
+            "name": "ph-badge",
+            "description": "Small status label.",
+            "attributes": [
+                {
+                    "name": "label",
+                    "description": "Or default slot"
+                },
+                {
+                    "name": "pill",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "rounded-pill"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "variant",
+                    "description": "primary | secondary | success | warning | error | info | neutral"
+                }
+            ]
+        },
+        {
+            "name": "ph-box",
+            "description": "Themed spacing/radius/border/background div.",
+            "attributes": [
+                {
+                    "name": "bg",
+                    "description": "Named: primary | secondary | success | danger | warning | light | dark | white | transparent; any other string → inline background-color (e.g. 'surface', 'info')"
+                },
+                {
+                    "name": "border",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "margin",
+                    "description": "Same; '0' stays unset"
+                },
+                {
+                    "name": "padding",
+                    "description": "Scale token, px, or raw CSS"
+                },
+                {
+                    "name": "radius",
+                    "description": "none | sm | md | lg | full"
+                }
+            ]
+        },
+        {
+            "name": "ph-breadcrumb",
+            "description": "Crumbs; the last item is active with aria-current=\"page\". Only non-active",
+            "attributes": [
+                {
+                    "name": "items",
+                    "description": "{ label } (required) + optional href"
+                }
+            ]
+        },
+        {
+            "name": "ph-button",
+            "description": "Shipped in src/Core/UI/Phui/ but not documented in docs/PhUI_Components.md yet."
+        },
+        {
+            "name": "ph-card",
+            "description": "Content card. Header (title/subtitle or custom), body (default slot), footer.",
+            "attributes": [
+                {
+                    "name": "bordered",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "false → border-0"
+                },
+                {
+                    "name": "hoverable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Adds the card-hoverable class"
+                },
+                {
+                    "name": "subtitle"
+                },
+                {
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "ph-checkbox",
+            "description": "Boolean checkbox with optional indeterminate visual state.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "indeterminate",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Applied live via the DOM property"
+                },
+                {
+                    "name": "label",
+                    "description": "Falls back to default slot"
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "ph-chip",
+            "description": "Pill-shaped removable tag, built on badge rounded-pill. Disabled chips are",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Hides remove button, dims chip"
+                },
+                {
+                    "name": "label",
+                    "description": "Or default slot"
+                },
+                {
+                    "name": "removable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Renders the close button"
+                },
+                {
+                    "name": "variant",
+                    "description": "Same values as <ph-badge>"
+                }
+            ]
+        },
+        {
+            "name": "ph-col",
+            "description": "Bootstrap 12-column grid column. span is **cumulative** with breakpoint props —",
+            "attributes": [
+                {
+                    "name": "cols",
+                    "description": "Per-breakpoint spans, xs as base key ({ xs: 12, md: 6 } → col-12 col-md-6)"
+                },
+                {
+                    "name": "offset",
+                    "description": "offset-*; per-breakpoint via object (xs base key, 0→offset-0)"
+                },
+                {
+                    "name": "order",
+                    "description": "order-*; per-breakpoint via object, xs base key"
+                },
+                {
+                    "name": "span",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Base col-*; bare attr → col, \"auto\" → col-auto"
+                },
+                {
+                    "name": "tag",
+                    "description": "Host element"
+                }
+            ]
+        },
+        {
+            "name": "ph-data-table",
+            "description": "Client-side sortable, paginatable table. Sorting toggles asc/desc on the",
+            "attributes": [
+                {
+                    "name": "columns",
+                    "description": "{ key, label?, sortable? }"
+                },
+                {
+                    "name": "items",
+                    "description": "Row objects; keys correspond to columns[].key"
+                },
+                {
+                    "name": "page-size",
+                    "description": "<= 0 collapses to a single page"
+                },
+                {
+                    "name": "paginated",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Toggles the pager row"
+                }
+            ]
+        },
+        {
+            "name": "ph-flex",
+            "description": "Full flex container via props.",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "stretch | flex-start | center | flex-end | baseline"
+                },
+                {
+                    "name": "direction",
+                    "description": "row | row-reverse | column | column-reverse"
+                },
+                {
+                    "name": "gap",
+                    "description": "Scale / px / raw CSS"
+                },
+                {
+                    "name": "justify",
+                    "description": "flex-start | center | flex-end | space-between | space-around | space-evenly"
+                },
+                {
+                    "name": "wrap",
+                    "description": "nowrap | wrap | wrap-reverse"
+                }
+            ]
+        },
+        {
+            "name": "ph-form-field",
+            "description": "Layout wrapper around any control: label, slot, and error-or-helper text. Adds",
+            "attributes": [
+                {
+                    "name": "error",
+                    "description": "valid-feedback d-block"
+                },
+                {
+                    "name": "helper-text",
+                    "description": "form-text; shown only when error is empty"
+                },
+                {
+                    "name": "label",
+                    "description": "form-label"
+                }
+            ]
+        },
+        {
+            "name": "ph-heading",
+            "description": "Semantic h1–h6 through the level prop.",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "left | center | right | justify"
+                },
+                {
+                    "name": "color",
+                    "description": "default | muted | primary | secondary | danger"
+                },
+                {
+                    "name": "level",
+                    "description": "1–6"
+                }
+            ]
+        },
+        {
+            "name": "ph-input",
+            "description": "Single-line text input with label, helper/error text, disabled/readonly states.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error",
+                    "description": "Non-empty → is-invalid + red form-text"
+                },
+                {
+                    "name": "helper-text",
+                    "description": "Shown as form-text"
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-input-<id>"
+                },
+                {
+                    "name": "label",
+                    "description": "Rendered with form-label; * marker when required"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Bound via v-model"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "readonly",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Only visual (*); validation is your job"
+                },
+                {
+                    "name": "type",
+                    "description": "Any native input type"
+                }
+            ]
+        },
+        {
+            "name": "ph-link",
+            "description": "Switches between native <a> and router-link based on href type:",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "preventDefault on click, dimmed, aria-disabled"
+                },
+                {
+                    "name": "href",
+                    "description": "Drives element + href/to"
+                },
+                {
+                    "name": "label",
+                    "description": "Default slot wins"
+                },
+                {
+                    "name": "rel",
+                    "description": "Auto noopener noreferrer when target=\"_blank\""
+                },
+                {
+                    "name": "target"
+                },
+                {
+                    "name": "underline",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "false → link-underline-opacity-0"
+                },
+                {
+                    "name": "variant",
+                    "description": "primary | secondary | neutral | danger"
+                }
+            ]
+        },
+        {
+            "name": "ph-modal",
+            "description": "Teleported to body, shown when modelValue is truthy. Closable via the ✕,",
+            "attributes": [
+                {
+                    "name": "closable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Shows the ✕ and enables state-affecting close actions"
+                },
+                {
+                    "name": "close-on-backdrop",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Backdrop click closes only when closable too"
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Controls visibility"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg | xl | full"
+                },
+                {
+                    "name": "title",
+                    "description": "Shown in default header"
+                }
+            ]
+        },
+        {
+            "name": "ph-navigation",
+            "description": "Unlike the rest of PhUI, **PhNavigation has no client template**. It renders in",
+            "attributes": [
+                {
+                    "name": "active-route",
+                    "description": "Current request URI"
+                },
+                {
+                    "name": "items",
+                    "description": "{ label, href, disabled?, group? }"
+                },
+                {
+                    "name": "orientation",
+                    "description": "horizontal | sidebar | vertical"
+                }
+            ]
+        },
+        {
+            "name": "ph-pagination",
+            "description": "Ellipsised pager (…) when totalPages > maxVisible.",
+            "attributes": [
+                {
+                    "name": "current-page"
+                },
+                {
+                    "name": "max-visible",
+                    "description": "Window of page buttons around current"
+                },
+                {
+                    "name": "total-pages"
+                }
+            ]
+        },
+        {
+            "name": "ph-progress-bar",
+            "description": "Clamped to 0–100. Optional label row and live value.",
+            "attributes": [
+                {
+                    "name": "animated",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Striped + animated"
+                },
+                {
+                    "name": "label",
+                    "description": "Left of the value row"
+                },
+                {
+                    "name": "show-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Shows {{ value }}%"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg (extra small/large progress)"
+                },
+                {
+                    "name": "value",
+                    "description": "Clamped via min(100, max(0, value))"
+                },
+                {
+                    "name": "variant",
+                    "description": "primary | secondary | success | warning | error"
+                }
+            ]
+        },
+        {
+            "name": "ph-radio",
+            "description": "Radio input. A group is created by sharing the same name; equality with the",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "label",
+                    "description": "Or default slot"
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "name",
+                    "description": "Grouping"
+                },
+                {
+                    "name": "value",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Emitted value; checked when modelValue === value"
+                }
+            ]
+        },
+        {
+            "name": "ph-row",
+            "description": "Bootstrap 12-column grid row: the container for <ph-col> grid cells. Serves as",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "start | end | center | baseline | stretch → align-items-*"
+                },
+                {
+                    "name": "cols",
+                    "description": "row-cols-*; per-breakpoint via object ({ cols: 2, md: 3 })"
+                },
+                {
+                    "name": "gutter",
+                    "description": "g-* gutters (g-0…g-5, old 2-20/30-90 gutters also accepted)"
+                },
+                {
+                    "name": "gutter-x",
+                    "description": "gx-* horizontal gutters"
+                },
+                {
+                    "name": "gutter-y",
+                    "description": "gy-* vertical gutters"
+                },
+                {
+                    "name": "justify",
+                    "description": "start | end | center | between | around | evenly → justify-content-*"
+                },
+                {
+                    "name": "tag",
+                    "description": "Host element"
+                }
+            ]
+        },
+        {
+            "name": "ph-select",
+            "description": "Native select bound to modelValue. Options accept either objects",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error",
+                    "description": "is-invalid + red form-text"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-select-<id>"
+                },
+                {
+                    "name": "label",
+                    "description": "* marker when required"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "options",
+                    "description": "{label, value, disabled?} or primitive values"
+                },
+                {
+                    "name": "placeholder",
+                    "description": "Rendered as a disabled, selected option"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Visual only"
+                }
+            ]
+        },
+        {
+            "name": "ph-skeleton",
+            "description": "Loading placeholder. Width/height accept scale tokens, %, px numbers, or any",
+            "attributes": [
+                {
+                    "name": "animated",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "placeholder-glow + placeholder-wave"
+                },
+                {
+                    "name": "height",
+                    "description": "Auto: text 1em, circular = width, rectangular 100%"
+                },
+                {
+                    "name": "variant",
+                    "description": "text | circular | rectangular"
+                },
+                {
+                    "name": "width",
+                    "description": "Number → px"
+                }
+            ]
+        },
+        {
+            "name": "ph-stack",
+            "description": "Vertical flex flow.",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "stretch | flex-start | center | flex-end | baseline"
+                },
+                {
+                    "name": "gap",
+                    "description": "Scale / px / raw CSS"
+                }
+            ]
+        },
+        {
+            "name": "ph-tabs",
+            "description": "Tab headers + a scoped-slot panel where you render content for the active tab.",
+            "attributes": [
+                {
+                    "name": "items",
+                    "description": "{ label, value, disabled? }"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Active tab value"
+                }
+            ]
+        },
+        {
+            "name": "ph-text",
+            "description": "Typography via props instead of utility classes. Renders a dynamic element",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "left | center | right | justify"
+                },
+                {
+                    "name": "as",
+                    "description": "Any tag name"
+                },
+                {
+                    "name": "color",
+                    "description": "default | muted | main | primary | secondary | danger | inverse"
+                },
+                {
+                    "name": "size",
+                    "description": "xs | sm | md | lg | xl"
+                },
+                {
+                    "name": "truncate",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "text-truncate"
+                },
+                {
+                    "name": "weight",
+                    "description": "light | normal | medium | semibold | bold"
+                }
+            ]
+        },
+        {
+            "name": "ph-textarea",
+            "description": "Multi-line textarea. Emits on input as you type.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error",
+                    "description": "is-invalid + red form-text"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-textarea-<id>"
+                },
+                {
+                    "name": "label",
+                    "description": "* marker when required"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "readonly",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Visual only"
+                },
+                {
+                    "name": "resize",
+                    "description": "none | both | horizontal | vertical"
+                },
+                {
+                    "name": "rows"
+                }
+            ]
+        },
+        {
+            "name": "ph-theme",
+            "description": "Interactive dark/light theme switcher toggle button. Automatically synchronizes with Bootstrap 5 data-bs-theme attribute on <html> and persists selection to localStorage. Designed for zero-hydration mismatch in SSR environments.",
+            "attributes": [
+                {
+                    "name": "aria-label",
+                    "description": "Accessible button label override"
+                },
+                {
+                    "name": "storage-key",
+                    "description": "LocalStorage key name (defaults to 'phue-theme')"
+                },
+                {
+                    "name": "theme-config",
+                    "description": "Optional config fallback dictionary"
+                }
+            ]
+        },
+        {
+            "name": "spacer",
+            "description": "Tiny non-collapsing spacer (flex-shrink-0, aria-hidden). horizontal swaps",
+            "attributes": [
+                {
+                    "name": "horizontal",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Width vs height"
+                },
+                {
+                    "name": "size",
+                    "description": "Scale / px / raw CSS"
+                }
+            ]
+        }
+    ],
+    "version": 1.1
+}

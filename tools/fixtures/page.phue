@@ -1,0 +1,35 @@
+<template>
+  <div class="d-flex align-items-center">
+    <h1>{{ title }}</h1>
+    <ph-button variant="primary" :disabled="loading" @click="save">
+      {{ buttonLabel }}
+    </ph-button>
+    <ul>
+      <li v-for="item in items" :key="item.id">{{ item.name }}</li>
+    </ul>
+  </div>
+</template>
+
+<script>
+  import { ref, computed } from 'vue';
+  export default {
+    setup() {
+      const items = ref([{ id: 1, name: 'Alpha' }]);
+      const loading = ref(false);
+      const title = computed(() => 'Page Title');
+      return { items, loading, title, buttonLabel: 'Save' };
+    }
+  };
+</script>
+
+<php>
+  $config = ['lazy' => true];
+
+  return [
+      'title' => 'Tooling Corpus Page',
+      'state' => [
+          'items' => [['id' => 1, 'name' => 'Alpha']],
+          'loading' => false,
+      ],
+  ];
+</php>

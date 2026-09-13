@@ -1,0 +1,78 @@
+{
+  "phue": {
+    "prefix": "phue",
+    "body": [
+      "<template>",
+      "  ${1:<!-- page content -->}",
+      "</template>",
+      "",
+      "<script>",
+      "  ${2:export default { setup() {} }}",
+      "</script>",
+      "",
+      "<php>",
+      "  return ['state' => []];",
+      "</php>"
+    ],
+    "description": "Create a new .phue single-file component"
+  },
+  "ph-template": {
+    "prefix": "ph-template",
+    "body": [
+      "<template>",
+      "  $1",
+      "</template>"
+    ],
+    "description": "Insert a <template> block"
+  },
+  "ph-script": {
+    "prefix": "ph-script",
+    "body": [
+      "<script>",
+      "  export default {",
+      "    setup() {",
+      "      $1",
+      "    }",
+      "  };",
+      "</script>"
+    ],
+    "description": "Insert a <script> block with a Vue Options/Composition wrapper"
+  },
+  "ph-php": {
+    "prefix": "ph-php",
+    "body": [
+      "<php>",
+      "  return [",
+      "      'state' => [",
+      "          $1",
+      "      ],",
+      "  ];",
+      "</php>"
+    ],
+    "description": "Insert a <php> state provider block"
+  },
+  "phue-state-entry": {
+    "prefix": "phue-state",
+    "body": ["      '$0' => $1,"],
+    "description": "Add a key entry to the <php> state array"
+  },
+  "ph-button": {
+    "prefix": "ph-button",
+    "body": ["<ph-button :variant=\"$1\">$2</ph-button>"],
+    "description": "PhUI button component"
+  },
+  "ph-input": {
+    "prefix": "ph-input",
+    "body": ["<ph-input v-model=\"${1:value}\" label=\"$2\" />"],
+    "description": "PhUI input component"
+  },
+  "ph-card": {
+    "prefix": "ph-card",
+    "body": [
+      "<ph-card :title=\"$1\">",
+      "  $2",
+      "</ph-card>"
+    ],
+    "description": "PhUI card component"
+  }
+}

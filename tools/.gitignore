@@ -1,0 +1,4 @@
+vscode-phue/node_modules/
+vscode-phue/out/
+vscode-phue/*.vsix
+zed-phue/grammars/

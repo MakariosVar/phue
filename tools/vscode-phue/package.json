@@ -1,0 +1,77 @@
+{
+  "name": "phue-vscode",
+  "displayName": "Phue Language Support",
+  "description": "Syntax highlighting, snippets and PhUI component autocompletion for .phue single-file components.",
+  "version": "0.1.0",
+  "publisher": "phue",
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "activationEvents": ["onLanguage:phue"],
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "phue",
+    "vue",
+    "php",
+    "single-file-component"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "phue",
+        "aliases": [
+          "Phue",
+          "phue"
+        ],
+        "extensions": [
+          ".phue"
+        ],
+        "icon": {
+          "light": "./media/Phue.svg",
+          "dark": "./media/Phue.svg"
+        },
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "phue",
+        "scopeName": "source.phue",
+        "path": "./syntaxes/phue.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html.vue": "html",
+          "source.js": "javascript",
+          "source.php": "php"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "phue",
+        "path": "./snippets/phue.json"
+      }
+    ],
+    "html": {
+      "customData": [
+        "./custom-data/phui-custom-data.json"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -w -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.8.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Phue",
+  "scopeName": "source.phue",
+  "fileTypes": [],
+  "patterns": [
+    { "include": "#blocks" },
+    { "include": "#generic-markup" }
+  ],
+  "repository": {
+    "blocks": {
+      "patterns": [
+        { "include": "#block-template" },
+        { "include": "#block-script" },
+        { "include": "#block-php" }
+      ]
+    },
+    "generic-markup": {
+      "match": "<[^>]+>",
+      "name": "meta.tag.phue"
+    },
+    "block-template": {
+      "begin": "(<)(template)(\\b[^>]*)>",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+      },
+      "end": "(</)(template)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "contentName": "text.html.vue meta.embedded.block.template.phue",
+      "patterns": [
+        { "include": "#vue-attribute" },
+        { "include": "#vue-interpolation" },
+        { "include": "text.html.basic" }
+      ]
+    },
+    "block-script": {
+      "begin": "(<)(script)(\\b[^>]*)>",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+      },
+      "end": "(</)(script)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "contentName": "source.js meta.embedded.block.script.phue",
+      "patterns": [
+        { "include": "source.js" }
+      ]
+    },
+    "block-php": {
+      "begin": "(<)(php)(>)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+      },
+      "end": "(</)(php)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "contentName": "source.php meta.embedded.block.php.phue",
+      "patterns": [
+        { "include": "#php-lite" }
+      ]
+    },
+    "vue-attribute": {
+      "comment": "Vue bindings/events: :prop, @event (with optional value)",
+      "match": "((?:@|:)[\\w-]+(?:\\.[\\w-]+)*)\\s*(?:=(?:\"([^\"]*)\"|'([^']*)'))?",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.html.vue" },
+        "2": { "name": "string.quoted.double.html.vue" },
+        "3": { "name": "string.quoted.single.html.vue" }
+      }
+    },
+    "vue-interpolation": {
+      "begin": "(\\{\\{)\\s*",
+      "beginCaptures": {
+        "1": { "name": "punctuation.section.template.begin.html.vue" }
+      },
+      "end": "\\s*(\\}\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.section.template.end.html.vue" }
+      },
+      "name": "meta.expression.vue",
+      "patterns": [
+        {
+          "match": "[\\w$]+(?:\\.[\\w$]+)*",
+          "name": "variable.other.js"
+        }
+      ]
+    },
+    "php-lite": {
+      "patterns": [
+        { "include": "#php-comment-line" },
+        { "include": "#php-comment-block" },
+        { "include": "#php-string-single" },
+        { "include": "#php-string-double" },
+        { "include": "#php-variable" },
+        { "include": "#php-function-call" },
+        { "include": "#php-keyword" },
+        { "include": "#php-number" }
+      ]
+    },
+    "php-comment-line": {
+      "match": "(//[^\\n]*|#[^\\n]*)",
+      "name": "comment.line.php.phue"
+    },
+    "php-comment-block": {
+      "begin": "/\\*",
+      "end": "\\*/",
+      "name": "comment.block.php.phue"
+    },
+    "php-string-single": {
+      "match": "'(?:[^'\\\\]|\\\\.)*'",
+      "name": "string.quoted.single.php"
+    },
+    "php-string-double": {
+      "match": "\"(?:[^\"\\\\]|\\\\.)*\"",
+      "name": "string.quoted.double.php"
+    },
+    "php-variable": {
+      "match": "\\$\\w+",
+      "name": "variable.other.php"
+    },
+    "php-function-call": {
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*\\()",
+      "name": "entity.name.function.php"
+    },
+    "php-keyword": {
+      "match": "\\b(?:return|array|new|function|null|true|false|continue|break|exit|die|echo|print|if|else|elseif|foreach|as|use|namespace|class|extends|implements|public|private|protected|static|const|interface|trait|yield)\\b",
+      "name": "keyword.control.php"
+    },
+    "php-number": {
+      "match": "\\b\\d+(?:\\.\\d+)?\\b",
+      "name": "constant.numeric.php"
+    }
+  }
+}

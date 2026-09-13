@@ -1,0 +1,9 @@
+id = "phue"
+name = "Phue"
+version = "0.1.0"
+schema_version = 1
+
+[grammars.phue]
+repository = "file:///home/trc/mak-dev/phue"
+rev = "0a2783883196772976520f3e6525410e89b87dab"
+path = "tools/tree-sitter-phue"
