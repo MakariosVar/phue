@@ -3,7 +3,7 @@
     :class="[
       'avatar',
       'd-inline-flex align-items-center justify-content-center',
-      'bg-secondary-subtle text-dark fw-bold overflow-hidden user-select-none',
+      'bg-body-secondary text-body fw-bold overflow-hidden user-select-none',
       shapeClass,
       sizeClasses[size] || sizeClasses.md
     ]"
