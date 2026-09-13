@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\Console;
 
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Console\PathResolver;
 
@@ -41,29 +40,60 @@ final class PathResolverTest extends TestCase
         parent::tearDown();
     }
 
-    #[RunInSeparateProcess]
-    public function testExplicitConstantWinsOverDiscoveryAndCwd(): void
+    /**
+     * Runs PathResolver in a freshly spawned PHP process so the constant can
+     * be defined without polluting this process (no #[RunInSeparateProcess]:
+     * PHPUnit's isolation is brittle once the full suite is loaded).
+     */
+    private function resolveInSubprocess(string $constantValue, ?string $cwd = null): string
     {
-        define('PHUE_BASE_PATH', $this->tmpBase);
+        $script = sprintf(
+            "define('PHUE_BASE_PATH', %s);" .
+            "require %s;" .
+            "echo \\Phue\\Core\\Console\\PathResolver::resolveBasePath();",
+            "'" . addslashes($constantValue) . "'",
+            var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true),
+        );
 
-        // cwd points at a marker-less directory; the constant must win regardless.
-        $markerless = $this->tmpBase . '/markerless';
-        mkdir($markerless, 0777, true);
-        chdir($markerless);
+        $command = [PHP_BINARY, '-r', $script];
+        $proc    = proc_open(
+            $command,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $cwd,
+        );
 
-        $this->assertSame($this->tmpBase, PathResolver::resolveBasePath());
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        $this->assertSame(0, $exitCode, 'Subprocess exited non-zero: ' . $stderr);
+
+        return $stdout;
     }
 
-    #[RunInSeparateProcess]
-    public function testEmptyConstantIsIgnoredAndFallsBackToCwd(): void
+    public function testExplicitConstantWinsOverDiscoveryAndCwd(): void
     {
-        define('PHUE_BASE_PATH', '');
-
         $markerless = $this->tmpBase . '/markerless';
         mkdir($markerless, 0777, true);
-        chdir($markerless);
 
-        $this->assertSame($markerless, PathResolver::resolveBasePath());
+        $this->assertSame(
+            $this->tmpBase,
+            $this->resolveInSubprocess($this->tmpBase, $markerless),
+        );
+    }
+
+    public function testEmptyConstantIsIgnoredAndFallsBackToCwd(): void
+    {
+        $markerless = $this->tmpBase . '/markerless';
+        mkdir($markerless, 0777, true);
+
+        $this->assertSame(
+            $markerless,
+            $this->resolveInSubprocess('', $markerless),
+        );
     }
 
     public function testDiscoveryFindsComposerJsonMarkerUpward(): void
