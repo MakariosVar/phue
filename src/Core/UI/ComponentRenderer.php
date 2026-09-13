@@ -211,6 +211,7 @@ class ComponentRenderer
         $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
         $navState = [
             'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
+            'actions'     => NavigationConfig::getAppActions($user),
             'activeRoute' => $uri,
             'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal'
         ];
@@ -273,8 +274,10 @@ JS,
         if ($navHtml === '' && $hasNavComponent && class_exists(NavigationConfig::class)) {
             $navState = [
                 'items'       => NavigationConfig::getAppItems($user),
+                'actions'     => NavigationConfig::getAppActions($user),
                 'activeRoute' => $uri,
                 'orientation' => NavigationConfig::getAppPlacement(),
+                'themeConfig' => NavigationConfig::getAppThemeToggle(),    
             ];
 
             try {

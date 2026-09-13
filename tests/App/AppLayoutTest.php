@@ -81,10 +81,15 @@ final class AppLayoutTest extends TestCase
                 $context['components'] = $components;
             }
 
+            $actions = $params['actions'] ?? (\App\Config\NavigationConfig::getAppActions($user));
+            $themeConfig = $params['themeConfig'] ?? (\App\Config\NavigationConfig::getAppThemeToggle());
+
             $navState = [
                 'items'       => $items,
+                'actions'     => $actions,
                 'activeRoute' => $uri,
                 'orientation' => $orientation,
+                'themeConfig' => $themeConfig,
             ];
 
             $params['navHtml'] = $ssrEngine->render(
@@ -196,6 +201,19 @@ final class AppLayoutTest extends TestCase
         );
         $this->assertStringContainsString('<div class="ms-auto', $html);
         $this->assertStringContainsString('aria-label="Toggle theme"', $html);
+        $this->assertStringContainsString('Login', $html);
+        $this->assertStringNotContainsString('Profile', $html);
+    }
+
+    public function testTopbarActionsRespectIdentityVisibility(): void
+    {
+        $html = $this->renderLayout([
+            'uri'  => '/',
+            'user' => $this->identity('admin'),
+        ]);
+
+        $this->assertStringContainsString('Profile', $html);
+        $this->assertStringNotContainsString('Login', $html);
     }
 
     public function testTopbarBrandValuesAreEscaped(): void
