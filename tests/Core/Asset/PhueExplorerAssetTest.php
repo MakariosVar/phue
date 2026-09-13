@@ -252,6 +252,17 @@ final class PhueExplorerAssetTest extends TestCase
         $this->assertStringContainsString('history.pushState', $source);
     }
 
+    public function testSourceAllowsMountingOnPageRevisitWithoutImportDeduplicationBlock(): void
+    {
+        $source = $this->explorerSource();
+
+        // Must invoke mount hook on every module load without early-return blocking re-visits
+        $this->assertStringNotContainsString('importedModules.has', $source);
+        $this->assertStringContainsString('await import(scriptUrl)', $source);
+        $this->assertStringContainsString('mod.default()', $source);
+        $this->assertStringContainsString('mod.mountApp()', $source);
+    }
+
     public function testSourceDeclaresStrictIIfeWithoutGlobalLeak(): void
     {
         $source = $this->explorerSource();

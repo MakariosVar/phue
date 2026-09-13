@@ -7,9 +7,6 @@
   if (window.__phueExplorerInitialized) return;
   window.__phueExplorerInitialized = true;
 
-  /** @type {Set<string>} Tracks dynamically imported module URLs */
-  const importedModules = new Set();
-
   /**
    * Updates active status classes and accessibility attributes on nav links during client transitions
    *
@@ -40,11 +37,11 @@
    * @param {string} scriptUrl Module URL to import
    */
   async function loadAndMountModule(scriptUrl) {
-    if (importedModules.has(scriptUrl) || scriptUrl.includes('PhNavigation') || scriptUrl.includes('phue-explorer')) {
+    if (scriptUrl.includes('PhNavigation') || scriptUrl.includes('phue-explorer')) {
+
       return;
     }
 
-    importedModules.add(scriptUrl);
     const mod = await import(scriptUrl);
 
     // Invoke default export or explicit mount hook if present
