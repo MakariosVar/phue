@@ -9,6 +9,17 @@ namespace Phue\Core\Console;
  */
 interface CommandInterface
 {
+
+    /*
+     * SUCCESS status codes.
+     */
+    public const SUCCESS = 0;
+
+    /**
+     * FAILURE status codes.
+     */
+    public const FAILURE = 1;
+
     /**
      * Gets the unique command name (e.g., 'serve', 'make:controller').
      */

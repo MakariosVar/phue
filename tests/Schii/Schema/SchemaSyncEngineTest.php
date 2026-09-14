@@ -1,0 +1,177 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Phue\Tests\Schii\Schema;
+
+use PHPUnit\Framework\TestCase;
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Connection;
+use Phue\Schii\Attribute\Field;
+use Phue\Schii\Attribute\UI;
+use Phue\Schii\Schema\SchemaInspector;
+use Phue\Schii\Schema\SchemaOperation;
+use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Schii\Schema\SchemaSyncEngine;
+
+/**
+ * Syncing models on a real in-memory SQLite database: diff detection, dry-run
+ * SQL emission and destructive apply semantics.
+ *
+ * @package Phue\Tests\Schii\Schema
+ */
+#[UI(label: 'Sync Widgets')]
+class SyncWidget extends BaseActiveRecord
+{
+    protected string $table = 'sync_widgets';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'text', required: true)]
+    public string $name = '';
+}
+
+#[UI(label: 'Sync Widgets V2')]
+class SyncWidgetV2 extends BaseActiveRecord
+{
+    protected string $table = 'sync_widgets';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'text', required: true)]
+    public string $name = '';
+
+    #[Field(type: 'text')]
+    public string $sku = '';
+}
+
+#[UI(label: 'Sync Widgets V3 (dropped name)')]
+class SyncWidgetV3 extends BaseActiveRecord
+{
+    protected string $table = 'sync_widgets';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'text')]
+    public string $sku = '';
+}
+
+#[\PHPUnit\Framework\Attributes\Group('integration')]
+final class SchemaSyncEngineTest extends TestCase
+{
+    private Connection $db;
+    private SchemaSyncEngine $engine;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->db = new Connection([
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ]);
+
+        BaseActiveRecord::setConnection($this->db);
+
+        $registry = new SchemaRegistry();
+        $this->engine = new SchemaSyncEngine(
+            $registry,
+            new SchemaInspector($this->db),
+            $this->db,
+        );
+    }
+
+    public function testDiffOnMissingTableEmitsCreateAndAddColumns(): void
+    {
+        $diff = $this->engine->diff(SyncWidget::class);
+
+        $this->assertFalse($diff->isEmpty());
+
+        $ops = array_map(static fn (array $op) => $op['op'], $diff->operations);
+        $this->assertContains(SchemaOperation::CreateTable, $ops);
+        $this->assertContains(SchemaOperation::AddColumn, $ops);
+    }
+
+    public function testDiffOnFreshlyAppliedSchemaIsEmpty(): void
+    {
+        $this->engine->apply(SyncWidget::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncWidget::class);
+
+        $this->assertTrue($diff->isEmpty());
+        $this->assertSame([], $diff->operations);
+    }
+
+    public function testDiffAddsNewColumnAfterTableExists(): void
+    {
+        $this->engine->apply(SyncWidget::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncWidgetV2::class);
+
+        $ops = array_map(static fn (array $op) => $op['op'], $diff->operations);
+        $this->assertContains(SchemaOperation::AddColumn, $ops);
+        $this->assertNotContains(SchemaOperation::CreateTable, $ops);
+    }
+
+    public function testDiffDetectsDropForRemovedField(): void
+    {
+        $this->engine->apply(SyncWidgetV2::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncWidgetV3::class);
+
+        $this->assertTrue($diff->hasDrops());
+    }
+
+    public function testDryRunReturnsSqlWithoutApplying(): void
+    {
+        $sql = $this->engine->apply(SyncWidget::class, dryRun: true);
+
+        $this->assertNotEmpty($sql);
+        $this->assertStringContainsString('sync_widgets', implode(' ', $sql));
+
+        // Table must NOT exist yet.
+        $this->assertFalse((new SchemaInspector($this->db))->tableExists('sync_widgets'));
+    }
+
+    public function testRealApplyCreatesTable(): void
+    {
+        $sql = $this->engine->apply(SyncWidget::class, dryRun: false);
+
+        $this->assertNotEmpty($sql);
+        $this->assertTrue((new SchemaInspector($this->db))->tableExists('sync_widgets'));
+    }
+
+    public function testApplyForbidsDropsUnlessRequired(): void
+    {
+        $this->engine->apply(SyncWidgetV2::class, dryRun: false);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('allowDrops');
+
+        $this->engine->apply(SyncWidgetV3::class, dryRun: false, allowDrops: false);
+    }
+
+    public function testApplyAllowsDropsWhenConfirmed(): void
+    {
+        $this->engine->apply(SyncWidgetV2::class, dryRun: false);
+
+        $sql = $this->engine->apply(SyncWidgetV3::class, dryRun: false, allowDrops: true);
+
+        $this->assertNotEmpty($sql);
+
+        // 'name' column must be gone.
+        $columns = (new SchemaInspector($this->db))->inspect('sync_widgets');
+        $this->assertArrayNotHasKey('name', $columns);
+        $this->assertArrayHasKey('sku', $columns);
+    }
+
+    public function testDiffThrowsForNonActiveRecord(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->engine->diff(\stdClass::class);
+    }
+}

@@ -90,7 +90,7 @@ PHP);
         $files = array_merge($files, glob(dirname(__DIR__, 2) . '/src/Schii/*.php') ?: []);
 
         foreach (array_unique($files) as $file) {
-            $source = (string) file_get_contents($file);
+            $source = strip_comments((string) file_get_contents($file));
             foreach ($forbidden as $needle) {
                 if (str_contains($source, $needle)) {
                     $hits[] = "{$needle} in {$file}";
@@ -183,4 +183,30 @@ PHP);
 
         rmdir($dir);
     }
+}
+
+/**
+ * Removes PHP comments/docblocks from source, keeping runtime code intact.
+ * Used by the UI-independence scan so PHPDoc examples (e.g. App\Models in a
+ * docblock) don't trip a runtime-coupling assertion.
+ */
+function strip_comments(string $source): string
+{
+    $tokens = token_get_all($source);
+    $clean = '';
+
+    foreach ($tokens as $token) {
+        if (is_array($token)) {
+            [$id, $text] = $token;
+            if ($id === T_COMMENT || $id === T_DOC_COMMENT) {
+                $clean .= "\n";
+                continue;
+            }
+            $clean .= $text;
+        } else {
+            $clean .= $token;
+        }
+    }
+
+    return $clean;
 }

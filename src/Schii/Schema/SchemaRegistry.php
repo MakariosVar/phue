@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Phue\Schii\Schema;
 
+use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Schii\Attribute\Field;
 use Phue\Schii\Attribute\UI;
+use Phue\Schii\Generator\PhiiExportSchema;
 use Psr\SimpleCache\CacheInterface;
 use ReflectionClass;
 use ReflectionProperty;
@@ -68,6 +70,92 @@ final class SchemaRegistry
         }
 
         return array_values(array_unique($entities));
+    }
+
+    /**
+     * Discover FQCNs (not slugs) for all concrete ActiveRecord classes in a namespace.
+     *
+     * FILTER: `is_subclass_of($class, BaseActiveRecord::class) && !$reflector->isAbstract()` —
+     * same criteria as discoverEntities(). DataMapper Entities reside in the namespace
+     * but must not pass the filter (not BaseActiveRecord).
+     *
+     * @param string $namespace e.g. 'App\\Models'
+     *
+     * @return array<class-string> e.g. ['App\\Models\\User', 'App\\Models\\Product']
+     */
+    public function discoverModelClasses(string $namespace): array
+    {
+        $classes = [];
+        $directory = $this->resolveNamespaceToPath($namespace);
+
+        if (!$directory || !is_dir($directory)) {
+            return [];
+        }
+
+        $files = scandir($directory) ?: [];
+
+        foreach ($files as $file) {
+            if (!str_ends_with($file, '.php')) {
+                continue;
+            }
+
+            $className = pathinfo($file, PATHINFO_FILENAME);
+            $fullClassName = rtrim($namespace, '\\') . '\\' . $className;
+
+            if (class_exists($fullClassName)) {
+                $reflector = new ReflectionClass($fullClassName);
+
+                if ($reflector->isSubclassOf(BaseActiveRecord::class) && !$reflector->isAbstract()) {
+                    $classes[] = $fullClassName;
+                }
+            }
+        }
+
+        return array_values(array_unique($classes));
+    }
+
+    /**
+     * Converts a ModelSchema to a PhiiExportSchema.
+     * Resolves the table name via (new $modelClass())->getTable().
+     *
+     * @param class-string $modelClass
+     * @param string $module
+     *
+     * @return PhiiExportSchema
+     *
+     * @throws InvalidArgumentException If not BaseActiveRecord subclass
+     */
+    public function toPhiiExportSchema(string $modelClass, string $module = 'admin'): PhiiExportSchema
+    {
+        if (!is_subclass_of($modelClass, BaseActiveRecord::class)) {
+            throw new InvalidArgumentException(
+                sprintf('Model class "%s" must be a subclass of "%s".', $modelClass, BaseActiveRecord::class)
+            );
+        }
+
+        $schema = $this->get($modelClass);
+
+        return PhiiExportSchema::fromModelSchema($schema, $modelClass, $module);
+    }
+
+    /**
+     * @param string $entityNamespace
+     * @param string $module
+     *
+     * @return array<class-string, PhiiExportSchema> Map of FQCN → export schema
+     */
+    public function getAllPhiiExportSchemas(
+        string $entityNamespace,
+        string $module = 'admin',
+    ): array {
+        $schemas = [];
+        $classes = $this->discoverModelClasses($entityNamespace);
+
+        foreach ($classes as $class) {
+            $schemas[$class] = $this->toPhiiExportSchema($class, $module);
+        }
+
+        return $schemas;
     }
 
     /**
@@ -202,7 +290,7 @@ final class SchemaRegistry
 
             $fields[$propertyName] = new FieldSchema(
                 name: $propertyName,
-                type: $field->type,
+                type: $this->normalizeType($field->type),
                 label: $fieldLabel,
                 widget: $field->widget,
                 column: $field->column,
@@ -230,6 +318,22 @@ final class SchemaRegistry
                 'delete' => strtolower("admin.{$entityName}.delete"),
             ]
         );
+    }
+
+    /**
+     * Normalizes field type strings into canonical Schii types.
+     *
+     * @param string $type
+     * @return string
+     */
+    private function normalizeType(string $type): string
+    {
+        return match (strtolower($type)) {
+            'integer', 'int' => 'int',
+            'number', 'float', 'decimal', 'numeric' => 'float',
+            'email', 'select', 'string' => 'text',
+            default => $type,
+        };
     }
 
     /**

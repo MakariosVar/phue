@@ -10,6 +10,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Console\Application;
+use Phue\Core\Config;
 use Phue\Core\Console\Commands\DeployCommand;
 use Phue\Core\Console\Commands\MakeControllerCommand;
 use Phue\Core\Console\Commands\MakeMigrationCommand;
@@ -19,9 +20,16 @@ use Phue\Core\Console\Commands\MigrateRollbackCommand;
 use Phue\Core\Console\Commands\SchiiMigrateCommand;
 use Phue\Core\Console\Commands\ServeCommand;
 use Phue\Core\Console\Commands\SwooleServeCommand;
+use Phue\Schii\Commands\SchiiExportCommand;
+use Phue\Schii\Commands\SchiiServeCommand;
+use Phue\Schii\SchiiModule;
 use Phue\Core\Console\Commands\NpmInstallCommand;
 use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
+
+$basePath = dirname(__DIR__);
+$config = new Config($basePath . '/config');
+$modules = (array) $config->get('app.modules', []);
 
 $app = new Application('1.0.0');
 
@@ -41,5 +49,13 @@ $app
     ->add(new NpmInstallCommand())
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand());
+
+// Check if Schii is loaded and enable the Schii commands conditionally
+$isSchiiLoaded = in_array(SchiiModule::class, $modules, true);
+if ($isSchiiLoaded) {
+    $app
+        ->add(new SchiiExportCommand())
+        ->add(new SchiiServeCommand());
+}
 
 exit($app->run($_SERVER['argv']));
