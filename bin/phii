@@ -1,0 +1,24 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Phue\Core\Console\Application;
+use Phue\Generator\Commands\ModuleGeneratorCommand;
+use Phue\Generator\Commands\ModelGeneratorCommand;
+use Phue\Generator\Commands\ControllerGeneratorCommand;
+use Phue\Generator\Commands\MigrationGeneratorCommand;
+use Phue\Generator\Commands\CrudGeneratorCommand;
+
+$app = new Application('1.0.0');
+
+$app
+    ->add(new ModuleGeneratorCommand())
+    ->add(new ModelGeneratorCommand())
+    ->add(new ControllerGeneratorCommand())
+    ->add(new MigrationGeneratorCommand())
+    ->add(new CrudGeneratorCommand());
+
+exit($app->run($_SERVER['argv']));

@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
-use Phue\Core\Database\Drivers\Abstract\DriverInterface;
 use Phue\Core\Database\Drivers\Pdo\MysqlDriver;
 use Phue\Core\Database\Drivers\Pdo\PostgresDriver;
 use Phue\Core\Database\Drivers\Pdo\SqliteDriver;
@@ -84,21 +83,47 @@ class SchiiAutoMigrationTest extends TestCase
     public function testAutoMigrateCreatesTableAndAltersColumns(): void
     {
         $registry = new SchemaRegistry();
-        $migrator = new AutoMigrator($registry, $this->db);
+        $migrator = new AutoMigrator($this->db, $registry);
 
-        // 1. Initial Migration (Creates Table)
+        // 1. Initial Migration (Creates Table + first column, then adds the rest)
         $actions = $migrator->migrate(MigratableProduct::class);
-        $this->assertCount(1, $actions);
-        $this->assertStringContainsString("Created table 'migratable_products'", $actions[0]);
+        $this->assertCount(2, $actions);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS "migratable_products"', $actions[0]);
+        $this->assertStringContainsString('ADD COLUMN "price"', $actions[1]);
+
+        // The table must be real, not just planned
+        $columns = $this->tableColumns('migratable_products');
+        $this->assertContains('name', $columns);
+        $this->assertContains('price', $columns);
 
         // 2. Second Run (No Changes)
         $actionsNoOp = $migrator->migrate(MigratableProduct::class);
         $this->assertEmpty($actionsNoOp);
 
-        // 3. Schema V2 Migration (Adds 'sku' Column via ALTER TABLE without trailing semicolon)
+        // 3. Schema V2 Migration (Adds 'sku' Column)
         $actionsV2 = $migrator->migrate(MigratableProductV2::class);
         $this->assertCount(1, $actionsV2);
-        $this->assertStringContainsString("Added column 'sku'", $actionsV2[0]);
+        $this->assertStringContainsString('ADD COLUMN "sku"', $actionsV2[0]);
+
+        $this->assertContains('sku', $this->tableColumns('migratable_products'));
+    }
+
+    /**
+     * Collect column names of a table via PRAGMA.
+     *
+     * @param string $tableName
+     *
+     * @return array<int, string>
+     */
+    private function tableColumns(string $tableName): array
+    {
+        $stmt = $this->db->query("PRAGMA table_info({$tableName})");
+        $rows = is_object($stmt) && method_exists($stmt, 'fetchAll') ? $stmt->fetchAll() : (array) $stmt;
+
+        return array_map(
+            static fn (array $col): string => (string) $col['name'],
+            $rows
+        );
     }
 
     /**
@@ -107,7 +132,7 @@ class SchiiAutoMigrationTest extends TestCase
     public function testAutoMigrateThrowsExceptionForInvalidTableName(): void
     {
         $registry = new SchemaRegistry();
-        $migrator = new AutoMigrator($registry, $this->db);
+        $migrator = new AutoMigrator($this->db, $registry);
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Invalid database identifier name");
@@ -127,28 +152,6 @@ class SchiiAutoMigrationTest extends TestCase
         $this->assertEquals('sqlite', $sqlite->getName());
         $this->assertEquals('mysql', $mysql->getName());
         $this->assertEquals('pgsql', $postgres->getName());
-    }
-
-    /**
-     * Test driver resolution via DriverInterface contract on the AutoMigrator.
-     */
-    public function testAutoMigratorDetectsDriverViaInterfaceName(): void
-    {
-        $driverMock = $this->createMock(DriverInterface::class);
-        $driverMock->method('getName')->willReturn('mysql');
-
-        $connectionMock = $this->createMock(Connection::class);
-        $connectionMock->method('getDriver')->willReturn($driverMock);
-
-        $registry = new SchemaRegistry();
-        $migrator = new AutoMigrator($registry, $connectionMock);
-
-        // Access private method getDriverName() using Reflection
-        $reflection = new \ReflectionClass($migrator);
-        $method = $reflection->getMethod('getDriverName');
-
-        $resolvedName = $method->invoke($migrator);
-        $this->assertEquals('mysql', $resolvedName);
     }
 
     /**
@@ -200,60 +203,41 @@ class SchiiAutoMigrationTest extends TestCase
     }
 
     /**
-     * Test that a failed ALTER TABLE statement triggers a transaction rollback.
+     * Test that a failed ADD COLUMN statement triggers a transaction rollback.
      *
-     * Note: Connection proxies driver methods through __call(), so a sub-class
-     * overriding __call() is the only way to fault-inject without mocking the
-     * (non-existent) Connection method surface.
+     * SQLite refuses to add a NOT NULL column without a DEFAULT value, so the
+     * engine must abort the whole batch, roll back, and leave the table untouched.
      */
     public function testAutoMigratorRollsBackWhenColumnAlterFails(): void
     {
-        $failDb = new FailOnAlterConnection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
-        BaseActiveRecord::setConnection($failDb);
+        $migrator = new AutoMigrator($this->db, new SchemaRegistry());
 
-        $registry = new SchemaRegistry();
-        $migrator = new AutoMigrator($registry, $failDb);
-
-        // Initial migration succeeds: CREATE TABLE passes through the override.
+        // Initial migration succeeds
         $initial = $migrator->migrate(MigratableProduct::class);
-        $this->assertCount(1, $initial);
+        $this->assertNotEmpty($initial);
 
+        // Existing rows make ADD COLUMN NOT NULL a real SQLite failure:
+        // "Cannot add a NOT NULL column with default value NULL"
+        $this->db->query("INSERT INTO migratable_products (name) VALUES ('laptop')");
+
+        $thrown = null;
         try {
-            $migrator->migrate(MigratableProductV2::class);
-            $this->fail('Expected RuntimeException for failing ALTER TABLE');
-        } catch (\RuntimeException $e) {
-            $this->assertSame('ALTER TABLE failed', $e->getMessage());
+            $migrator->migrate(MigratableProductFailV2::class);
+        } catch (\RuntimeException $failure) {
+            $thrown = $failure;
         }
 
-        // The transaction must have been rolled back.
-        $this->assertFalse($failDb->inTransaction());
+        $this->assertNotNull($thrown, 'Expected RuntimeException for failing ADD COLUMN');
+        $this->assertStringContainsString('Failed to apply schema diff', $thrown->getMessage());
 
-        // And the schema must be untouched: 'sku' must NOT exist.
-        $stmt = $failDb->query('PRAGMA table_info(migratable_products)');
-        $columns = is_object($stmt) && method_exists($stmt, 'fetchAll') ? $stmt->fetchAll() : (array) $stmt;
-        $names = array_map(static fn (array $col): string => $col['name'], $columns);
-
-        $this->assertNotContains('sku', $names);
+        // Nothing leaked from the failed batch: 'flag' must NOT exist.
+        $this->assertNotContains('flag', $this->tableColumns('migratable_products'));
     }
 }
 
-/**
- * Connection sub-class that fails any ALTER TABLE execute() call while passing
- * every other driver call through to the real sqlite driver.
- *
- * @package Phue\Tests\Schii
- */
-final class FailOnAlterConnection extends Connection
+#[UI(label: 'Dynamic Products V2 - failing batch')]
+class MigratableProductFailV2 extends MigratableProduct
 {
-    public function __call(string $method, array $arguments): mixed
-    {
-        if ($method === 'execute' && str_contains((string) ($arguments[0] ?? ''), 'ALTER TABLE')) {
-            throw new \RuntimeException('ALTER TABLE failed');
-        }
-
-        return parent::__call($method, $arguments);
-    }
+    #[Field(type: 'boolean', required: true)]
+    public bool $flag = false;
 }

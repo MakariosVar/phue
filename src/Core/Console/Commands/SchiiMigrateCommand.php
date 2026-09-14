@@ -70,7 +70,7 @@ final class SchiiMigrateCommand extends AbstractDatabaseCommand implements Comma
         try {
             $connection = $this->resolveConnection();
             $registry = new SchemaRegistry();
-            $migrator = new AutoMigrator($registry, $connection);
+            $migrator = new AutoMigrator($connection, $registry);
 
             $actions = $migrator->migrate($modelClass);
 

@@ -13,6 +13,7 @@
         <exclude>tests/Compiler/Fixtures</exclude>
         <exclude>tests/Benchmark/BenchmarkRunner.php</exclude>
         <exclude>tests/*/_tmp_*</exclude>
+
         </testsuite>
     </testsuites>
 
@@ -20,6 +21,9 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">src/Phii/Generator/templates</directory>
+        </exclude>
     </source>
 
 </phpunit>

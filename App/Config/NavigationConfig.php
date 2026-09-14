@@ -45,6 +45,7 @@ class NavigationConfig
             self::grouped(self::item('Docs', '/docs'), 'Explore'),
             self::grouped(self::item('UI Components', '/ui'), 'Explore'),
             self::item('Schii', '/schii'),
+            self::item('Phii', '/phii'),
         ];
 
         return self::filterVisible($allItems, $user);

@@ -255,7 +255,7 @@ PHP
         $result = $this->runCommand(new SchiiMigrateCommand(), [CliWidget::class]);
 
         $this->assertSame(0, $result['code']);
-        $this->assertStringContainsString("Created table 'cli_widgets'", $result['out']);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS "cli_widgets"', $result['out']);
         $this->assertSame('', $result['err']);
 
         $this->assertSame(1, $this->countTableRows($this->openFileDb(), 'cli_widgets'));

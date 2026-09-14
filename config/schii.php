@@ -11,4 +11,7 @@ return [
     'requireAuth' => true,
     'middleware' => [],
     'authResolver' => ['App\\Models\\User', 'findIdentityByAuthKey'],
+    'exportDir' => 'storage/generated',
+    'phiiNamespace' => 'App\\Models',
+    'phiiPrefix' => '/phii',
 ];

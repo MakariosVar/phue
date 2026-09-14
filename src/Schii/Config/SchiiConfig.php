@@ -35,7 +35,10 @@ final readonly class SchiiConfig
         public bool $autoMigrate = true,
         public string $cachePrefix = 'schii_schema_',
         public array $middleware = [],
-        public mixed $authResolver = null
+        public mixed $authResolver = null,
+        public string $exportDir = 'storage/generated',
+        public string $phiiNamespace = 'App\\Models',
+        public string $phiiPrefix = '/phii',
     ) {}
 
     /**
@@ -64,7 +67,10 @@ final readonly class SchiiConfig
             autoMigrate: $options['autoMigrate'] ?? true,
             cachePrefix: $options['cachePrefix'] ?? 'schii_schema_',
             middleware: $options['middleware'] ?? [],
-            authResolver: $options['authResolver'] ?? null
+            authResolver: $options['authResolver'] ?? null,
+            exportDir: $options['exportDir'] ?? 'storage/generated',
+            phiiNamespace: $options['phiiNamespace'] ?? 'App\\Models',
+            phiiPrefix: $options['phiiPrefix'] ?? '/phii',
         );
     }
 
@@ -93,6 +99,9 @@ final readonly class SchiiConfig
             'cachePrefix' => $this->cachePrefix,
             'middleware' => $this->middleware,
             'authResolver' => $this->authResolver,
+            'exportDir' => $this->exportDir,
+            'phiiNamespace' => $this->phiiNamespace,
+            'phiiPrefix' => $this->phiiPrefix,
         ];
     }
 }

@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use PDOException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
+use Phue\Core\Database\SqlIdentifier;
 use RuntimeException;
 
 final class SchemaSyncEngine
@@ -40,7 +41,15 @@ final class SchemaSyncEngine
         $instance = new $modelClass();
         $table = $instance->getTable();
 
+        $pdo = $this->connection->getPdo();
+        $driverName = strtolower($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? 'sqlite');
+        SqlIdentifier::quote($table, $driverName);
+
         $modelSchema = $this->schemaRegistry->get($modelClass);
+        foreach (array_keys($modelSchema->fields) as $fieldName) {
+            SqlIdentifier::quote((string) $fieldName, $driverName);
+        }
+
         $operations = [];
 
         // If the table does not exist, plan table creation and initial columns

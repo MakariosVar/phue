@@ -14,11 +14,19 @@ use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
+use Phue\Database\Connection;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
+use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
+use Phue\Schii\Endpoint\SchemaSyncEndpoint;
+use Phue\Schii\Inspector\SchemaInspector;
+use Phue\Schii\Inspector\SchemaSyncEngine;
 use Phue\Schii\Schema\SchemaRegistry;
 use Phue\Schii\Controller\ConsoleController;
+use Phue\Schii\Controller\PhiiController;
+use Phue\Generator\BuildGenerator;
+use Phue\Generator\RuntimeGenerator;
 use Phue\Auth\AuthManager;
 use Phue\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Auth\RbacManager;
@@ -26,7 +34,7 @@ use Phue\Auth\RbacManager;
 /**
  * Class SchiiModule
  *
- * Serves as the bootstrapping module for the Schii admin panel and REST architecture.
+ * Serves as the bootstrapping module for the Schii admin panel, Phii code generator, and REST architecture.
  * Configures framework dependency injections, handles UI component loaders, wires up
  * dynamic authentication resolvers, and registers REST API and console routes.
  *
@@ -109,7 +117,58 @@ class SchiiModule extends Module
             }
         );
 
-        // 5. Register Component Loader & Renderer Services
+        // 4a. Phii & Inspector DI Bindings
+        $this->container->bind(
+            SchemaInspector::class,
+            function (Container $c): SchemaInspector {
+                $connection = $c->has(Connection::class) ? $c->get(Connection::class) : null;
+                if (!$connection) {
+                    throw new \RuntimeException('Database connection is not available for SchemaInspector.');
+                }
+                return new SchemaInspector($connection);
+            }
+        );
+
+        $this->container->bind(
+            SchemaSyncEngine::class,
+            function (Container $c): SchemaSyncEngine {
+                $connection = $c->has(Connection::class) ? $c->get(Connection::class) : null;
+                if (!$connection) {
+                    throw new \RuntimeException('Database connection is not available for SchemaSyncEngine.');
+                }
+                return new SchemaSyncEngine(
+                    $c->get(SchemaRegistry::class),
+                    $c->get(SchemaInspector::class),
+                    $connection
+                );
+            }
+        );
+
+        $this->container->bind(
+            SchemaInspectorEndpoint::class,
+            function (Container $c): SchemaInspectorEndpoint {
+                return new SchemaInspectorEndpoint($c->get(SchemaInspector::class));
+            }
+        );
+
+        $this->container->bind(
+            SchemaSyncEndpoint::class,
+            function (Container $c): SchemaSyncEndpoint {
+                return new SchemaSyncEndpoint($c->get(SchemaSyncEngine::class));
+            }
+        );
+
+        $this->container->bind(
+            BuildGenerator::class,
+            function (Container $c) use ($schiiConfig): BuildGenerator {
+                return new BuildGenerator(
+                    $c->get(SchemaRegistry::class),
+                    $schiiConfig->exportDir ?? 'storage/generated'
+                );
+            }
+        );
+
+        // 5. Register Component Loader & Renderer Services (Schii)
         $this->container->singleton(
             'schii.loader',
             fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
@@ -127,6 +186,29 @@ class SchiiModule extends Module
                 assetRegistry: $c->get(AssetRegistry::class),
                 loader: $c->get('schii.loader'),
                 layoutName: 'SchiiLayout',
+                uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
+                partialRenderer: $c->get(PhuePartialRenderer::class)
+            );
+        });
+
+        // Register Component Loader & Renderer Services (Phii)
+        $this->container->singleton(
+            'phii.loader',
+            fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
+        );
+
+        if ($this->container->has(ComponentLoaderRegistry::class)) {
+            /** @var ComponentLoaderRegistry $loaderRegistry */
+            $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
+            $loaderRegistry->addLoader($this->container->get('phii.loader'));
+        }
+
+        $this->container->singleton('phii.renderer', function ($c) {
+            return new ComponentRenderer(
+                shellRenderer: $c->get(HtmlShellRenderer::class),
+                assetRegistry: $c->get(AssetRegistry::class),
+                loader: $c->get('phii.loader'),
+                layoutName: 'PhiiLayout',
                 uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
                 partialRenderer: $c->get(PhuePartialRenderer::class)
             );
@@ -159,13 +241,6 @@ class SchiiModule extends Module
             }
         );
 
-        // 7. Dynamic REST & Console Route Mappings
-        /** @var string $apiPrefix */
-        $apiPrefix = '/' . trim($schiiConfig->apiPrefix ?? '/api/schii', '/');
-
-        /** @var array<int, class-string> $middleware */
-        $middleware = $schiiConfig->middleware ?? [];
-
         /** @var bool $requireAuth */
         $requireAuth = $schiiConfig->requireAuth;
 
@@ -174,16 +249,56 @@ class SchiiModule extends Module
             ? AuthorizedModelEndpoint::class 
             : ModelEndpoint::class;
 
+        $this->container->bind(
+            RuntimeGenerator::class,
+            function (Container $c) use ($crudHandler): RuntimeGenerator {
+                return new RuntimeGenerator(
+                    $c->get(\Phue\Core\Router::class),
+                    $c->get($crudHandler),
+                    $c->get(SchemaRegistry::class)
+                );
+            }
+        );
+
+        $this->container->bind(
+            PhiiController::class,
+            function (Container $c): PhiiController {
+                return new PhiiController(
+                    $c->get('phii.renderer'),
+                    $c->get(BuildGenerator::class),
+                    $c->get(RuntimeGenerator::class)
+                );
+            }
+        );
+
+        // 7. Dynamic REST & Console Route Mappings
+        /** @var string $apiPrefix */
+        $apiPrefix = '/' . trim($schiiConfig->apiPrefix ?? '/api/schii', '/');
+
+        /** @var array<int, class-string> $middleware */
+        $middleware = $schiiConfig->middleware ?? [];
+
+        /** @var string $phiiPrefix */
+        $phiiPrefix = '/' . trim($schiiConfig->phiiPrefix ?? '/phii', '/');
+
+        // Inspector & Sync routes (placed before generic {entity} CRUD routes)
+        $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [SchemaInspectorEndpoint::class, 'structure'], middleware: $middleware);
+        $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [SchemaSyncEndpoint::class, 'sync'], middleware: $middleware);
+
         // Public Schema Metadata Endpoints
-        $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], $middleware);
+        $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
+        $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
 
         // Protected CRUD Operations Endpoints
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], $middleware);
-        $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], $middleware);
-        $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], $middleware);
-        $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], $middleware);
+        $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
+        $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
+        $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
+        $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
+        $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
+
+        // Phii Panel & Generation Routes
+        $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
+        $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
 
         // Admin Console View Route
         /** @var string $consolePrefix */

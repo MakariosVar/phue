@@ -8,28 +8,44 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\SqlIdentifier;
 use Phue\Schii\Schema\SchemaRegistry;
-
+use Phue\Schii\Schema\SchemaInspector;
+use Phue\Schii\Schema\SchemaSyncEngine;
 /**
  * Inspects database tables and auto-migrates missing columns and tables based on Schii Schema.
  */
 final class AutoMigrator
 {
+    private Connection $connection;
     private SchemaToSqlConverter $converter;
+    private SchemaSyncEngine $syncEngine;
 
+    /**
+     * AutoMigrator constructor.
+     *
+     * @param Connection           $connection      Active database connection instance.
+     * @param SchemaRegistry|null  $schemaRegistry  Optional schema registry instance.
+     * @param SchemaInspector|null $schemaInspector Optional database schema inspector instance.
+     */
     public function __construct(
-        private readonly SchemaRegistry $schemaRegistry,
-        private readonly Connection $connection
+        Connection $connection,
+        ?SchemaRegistry $schemaRegistry = null,
+        ?SchemaInspector $schemaInspector = null
     ) {
-        $this->converter = new SchemaToSqlConverter($this->getDriverName());
+        $registry = $schemaRegistry ?? new SchemaRegistry();
+        $inspector = $schemaInspector ?? new SchemaInspector($connection);
+
+        $this->syncEngine = new SchemaSyncEngine($registry, $inspector, $connection);
     }
 
     /**
-     * Run auto-migration for a specific ActiveRecord model class wrapped in a database transaction.
+     * Run auto-migration for a specific ActiveRecord model class using SchemaSyncEngine.
      *
-     * @param class-string<BaseActiveRecord> $modelClass
-     * @return array<string> List of executed SQL queries/actions
-     * @throws \InvalidArgumentException If the class does not extend BaseActiveRecord or contains invalid identifiers.
-     * @throws \Throwable If an error occurs during query execution.
+     * @param class-string<BaseActiveRecord> $modelClass Target ActiveRecord model class name.
+     *
+     * @return array<string> List of executed SQL queries/actions.
+     *
+     * @throws \InvalidArgumentException If the class does not extend BaseActiveRecord.
+     * @throws \Throwable If an error occurs during execution.
      */
     public function migrate(string $modelClass): array
     {
@@ -37,60 +53,7 @@ final class AutoMigrator
             throw new \InvalidArgumentException("Class {$modelClass} must extend BaseActiveRecord.");
         }
 
-        $schema = $this->schemaRegistry->get($modelClass);
-        
-        /** @var BaseActiveRecord $instance */
-        $instance = new $modelClass();
-        $tableName = SqlIdentifier::validate($instance->getTable());
-        $driverName = $this->getDriverName();
-
-        $executedActions = [];
-
-        // Begin transaction wrapping
-        $this->connection->beginTransaction();
-
-        try {
-            // 1. Check if the target table exists in the database
-            if (!$this->tableExists($tableName)) {
-                $createSql = $this->converter->buildCreateTableSql($schema, $tableName);
-                $this->connection->execute($createSql);
-                $executedActions[] = "Created table '{$tableName}'";
-
-                $this->connection->commit();
-                return $executedActions;
-            }
-
-            // 2. Table exists: Inspect existing columns and ALTER table if any schema field is missing
-            $existingColumns = $this->getExistingColumns($tableName);
-
-            foreach ($schema->fields as $field) {
-                $fieldName = SqlIdentifier::validate($field->name);
-
-                // Skip primary key column 'id' as it should already exist in the table
-                if ($fieldName === 'id') {
-                    continue;
-                }
-
-                if (!in_array($fieldName, $existingColumns, true)) {
-                    $columnSql = $this->converter->buildColumnSql($field);
-                    $quotedTable = SqlIdentifier::quote($tableName, $driverName);
-                    
-                    // Fixed: Removed trailing semicolon at the end of the query string
-                    $alterSql = "ALTER TABLE {$quotedTable} ADD COLUMN {$columnSql}";
-                    
-                    $this->connection->execute($alterSql);
-                    $executedActions[] = "Added column '{$fieldName}' to '{$tableName}'";
-                }
-            }
-
-            $this->connection->commit();
-            return $executedActions;
-        } catch (\Throwable $e) {
-            if ($this->connection->inTransaction()) {
-                $this->connection->rollBack();
-            }
-            throw $e;
-        }
+        return $this->syncEngine->apply($modelClass, dryRun: false, allowDrops: false);
     }
 
     /**
