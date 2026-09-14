@@ -61,6 +61,7 @@ PHP);
     {
         $registry = $app->getContainer()->get(ComponentLoaderRegistry::class);
         $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
+        $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/App/Frontend'));
     }
 
     public function testModuleHonorsApplicationConfigPrefixAndNamespace(): void

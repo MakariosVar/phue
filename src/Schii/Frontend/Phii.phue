@@ -1,0 +1,138 @@
+<php>
+/**
+ * Phii Console Server-Authoritative Logic & State
+ */
+$title = 'Phii Console';
+
+return [
+    'title' => $title,
+    'state' => [
+        'generators' => [],
+        'entities'   => [],
+        'modules'    => ['admin', 'app'],
+    ],
+    'scripts' => [],
+];
+</php>
+
+<template>
+    <div v-cloak class="phii-console p-4">
+        <header class="mb-4">
+            <h1 class="m-0">Phii Generator Console</h1>
+            <p class="m-0 text-body-secondary">Generate CRUD, Models, Controllers, and Migrations</p>
+        </header>
+
+        <div class="card p-4">
+            <form @submit.prevent="submitGenerate">
+                <div class="mb-3">
+                    <label class="form-label">Generator Type</label>
+                    <select v-model="form.generator" class="form-select" required>
+                        <option value="" disabled>Select a generator...</option>
+                        <option v-for="gen in generators" :key="gen" :value="gen">{{ gen }}</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Entity / Model Name</label>
+                    <input
+                        type="text"
+                        v-model="form.entity"
+                        class="form-control"
+                        placeholder="e.g. Profile"
+                        required
+                    />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Module</label>
+                    <input
+                        type="text"
+                        v-model="form.module"
+                        class="form-control"
+                        placeholder="admin"
+                    />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Options (JSON or extra flags)</label>
+                    <input
+                        type="text"
+                        v-model="form.options"
+                        class="form-control"
+                        placeholder="{}"
+                    />
+                </div>
+
+                <div v-if="errorMsg" class="alert alert-danger">{{ errorMsg }}</div>
+                <div v-if="successMsg" class="alert alert-success">{{ successMsg }}</div>
+
+                <button type="submit" :disabled="submitting" class="btn btn-primary">
+                    {{ submitting ? 'Generating...' : 'Generate' }}
+                </button>
+            </form>
+        </div>
+    </div>
+</template>
+
+<script type="module">
+import { createApp, ref, reactive, onMounted } from 'vue';
+
+export default function mountApp() {
+    window.__phueApp?.unmount?.();
+
+    window.__phueApp = createApp({
+        setup() {
+            const generators = ref(['crud', 'model', 'controller', 'migration']);
+            const submitting = ref(false);
+            const errorMsg = ref(null);
+            const successMsg = ref(null);
+
+            const form = reactive({
+                generator: 'crud',
+                entity: '',
+                module: 'admin',
+                options: ''
+            });
+
+            const submitGenerate = async () => {
+                submitting.value = true;
+                errorMsg.value = null;
+                successMsg.value = null;
+
+                try {
+                    const res = await fetch('/phii/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(form)
+                    });
+
+                    const data = await res.json().catch(() => ({}));
+
+                    if (!res.ok) {
+                        throw new Error(data.message || 'Failed to execute generate action.');
+                    }
+
+                    successMsg.value = 'Generation completed successfully!';
+                } catch (err) {
+                    errorMsg.value = err.message;
+                } finally {
+                    submitting.value = false;
+                }
+            };
+
+            return {
+                generators,
+                form,
+                submitting,
+                errorMsg,
+                successMsg,
+                submitGenerate,
+            };
+        }
+    });
+
+    window.__phueApp.mount('#app');
+}
+
+mountApp();
+</script>

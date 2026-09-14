@@ -171,6 +171,8 @@ function useForm(initialFields = []) {
 }
 
 export default function mountApp() {
+    window.__phueApp?.unmount?.();
+
     window.__phueApp = createApp({
         setup() {
             const title = ref('Schii Console');
@@ -327,7 +329,8 @@ export default function mountApp() {
                 deleteRecord,
             };
         }
-    })
+    });
+
     window.__phueApp.mount('#app');
 }
 

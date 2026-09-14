@@ -28,6 +28,7 @@ use Phue\Schii\Controller\ConsoleController;
 use Phue\Schii\Controller\PhiiController;
 use Phue\Schii\Generator\BuildGenerator;
 use Phue\Schii\Generator\RuntimeGenerator;
+use Phue\Core\Ssr\SsrEngine;
 use Phue\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Auth\AuthManager;
 use Phue\Auth\RbacManager;
@@ -148,14 +149,21 @@ class SchiiModule extends Module
         $this->container->bind(
             SchemaInspectorEndpoint::class,
             function (Container $c): SchemaInspectorEndpoint {
-                return new SchemaInspectorEndpoint($c->get(SchemaInspector::class));
+                return new SchemaInspectorEndpoint(
+                    $c->get(SchemaRegistry::class),
+                    $c->has(Connection::class) ? $c->get(Connection::class) : null,
+                    $schiiConfig->entityNamespace ?? 'App\\Models'
+                );
             }
         );
 
         $this->container->bind(
             SchemaSyncEndpoint::class,
             function (Container $c): SchemaSyncEndpoint {
-                return new SchemaSyncEndpoint($c->get(SchemaSyncEngine::class));
+                return new SchemaSyncEndpoint(
+                    $c->get(SchemaSyncEngine::class),
+                    $schiiConfig->entityNamespace ?? 'App\\Models'
+                );
             }
         );
 
@@ -186,9 +194,11 @@ class SchiiModule extends Module
                 shellRenderer: $c->get(HtmlShellRenderer::class),
                 assetRegistry: $c->get(AssetRegistry::class),
                 loader: $c->get('schii.loader'),
-                layoutName: 'SchiiLayout',
+                layoutName: 'AppLayout',
                 uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
-                partialRenderer: $c->get(PhuePartialRenderer::class)
+                partialRenderer: $c->get(PhuePartialRenderer::class),
+                ssrEngine: $c->get(SsrEngine::class),
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
             );
         });
 
@@ -209,9 +219,11 @@ class SchiiModule extends Module
                 shellRenderer: $c->get(HtmlShellRenderer::class),
                 assetRegistry: $c->get(AssetRegistry::class),
                 loader: $c->get('phii.loader'),
-                layoutName: 'PhiiLayout',
+                layoutName: 'AppLayout',
                 uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
-                partialRenderer: $c->get(PhuePartialRenderer::class)
+                partialRenderer: $c->get(PhuePartialRenderer::class),
+                ssrEngine: $c->get(SsrEngine::class),
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
             );
         });
 
@@ -266,8 +278,9 @@ class SchiiModule extends Module
             function (Container $c): PhiiController {
                 return new PhiiController(
                     $c->get('phii.renderer'),
-                    $c->get(BuildGenerator::class),
-                    $c->get(RuntimeGenerator::class)
+                    $c->get(SchemaRegistry::class),
+                    $c->get(SchiiConfig::class),
+                    $c->get(Application::class)
                 );
             }
         );
@@ -279,31 +292,33 @@ class SchiiModule extends Module
         /** @var array<int, class-string> $middleware */
         $middleware = $schiiConfig->middleware ?? [];
 
-        /** @var string $phiiPrefix */
-        $phiiPrefix = '/' . trim($schiiConfig->phiiPrefix ?? '/phii', '/');
+        if ($schiiConfig->enabled) {
+            /** @var string $phiiPrefix */
+            $phiiPrefix = '/' . trim($schiiConfig->phiiPrefix ?? '/phii', '/');
 
-        // Inspector & Sync routes (placed before generic {entity} CRUD routes)
-        $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [SchemaInspectorEndpoint::class, 'structure'], middleware: $middleware);
-        $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [SchemaSyncEndpoint::class, 'sync'], middleware: $middleware);
+            // Inspector & Sync routes (placed before generic {entity} CRUD routes)
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [SchemaInspectorEndpoint::class, 'structure'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [SchemaSyncEndpoint::class, 'sync'], middleware: $middleware);
 
-        // Public Schema Metadata Endpoints
-        $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
+            // Public Schema Metadata Endpoints
+            $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
 
-        // Protected CRUD Operations Endpoints
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
-        $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
-        $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
-        $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
-        $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
+            // Protected CRUD Operations Endpoints
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
+            $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
+            $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
 
-        // Phii Panel & Generation Routes
-        $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
-        $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
+            // Phii Panel & Generation Routes
+            $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
+            $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
 
-        // Admin Console View Route
-        /** @var string $consolePrefix */
-        $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
-        $this->router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);
+            // Admin Console View Route
+            /** @var string $consolePrefix */
+            $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
+            $this->router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);
+        }        
     }
 }

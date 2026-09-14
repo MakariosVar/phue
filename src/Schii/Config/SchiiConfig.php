@@ -18,6 +18,7 @@ final readonly class SchiiConfig
     /**
      * Initializes a new immutable Schii Configuration instance.
      *
+     * @param bool $enabled Whether Schii is enabled.
      * @param string $apiPrefix Base URI prefix for dynamically exposed Schii REST endpoints.
      * @param string $prefix Base URI Schii Admin console endpoints.
      * @param string $entityNamespace Fully qualified PHP namespace where Schii models reside.
@@ -28,6 +29,7 @@ final readonly class SchiiConfig
      * @param callable|array{0: class-string, 1: string}|null $authResolver Custom identity lookup callable.
      */
     public function __construct(
+        public bool $enabled = true,
         public string $apiPrefix = '/api/schii',
         public string $prefix = '/schii',
         public string $entityNamespace = 'App\\Models',
@@ -46,6 +48,7 @@ final readonly class SchiiConfig
      * overriding defaults only for keys that are explicitly supplied.
      *
      * @param array{
+     *     enabled?: bool,
      *     apiPrefix?: string,
      *     prefix?: string,
      *     entityNamespace?: string,
@@ -60,6 +63,7 @@ final readonly class SchiiConfig
     public static function fromArray(array $options): self
     {
         return new self(
+            enabled: $options['enabled'] ?? true,
             apiPrefix: $options['apiPrefix'] ?? '/api/schii',
             prefix: $options['prefix'] ?? '/schii',
             entityNamespace: $options['entityNamespace'] ?? 'App\\Models',
@@ -78,6 +82,7 @@ final readonly class SchiiConfig
      * Converts the current configuration object into an associative array representation.
      *
      * @return array{
+     *     enabled: bool,
      *     apiPrefix: string,
      *     prefix: string,
      *     entityNamespace: string,
@@ -91,6 +96,7 @@ final readonly class SchiiConfig
     public function toArray(): array
     {
         return [
+            'enabled' => $this->enabled,
             'apiPrefix' => $this->apiPrefix,
             'prefix' => $this->prefix,
             'entityNamespace' => $this->entityNamespace,

@@ -58,9 +58,7 @@ final class PhiiController
             'module' => 'admin',
         ];
 
-        $html = $this->renderer->render('Phii', ['state' => $state]);
-
-        return new Response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+        return $this->renderer->render('Phii', ['state' => $state]);
     }
 
     public function generate(Request $request): Response

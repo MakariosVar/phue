@@ -44,9 +44,12 @@ class NavigationConfig
             self::item('Home', '/'),
             self::grouped(self::item('Docs', '/docs'), 'Explore'),
             self::grouped(self::item('UI Components', '/ui'), 'Explore'),
-            self::item('Schii', '/schii'),
-            self::item('Phii', '/phii'),
         ];
+
+        if ((bool) env('SCHII_ENABLED', true)) {
+            $allItems[] = self::item('Schii', '/schii');
+            $allItems[] = self::item('Phii', '/phii');
+        }
 
         return self::filterVisible($allItems, $user);
     }
@@ -202,19 +205,5 @@ class NavigationConfig
 
             return (bool) $visible;
         }));
-    }
-
-    /**
-     * Returns navigation items specific to the Schii module context.
-     *
-     * @return array<int, array{label: string, href: string, disabled?: bool}> Itemized navigation list.
-     */
-    public static function getSchiiItems(): array
-    {
-        return [
-            self::item('Schii - AR Dashboard', '/schii'),
-            self::item('Phii - Code Generation', '/schii/phii'),
-            self::item('App', '/'),
-        ];
     }
 }
