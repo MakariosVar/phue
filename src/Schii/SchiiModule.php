@@ -11,24 +11,25 @@ use Phue\Core\Module;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Routing\Router;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
-use Phue\Database\Connection;
+use Phue\Core\Database\Connection;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
 use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
 use Phue\Schii\Endpoint\SchemaSyncEndpoint;
-use Phue\Schii\Inspector\SchemaInspector;
-use Phue\Schii\Inspector\SchemaSyncEngine;
+use Phue\Schii\Schema\SchemaInspector;
+use Phue\Schii\Schema\SchemaSyncEngine;
 use Phue\Schii\Schema\SchemaRegistry;
 use Phue\Schii\Controller\ConsoleController;
 use Phue\Schii\Controller\PhiiController;
-use Phue\Generator\BuildGenerator;
-use Phue\Generator\RuntimeGenerator;
-use Phue\Auth\AuthManager;
+use Phue\Schii\Generator\BuildGenerator;
+use Phue\Schii\Generator\RuntimeGenerator;
 use Phue\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Auth\AuthManager;
 use Phue\Auth\RbacManager;
 
 /**
@@ -253,7 +254,7 @@ class SchiiModule extends Module
             RuntimeGenerator::class,
             function (Container $c) use ($crudHandler): RuntimeGenerator {
                 return new RuntimeGenerator(
-                    $c->get(\Phue\Core\Router::class),
+                    $c->get(Router::class),
                     $c->get($crudHandler),
                     $c->get(SchemaRegistry::class)
                 );
