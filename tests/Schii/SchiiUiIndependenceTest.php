@@ -118,7 +118,7 @@ PHP);
         $this->assertSame('User', json_decode($entity->getContent(), true)['entity']);
     }
 
-    public function testModuleRegistersConsolePageFromItsOwnFrontend(): void
+    public function testModuleRegistersSchiiPageFromItsOwnFrontend(): void
     {
         $this->writeConfig('/api/schii', 'Phue\\Tests\\Schii\\Stubs');
 
@@ -130,7 +130,7 @@ PHP);
         $content = $page->getContent();
         $this->assertStringContainsString('<div id="app">', $content);
 
-        preg_match('#/assets/phue/Console\.[a-f0-9]{8}\.phue\.js#', $content, $m);
+        preg_match('#/assets/phue/Schii\.[a-f0-9]{8}\.phue\.js#', $content, $m);
         $this->assertArrayHasKey(0, $m, 'Schii page must emit its own module URL');
 
         $module = $app->handle(new Request('GET', $m[0]));
@@ -141,7 +141,7 @@ PHP);
         $this->assertStringContainsString(".mount('#app')", $module->getContent());
     }
 
-    public function testConsoleStateCarriesConfiguredApiPrefix(): void
+    public function testSchiiStateCarriesConfiguredApiPrefix(): void
     {
         // Non-default prefix: the console must discover the real one, not /
         // api/schii
@@ -156,13 +156,13 @@ PHP);
         $content = $page->getContent();
 
         preg_match('/window\\.__INITIAL_STATE__ = (\\{.*?\\});/', $content, $m);
-        $this->assertArrayHasKey(1, $m, 'Console page must inject window.__INITIAL_STATE__');
+        $this->assertArrayHasKey(1, $m, 'Schii page must inject window.__INITIAL_STATE__');
         $state = json_decode($m[1], true);
 
         $this->assertSame(
             '/custom/api',
             $state['apiPrefix'] ?? null,
-            'Console page must carry the configured apiPrefix (never the hardcoded default)',
+            'Schii page must carry the configured apiPrefix (never the hardcoded default)',
         );
 
         $this->assertStringNotContainsString(
