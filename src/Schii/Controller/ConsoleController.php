@@ -44,7 +44,7 @@ final class ConsoleController
         /** @var SchiiConfig $config */
         $config = $this->container->get(SchiiConfig::class);
 
-        return $renderer->render("Console", [
+        return $renderer->render("Schii", [
             "request" => $request,
             "params" => $params,
             "apiPrefix" => $config->apiPrefix,

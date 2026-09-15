@@ -968,7 +968,7 @@ They return an `html` key whose value replaces the page markup inside the shell.
 
 ### Developer console page
 
-`SchiiModule` routes `GET /schii` → `ConsoleController::index(Request, array $params)` which returns `ComponentRenderer::render('Console', [...])`. The console page (`src/Schii/Frontend/Console.phue`) is a **Vue 3 no-build app**:
+`SchiiModule` routes `GET /schii` → `ConsoleController::index(Request, array $params)` which returns `ComponentRenderer::render('Console', [...])`. The console page (`src/Schii/Frontend/Schii.phue`) is a **Vue 3 no-build app**:
 
 - Boots from `/assets/vendor/vue3/vue.esm-browser.js` and reads `window.__INITIAL_STATE__`.
 - On mount it queries `GET {apiPrefix}/schema` — **server-authoritative entity discovery**: the page carries no hardcoded entity list.
