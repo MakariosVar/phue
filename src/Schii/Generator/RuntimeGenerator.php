@@ -57,7 +57,7 @@ final class RuntimeGenerator implements GeneratorInterface
         string $apiPrefix,
         string $entitySlug,
         string $modelClass,
-        bool $requireAuth = true,
+        bool $requireAuth = false,
         array $middleware = [],
     ): void {
         $handler = $this->resolveEndpoint($requireAuth);
@@ -89,7 +89,7 @@ final class RuntimeGenerator implements GeneratorInterface
     public function registerAll(
         string $apiPrefix,
         string $entityNamespace,
-        bool $requireAuth = true,
+        bool $requireAuth = false,
         array $middleware = [],
     ): array {
         $registeredPatterns = [];

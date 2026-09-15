@@ -8,14 +8,20 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Schii\Attribute\Field;
 use Phue\Schii\Attribute\UI;
 
-#[UI(label: 'Users', icon: 'user')]
+#[UI(label: 'User', icon: 'user')]
 class User extends BaseActiveRecord
 {
     protected string $table = 'users';
 
-    #[Field(type: 'integer', label: 'ID')]
-    public ?int $id = null;
+    #[Field(type: 'text')]
+    public string $username;
 
-    #[Field(type: 'text', required: true, searchable: true)]
-    public string $name;
+    #[Field(type: 'text')]
+    public string $password_hash;
+
+    #[Field(type: 'text')]
+    public ?string $auth_key = null;
+
+    #[Field(type: 'text')]
+    public mixed $roles = '[]';
 }

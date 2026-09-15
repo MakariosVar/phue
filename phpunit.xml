@@ -11,6 +11,7 @@
         <exclude>tests/Core/Stubs</exclude>
         <exclude>tests/Schii/Stubs</exclude>
         <exclude>tests/Compiler/Fixtures</exclude>
+        <exclude>tests/Fixtures</exclude>
         <exclude>tests/Benchmark/BenchmarkRunner.php</exclude>
         <exclude>tests/*/_tmp_*</exclude>
 

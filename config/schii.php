@@ -10,7 +10,7 @@ return [
     'entityNamespace' => 'App\\Models',
     'autoMigrate' => true,
     'cachePrefix' => 'schii_schema_',
-    'requireAuth' => true,
+    'requireAuth' => false,
     'middleware' => [],
     'authResolver' => ['App\\Models\\User', 'findIdentityByAuthKey'],
     'exportDir' => 'storage/generated',

@@ -14,8 +14,7 @@ class SchiiIntegrationTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->app = new Application('/app');
-        $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
+        $this->app = new Application(dirname(__DIR__) . '/Fixtures/SchiiApp');
     }
 
     public function testSchemaEndpointReturnsJsonSchema(): void

@@ -8,6 +8,7 @@ AGENTS.md
 
 node_modules
 .phpunit.cache
+*.cache
 
 composer.lock
 *.sqlite
