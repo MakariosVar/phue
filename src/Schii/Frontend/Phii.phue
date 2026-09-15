@@ -1,120 +1,186 @@
 <php>
-/**
- * Phii Console Server-Authoritative Logic & State
- */
-$title = 'Phii Console';
+$phiiState = $state ?? [];
 
 return [
-    'title' => $title,
+    'title' => 'Phii Console',
     'state' => [
-        'generators' => [],
-        'entities'   => [],
-        'modules'    => ['admin', 'app'],
+        'apiPrefix' => $phiiState['apiPrefix'] ?? '/api/schii',
+        'phiiPrefix' => $phiiState['phiiPrefix'] ?? '/phii',
+        'phiiNamespace' => $phiiState['phiiNamespace'] ?? 'Phue\\Phii',
+        'module' => $phiiState['module'] ?? 'admin',
     ],
     'scripts' => [],
 ];
 </php>
 
 <template>
-    <div v-cloak class="phii-console p-4">
-        <header class="mb-4">
-            <h1 class="m-0">Phii Generator Console</h1>
-            <p class="m-0 text-body-secondary">Generate CRUD, Models, Controllers, and Migrations</p>
-        </header>
+<div class="phii-console p-4" v-cloak>
+    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
+        <div>
+            <ph-heading :level="1" class="mb-0">Phii Generator Console</ph-heading>
+            <ph-text color="muted">Generate CRUD, Models, Controllers, and Migrations</ph-text>
+        </div>
+        <ph-badge label="Schema-powered codegen" variant="info" pill />
+    </ph-flex>
 
-        <div class="card p-4">
-            <form @submit.prevent="submitGenerate">
-                <div class="mb-3">
-                    <label class="form-label">Generator Type</label>
-                    <select v-model="form.generator" class="form-select" required>
-                        <option value="" disabled>Select a generator...</option>
-                        <option v-for="gen in generators" :key="gen" :value="gen">{{ gen }}</option>
-                    </select>
-                </div>
+    <ph-alert
+        v-if="errorMsg"
+        variant="error"
+        :message="errorMsg"
+        dismissible
+        class="mb-3"
+        @dismiss="errorMsg = null"
+    />
+    <ph-alert
+        v-if="successMsg"
+        variant="success"
+        :message="successMsg"
+        dismissible
+        class="mb-3"
+        @dismiss="successMsg = null"
+    />
 
-                <div class="mb-3">
-                    <label class="form-label">Entity / Model Name</label>
-                    <input
-                        type="text"
-                        v-model="form.entity"
-                        class="form-control"
-                        placeholder="e.g. Profile"
+    <ph-row gutter="3">
+        <ph-col span="12" lg="6">
+            <ph-card title="Generate" subtitle="Pick a generator and scaffold application code from your schema." hoverable>
+                <form id="phii-generate-form" novalidate @submit.prevent="submitGenerate">
+                    <ph-select
+                        v-model="form.generator"
+                        label="Generator Type"
+                        :options="generatorOptions"
+                        helper-text="Pick the artifact to scaffold."
                         required
                     />
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Module</label>
-                    <input
-                        type="text"
-                        v-model="form.module"
-                        class="form-control"
-                        placeholder="admin"
+                    <ph-input
+                        v-model="form.entity"
+                        label="Entity / Model Name"
+                        placeholder="e.g. Profile"
+                        helper-text="Resolved against the registered entity namespaces."
+                        required
                     />
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Options (JSON or extra flags)</label>
-                    <input
-                        type="text"
-                        v-model="form.options"
-                        class="form-control"
-                        placeholder="{}"
-                    />
-                </div>
+                    <ph-row gutter="3">
+                        <ph-col span="12" md="6">
+                            <ph-input v-model="form.module" label="Module" placeholder="admin" />
+                        </ph-col>
+                        <ph-col span="12" md="6">
+                            <ph-input v-model="form.options" label="Options (JSON)" placeholder='{"driver": "sqlite"}' />
+                        </ph-col>
+                    </ph-row>
 
-                <div v-if="errorMsg" class="alert alert-danger">{{ errorMsg }}</div>
-                <div v-if="successMsg" class="alert alert-success">{{ successMsg }}</div>
+                    <div class="d-flex justify-content-end mt-2">
+                        <ph-button type="submit" variant="primary" :loading="submitting">
+                            Generate
+                        </ph-button>
+                    </div>
+                </form>
+            </ph-card>
+        </ph-col>
 
-                <button type="submit" :disabled="submitting" class="btn btn-primary">
-                    {{ submitting ? 'Generating...' : 'Generate' }}
-                </button>
-            </form>
-        </div>
-    </div>
+        <ph-col span="12" lg="6">
+            <ph-card title="Result" subtitle="Files generated by the last run." hoverable>
+                <template v-if="resultPaths.length">
+                    <ph-stack gap="xs">
+                        <div
+                            v-for="(path, i) in resultPaths"
+                            :key="i"
+                            class="d-flex align-items-start gap-2 border rounded p-2"
+                        >
+                            <ph-badge variant="success" label="OK" />
+                            <ph-text size="sm" as="code" class="mb-0 text-break">{{ path }}</ph-text>
+                        </div>
+                    </ph-stack>
+                </template>
+                <ph-text v-else color="muted">
+                    Generated file paths will appear here after a successful run.
+                </ph-text>
+            </ph-card>
+        </ph-col>
+    </ph-row>
+</div>
 </template>
 
 <script type="module">
-import { createApp, ref, reactive, onMounted } from 'vue';
+import { createApp, ref, reactive, computed } from 'vue';
 
 export default function mountApp() {
     window.__phueApp?.unmount?.();
 
     window.__phueApp = createApp({
         setup() {
-            const generators = ref(['crud', 'model', 'controller', 'migration']);
+            const initialState = window.__INITIAL_STATE__ || {};
+            const phiiPrefix = initialState.phiiPrefix || '/phii';
+
+            const generators = ref(['crud', 'model', 'controller', 'migration', 'module']);
             const submitting = ref(false);
             const errorMsg = ref(null);
             const successMsg = ref(null);
+            const resultPaths = ref([]);
 
             const form = reactive({
                 generator: 'crud',
                 entity: '',
-                module: 'admin',
-                options: ''
+                module: initialState.module || 'admin',
+                options: '',
             });
+
+            const generatorOptions = computed(() =>
+                generators.value.map(g => ({ label: g.toUpperCase(), value: g }))
+            );
+
+            const parseOptions = () => {
+                const raw = (form.options || '').trim();
+                if (!raw) return {};
+                try {
+                    const parsed = JSON.parse(raw);
+                    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                        ? parsed
+                        : {};
+                } catch {
+                    errorMsg.value = 'Options must be valid JSON, e.g. {"auth": true}.';
+                    return null;
+                }
+            };
 
             const submitGenerate = async () => {
                 submitting.value = true;
                 errorMsg.value = null;
                 successMsg.value = null;
 
+                const options = parseOptions();
+                if (options === null) {
+                    submitting.value = false;
+                    return;
+                }
+
                 try {
-                    const res = await fetch('/phii/generate', {
+                    const res = await fetch(`${phiiPrefix}/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(form)
+                        body: JSON.stringify({
+                            generator: form.generator,
+                            entity: form.entity.trim(),
+                            module: form.module.trim() || 'admin',
+                            options,
+                        }),
                     });
 
                     const data = await res.json().catch(() => ({}));
 
                     if (!res.ok) {
-                        throw new Error(data.message || 'Failed to execute generate action.');
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
                     }
 
-                    successMsg.value = 'Generation completed successfully!';
+                    resultPaths.value = Array.isArray(data.paths)
+                        ? data.paths
+                        : (data.paths ? [data.paths] : []);
+                    successMsg.value = resultPaths.value.length
+                        ? `Generated ${resultPaths.value.length} file(s) successfully.`
+                        : 'Generation completed successfully!';
                 } catch (err) {
-                    errorMsg.value = err.message;
+                    errorMsg.value = err?.message || 'Failed to execute generate action.';
+                    resultPaths.value = [];
                 } finally {
                     submitting.value = false;
                 }
@@ -122,10 +188,12 @@ export default function mountApp() {
 
             return {
                 generators,
+                generatorOptions,
                 form,
                 submitting,
                 errorMsg,
                 successMsg,
+                resultPaths,
                 submitGenerate,
             };
         }

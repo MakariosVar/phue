@@ -1,183 +1,181 @@
 <php>
-/**
- * Schii Console Server-Authoritative Logic & State
- *
- * @var string|null $apiPrefix Dynamic API route prefix passed from shell router.
- */
 $title = 'Schii Console';
 
 return [
     'title' => $title,
     'state' => [
         'apiPrefix' => $apiPrefix ?? '/api/schii',
-        'entities'  => [],
     ],
     'scripts' => [],
 ];
 </php>
 
 <template>
-    <div v-cloak class="schii-console">
-        <header class="schii-header p-4 d-flex justify-content-between align-items-center">
-            <div>
-                <h1 class="m-0">Schii Console</h1>
-                <p class="m-0 text-body-secondary">Zero-Controller Dynamic REST Management Interface</p>
-            </div>
-            <button v-if="currentEntity" @click="openCreateModal" class="btn btn-primary">
-                + New {{ currentEntity }}
-            </button>
-        </header>
+<div class="schii-console p-4" v-cloak>
+    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
+        <div>
+            <ph-heading :level="1" class="mb-0">Schii Console</ph-heading>
+            <ph-text color="muted">Zero-Controller Dynamic REST Management Interface</ph-text>
+        </div>
+        <ph-button v-if="currentEntity" variant="primary" @click="openCreateModal">
+            + New {{ currentEntity }}
+        </ph-button>
+    </ph-flex>
 
-        <main class="d-flex schii-content">
-            <aside class="schii-sidebar p-4">
-                <h3 class="m-0 p-2">Entities</h3>
-                <div v-if="loadingEntities" class="schii-loading-sidebar p-2">
-                    Discovering schemas...
+    <ph-alert
+        v-if="errorMsg"
+        variant="error"
+        :message="errorMsg"
+        dismissible
+        class="mb-3"
+        @dismiss="errorMsg = null"
+    />
+
+    <ph-row gutter="3">
+        <ph-col span="12" md="4" lg="3">
+            <ph-card title="Entities" :bordered="false">
+                <div v-if="loadingEntities">
+                    <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
                 </div>
-                <ul v-else class="m-0 p-0 d-flex flex-column gap-1 schii-entity-list">
-                    <li
+                <ph-stack v-else-if="entities.length" gap="xs">
+                    <ph-button
                         v-for="entity in entities"
                         :key="entity"
-                        :class="{ active: currentEntity === entity }"
-                        class="p-2 d-flex justify-content-between align-items-center"
-                        style="cursor: pointer;"
+                        :variant="currentEntity === entity ? 'primary' : 'ghost'"
+                        block
                         @click="selectEntity(entity)"
-                    >
-                        {{ entity }}
-                    </li>
-                </ul>
-            </aside>
+                    >{{ entity }}</ph-button>
+                </ph-stack>
+                <ph-text v-else color="muted" size="sm">No entities discovered.</ph-text>
+            </ph-card>
+        </ph-col>
 
-            <section class="schii-main p-4">
-                <div v-if="loading" class="schii-loading p-4">
-                    Loading data...
-                </div>
-
-                <div v-else-if="currentEntity" class="schii-entity-view p-4">
-                    <h2>{{ currentEntity }} Management</h2>
-
-                    <div class="schii-table-container p-2">
-                        <div class="table-responsive">
-                            <table class="table table-hover table-sm align-middle">
-                                <thead>
-                                    <tr>
-                                        <th v-for="field in fields" :key="field.name">
-                                            {{ field.label || field.name }}
-                                        </th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="row in rows" :key="row.id || JSON.stringify(row)">
-                                        <td v-for="field in fields" :key="field.name">
-                                            {{ row[field.name] }}
-                                        </td>
-                                        <td class="d-flex gap-2">
-                                            <button @click="openEditModal(row)" class="btn btn-sm btn-outline-secondary">Edit</button>
-                                            <button @click="deleteRecord(row.id)" class="btn btn-sm btn-danger">Delete</button>
-                                        </td>
-                                    </tr>
-                                    <tr v-if="rows.length === 0">
-                                        <td :colspan="(fields.length || 1) + 1" class="text-center text-body-secondary p-4">
-                                            No records found.
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+        <ph-col span="12" md="8" lg="9">
+            <ph-card>
+                <template #header>
+                    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="md">
+                        <div>
+                            <ph-text weight="semibold" size="lg" class="mb-0">
+                                {{ currentEntity || 'Data Browser' }}
+                            </ph-text>
+                            <ph-text v-if="!loading && currentEntity" size="sm" color="muted" class="mb-0">
+                                {{ total }} record(s) &middot; page {{ page }} of {{ lastPage }}
+                            </ph-text>
                         </div>
-                    </div>
-                </div>
+                        <ph-badge v-if="currentEntity" label="REST" variant="info" pill />
+                    </ph-flex>
+                </template>
 
-                <div v-else class="schii-placeholder p-4">
-                    Select an entity from the sidebar to inspect schema and records.
-                </div>
-            </section>
-        </main>
+                <template v-if="!currentEntity">
+                    <ph-text color="muted">Select an entity from the sidebar to inspect schema and records.</ph-text>
+                </template>
 
-        <!-- Dynamic Modal for Form Store/Update -->
-        <div v-if="showModal" class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">{{ isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity }}</h3>
-                        <button type="button" class="btn-close" @click="closeModal" aria-label="Close"></button>
-                    </div>
+                <template v-else-if="loading">
+                    <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
+                </template>
 
-                    <form @submit.prevent="submitForm">
-                        <div class="modal-body">
-                            <div v-for="field in writableFields" :key="field.name" class="mb-3">
-                                <label class="form-label">{{ field.label || field.name }}</label>
+                <template v-else>
+                    <ph-input
+                        v-model="query"
+                        type="search"
+                        placeholder="Search records..."
+                        @keyup.enter="search"
+                    />
 
-                                <select
-                                    v-if="field.type === 'select'"
-                                    v-model="form[field.name]"
-                                    class="form-select"
-                                >
-                                    <option v-for="(lbl, val) in field.options" :key="val" :value="val">{{ lbl }}</option>
-                                </select>
+                    <ph-data-table :columns="columns" :items="rows">
+                        <template #empty>
+                            <ph-text color="muted">
+                                No records found{{ query ? ' for your search term.' : '.' }}
+                            </ph-text>
+                        </template>
 
-                                <textarea
-                                    v-else-if="field.type === 'textarea'"
-                                    v-model="form[field.name]"
-                                    class="form-control"
-                                ></textarea>
+                        <template v-for="field in boolFields" :key="field.name"
+                                  v-slot:[`cell(${field.name})`]="{ value }">
+                            <ph-badge :label="value ? 'Yes' : 'No'"
+                                      :variant="value ? 'success' : 'secondary'" />
+                        </template>
 
-                                <input
-                                    v-else
-                                    :type="field.type || 'text'"
-                                    v-model="form[field.name]"
-                                    class="form-control"
-                                />
+                        <template #cell(__actions)="{ row }">
+                            <div class="d-flex gap-2">
+                                <ph-button variant="outline" size="sm" @click="openEditModal(row)">Edit</ph-button>
+                                <ph-button variant="danger" size="sm" @click="askDelete(row.id)">Delete</ph-button>
                             </div>
+                        </template>
+                    </ph-data-table>
 
-                            <div v-if="formError" class="alert alert-danger">{{ formError }}</div>
-                        </div>
+                    <div v-if="lastPage > 1" class="d-flex justify-content-center mt-3">
+                        <ph-pagination :current-page="page" :total-pages="lastPage" @page-change="onPageChange" />
+                    </div>
+                </template>
+            </ph-card>
+        </ph-col>
+    </ph-row>
 
-                        <div class="modal-footer">
-                            <button type="button" @click="closeModal" class="btn btn-outline-secondary">Cancel</button>
-                            <button type="submit" :disabled="submitting" class="btn btn-primary">
-                                {{ submitting ? 'Saving...' : 'Save' }}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <div class="modal-backdrop fade show"></div>
-        </div>
-    </div>
+    <ph-modal v-model="showModal"
+              :title="isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity"
+              size="lg">
+        <ph-alert v-if="formError" variant="error" :message="formError" class="mb-3" />
+
+        <form id="schii-record-form" novalidate @submit.prevent="submitForm">
+            <ph-row gutter="3">
+                <ph-col v-for="field in writableFields" :key="field.name" span="12" md="6">
+                    <ph-input
+                        v-if="isTextWidget(field)"
+                        v-model="form[field.name]"
+                        :type="inputType(field)"
+                        :label="field.label || field.name"
+                        :required="field.required"
+                        :disabled="isEditing && field.name === 'id'"
+                    />
+                    <ph-select
+                        v-else-if="field.type === 'select'"
+                        v-model="form[field.name]"
+                        :label="field.label || field.name"
+                        :options="selectOptions(field)"
+                        :required="field.required"
+                    />
+                    <ph-textarea
+                        v-else-if="field.widget === 'textarea'"
+                        v-model="form[field.name]"
+                        :label="field.label || field.name"
+                        :rows="3"
+                        :required="field.required"
+                    />
+                    <ph-checkbox
+                        v-else-if="field.type === 'boolean' || field.widget === 'checkbox'"
+                        v-model="form[field.name]"
+                        :label="field.label || field.name"
+                    />
+                </ph-col>
+            </ph-row>
+        </form>
+
+        <template #footer>
+            <ph-button variant="ghost" @click="closeModal">Cancel</ph-button>
+            <ph-button variant="primary" :loading="submitting" @click="submitForm">Save</ph-button>
+        </template>
+    </ph-modal>
+
+    <ph-modal v-model="confirmOpen" title="Confirm delete" size="sm">
+        <ph-text>Are you sure you want to delete record #{{ pendingDeleteId }}? This cannot be undone.</ph-text>
+        <template #footer>
+            <ph-button variant="ghost" @click="confirmOpen = false">Cancel</ph-button>
+            <ph-button variant="danger" @click="confirmDelete">Delete</ph-button>
+        </template>
+    </ph-modal>
+</div>
 </template>
 
 <script type="module">
-import { createApp, ref, computed, onMounted } from 'vue';
-
-/**
- * Custom inline composable for managing dynamic entity reactive state & operations
- */
-function useForm(initialFields = []) {
-    const form = ref({});
-    const submitting = ref(false);
-    const formError = ref(null);
-
-    const resetForm = (fields = [], initialData = {}) => {
-        const formData = {};
-        fields.forEach(field => {
-            formData[field.name] = initialData[field.name] !== undefined ? initialData[field.name] : '';
-        });
-        form.value = formData;
-        formError.value = null;
-    };
-
-    return { form, submitting, formError, resetForm };
-}
+import { createApp, ref, reactive, computed, onMounted } from 'vue';
 
 export default function mountApp() {
     window.__phueApp?.unmount?.();
 
     window.__phueApp = createApp({
         setup() {
-            const title = ref('Schii Console');
-            const initialState = window.__INITIAL_STATE__ || {};
-            const apiPrefix = initialState.apiPrefix || '/api/schii';
+            const PAGE_SIZE = 10;
+            const apiPrefix = window.__INITIAL_STATE__?.apiPrefix || '/api/schii';
 
             const entities = ref([]);
             const loadingEntities = ref(true);
@@ -185,148 +183,252 @@ export default function mountApp() {
             const fields = ref([]);
             const rows = ref([]);
             const loading = ref(false);
+            const errorMsg = ref(null);
 
-            // Modal and form state
+            const page = ref(1);
+            const lastPage = ref(1);
+            const total = ref(0);
+            const query = ref('');
+
+            const columns = computed(() => [
+                ...fields.value.map(f => ({ key: f.name, label: f.label || f.name })),
+                { key: '__actions', label: 'Actions' },
+            ]);
+
+            const boolFields = computed(() =>
+                fields.value.filter(f =>
+                    f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox'
+                )
+            );
+
+            const writableFields = computed(() =>
+                fields.value.filter(f => f.name !== 'id' && f.writable !== false)
+            );
+
             const showModal = ref(false);
             const isEditing = ref(false);
             const activeId = ref(null);
-            const { form, submitting, formError, resetForm } = useForm();
+            const submitting = ref(false);
+            const formError = ref(null);
+            const form = reactive({});
 
-            const writableFields = computed(() => fields.value.filter(f => f.name !== 'id' && f.writable !== false));
+            const confirmOpen = ref(false);
+            const pendingDeleteId = ref(null);
 
             const fetchEntities = async () => {
                 loadingEntities.value = true;
                 try {
                     const res = await fetch(`${apiPrefix}/schema`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        entities.value = data.entities || [];
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
                     }
+                    const data = await res.json();
+                    entities.value = Array.isArray(data) ? data : (data.entities || []);
                 } catch (err) {
-                    console.error('Failed to discover entity schemas:', err);
+                    errorMsg.value = err?.message || 'Failed to discover entity schemas.';
                 } finally {
                     loadingEntities.value = false;
                 }
             };
 
-            const selectEntity = async (entity) => {
-                currentEntity.value = entity;
-                loading.value = true;
-                fields.value = [];
-                rows.value = [];
-
+            const loadSchema = async () => {
                 try {
-                    const [schemaRes, dataRes] = await Promise.all([
-                        fetch(`${apiPrefix}/schema/${entity}`),
-                        fetch(`${apiPrefix}/${entity}`)
-                    ]);
-
-                    if (schemaRes.ok) {
-                        const schemaData = await schemaRes.json();
-                        fields.value = schemaData.fields || [];
-                    }
-
-                    if (dataRes.ok) {
-                        const data = await dataRes.json();
-                        rows.value = Array.isArray(data) ? data : (data.data || []);
+                    const res = await fetch(`${apiPrefix}/schema/${currentEntity.value}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        fields.value = data.fields || [];
                     }
                 } catch (err) {
-                    console.error(`Failed to fetch schema/data for ${entity}:`, err);
+                    errorMsg.value = err?.message || 'Failed to load schema.';
+                }
+            };
+
+            const loadRows = async () => {
+                if (!currentEntity.value) return;
+                loading.value = true;
+                try {
+                    const params = new URLSearchParams({
+                        page: String(page.value),
+                        limit: String(PAGE_SIZE),
+                    });
+                    if (query.value.trim()) params.set('q', query.value.trim());
+
+                    const res = await fetch(`${apiPrefix}/${currentEntity.value}?${params.toString()}`);
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
+                    }
+                    const data = await res.json();
+                    rows.value = Array.isArray(data) ? data : (data.data || []);
+                    const meta = data.meta || {};
+                    total.value = typeof meta.total === 'number' ? meta.total : rows.value.length;
+                    lastPage.value = Math.max(
+                        1,
+                        meta.last_page ?? meta.pages ?? Math.ceil(total.value / PAGE_SIZE)
+                    );
+                } catch (err) {
+                    errorMsg.value = err?.message || 'Failed to load records.';
+                    rows.value = [];
                 } finally {
                     loading.value = false;
                 }
             };
 
+            const selectEntity = async (entity) => {
+                if (currentEntity.value === entity) return;
+                currentEntity.value = entity;
+                page.value = 1;
+                query.value = '';
+                rows.value = [];
+                fields.value = [];
+                await Promise.all([loadSchema(), loadRows()]);
+            };
+
+            const onPageChange = (p) => {
+                page.value = p;
+                loadRows();
+            };
+
+            const search = () => {
+                page.value = 1;
+                loadRows();
+            };
+
+            const resetForm = () => {
+                writableFields.value.forEach(f => {
+                    if (f.type === 'boolean' || f.widget === 'checkbox') {
+                        form[f.name] = false;
+                    } else if (f.type === 'select' && Array.isArray(f.options) && f.options.length) {
+                        const first = f.options[0];
+                        form[f.name] = typeof first === 'object' ? (first.value ?? first) : first;
+                    } else {
+                        form[f.name] = '';
+                    }
+                });
+                formError.value = null;
+            };
+
             const openCreateModal = () => {
                 isEditing.value = false;
                 activeId.value = null;
-                resetForm(writableFields.value);
+                resetForm();
                 showModal.value = true;
             };
 
             const openEditModal = (row) => {
                 isEditing.value = true;
                 activeId.value = row.id;
-                resetForm(writableFields.value, row);
+                resetForm();
+                writableFields.value.forEach(f => {
+                    form[f.name] = row[f.name] ?? '';
+                });
                 showModal.value = true;
             };
 
             const closeModal = () => {
                 showModal.value = false;
-                formError.value = null;
             };
 
             const submitForm = async () => {
                 submitting.value = true;
                 formError.value = null;
-
-                const url = isEditing.value
-                    ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
-                    : `${apiPrefix}/${currentEntity.value}`;
-
-                const method = isEditing.value ? 'PUT' : 'POST';
-
                 try {
+                    const url = isEditing.value
+                        ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
+                        : `${apiPrefix}/${currentEntity.value}`;
                     const res = await fetch(url, {
-                        method,
+                        method: isEditing.value ? 'PUT' : 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(form.value)
+                        body: JSON.stringify(form),
                     });
-
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
-                        throw new Error(errData.message || 'Failed to save record.');
+                        throw new Error(errData.error || errData.message || 'Failed to save record.');
                     }
-
                     closeModal();
-                    await selectEntity(currentEntity.value);
+                    await loadRows();
                 } catch (err) {
-                    formError.value = err.message;
+                    formError.value = err?.message || 'Failed to save record.';
                 } finally {
                     submitting.value = false;
                 }
             };
 
-            const deleteRecord = async (id) => {
-                if (!confirm(`Are you sure you want to delete this record?`)) return;
+            const askDelete = (id) => {
+                pendingDeleteId.value = id;
+                confirmOpen.value = true;
+            };
 
+            const confirmDelete = async () => {
+                confirmOpen.value = false;
+                if (pendingDeleteId.value == null) return;
+                const id = pendingDeleteId.value;
+                pendingDeleteId.value = null;
                 try {
                     const res = await fetch(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
-                        alert(errData.message || 'Failed to delete record.');
-                        return;
+                        throw new Error(errData.error || errData.message || 'Failed to delete record.');
                     }
-                    await selectEntity(currentEntity.value);
+                    await loadRows();
                 } catch (err) {
-                    console.error('Delete error:', err);
+                    errorMsg.value = err?.message || 'Failed to delete record.';
                 }
             };
 
-            onMounted(() => {
-                fetchEntities();
-            });
+            const isTextWidget = (f) => !(f.type === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea');
+
+            const inputType = (f) =>
+                f.type === 'integer' || f.type === 'int' || f.type === 'number' || f.type === 'float'
+                    ? 'number'
+                    : (f.type === 'email' ? 'email' : 'text');
+
+            const selectOptions = (f) => {
+                if (!Array.isArray(f.options)) return [];
+                return f.options.map(o =>
+                    typeof o === 'object'
+                        ? { label: o.label ?? o.value, value: o.value, disabled: !!o.disabled }
+                        : { label: String(o), value: o }
+                );
+            };
+
+            onMounted(fetchEntities);
 
             return {
-                title,
                 entities,
                 loadingEntities,
                 currentEntity,
                 fields,
+                columns,
+                boolFields,
                 writableFields,
                 rows,
                 loading,
+                errorMsg,
+                page,
+                lastPage,
+                total,
+                query,
                 showModal,
                 isEditing,
-                form,
                 submitting,
                 formError,
+                form,
+                confirmOpen,
+                pendingDeleteId,
                 selectEntity,
+                onPageChange,
+                search,
                 openCreateModal,
                 openEditModal,
                 closeModal,
                 submitForm,
-                deleteRecord,
+                askDelete,
+                confirmDelete,
+                isTextWidget,
+                inputType,
+                selectOptions,
             };
         }
     });
