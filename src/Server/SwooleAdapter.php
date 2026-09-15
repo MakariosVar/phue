@@ -97,11 +97,23 @@ final class SwooleAdapter implements ServerAdapterInterface
             $headers[$normalizedKey] = (string) $val;
         }
 
+        $post = $swRequest->post ?? [];
+        $contentType = $headers['Content-Type'] ?? $headers['content-type'] ?? '';
+        if (str_contains($contentType, 'application/json')) {
+            $raw = $swRequest->getContent();
+            if ($raw !== '' && $raw !== false) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $post = $decoded;
+                }
+            }
+        }
+
         return new Request(
             uri: $swRequest->server['request_uri'] ?? '/',
             method: $swRequest->server['request_method'] ?? 'GET',
             queryParams: $swRequest->get ?? [],
-            parsedBody: $swRequest->post ?? [],
+            parsedBody: $post,
             headers: $headers,
             serverParams: $swRequest->server ?? []
         );

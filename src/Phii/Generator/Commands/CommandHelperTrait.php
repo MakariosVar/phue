@@ -7,6 +7,13 @@ namespace Phue\Generator\Commands;
 use Phue\Schii\Generator\PhiiExportSchema;
 use Phue\Schii\Schema\SchemaRegistry;
 
+/**
+ * Trait CommandHelperTrait
+ *
+ * Provides shared helper methods and CLI flags configuration for Phii generator commands.
+ *
+ * @package Phue\Generator\Commands
+ */
 trait CommandHelperTrait
 {
     /**

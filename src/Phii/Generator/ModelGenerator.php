@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Generator;
 
+use Phue\Generator\FileMutation;
 use Phue\Schii\Generator\PhiiExportSchema;
 
 /**
@@ -14,19 +15,19 @@ use Phue\Schii\Generator\PhiiExportSchema;
 final class ModelGenerator
 {
     /**
-     * Generate a model class file from a PhiiExportSchema instance.
+     * Generate a model class file mutation from a PhiiExportSchema instance.
      *
      * @param PhiiExportSchema $schema   Exported schema definition.
      * @param string           $type     Model type ('active-record' or 'data-mapper').
-     * @param string           $basePath Base output path for writing the file.
+     * @param string           $basePath Base output path for the target file.
      *
-     * @return string Path to the generated model file.
+     * @return array<int, FileMutation> List of file mutations.
      */
     public function generateFromSchema(
         PhiiExportSchema $schema,
         string $type = 'active-record',
         string $basePath = ''
-    ): string {
+    ): array {
         $templateFile = $type === 'data-mapper'
             ? __DIR__ . '/templates/model-data-mapper.php'
             : __DIR__ . '/templates/model-active-record.php';
@@ -49,17 +50,12 @@ final class ModelGenerator
         );
 
         $filePath = rtrim($basePath, '/') . "/{$modelName}.php";
-        if ($basePath !== '' && !is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
 
-        file_put_contents($filePath, $output);
-
-        return $filePath;
+        return [new FileMutation($filePath, $output)];
     }
 
     /**
-     * Generate a model class file directly from raw field definitions.
+     * Generate a model class file mutation directly from raw field definitions.
      *
      * @param array<int, mixed> $fields     Raw field definitions.
      * @param string            $modelName  Target model class name.
@@ -67,7 +63,7 @@ final class ModelGenerator
      * @param string            $namespace  PHP namespace for the generated class.
      * @param string            $basePath   Base output directory path.
      *
-     * @return string Path to the generated model file.
+     * @return array<int, FileMutation> List of file mutations.
      */
     public function generateFromFields(
         array $fields,
@@ -75,7 +71,7 @@ final class ModelGenerator
         string $tableName,
         string $namespace,
         string $basePath
-    ): string {
+    ): array {
         $templateFile = __DIR__ . '/templates/model-active-record.php';
         $template = file_get_contents($templateFile);
         if ($template === false) {
@@ -91,13 +87,8 @@ final class ModelGenerator
         );
 
         $filePath = rtrim($basePath, '/') . "/{$modelName}.php";
-        if ($basePath !== '' && !is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
 
-        file_put_contents($filePath, $output);
-
-        return $filePath;
+        return [new FileMutation($filePath, $output)];
     }
 
     /**

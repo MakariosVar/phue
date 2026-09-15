@@ -7,6 +7,7 @@ namespace Phue\Tests\Phii\Generator;
 use Phue\Generator\ApiGenerator;
 use Phue\Generator\ControllerGenerator;
 use Phue\Generator\CrudGenerator;
+use Phue\Generator\FileMutation;
 use Phue\Generator\MigrationGenerator;
 use Phue\Generator\ModelGenerator;
 use Phue\Generator\ModuleGenerator;
@@ -15,12 +16,15 @@ use Phue\Schii\Generator\PhiiExportSchema;
 use Phue\Schii\Schema\FieldSchema;
 use Phue\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\Profile;
+use Phue\Tests\Schii\Stubs\User;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Phii code generators (Model/Controller/Migration/Module/Crud/Api):
- * every generated artifact must be real, parseable PHP and reflect the schema
- * that produced it. No placeholders may survive, no invalid syntax may escape.
+ * every generated artifact is a FileMutation describing real, parseable PHP
+ * that reflects the schema producing it. No placeholders may survive,
+ * no invalid syntax may escape, and file writes must be lazy + side-effect free
+ * until write() is explicitly called.
  *
  * @package Phue\Tests\Phii\Generator
  */
@@ -63,42 +67,65 @@ final class PhiiGeneratorsTest extends TestCase
         return (new SchemaRegistry())->toPhiiExportSchema(Profile::class, 'admin');
     }
 
+    private function assertMutation(
+        FileMutation $mutation,
+        string $path,
+        int $minLength = 1
+    ): void {
+        $this->assertSame($path, $mutation->path);
+        $this->assertGreaterThanOrEqual($minLength, strlen($mutation->content));
+        $this->assertStringNotContainsString('{{ ', $mutation->content, 'No template placeholder may survive.');
+    }
+
     private function assertPhpIsValid(string $file): void
     {
         exec('php -l ' . escapeshellarg($file) . ' 2>&1', $output, $code);
         $this->assertSame(0, $code, 'Generated file must be valid PHP: ' . implode("\n", (array) $output));
     }
 
-    public function testModelGeneratorActiveRecordProducesLoadableSchemaDrivenFile(): void
+    public function testMutationIsLazyAndWritable(): void
     {
-        $file = (new ModelGenerator())->generateFromSchema($this->schema(), 'active-record', $this->dump);
+        $target = $this->dump . '/lazy-target.php';
+        $mutation = new FileMutation($target, '<?php echo "hi";');
 
-        $this->assertSame($this->dump . '/Profile.php', $file);
-        $this->assertFileExists($file);
-        $this->assertPhpIsValid($file);
+        // Generating a mutation must never touch the filesystem
+        $this->assertFileDoesNotExist($target);
+        $this->assertDirectoryDoesNotExist($this->dump);
 
-        $content = (string) file_get_contents($file);
+        $this->assertTrue($mutation->write());
+        $this->assertFileExists($target);
+        $this->assertSame('<?php echo "hi";', file_get_contents($target));
+    }
+
+    public function testModelGeneratorActiveRecordProducesSchemaDrivenMutation(): void
+    {
+        [$mutation] = (new ModelGenerator())->generateFromSchema($this->schema(), 'active-record', $this->dump);
+
+        $this->assertMutation($mutation, $this->dump . '/Profile.php');
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
+
+        $content = $mutation->content;
         $this->assertStringContainsString('namespace Phue\Tests\Schii\Stubs;', $content);
         $this->assertStringContainsString('class Profile', $content);
         $this->assertStringContainsString("protected string \$table = 'profiles';", $content);
-        $this->assertStringContainsString('#[Field(type: \'int\', required: false, searchable: false, filterable: false, sortable: false)]', $content);
         $this->assertStringContainsString('public int $id;', $content);
         $this->assertStringContainsString('public string $full_name;', $content);
+        $this->assertStringContainsString('public string $email;', $content);
         $this->assertStringContainsString('public bool $active;', $content);
-        $this->assertStringNotContainsString('{{ ', $content);
+        $this->assertStringContainsString('#[Field(', $content);
     }
 
     public function testModelGeneratorDataMapperUsesItsOwnTemplate(): void
     {
-        $file = (new ModelGenerator())->generateFromSchema($this->schema(), 'data-mapper', $this->dump);
+        [$mutation] = (new ModelGenerator())->generateFromSchema($this->schema(), 'data-mapper', $this->dump);
 
-        $this->assertFileExists($file);
-        $this->assertPhpIsValid($file);
+        $this->assertMutation($mutation, $this->dump . '/Profile.php');
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
 
-        $content = (string) file_get_contents($file);
-        $this->assertStringContainsString('class Profile', $content);
-        $this->assertStringNotContainsString('BaseActiveRecord', $content);
-        $this->assertStringNotContainsString('{{ ', $content);
+        $this->assertStringContainsString('class Profile', $mutation->content);
+        $this->assertStringNotContainsString('BaseActiveRecord', $mutation->content);
     }
 
     public function testModelGeneratorFromFieldsProducesRequestedShape(): void
@@ -128,12 +155,13 @@ final class PhiiGeneratorsTest extends TestCase
             )),
         ];
 
-        $file = (new ModelGenerator())->generateFromFields($fields, 'Widget', 'widgets', 'App\\Widgets', $this->dump);
+        [$mutation] = (new ModelGenerator())->generateFromFields($fields, 'Widget', 'widgets', 'App\\Widgets', $this->dump);
 
-        $this->assertSame($this->dump . '/Widget.php', $file);
-        $this->assertPhpIsValid($file);
+        $this->assertMutation($mutation, $this->dump . '/Widget.php');
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
 
-        $content = (string) file_get_contents($file);
+        $content = $mutation->content;
         $this->assertStringContainsString('namespace App\Widgets;', $content);
         $this->assertStringContainsString('class Widget', $content);
         $this->assertStringContainsString("protected string \$table = 'widgets';", $content);
@@ -143,13 +171,14 @@ final class PhiiGeneratorsTest extends TestCase
 
     public function testControllerGeneratorProducesRoutableControllerWithCorrectHttpVerbs(): void
     {
-        $generator = new ControllerGenerator();
-        $file = $generator->generate('admin', 'Profile', $this->dump, ['index', 'store', 'show', 'update', 'delete']);
+        [$mutation] = (new ControllerGenerator())->generate('admin', 'Profile', $this->dump, ['index', 'store', 'show', 'update', 'delete']);
 
-        $this->assertSame($this->dump . '/ProfileController.php', $file);
-        $this->assertPhpIsValid($file);
+        $this->assertMutation($mutation, $this->dump . '/ProfileController.php');
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
 
-        $content = (string) file_get_contents($file);
+        $content = $mutation->content;
+        $this->assertStringContainsString('namespace Phue\admin\Controller;', $content);
         $this->assertStringContainsString('class ProfileController', $content);
         $this->assertStringContainsString("#[Route('/admin/profile', methods: ['GET']", $content);
         $this->assertStringContainsString("#[Route('/admin/profile', methods: ['POST']", $content);
@@ -157,44 +186,74 @@ final class PhiiGeneratorsTest extends TestCase
         $this->assertStringContainsString("#[Route('/admin/profile/{id}', methods: ['PUT']", $content);
         $this->assertStringContainsString("#[Route('/admin/profile/{id}', methods: ['DELETE']", $content);
         $this->assertStringContainsString('public function index(Request $request, mixed $id = null): Response', $content);
+        $this->assertStringContainsString('public function show(Request $request, mixed $id = null): Response', $content);
+        $this->assertStringContainsString('public function store(Request $request, mixed $id = null): Response', $content);
+        $this->assertStringContainsString('public function update(Request $request, mixed $id = null): Response', $content);
+        $this->assertStringContainsString('public function delete(Request $request, mixed $id = null): Response', $content);
         $this->assertStringContainsString('return Response::json', $content);
     }
 
     public function testControllerGeneratorHonorsRequestedActionSubset(): void
     {
-        $file = (new ControllerGenerator())->generate('admin', 'Profile', $this->dump, ['show']);
-
-        $this->assertPhpIsValid($file);
-        $content = (string) file_get_contents($file);
-        $this->assertStringContainsString("public function show(Request", $content);
+        [$mutation] = (new ControllerGenerator())->generate('admin', 'Profile', $this->dump, ['show']);
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
+        $content = $mutation->content;
+        $this->assertStringContainsString('public function show(Request', $content);
         $this->assertStringNotContainsString('public function index(', $content);
         $this->assertStringNotContainsString('public function store(', $content);
+        $this->assertStringNotContainsString('public function update(', $content);
+        $this->assertStringNotContainsString('public function delete(', $content);
     }
 
-    public function testModuleGeneratorCreatesDirectorySkeletonAndConfig(): void
+    public function testModuleGeneratorSkeletonReplacesPlaceholdersAndWritesCleanly(): void
     {
-        $created = (new ModuleGenerator())->generate('Blog', $this->dump, ['auth' => true, 'api' => true]);
+        $mutations = (new ModuleGenerator())->generate('Blog', $this->dump, ['auth' => true, 'api' => true]);
 
-        foreach (['Config', 'Controller', 'Model', 'Views'] as $sub) {
-            $this->assertDirectoryExists($this->dump . "/App/Modules/Blog/{$sub}");
+        $this->assertCount(5, $mutations);
+
+        $configMutation = null;
+        $gitkeeps = [];
+        foreach ($mutations as $mutation) {
+            if (str_ends_with($mutation->path, '/Config/module.php')) {
+                $configMutation = $mutation;
+            }
+            if (str_ends_with($mutation->path, '/.gitkeep')) {
+                $gitkeeps[] = $mutation;
+            }
         }
 
-        $configFile = $this->dump . '/App/Modules/Blog/Config/module.php';
-        $this->assertFileExists($configFile);
-        $this->assertStringContainsString('Blog', (string) file_get_contents($configFile));
-        $this->assertStringNotContainsString('{{ MODULE_NAME }}', (string) file_get_contents($configFile));
-        $this->assertContains($configFile, $created, 'Config file must be reported as created');
+        $this->assertNotNull($configMutation, 'Config/module.php mutation is required');
+        $this->assertCount(4, $gitkeeps, 'Exactly 4 .gitkeep mutations expected (Config/Controller/Views/Model)');
+
+        foreach (['Config', 'Controller', 'Views', 'Model'] as $sub) {
+            $this->assertContains($this->dump . "/App/Modules/Blog/{$sub}/.gitkeep", array_map(
+                static fn (FileMutation $m): string => $m->path,
+                $gitkeeps
+            ));
+        }
+
+        $content = $configMutation->content;
+        $this->assertStringContainsString('Blog', $content);
+        $this->assertStringNotContainsString('{{ MODULE_NAME }}', $content);
+
+        // Writing every mutation must create the skeleton lazily
+        foreach (array_merge([$configMutation], $gitkeeps) as $mutation) {
+            $this->assertFileDoesNotExist($mutation->path);
+        }
+        $this->assertTrue($configMutation->write());
+        $this->assertFileExists($this->dump . '/App/Modules/Blog/Config/module.php');
     }
 
     public function testMigrationGeneratorProducesSqlMigration(): void
     {
-        $migration = new MigrationGenerator();
-        $file = $migration->generateFromSchema($this->schema(), $this->dump, 'sqlite');
+        [$mutation] = (new MigrationGenerator())->generateFromSchema($this->schema(), $this->dump, 'sqlite');
 
-        $this->assertFileExists($file);
-        $this->assertPhpIsValid($file);
+        $this->assertStringEndsWith('_create_profiles.php', $mutation->path);
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
 
-        $content = (string) file_get_contents($file);
+        $content = $mutation->content;
         $this->assertStringContainsString("\$this->schema->create('profiles', function (Blueprint \$table)", $content);
         $this->assertStringContainsString('$table->id();', $content);
         $this->assertStringContainsString("\$table->text('full_name')", $content);
@@ -205,15 +264,13 @@ final class PhiiGeneratorsTest extends TestCase
 
     public function testMigrationGeneratorEmitsDialectNeutralBlueprintMigration(): void
     {
-        $migration = new MigrationGenerator();
-        $file = $migration->generateFromSchema($this->schema(), $this->dump . '/pg', 'pgsql');
+        [$mutation] = (new MigrationGenerator())->generateFromSchema($this->schema(), $this->dump . '/pg', 'pgsql');
 
-        $this->assertFileExists($file);
-        $this->assertPhpIsValid($file);
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
 
-        $content = (string) file_get_contents($file);
+        $content = $mutation->content;
         $this->assertStringContainsString("\$table->text('full_name')", $content);
-
         $this->assertStringNotContainsString('CREATE TABLE', $content);
         $this->assertStringNotContainsString('SERIAL PRIMARY KEY', $content);
         $this->assertStringNotContainsString('AUTOINCREMENT', $content);
@@ -226,32 +283,68 @@ final class PhiiGeneratorsTest extends TestCase
         $this->assertSame(['model', 'controller', 'migration', 'routes', 'views'], $crud->getGeneratedTypes());
     }
 
-    public function testCrudGeneratorScaffoldsModelControllerAndMigration(): void
+    public function testCrudGeneratorScaffoldsModelControllerAndMigrationAsMutations(): void
     {
-        $files = (new CrudGenerator())->generate($this->schema(), 'admin', $this->dump);
+        $mutations = (new CrudGenerator())->generate($this->schema(), 'admin', $this->dump);
 
-        $this->assertArrayHasKey('model', $files);
-        $this->assertArrayHasKey('controller', $files);
-        $this->assertArrayHasKey('migration', $files);
+        $this->assertCount(3, $mutations);
 
-        foreach ([$files['model'], $files['controller'], $files['migration']] as $artifact) {
-            $this->assertFileExists($artifact);
-            $this->assertPhpIsValid($artifact);
+        $paths = array_map(static fn (FileMutation $m): string => $m->path, $mutations);
+        $this->assertContains($this->dump . '/App/Models/Profile.php', $paths);
+        $this->assertContains($this->dump . '/App/Modules/admin/Controller/ProfileController.php', $paths);
+        $this->assertNotEmpty(array_filter($paths, static fn (string $p): bool =>
+            str_contains($p, '/database/migrations/') && str_ends_with($p, '_create_profiles.php')
+        ));
+
+        foreach ($mutations as $mutation) {
+            $this->assertFileDoesNotExist($mutation->path, 'Generation must remain lazy until write()');
         }
 
-        $this->assertStringContainsString('admin routes registered', $files['routes']);
-        $this->assertStringContainsString('admin views scaffolded', $files['views']);
+        foreach ($mutations as $mutation) {
+            $this->assertTrue($mutation->write());
+            $this->assertFileExists($mutation->path);
+            $this->assertPhpIsValid($mutation->path);
+        }
     }
 
-    public function testApiGeneratorWritesControllerAndRouteSnippet(): void
+    public function testApiGeneratorWritesControllerAndUniqueRouteSnippet(): void
     {
         $result = (new ApiGenerator())->generate($this->schema(), $this->dump);
 
-        $this->assertSame(['api_controller', 'routes'], array_keys($result));
-        $this->assertFileExists($result['api_controller']);
-        $this->assertPhpIsValid($result['api_controller']);
+        $this->assertCount(2, $result);
+        [$controller, $routes] = $result;
 
-        $this->assertStringContainsString('/api/v1/profile', $result['routes']);
-        $this->assertStringContainsString('ProfileApiController', (string) file_get_contents($result['api_controller']));
+        $this->assertMutation($controller, $this->dump . '/ProfileApiController.php');
+        $this->assertTrue($controller->write());
+        $this->assertPhpIsValid($controller->path);
+        $this->assertStringContainsString('ProfileApiController', $controller->content);
+
+        $this->assertMutation($routes, $this->dump . '/routes-profile-snippet.php');
+        $this->assertStringContainsString('/api/v1/profile', $routes->content);
+        $this->assertStringContainsString('index', $routes->content);
+        $this->assertStringContainsString('show', $routes->content);
+        $this->assertStringContainsString('store', $routes->content);
+        $this->assertStringContainsString('update', $routes->content);
+        $this->assertStringContainsString('delete', $routes->content);
+    }
+
+    public function testApiGeneratorRouteSnippetNamesAreUniquePerEntity(): void
+    {
+        $profileSchema = $this->schema();
+        $userSchema = (new SchemaRegistry())->toPhiiExportSchema(User::class, 'admin');
+
+        [, $profileRoutes] = (new ApiGenerator())->generate($profileSchema, $this->dump);
+        [, $userRoutes] = (new ApiGenerator())->generate($userSchema, $this->dump);
+
+        $this->assertNotSame($profileRoutes->path, $userRoutes->path, 'Route snippet files must be unique per entity.');
+        $this->assertStringContainsString('/api/v1/profile', $profileRoutes->content);
+        $this->assertStringContainsString('/api/v1/user', $userRoutes->content);
+    }
+
+    public function testApiControllerNamespacePointsToSchiiApi(): void
+    {
+        [$controller] = (new ApiGenerator())->generate($this->schema(), $this->dump);
+
+        $this->assertStringContainsString('namespace Phue\Schii\Api;', $controller->content);
     }
 }

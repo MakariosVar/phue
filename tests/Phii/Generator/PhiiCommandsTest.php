@@ -129,7 +129,7 @@ final class PhiiCommandsTest extends TestCase
         $this->assertSame(CommandInterface::SUCCESS, $result['code'], $result['err']);
         $this->assertStringContainsString('Generated model at:', $result['out']);
         $this->assertStringContainsString($this->dump, $result['out']);
-        $this->assertFileExists($this->dump . '/Profile.php');
+        $this->assertFileExists($this->dump . '/App/Models/Profile.php');
     }
 
     public function testModelCommandRejectsMissingModelArgument(): void
@@ -148,7 +148,8 @@ final class PhiiCommandsTest extends TestCase
 
         $this->assertSame(CommandInterface::SUCCESS, $result['code'], $result['err']);
         $this->assertStringContainsString('ProfileController', $result['out']);
-        $this->assertFileExists($this->dump . '/ProfileController.php');
+        $this->assertFileExists($this->dump . '/App/Modules/admin/Controller/ProfileController.php');
+        $this->assertPhpIsValid($this->dump . '/App/Modules/admin/Controller/ProfileController.php');
     }
 
     public function testMigrationCommandGeneratesMigration(): void
@@ -158,8 +159,9 @@ final class PhiiCommandsTest extends TestCase
 
         $this->assertSame(CommandInterface::SUCCESS, $result['code'], $result['err']);
 
-        $created = glob($this->dump . '/*_create_profiles.php');
-        $this->assertNotEmpty($created, 'Expected a *_create_profiles.php artifact in ' . $this->dump);
+        $created = glob($this->dump . '/database/migrations/*_create_profiles.php');
+        $this->assertNotEmpty($created, 'Expected a *_create_profiles.php artifact in ' . $this->dump . '/database/migrations');
+        $this->assertPhpIsValid($created[0]);
     }
 
     public function testCrudCommandGeneratesAllArtifacts(): void

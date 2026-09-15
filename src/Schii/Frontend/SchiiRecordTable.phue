@@ -1,0 +1,150 @@
+<template>
+  <div>
+    <div v-if="selectable && rows.length" class="d-flex align-items-center gap-2 mb-2">
+      <ph-checkbox
+        :model-value="allOnPageSelected"
+        :indeterminate="someOnPageSelected"
+        label="Select all on page"
+        @update:model-value="selectAllPage($event)"
+      />
+      <ph-badge v-if="selected.length" :label="`${selected.length} selected`" variant="info" pill />
+      <ph-button v-if="selected.length" variant="ghost" size="sm" @click="clearSelection">Clear</ph-button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle">
+        <thead>
+          <tr>
+            <th v-if="selectable" scope="col"></th>
+            <th v-for="col in columns" :key="col.key" scope="col">{{ col.label || col.key }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="rows.length === 0">
+            <td :colspan="columns.length + (selectable ? 1 : 0)" class="text-center text-body-secondary py-4">
+              No records found.
+            </td>
+          </tr>
+          <tr v-for="(row, idx) in rows" :key="row.id ?? idx">
+            <td v-if="selectable" class="text-center">
+              <ph-checkbox
+                :model-value="isSelected(row.id)"
+                @update:model-value="toggleSelect(row.id, $event)"
+              />
+            </td>
+            <td v-for="col in columns" :key="col.key">
+              <template v-if="isBoolField(col.key)">
+                <ph-badge
+                  :label="row[col.key] ? 'Yes' : 'No'"
+                  :variant="row[col.key] ? 'success' : 'secondary'"
+                />
+              </template>
+              <template v-else-if="col.key === '__actions'">
+                <div class="d-flex gap-2">
+                  <ph-button variant="outline" size="sm" @click="$emit('edit', row)">Edit</ph-button>
+                  <ph-button variant="danger" size="sm" @click="$emit('delete-request', row.id)">Delete</ph-button>
+                </div>
+              </template>
+              <template v-else>{{ row[col.key] ?? '—' }}</template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-if="lastPage > 1" class="d-flex justify-content-center mt-3">
+      <ph-pagination
+        :current-page="page"
+        :total-pages="lastPage"
+        @page-change="(p) => $emit('page-change', p)"
+      />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'SchiiRecordTable',
+  props: {
+    fields: {
+      type: Array,
+      default: () => []
+    },
+    rows: {
+      type: Array,
+      default: () => []
+    },
+    loading: {
+      type: Boolean,
+      default: false
+    },
+    page: {
+      type: Number,
+      default: 1
+    },
+    lastPage: {
+      type: Number,
+      default: 1
+    },
+    selected: {
+      type: Array,
+      default: () => []
+    },
+    selectable: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:selected', 'page-change', 'edit', 'delete-request'],
+  computed: {
+    columns() {
+      const cols = this.fields.map(f => ({ key: f.name, label: f.label || f.name }));
+      cols.push({ key: '__actions', label: 'Actions' });
+      return cols;
+    },
+    boolFields() {
+      return this.fields
+        .filter(f => f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox')
+        .map(f => f.name);
+    },
+    onPageIds() {
+      return this.rows.map(r => r.id).filter(id => id !== undefined && id !== null);
+    },
+    allOnPageSelected() {
+      return this.onPageIds.length > 0 && this.onPageIds.every(id => this.isSelected(id));
+    },
+    someOnPageSelected() {
+      return this.onPageIds.some(id => this.isSelected(id)) && !this.allOnPageSelected;
+    }
+  },
+  methods: {
+    isBoolField(key) {
+      return this.boolFields.includes(key);
+    },
+    isSelected(id) {
+      return this.selected.includes(id);
+    },
+    toggleSelect(id, checked) {
+      if (checked) {
+        if (!this.isSelected(id)) {
+          this.$emit('update:selected', [...this.selected, id]);
+        }
+      } else {
+        this.$emit('update:selected', this.selected.filter(v => v !== id));
+      }
+    },
+    selectAllPage(checked) {
+      if (checked) {
+        const merged = new Set([...this.selected, ...this.onPageIds]);
+        this.$emit('update:selected', [...merged]);
+      } else {
+        const remaining = this.selected.filter(id => !this.onPageIds.includes(id));
+        this.$emit('update:selected', remaining);
+      }
+    },
+    clearSelection() {
+      this.$emit('update:selected', []);
+    }
+  }
+};
+</script>

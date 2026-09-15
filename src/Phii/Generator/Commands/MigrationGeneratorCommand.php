@@ -6,6 +6,8 @@ namespace Phue\Generator\Commands;
 
 use Phue\Core\Console\CommandInterface;
 use Phue\Generator\MigrationGenerator;
+use Phue\Phii\Generator\BackupManager;
+use Phue\Phii\Generator\PhiiReport;
 use Phue\Schii\Schema\SchemaRegistry;
 
 /**
@@ -19,17 +21,21 @@ final class MigrationGeneratorCommand implements CommandInterface
 
     private MigrationGenerator $generator;
     private SchemaRegistry $schemaRegistry;
+    private BackupManager $backupManager;
 
     /**
      * @param MigrationGenerator|null $generator
      * @param SchemaRegistry|null     $schemaRegistry
+     * @param BackupManager|null      $backupManager
      */
     public function __construct(
         ?MigrationGenerator $generator = null,
-        ?SchemaRegistry $schemaRegistry = null
+        ?SchemaRegistry $schemaRegistry = null,
+        ?BackupManager $backupManager = null
     ) {
         $this->generator = $generator ?? new MigrationGenerator();
         $this->schemaRegistry = $schemaRegistry ?? new SchemaRegistry(getcwd());
+        $this->backupManager = $backupManager ?? new BackupManager();
     }
 
     /**
@@ -63,11 +69,21 @@ final class MigrationGeneratorCommand implements CommandInterface
         $driver = 'sqlite';
         $modelInput = null;
 
+        $isPreview = false;
+        $isForce = false;
+        $doBackup = false;
+
         foreach ($args as $arg) {
             if (str_starts_with($arg, '--output=')) {
                 $outputDir = substr($arg, 9);
             } elseif (str_starts_with($arg, '--driver=')) {
                 $driver = substr($arg, 9);
+            } elseif ($arg === '--preview') {
+                $isPreview = true;
+            } elseif ($arg === '--force') {
+                $isForce = true;
+            } elseif ($arg === '--backup') {
+                $doBackup = true;
             } elseif (!str_starts_with($arg, '-')) {
                 $modelInput ??= $arg;
             }
@@ -80,9 +96,62 @@ final class MigrationGeneratorCommand implements CommandInterface
 
         try {
             $schema = $this->resolveSchema($this->schemaRegistry, $modelInput);
-            $path = $this->generator->generateFromSchema($schema, $outputDir, $driver);
+            
+            $targetDir = rtrim($outputDir, '/') . '/database/migrations';
 
-            fwrite($outputStream, "Generated migration at: {$path}\n");
+            /** @var array<\Phue\Generator\FileMutation> $mutations */
+            $mutations = $this->generator->generateFromSchema($schema, $targetDir, $driver);
+
+            $plan = [];
+            $conflicts = 0;
+
+            foreach ($mutations as $m) {
+                $exists = file_exists($m->path);
+                if ($exists) {
+                    $conflicts++;
+                }
+                $plan[] = [
+                    'path' => $m->path,
+                    'exists' => $exists,
+                    'willOverwrite' => $exists || $isForce,
+                    'summary' => "Generate database migration for schema",
+                ];
+            }
+
+            if ($isPreview) {
+                fwrite($outputStream, json_encode(['plan' => $plan], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+                return CommandInterface::SUCCESS;
+            }
+
+            foreach ($mutations as $m) {
+                if (file_exists($m->path) && !$isForce) {
+                    fwrite($errorStream, "Error: File already exists at {$m->path}. Use --force to overwrite.\n");
+                    return CommandInterface::FAILURE;
+                }
+            }
+
+            $backupPath = null;
+            if ($doBackup) {
+                $backupPath = $this->backupManager->createBackup($outputDir);
+            }
+
+            $written = 0;
+            foreach ($mutations as $m) {
+                if ($m->write()) {
+                    $written++;
+                    fwrite($outputStream, "Generated migration at: {$m->path}\n");
+                }
+            }
+
+            $report = new PhiiReport(
+                written: $written,
+                skipped: count($mutations) - $written,
+                conflicts: $conflicts,
+                backupPath: $backupPath
+            );
+
+            fwrite($outputStream, json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+
             return CommandInterface::SUCCESS;
         } catch (\Throwable $e) {
             fwrite($errorStream, "Error: " . $e->getMessage() . "\n");

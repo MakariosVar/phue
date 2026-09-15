@@ -98,6 +98,42 @@ class AuthorizedModelEndpoint
     }
 
     /**
+     * Handles bulk entity operations with RBAC bulk permission check.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters containing target entity.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function bulk(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'bulk', fn() => $this->delegate->bulk($request, $params));
+    }
+
+    /**
+     * Handles entity export requests with RBAC export permission check.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters containing target entity.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function export(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'export', fn() => $this->delegate->export($request, $params));
+    }
+
+    /**
+     * Handles entity import requests with RBAC import permission check.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters containing target entity.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function import(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'import', fn() => $this->delegate->import($request, $params));
+    }
+
+    /**
      * Evaluates 401/403 authorization logic before invoking target delegate callback.
      *
      * @param Request $request Framework Request instance.

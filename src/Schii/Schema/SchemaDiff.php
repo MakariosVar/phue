@@ -51,6 +51,42 @@ final readonly class SchemaDiff
     }
 
     /**
+     * Convert the schema diff into an array representation.
+     *
+     * @param string $driver Target database driver.
+     * @return array<string, mixed>
+     */
+    public function toArray(string $driver = 'sqlite'): array
+    {
+        $ops = [];
+        foreach ($this->operations as $opData) {
+            $op = $opData['op'];
+            $col = $opData['column'] ?? null;
+            $newCol = $opData['new'] ?? null;
+
+            $ops[] = [
+                'op' => $op instanceof \BackedEnum ? $op->value : $op,
+                'column' => $col !== null ? [
+                    'name' => $col->name,
+                    'type' => $col->type,
+                ] : null,
+                'new' => $newCol !== null ? [
+                    'name' => $newCol->name,
+                    'type' => $newCol->type,
+                ] : null,
+            ];
+        }
+
+        return [
+            'table' => $this->table,
+            'ops' => $ops,
+            'destructive' => $this->hasDrops(),
+            'sqls' => $this->toSqls($driver),
+            'hasChanges' => !$this->isEmpty(),
+        ];
+    }
+
+    /**
      * Generate driver-specific SQL statements for the planned diff.
      *
      * @param string $driver Target database driver ('mysql', 'pgsql', 'sqlite').

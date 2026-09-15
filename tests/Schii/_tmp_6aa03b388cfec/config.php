@@ -1,1 +1,0 @@
-<?php return ["api" => ["prefix" => "/api/schii"], "modules" => ["Schii" => ["enabled" => true, "prefix" => "/schii"]]];

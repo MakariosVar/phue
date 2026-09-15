@@ -9,7 +9,6 @@ use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Schii\Schema\SchemaSyncEngine;
 
-
 /**
  * Endpoint for inspecting schema diffs and executing structural synchronization.
  *
@@ -69,6 +68,36 @@ final class SchemaSyncEndpoint
         $plan = $this->syncEngine->diff($modelClass);
 
         return Response::json($plan);
+    }
+
+    /**
+     * Inspects and returns the schema diff array for the target entity.
+     *
+     * @route GET /api/schii/schema/{entity}/diff
+     *
+     * @param Request      $request Incoming HTTP request object.
+     * @param array|string $params  Route parameters containing the target entity slug.
+     *
+     * @return Response JSON response containing the schema diff array.
+     */
+    public function diff(Request $request, array|string $params): Response
+    {
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params['entity'] ?? (reset($params) ?: '')
+            : $params;
+
+        $modelClass = $this->resolveModelClass((string) $entity);
+        if ($modelClass === null) {
+            return Response::json(['error' => 'Resource not found'], 404);
+        }
+
+        $pdo = $this->syncEngine->getPdo();
+        $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? 'sqlite';
+
+        $schemaDiff = $this->syncEngine->diff($modelClass);
+
+        return Response::json($schemaDiff->toArray((string) $driver));
     }
 
     /**

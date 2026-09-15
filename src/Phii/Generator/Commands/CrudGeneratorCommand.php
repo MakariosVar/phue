@@ -6,6 +6,8 @@ namespace Phue\Generator\Commands;
 
 use Phue\Core\Console\CommandInterface;
 use Phue\Generator\CrudGenerator;
+use Phue\Phii\Generator\BackupManager;
+use Phue\Phii\Generator\PhiiReport;
 use Phue\Schii\Schema\SchemaRegistry;
 
 /**
@@ -19,17 +21,21 @@ final class CrudGeneratorCommand implements CommandInterface
 
     private CrudGenerator $generator;
     private SchemaRegistry $schemaRegistry;
+    private BackupManager $backupManager;
 
     /**
      * @param CrudGenerator|null  $generator
      * @param SchemaRegistry|null $schemaRegistry
+     * @param BackupManager|null  $backupManager
      */
     public function __construct(
         ?CrudGenerator $generator = null,
-        ?SchemaRegistry $schemaRegistry = null
+        ?SchemaRegistry $schemaRegistry = null,
+        ?BackupManager $backupManager = null
     ) {
         $this->generator = $generator ?? new CrudGenerator();
         $this->schemaRegistry = $schemaRegistry ?? new SchemaRegistry(getcwd());
+        $this->backupManager = $backupManager ?? new BackupManager();
     }
 
     /**
@@ -63,6 +69,10 @@ final class CrudGeneratorCommand implements CommandInterface
         $module = 'admin';
         $modelInput = null;
 
+        $isPreview = false;
+        $isForce = false;
+        $doBackup = false;
+
         foreach ($args as $arg) {
             if (str_starts_with($arg, '--output=')) {
                 $basePath = substr($arg, 9);
@@ -70,6 +80,12 @@ final class CrudGeneratorCommand implements CommandInterface
                 $basePath = substr($arg, 7);
             } elseif (str_starts_with($arg, '--module=')) {
                 $module = substr($arg, 9);
+            } elseif ($arg === '--preview') {
+                $isPreview = true;
+            } elseif ($arg === '--force') {
+                $isForce = true;
+            } elseif ($arg === '--backup') {
+                $doBackup = true;
             } elseif (!str_starts_with($arg, '-')) {
                 $modelInput ??= $arg;
             }
@@ -82,12 +98,61 @@ final class CrudGeneratorCommand implements CommandInterface
 
         try {
             $schema = $this->resolveSchema($this->schemaRegistry, $modelInput, $module);
-            $results = $this->generator->generate($schema, $module, $basePath);
+            
+            /** @var array<\Phue\Generator\FileMutation> $mutations */
+            $mutations = $this->generator->generate($schema, $module, $basePath);
 
-            fwrite($outputStream, "CRUD generation completed:\n");
-            foreach ($results as $type => $info) {
-                fwrite($outputStream, " - [{$type}]: {$info}\n");
+            $plan = [];
+            $conflicts = 0;
+
+            foreach ($mutations as $m) {
+                $exists = file_exists($m->path);
+                if ($exists) {
+                    $conflicts++;
+                }
+                $plan[] = [
+                    'path' => $m->path,
+                    'exists' => $exists,
+                    'willOverwrite' => $exists || $isForce,
+                    'summary' => "CRUD component generation",
+                ];
             }
+
+            if ($isPreview) {
+                fwrite($outputStream, json_encode(['plan' => $plan], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+                return CommandInterface::SUCCESS;
+            }
+
+            foreach ($mutations as $m) {
+                if (file_exists($m->path) && !$isForce) {
+                    fwrite($errorStream, "Error: File already exists at {$m->path}. Use --force to overwrite.\n");
+                    return CommandInterface::FAILURE;
+                }
+            }
+
+            $backupPath = null;
+            if ($doBackup) {
+                $backupPath = $this->backupManager->createBackup($basePath);
+            }
+
+            $written = 0;
+            fwrite($outputStream, "CRUD generation completed:\n");
+            foreach ($mutations as $m) {
+                if ($m->write()) {
+                    $written++;
+                    fwrite($outputStream, " - {$m->path}\n");
+                }
+            }
+
+            $report = new PhiiReport(
+                written: $written,
+                skipped: count($mutations) - $written,
+                conflicts: $conflicts,
+                backupPath: $backupPath
+            );
+
+            fwrite($outputStream, json_encode($report->toArray(), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+
             return CommandInterface::SUCCESS;
         } catch (\Throwable $e) {
             fwrite($errorStream, "Error: " . $e->getMessage() . "\n");

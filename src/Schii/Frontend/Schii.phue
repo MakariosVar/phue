@@ -1,10 +1,11 @@
 <php>
-$title = 'Schii Console';
+$schiiState = $state ?? [];
+$configuredPrefix = $schiiState['apiPrefix'] ?? null;
 
 return [
-    'title' => $title,
+    'title' => 'Schii Console',
     'state' => [
-        'apiPrefix' => $apiPrefix ?? '/api/schii',
+        'apiPrefix' => $configuredPrefix ?? $apiPrefix ?? '/api/schii',
     ],
     'scripts' => [],
 ];
@@ -17,9 +18,7 @@ return [
             <ph-heading :level="1" class="mb-0">Schii Console</ph-heading>
             <ph-text color="muted">Zero-Controller Dynamic REST Management Interface</ph-text>
         </div>
-        <ph-button v-if="currentEntity" variant="primary" @click="openCreateModal">
-            + New {{ currentEntity }}
-        </ph-button>
+        <ph-badge label="REST + Bulk + Import/Export + Audit" variant="info" pill />
     </ph-flex>
 
     <ph-alert
@@ -29,6 +28,14 @@ return [
         dismissible
         class="mb-3"
         @dismiss="errorMsg = null"
+    />
+    <ph-alert
+        v-if="successMsg"
+        variant="success"
+        :message="successMsg"
+        dismissible
+        class="mb-3"
+        @dismiss="successMsg = null"
     />
 
     <ph-row gutter="3">
@@ -58,7 +65,7 @@ return [
                             <ph-text weight="semibold" size="lg" class="mb-0">
                                 {{ currentEntity || 'Data Browser' }}
                             </ph-text>
-                            <ph-text v-if="!loading && currentEntity" size="sm" color="muted" class="mb-0">
+                            <ph-text v-if="currentEntity" size="sm" color="muted" class="mb-0">
                                 {{ total }} record(s) &middot; page {{ page }} of {{ lastPage }}
                             </ph-text>
                         </div>
@@ -70,42 +77,41 @@ return [
                     <ph-text color="muted">Select an entity from the sidebar to inspect schema and records.</ph-text>
                 </template>
 
-                <template v-else-if="loading">
-                    <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
-                </template>
-
                 <template v-else>
-                    <ph-input
-                        v-model="query"
-                        type="search"
-                        placeholder="Search records..."
-                        @keyup.enter="search"
+                    <schii-record-toolbar
+                        :entity="currentEntity"
+                        v-model:query="query"
+                        :selected="selected"
+                        @search="search"
+                        @refresh="loadRows"
+                        @create="openCreateModal"
+                        @schema-diff="openDiff"
+                        @audit="openAudit"
+                        @import-open="importOpen = true"
+                        @export-csv="exportRecords('csv')"
+                        @export-json="exportRecords('json')"
+                        @bulk-delete="askBulk('delete')"
+                        @bulk-activate="askBulk('activate')"
+                        @bulk-deactivate="askBulk('deactivate')"
                     />
 
-                    <ph-data-table :columns="columns" :items="rows">
-                        <template #empty>
-                            <ph-text color="muted">
-                                No records found{{ query ? ' for your search term.' : '.' }}
-                            </ph-text>
-                        </template>
+                    <template v-if="loading">
+                        <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
+                    </template>
 
-                        <template v-for="field in boolFields" :key="field.name"
-                                  v-slot:[`cell(${field.name})`]="{ value }">
-                            <ph-badge :label="value ? 'Yes' : 'No'"
-                                      :variant="value ? 'success' : 'secondary'" />
-                        </template>
-
-                        <template #cell(__actions)="{ row }">
-                            <div class="d-flex gap-2">
-                                <ph-button variant="outline" size="sm" @click="openEditModal(row)">Edit</ph-button>
-                                <ph-button variant="danger" size="sm" @click="askDelete(row.id)">Delete</ph-button>
-                            </div>
-                        </template>
-                    </ph-data-table>
-
-                    <div v-if="lastPage > 1" class="d-flex justify-content-center mt-3">
-                        <ph-pagination :current-page="page" :total-pages="lastPage" @page-change="onPageChange" />
-                    </div>
+                    <template v-else>
+                        <schii-record-table
+                            :fields="fields"
+                            :rows="rows"
+                            :page="page"
+                            :last-page="lastPage"
+                            v-model:selected="selected"
+                            selectable
+                            @page-change="onPageChange"
+                            @edit="openEditModal"
+                            @delete-request="askDelete"
+                        />
+                    </template>
                 </template>
             </ph-card>
         </ph-col>
@@ -163,11 +169,55 @@ return [
             <ph-button variant="danger" @click="confirmDelete">Delete</ph-button>
         </template>
     </ph-modal>
+
+    <ph-modal v-model="bulkConfirmOpen" :title="bulkTitle" size="sm">
+        <ph-text>{{ bulkMessage }}</ph-text>
+        <template #footer>
+            <ph-button variant="ghost" @click="bulkConfirmOpen = false">Cancel</ph-button>
+            <ph-button
+                :variant="pendingBulk && pendingBulk.type === 'delete' ? 'danger' : 'primary'"
+                :loading="bulkSubmitting"
+                @click="confirmBulk"
+            >Confirm</ph-button>
+        </template>
+    </ph-modal>
+
+    <schii-import-modal
+        v-model="importOpen"
+        :entity="currentEntity"
+        :fields="fields"
+        :busy="importing"
+        :result="importResult"
+        @import="onImport"
+    />
+
+    <schii-schema-diff-modal
+        v-model="diffOpen"
+        :entity="currentEntity"
+        :diff="diff"
+        :loading="diffLoading"
+        :applying="diffApplying"
+        :sync-result="diffResult"
+        @apply="onApplyDiff"
+        @reload="loadDiff"
+    />
+
+    <schii-audit-panel
+        v-model="auditOpen"
+        :logs="auditLogs"
+        :loading="auditLoading"
+        @refresh="loadAudit"
+    />
 </div>
 </template>
 
 <script type="module">
 import { createApp, ref, reactive, computed, onMounted } from 'vue';
+
+function api(url, opts = {}) {
+    const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    return fetch(url, Object.assign({}, opts, { headers }));
+}
 
 export default function mountApp() {
     window.__phueApp?.unmount?.();
@@ -184,22 +234,13 @@ export default function mountApp() {
             const rows = ref([]);
             const loading = ref(false);
             const errorMsg = ref(null);
+            const successMsg = ref(null);
 
             const page = ref(1);
             const lastPage = ref(1);
             const total = ref(0);
             const query = ref('');
-
-            const columns = computed(() => [
-                ...fields.value.map(f => ({ key: f.name, label: f.label || f.name })),
-                { key: '__actions', label: 'Actions' },
-            ]);
-
-            const boolFields = computed(() =>
-                fields.value.filter(f =>
-                    f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox'
-                )
-            );
+            const selected = ref([]);
 
             const writableFields = computed(() =>
                 fields.value.filter(f => f.name !== 'id' && f.writable !== false)
@@ -215,10 +256,49 @@ export default function mountApp() {
             const confirmOpen = ref(false);
             const pendingDeleteId = ref(null);
 
+            const bulkConfirmOpen = ref(false);
+            const pendingBulk = ref(null);
+            const bulkSubmitting = ref(false);
+
+            const importOpen = ref(false);
+            const importing = ref(false);
+            const importResult = ref(null);
+
+            const diffOpen = ref(false);
+            const diff = ref(null);
+            const diffLoading = ref(false);
+            const diffApplying = ref(false);
+            const diffResult = ref(null);
+
+            const auditOpen = ref(false);
+            const auditLogs = ref([]);
+            const auditLoading = ref(false);
+
+            const bulkTitle = computed(() => {
+                if (!pendingBulk.value) return 'Confirm bulk action';
+                const map = {
+                    delete: 'Delete selected records',
+                    activate: 'Activate selected records',
+                    deactivate: 'Deactivate selected records',
+                };
+                return map[pendingBulk.value.type] || 'Confirm bulk action';
+            });
+
+            const bulkMessage = computed(() => {
+                if (!pendingBulk.value) return '';
+                const count = selected.value.length;
+                const action = pendingBulk.value.type;
+                const what = action === 'delete'
+                    ? 'deleted'
+                    : (action === 'activate' ? 'activated' : 'deactivated');
+                const verb = action === 'delete' ? 'delete' : 'update';
+                return `This will ${verb} ${count} selected record(s). They will be ${what}. This cannot be undone.`;
+            });
+
             const fetchEntities = async () => {
                 loadingEntities.value = true;
                 try {
-                    const res = await fetch(`${apiPrefix}/schema`);
+                    const res = await api(`${apiPrefix}/schema`);
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
@@ -234,7 +314,7 @@ export default function mountApp() {
 
             const loadSchema = async () => {
                 try {
-                    const res = await fetch(`${apiPrefix}/schema/${currentEntity.value}`);
+                    const res = await api(`${apiPrefix}/schema/${currentEntity.value}`);
                     if (res.ok) {
                         const data = await res.json();
                         fields.value = data.fields || [];
@@ -254,7 +334,7 @@ export default function mountApp() {
                     });
                     if (query.value.trim()) params.set('q', query.value.trim());
 
-                    const res = await fetch(`${apiPrefix}/${currentEntity.value}?${params.toString()}`);
+                    const res = await api(`${apiPrefix}/${currentEntity.value}?${params.toString()}`);
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
@@ -282,6 +362,7 @@ export default function mountApp() {
                 query.value = '';
                 rows.value = [];
                 fields.value = [];
+                selected.value = [];
                 await Promise.all([loadSchema(), loadRows()]);
             };
 
@@ -337,7 +418,7 @@ export default function mountApp() {
                     const url = isEditing.value
                         ? `${apiPrefix}/${currentEntity.value}/${activeId.value}`
                         : `${apiPrefix}/${currentEntity.value}`;
-                    const res = await fetch(url, {
+                    const res = await api(url, {
                         method: isEditing.value ? 'PUT' : 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(form),
@@ -347,6 +428,7 @@ export default function mountApp() {
                         throw new Error(errData.error || errData.message || 'Failed to save record.');
                     }
                     closeModal();
+                    successMsg.value = isEditing.value ? 'Record updated.' : 'Record created.';
                     await loadRows();
                 } catch (err) {
                     formError.value = err?.message || 'Failed to save record.';
@@ -366,15 +448,185 @@ export default function mountApp() {
                 const id = pendingDeleteId.value;
                 pendingDeleteId.value = null;
                 try {
-                    const res = await fetch(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
+                    const res = await api(`${apiPrefix}/${currentEntity.value}/${id}`, { method: 'DELETE' });
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         throw new Error(errData.error || errData.message || 'Failed to delete record.');
                     }
+                    successMsg.value = 'Record deleted.';
                     await loadRows();
                 } catch (err) {
                     errorMsg.value = err?.message || 'Failed to delete record.';
                 }
+            };
+
+            const askBulk = (type) => {
+                if (!selected.value.length) return;
+                pendingBulk.value = { type };
+                bulkConfirmOpen.value = true;
+            };
+
+            const confirmBulk = async () => {
+                if (!pendingBulk.value) return;
+                const type = pendingBulk.value.type;
+                const ids = [...selected.value];
+                bulkSubmitting.value = true;
+                bulkConfirmOpen.value = false;
+                try {
+                    const res = await api(`${apiPrefix}/${currentEntity.value}/bulk`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: type, ids }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+                    const summary = data.summary || data;
+                    const affected = summary.affected ?? summary.updated ?? summary.deleted ?? ids.length;
+                    successMsg.value = `Bulk ${type} complete: ${affected} record(s) affected.`;
+                    selected.value = [];
+                    pendingBulk.value = null;
+                    await loadRows();
+                } catch (err) {
+                    errorMsg.value = err?.message || 'Bulk action failed.';
+                    pendingBulk.value = null;
+                } finally {
+                    bulkSubmitting.value = false;
+                }
+            };
+
+            const blobDownload = (blob, filename) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            };
+
+            const exportRecords = async (format) => {
+                if (!currentEntity.value) return;
+                try {
+                    const res = await api(`${apiPrefix}/${currentEntity.value}/export?format=${format}`);
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
+                    }
+                    const blob = await res.blob();
+                    blobDownload(blob, `${currentEntity.value}.${format}`);
+                    successMsg.value = `Exported ${currentEntity.value} as ${format.toUpperCase()}.`;
+                } catch (err) {
+                    errorMsg.value = err?.message || `Failed to export ${format}.`;
+                }
+            };
+
+            const onImport = async (payload) => {
+                importing.value = true;
+                importResult.value = null;
+                try {
+                    const res = await api(`${apiPrefix}/${currentEntity.value}/import`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+                    importResult.value = data;
+                    successMsg.value = 'Import finished.';
+                    await loadRows();
+                } catch (err) {
+                    importResult.value = {
+                        summary: {
+                            imported: 0,
+                            updated: 0,
+                            failed: 1,
+                            errors: [err?.message || 'Import failed.'],
+                        },
+                    };
+                } finally {
+                    importing.value = false;
+                }
+            };
+
+            const loadDiff = async () => {
+                if (!currentEntity.value) return;
+                diffLoading.value = true;
+                diff.value = null;
+                diffResult.value = null;
+                try {
+                    const res = await api(`${apiPrefix}/schema/${currentEntity.value}/diff`);
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+                    diff.value = data;
+                } catch (err) {
+                    errorMsg.value = err?.message || 'Failed to compute schema diff.';
+                } finally {
+                    diffLoading.value = false;
+                }
+            };
+
+            const openDiff = () => {
+                diffOpen.value = true;
+                loadDiff();
+            };
+
+            const onApplyDiff = async ({ allowDrops }) => {
+                if (!currentEntity.value) return;
+                diffApplying.value = true;
+                diffResult.value = null;
+                try {
+                    const res = await api(`${apiPrefix}/schema/${currentEntity.value}/sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ apply: true, allowDrops }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+                    diffResult.value = data;
+                    if (data.success) {
+                        successMsg.value = 'Schema synchronized.';
+                        await Promise.all([loadSchema(), loadRows()]);
+                    }
+                } catch (err) {
+                    diffResult.value = { success: false, executed: [err?.message || 'Sync failed.'] };
+                } finally {
+                    diffApplying.value = false;
+                }
+            };
+
+            const loadAudit = async (filters = {}) => {
+                auditLoading.value = true;
+                try {
+                    const params = new URLSearchParams();
+                    if (filters.entity) params.set('entity', filters.entity);
+                    if (filters.verb) params.set('verb', filters.verb);
+                    const qs = params.toString();
+                    const res = await api(`${apiPrefix}/audit${qs ? '?' + qs : ''}`);
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+                    auditLogs.value = Array.isArray(data.logs) ? data.logs : [];
+                } catch (err) {
+                    errorMsg.value = err?.message || 'Failed to load audit logs.';
+                    auditLogs.value = [];
+                } finally {
+                    auditLoading.value = false;
+                }
+            };
+
+            const openAudit = () => {
+                auditOpen.value = true;
+                loadAudit();
             };
 
             const isTextWidget = (f) => !(f.type === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea');
@@ -400,16 +652,16 @@ export default function mountApp() {
                 loadingEntities,
                 currentEntity,
                 fields,
-                columns,
-                boolFields,
                 writableFields,
                 rows,
                 loading,
                 errorMsg,
+                successMsg,
                 page,
                 lastPage,
                 total,
                 query,
+                selected,
                 showModal,
                 isEditing,
                 submitting,
@@ -417,15 +669,41 @@ export default function mountApp() {
                 form,
                 confirmOpen,
                 pendingDeleteId,
+                bulkConfirmOpen,
+                pendingBulk,
+                bulkSubmitting,
+                bulkTitle,
+                bulkMessage,
+                importOpen,
+                importing,
+                importResult,
+                diffOpen,
+                diff,
+                diffLoading,
+                diffApplying,
+                diffResult,
+                auditOpen,
+                auditLogs,
+                auditLoading,
                 selectEntity,
                 onPageChange,
                 search,
+                loadRows,
                 openCreateModal,
                 openEditModal,
                 closeModal,
                 submitForm,
                 askDelete,
                 confirmDelete,
+                askBulk,
+                confirmBulk,
+                exportRecords,
+                onImport,
+                openDiff,
+                loadDiff,
+                onApplyDiff,
+                openAudit,
+                loadAudit,
                 isTextWidget,
                 inputType,
                 selectOptions,

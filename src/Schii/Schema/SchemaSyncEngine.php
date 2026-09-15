@@ -20,6 +20,16 @@ final class SchemaSyncEngine
     ) {}
 
     /**
+     * Get the PDO instance from the connection.
+     *
+     * @return \PDO
+     */
+    public function getPdo(): \PDO
+    {
+        return $this->connection->getPdo();
+    }
+
+    /**
      * Compute schema diff between the Model attributes and the actual database table.
      * Does not modify the database.
      *

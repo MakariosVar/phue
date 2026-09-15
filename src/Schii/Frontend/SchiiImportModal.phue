@@ -1,0 +1,158 @@
+<template>
+  <ph-modal
+    :model-value="modelValue"
+    :title="`Import ${entity}`"
+    size="lg"
+    @update:model-value="onToggle"
+  >
+    <ph-alert v-if="formError" variant="error" :message="formError" class="mb-3" />
+
+    <ph-alert v-if="result" :variant="resultHasErrors ? 'warning' : 'success'" class="mb-3">
+      Imported <strong>{{ importedCount }}</strong>, updated <strong>{{ updatedCount }}</strong>,
+      failed <strong>{{ failedCount }}</strong> record(s).
+      <template v-if="errorLines.length">
+        <ul class="mb-0 mt-1 small">
+          <li v-for="(line, i) in errorLines" :key="i">{{ line }}</li>
+        </ul>
+      </template>
+    </ph-alert>
+
+    <ph-flex direction="row" gap="lg" align="center" wrap="wrap" class="mb-3">
+      <ph-radio v-model="format" name="schii-import-format" value="json" label="JSON" />
+      <ph-radio v-model="format" name="schii-import-format" value="csv" label="CSV" />
+    </ph-flex>
+
+    <ph-select
+      v-model="matchBy"
+      :options="matchOptions"
+      label="Match by (unique key)"
+      helper-text="Rows are matched to existing records by this field."
+      class="mb-3"
+    />
+
+    <ph-textarea
+      v-model="payload"
+      :rows="10"
+      resize="both"
+      :label="format === 'json' ? 'JSON payload (array of objects)' : 'CSV payload (header + rows)'"
+      :placeholder="payloadPlaceholder"
+    />
+
+    <template #footer>
+      <ph-button variant="ghost" :disabled="busy" @click="onToggle(false)">Cancel</ph-button>
+      <ph-button variant="primary" :loading="busy" @click="sendImport">Import</ph-button>
+    </template>
+  </ph-modal>
+</template>
+
+<script>
+export default {
+  name: 'SchiiImportModal',
+  props: {
+    modelValue: {
+      type: Boolean,
+      default: false
+    },
+    entity: {
+      type: String,
+      default: ''
+    },
+    fields: {
+      type: Array,
+      default: () => []
+    },
+    busy: {
+      type: Boolean,
+      default: false
+    },
+    result: {
+      type: Object,
+      default: null
+    }
+  },
+  emits: ['update:modelValue', 'import'],
+  data() {
+    return {
+      format: 'json',
+      matchBy: 'id',
+      payload: '',
+      formError: null
+    };
+  },
+  computed: {
+    matchOptions() {
+      return this.fields.map(f => ({ label: f.label || f.name, value: f.name }));
+    },
+    payloadPlaceholder() {
+      return this.format === 'json'
+        ? '[{"full_name": "Maria", "email": "maria@example.com"}, ...]'
+        : 'full_name,email,active\nMaria,maria@example.com,1';
+    },
+    resultSummary() {
+      if (this.result && typeof this.result.summary === 'object' && this.result.summary) {
+        return this.result.summary;
+      }
+      return this.result || {};
+    },
+    importedCount() {
+      return this.resultSummary.imported ?? this.resultSummary.created ?? 0;
+    },
+    updatedCount() {
+      return this.resultSummary.updated ?? 0;
+    },
+    failedCount() {
+      return this.resultSummary.failed ?? 0;
+    },
+    errorLines() {
+      const errs = this.resultSummary.errors ?? this.result?.errors ?? [];
+      if (Array.isArray(errs)) {
+        return errs.map(e => (typeof e === 'string' ? e : e.error || JSON.stringify(e)));
+      }
+      return Object.values(errs).map(v => String(v));
+    },
+    resultHasErrors() {
+      return this.failedCount > 0 || this.errorLines.length > 0;
+    }
+  },
+  watch: {
+    modelValue(open) {
+      if (open) {
+        this.formError = null;
+        this.payload = '';
+      }
+    }
+  },
+  methods: {
+    onToggle(val) {
+      this.$emit('update:modelValue', val);
+    },
+    sendImport() {
+      const raw = (this.payload || '').trim();
+      if (!raw) {
+        this.formError = 'Payload is required.';
+        return;
+      }
+      if (this.format === 'json') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) {
+            throw new Error('JSON payload must be an array of objects.');
+          }
+        } catch (err) {
+          this.formError = `Invalid JSON payload: ${err.message}`;
+          return;
+        }
+      } else if (!raw.includes('\n')) {
+        this.formError = 'CSV payload looks invalid: expected a header line and at least one data row.';
+        return;
+      }
+      this.formError = null;
+      this.$emit('import', {
+        format: this.format,
+        data: raw,
+        matchBy: this.matchBy
+      });
+    }
+  }
+};
+</script>

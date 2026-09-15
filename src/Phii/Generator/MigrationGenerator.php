@@ -4,31 +4,32 @@ declare(strict_types=1);
 
 namespace Phue\Generator;
 
+use Phue\Generator\FileMutation;
 use Phue\Schii\Generator\PhiiExportSchema;
 use Phue\Schii\Schema\ModelSchema;
 use Phue\Schii\Migration\SchemaToSqlConverter;
 
 /**
- * Generates database migration files (up/down SQL and schema blueprint) from Schii export schemas.
+ * Generates database migration file mutations (up/down SQL and schema blueprint) from Schii export schemas.
  *
  * @package Phue\Generator
  */
 final class MigrationGenerator
 {
     /**
-     * Generate a migration file from schema.
+     * Generate a migration file mutation from schema.
      *
      * @param PhiiExportSchema $schema   Export schema definition.
      * @param string           $basePath Output directory path.
      * @param string           $driver   Database driver name ('sqlite', 'mysql', 'pgsql').
      *
-     * @return string Path to the generated migration file.
+     * @return array<int, FileMutation> List of file mutations.
      */
     public function generateFromSchema(
         PhiiExportSchema $schema,
         string $basePath = '',
         string $driver = 'sqlite'
-    ): string {
+    ): array {
         $templateFile = __DIR__ . '/templates/migration.php';
         $template = file_get_contents($templateFile);
         if ($template === false) {
@@ -51,13 +52,8 @@ final class MigrationGenerator
         );
 
         $filePath = rtrim($basePath, '/') . "/{$fileName}";
-        if ($basePath !== '' && !is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
 
-        file_put_contents($filePath, $output);
-
-        return $filePath;
+        return [new FileMutation($filePath, $output)];
     }
 
     /**

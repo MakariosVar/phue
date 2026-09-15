@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace Phue\Generator;
 
+use Phue\Generator\FileMutation;
 use Phue\Schii\Generator\PhiiExportSchema;
 
 /**
- * Generates zero-controller REST API controllers and router binding code.
+ * Generates zero-controller REST API controllers and router binding code mutations.
  *
  * @package Phue\Generator
  */
 final class ApiGenerator
 {
     /**
-     * Generate API controller and route code for a schema.
+     * Generate API controller file mutation and unique router binding mutations for a schema.
      *
      * @param PhiiExportSchema $schema   Target schema export.
      * @param string           $basePath Output directory path.
      *
-     * @return array<string, string> Generated API controller and route snippets.
+     * @return array<int, FileMutation> List of file mutations.
      */
     public function generate(PhiiExportSchema $schema, string $basePath = ''): array
     {
@@ -40,20 +41,19 @@ final class ApiGenerator
         );
 
         $filePath = rtrim($basePath, '/') . "/{$controllerName}.php";
-        if ($basePath !== '' && !is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
-
-        file_put_contents($filePath, $output);
+        
+        $routeSlug = strtolower($schema->entity);
+        $routeSnippet = $this->generateRoutes($schema);
+        $routePath = rtrim($basePath, '/') . "/routes-{$routeSlug}-snippet.php";
 
         return [
-            'api_controller' => $filePath,
-            'routes' => $this->generateRoutes($schema),
+            new FileMutation($filePath, $output),
+            new FileMutation($routePath, $routeSnippet),
         ];
     }
 
     /**
-     * Generate router registration code for the API schema.
+     * Generate full CRUD router registration code snippet for the API schema.
      *
      * @param PhiiExportSchema $schema
      *
@@ -62,10 +62,19 @@ final class ApiGenerator
     public function generateRoutes(PhiiExportSchema $schema): string
     {
         $routeSlug = strtolower($schema->entity);
+        $entity = $schema->entity;
+
         return sprintf(
-            "\$router->addRoute('GET', '/api/v1/%s', [\\Phue\\Schii\\Api\\%sApiController::class, 'index']);",
-            $routeSlug,
-            $schema->entity
+            "\$router->addRoute('GET', '/api/v1/%s', [\\Phue\\Schii\\Api\\%sApiController::class, 'index']);\n" .
+            "\$router->addRoute('GET', '/api/v1/%s/{id}', [\\Phue\\Schii\\Api\\%sApiController::class, 'show']);\n" .
+            "\$router->addRoute('POST', '/api/v1/%s', [\\Phue\\Schii\\Api\\%sApiController::class, 'store']);\n" .
+            "\$router->addRoute('PUT', '/api/v1/%s/{id}', [\\Phue\\Schii\\Api\\%sApiController::class, 'update']);\n" .
+            "\$router->addRoute('DELETE', '/api/v1/%s/{id}', [\\Phue\\Schii\\Api\\%sApiController::class, 'delete']);",
+            $routeSlug, $entity,
+            $routeSlug, $entity,
+            $routeSlug, $entity,
+            $routeSlug, $entity,
+            $routeSlug, $entity
         );
     }
 

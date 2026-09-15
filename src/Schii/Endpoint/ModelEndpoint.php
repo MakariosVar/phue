@@ -9,6 +9,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Schii\Schema\SchemaRegistry;
+use Throwable;
 
 /**
  * Class ModelEndpoint
@@ -120,63 +121,8 @@ final class ModelEndpoint
             return Response::json(["error" => "Resource not found"], 404);
         }
 
-        $schema = $this->schemaRegistry->get($modelClass);
-
-        /** @var ActiveQuery $query */
-        $query = $modelClass::query();
-
-        // 1. Global Search with LIKE wildcard escaping
-        /** @var string|null $searchQuery */
-        $searchQuery = $request->input("q") ?? $request->getQuery("q");
-        if (!empty($searchQuery)) {
-            $escapedQuery = addcslashes((string) $searchQuery, "%_\\");
-            $searchableFields = array_values(
-                array_filter(
-                    $schema->fields,
-                    static fn($field) => $field->searchable,
-                ),
-            );
-
-            foreach ($searchableFields as $index => $field) {
-                if ($index === 0) {
-                    $query->where($field->name, "LIKE", "%{$escapedQuery}%");
-                } else {
-                    $query->orWhere($field->name, "LIKE", "%{$escapedQuery}%");
-                }
-            }
-        }
-
-        // 2. Dynamic Filtering across filterable fields
-        foreach ($schema->fields as $field) {
-            if ($field->filterable) {
-                $value =
-                    $request->input($field->name) ??
-                    $request->getQuery($field->name);
-                if ($value !== "" && $value !== null) {
-                    $query->where($field->name, "=", $value);
-                }
-            }
-        }
-
-        // 3. Dynamic Sorting
-        /** @var string|null $sort */
-        $sort = $request->input("sort") ?? $request->getQuery("sort");
-        /** @var string $direction */
-        $direction =
-            strtoupper(
-                (string) ($request->input("direction") ??
-                    ($request->getQuery("direction") ?? "ASC")),
-            ) === "DESC"
-                ? "DESC"
-                : "ASC";
-
-        if (
-            $sort &&
-            isset($schema->fields[$sort]) &&
-            $schema->fields[$sort]->sortable
-        ) {
-            $query->orderBy($sort, $direction);
-        }
+        // Delegate query construction to buildQuery (Single Source of Truth)
+        $query = $this->buildQuery($request, $modelClass);
 
         // 4. Pagination
         $page = max(
@@ -395,6 +341,353 @@ final class ModelEndpoint
         }
 
         return Response::json(["message" => "Resource deleted successfully"]);
+    }
+
+    /**
+     * Perform bulk operations (update or delete) on a set of entity records.
+     *
+     * @route POST /api/schii/{entity}/bulk
+     *
+     * @param Request      $request Incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the entity slug.
+     *
+     * @return Response JSON response containing summary metrics and per-record results.
+     */
+    public function bulk(Request $request, array|string $params): Response
+    {
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
+        /** @var array<string, mixed> $rawBody */
+        $rawBody = method_exists($request, "getParsedBody")
+            ? ($request->getParsedBody() ?? [])
+            : $request->input();
+
+        $action = $rawBody["action"] ?? null;
+        $ids = $rawBody["ids"] ?? [];
+        $data = $rawBody["data"] ?? [];
+
+        if (!in_array($action, ["update", "delete"], true) || !is_array($ids) || empty($ids)) {
+            return Response::json(["error" => "Invalid bulk action or empty ids"], 422);
+        }
+
+        $ids = array_values(array_unique(array_filter($ids, static fn($id) => !is_array($id))));
+        if (empty($ids)) {
+            return Response::json(["error" => "Invalid ids provided"], 422);
+        }
+
+        $updatedCount = 0;
+        $deletedCount = 0;
+        $notFoundCount = 0;
+        $failedCount = 0;
+        $results = [];
+
+        foreach ($ids as $id) {
+            try {
+                $model = $modelClass::find($id);
+                if (!$model) {
+                    $notFoundCount++;
+                    $results[] = ["id" => $id, "status" => "not_found"];
+                    continue;
+                }
+
+                if ($action === "delete") {
+                    if ($model->delete()) {
+                        $deletedCount++;
+                        $results[] = ["id" => $id, "status" => "deleted"];
+                    } else {
+                        $failedCount++;
+                        $results[] = ["id" => $id, "status" => "failed", "error" => "Deletion failed"];
+                    }
+                } elseif ($action === "update") {
+                    $errors = $this->validateData($data, $modelClass, isUpdate: true);
+                    if (!empty($errors)) {
+                        $failedCount++;
+                        $results[] = ["id" => $id, "status" => "failed", "errors" => $errors];
+                        continue;
+                    }
+
+                    $inputData = $this->extractInputData($data, $modelClass);
+                    $model->fill($inputData);
+
+                    if ($model->save()) {
+                        $updatedCount++;
+                        $results[] = ["id" => $id, "status" => "updated", "data" => $model->toArray()];
+                    } else {
+                        $failedCount++;
+                        $results[] = ["id" => $id, "status" => "failed", "errors" => $model->getErrors()];
+                    }
+                }
+            } catch (Throwable $e) {
+                $failedCount++;
+                $results[] = ["id" => $id, "status" => "failed", "error" => $e->getMessage()];
+            }
+        }
+
+        return Response::json([
+            "summary" => [
+                "updated" => $updatedCount,
+                "deleted" => $deletedCount,
+                "notFound" => $notFoundCount,
+                "failed" => $failedCount,
+            ],
+            "results" => $results,
+        ], 200);
+    }
+
+    /**
+     * Export entity records in CSV or JSON format.
+     *
+     * @route GET /api/schii/{entity}/export
+     *
+     * @param Request      $request Incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the entity slug.
+     *
+     * @return Response Streaming CSV response or JSON payload.
+     */
+    public function export(Request $request, array|string $params): Response
+    {
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
+        $format = strtolower((string) ($request->input("format") ?? $request->getQuery("format") ?? "csv"));
+        $query = $this->buildQuery($request, $modelClass);
+        $items = $query->get();
+
+        if ($format === "json") {
+            $rows = array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items);
+            return Response::json($rows);
+        }
+
+        // CSV Streaming via php://temp
+        $stream = fopen("php://temp", "w+");
+        if ($stream === false) {
+            return Response::json(["error" => "Failed to open temporary stream"], 500);
+        }
+
+        $rows = array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items);
+        if (!empty($rows)) {
+            fputcsv($stream, array_keys(reset($rows)), ',', '"', '\\');
+            foreach ($rows as $row) {
+                fputcsv($stream, array_values($row), ',', '"', '\\');
+            }
+        }
+
+        rewind($stream);
+        $streamContent = stream_get_contents($stream);
+        fclose($stream);
+
+        return (new Response((string) $streamContent, 200))
+            ->setHeader("Content-Type", "text/csv")
+            ->setHeader("Content-Disposition", "attachment; filename=\"{$entity}.csv\"");
+    }
+
+    /**
+     * Import entity records from CSV or JSON payload.
+     *
+     * @route POST /api/schii/{entity}/import
+     *
+     * @param Request      $request Incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the entity slug.
+     *
+     * @return Response JSON summary response of imported, updated, and failed rows.
+     */
+    public function import(Request $request, array|string $params): Response
+    {
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => "Resource not found"], 404);
+        }
+
+        $format = strtolower((string) ($request->input("format") ?? $request->getQuery("format") ?? "json"));
+        $rawBody = method_exists($request, "getParsedBody")
+            ? ($request->getParsedBody() ?? [])
+            : $request->input();
+
+        $dataInput = $rawBody["data"] ?? null;
+        $matchBy = $rawBody["matchBy"] ?? null;
+
+        if ($dataInput === null) {
+            return Response::json(["error" => "Data payload is required"], 400);
+        }
+
+        $rows = [];
+        if ($format === "csv") {
+            if (!is_string($dataInput)) {
+                return Response::json(["error" => "CSV data must be a string"], 400);
+            }
+            $lines = array_filter(explode("\n", str_replace("\r\n", "\n", $dataInput)));
+            if (empty($lines)) {
+                return Response::json(["error" => "Empty CSV payload"], 400);
+            }
+            $headers = str_getcsv(array_shift($lines), ',', '"', '\\');
+            foreach ($lines as $line) {
+                $values = str_getcsv($line, ',', '"', '\\');
+                if (count($headers) === count($values)) {
+                    $rows[] = array_combine($headers, $values);
+                }
+            }
+        } elseif ($format === "json") {
+            if (is_string($dataInput)) {
+                $decoded = json_decode($dataInput, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $rows = $decoded;
+                }
+            } elseif (is_array($dataInput)) {
+                $rows = $dataInput;
+            }
+            if (empty($rows)) {
+                return Response::json(["error" => "Invalid or empty JSON data payload"], 400);
+            }
+        } else {
+            return Response::json(["error" => "Unknown format"], 400);
+        }
+
+        $imported = 0;
+        $updated = 0;
+        $validated = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            if (!is_array($row)) {
+                $failed++;
+                $errors[] = ["row" => $index, "error" => "Row must be an array"];
+                continue;
+            }
+
+            $validationErrors = $this->validateData($row, $modelClass, isUpdate: false);
+            if (!empty($validationErrors)) {
+                $failed++;
+                $errors[] = ["row" => $index, "errors" => $validationErrors];
+                continue;
+            }
+            $validated++;
+
+            $inputData = $this->extractInputData($row, $modelClass);
+            $modelInstance = null;
+
+            if (!empty($matchBy) && isset($row[$matchBy])) {
+                $modelInstance = $modelClass::query()->where($matchBy, "=", $row[$matchBy])->first();
+            }
+
+            if ($modelInstance) {
+                $modelInstance->fill($inputData);
+                if ($modelInstance->save()) {
+                    $updated++;
+                } else {
+                    $failed++;
+                    $errors[] = ["row" => $index, "errors" => $modelInstance->getErrors()];
+                }
+            } else {
+                $modelInstance = new $modelClass();
+                $modelInstance->fill($inputData);
+                if ($modelInstance->save()) {
+                    $imported++;
+                } else {
+                    $failed++;
+                    $errors[] = ["row" => $index, "errors" => $modelInstance->getErrors()];
+                }
+            }
+        }
+
+        return Response::json([
+            "imported" => $imported,
+            "updated" => $updated,
+            "validated" => $validated,
+            "failed" => $failed,
+            "errors" => $errors,
+        ], 200);
+    }
+
+    /**
+     * Builds and returns an ActiveQuery instance with global search, filtering, and sorting applied (without pagination).
+     *
+     * @param Request                      $request    Incoming HTTP request instance.
+     * @param class-string<BaseActiveRecord> $modelClass Fully qualified model class name.
+     *
+     * @return ActiveQuery Configured query instance.
+     */
+    private function buildQuery(Request $request, string $modelClass): ActiveQuery
+    {
+        $schema = $this->schemaRegistry->get($modelClass);
+
+        /** @var ActiveQuery $query */
+        $query = $modelClass::query();
+
+        // 1. Global Search with LIKE wildcard escaping
+        /** @var string|null $searchQuery */
+        $searchQuery = $request->input("q") ?? $request->getQuery("q");
+        if (!empty($searchQuery)) {
+            $escapedQuery = addcslashes((string) $searchQuery, "%_\\");
+            $searchableFields = array_values(
+                array_filter(
+                    $schema->fields,
+                    static fn($field) => $field->searchable,
+                ),
+            );
+
+            foreach ($searchableFields as $index => $field) {
+                if ($index === 0) {
+                    $query->where($field->name, "LIKE", "%{$escapedQuery}%");
+                } else {
+                    $query->orWhere($field->name, "LIKE", "%{$escapedQuery}%");
+                }
+            }
+        }
+
+        // 2. Dynamic Filtering across filterable fields
+        foreach ($schema->fields as $field) {
+            if ($field->filterable) {
+                $value =
+                    $request->input($field->name) ??
+                    $request->getQuery($field->name);
+                if ($value !== "" && $value !== null) {
+                    $query->where($field->name, "=", $value);
+                }
+            }
+        }
+
+        // 3. Dynamic Sorting
+        /** @var string|null $sort */
+        $sort = $request->input("sort") ?? $request->getQuery("sort");
+        /** @var string $direction */
+        $direction =
+            strtoupper(
+                (string) ($request->input("direction") ??
+                    ($request->getQuery("direction") ?? "ASC")),
+            ) === "DESC"
+                ? "DESC"
+                : "ASC";
+
+        if (
+            $sort &&
+            isset($schema->fields[$sort]) &&
+            $schema->fields[$sort]->sortable
+        ) {
+            $query->orderBy($sort, $direction);
+        }
+
+        return $query;
     }
 
     /**

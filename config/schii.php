@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 use function Phue\Core\env;
 
 return [
@@ -16,4 +17,21 @@ return [
     'exportDir' => 'storage/generated',
     'phiiNamespace' => 'App\\Models',
     'phiiPrefix' => '/phii',
+    'audit' => [
+        'enabled' => true,
+        'limit' => 200,
+    ],
+    'import' => [
+        'maxUpload' => '10M',
+        'allowedMime' => [
+            'text/csv',
+            'application/json',
+        ],
+    ],
+    'phii' => [
+        'allowInProduction' => false,
+    ],
+    'relations' => [
+        'autoInfer' => false,
+    ],
 ];

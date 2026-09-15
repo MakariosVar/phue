@@ -1,0 +1,181 @@
+<template>
+  <ph-modal
+    :model-value="modelValue"
+    :title="`Schema Diff — ${entity}`"
+    size="xl"
+    :closable="!applying"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <div v-if="loading" class="py-3">
+      <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
+    </div>
+
+    <ph-alert
+      v-else-if="syncResult"
+      :variant="syncResult.success ? 'success' : 'error'"
+      class="mb-3"
+      :title="syncResult.success ? 'Synchronized' : 'Sync failed'"
+    >
+      <ul v-if="executedList.length" class="mb-0 mt-1 small">
+        <li v-for="(action, i) in executedList" :key="i">{{ action }}</li>
+      </ul>
+    </ph-alert>
+
+    <template v-else-if="diff">
+      <ph-flex direction="row" gap="sm" align="center" wrap="wrap" class="mb-3">
+        <ph-badge :label="`Table ${diff.table}`" variant="info" />
+        <ph-badge :label="`${ops.length} change(s)`" :variant="diff.destructive ? 'error' : 'warning'" />
+        <ph-badge v-if="diff.destructive" label="DESTRUCTIVE" variant="error" pill />
+      </ph-flex>
+
+      <ph-alert v-if="diff.destructive" variant="error" title="Destructive operations detected" class="mb-3">
+        This diff drops or rebuilds columns/tables. Existing data may be lost. Confirm with
+        &ldquo;Allow destructive changes&rdquo; below.
+      </ph-alert>
+
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Column</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!ops.length">
+              <td colspan="4" class="text-center text-body-secondary py-3">No differences detected.</td>
+            </tr>
+            <tr v-for="(op, i) in ops" :key="i">
+              <td><ph-badge :label="opLabel(op.op)" :variant="opVariant(op.op)" /></td>
+              <td><code>{{ opName(op) }}</code></td>
+              <td><code>{{ opType(op) }}</code></td>
+              <td>{{ opAlter(op) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <template v-if="sqls.length">
+        <ph-text weight="semibold" size="sm" class="mb-1">Planned SQL</ph-text>
+        <pre class="p-2 border rounded bg-body-secondary small mb-0"><code>{{ sqls.join('\n') }}</code></pre>
+      </template>
+    </template>
+
+    <ph-text v-else color="muted">No schema differences detected for this table.</ph-text>
+
+    <template v-if="!syncResult" #footer>
+      <ph-checkbox
+        v-if="diff && diff.destructive"
+        v-model="allowDrops"
+        label="Allow destructive changes (drop/rebuild)"
+        class="me-auto"
+      />
+      <ph-button variant="ghost" :disabled="applying" @click="$emit('update:modelValue', false)">Close</ph-button>
+      <ph-button variant="outline" :disabled="applying" @click="$emit('reload')">Recompute</ph-button>
+      <ph-button
+        :variant="diff && diff.destructive ? 'danger' : 'primary'"
+        :disabled="!diff || (diff.destructive && !allowDrops)"
+        :loading="applying"
+        @click="$emit('apply', { allowDrops })"
+      >Apply Sync</ph-button>
+    </template>
+    <template v-else #footer>
+      <ph-button variant="ghost" @click="$emit('update:modelValue', false)">Close</ph-button>
+    </template>
+  </ph-modal>
+</template>
+
+<script>
+export default {
+  name: 'SchiiSchemaDiffModal',
+  props: {
+    modelValue: {
+      type: Boolean,
+      default: false
+    },
+    entity: {
+      type: String,
+      default: ''
+    },
+    diff: {
+      type: Object,
+      default: null
+    },
+    loading: {
+      type: Boolean,
+      default: false
+    },
+    applying: {
+      type: Boolean,
+      default: false
+    },
+    syncResult: {
+      type: Object,
+      default: null
+    }
+  },
+  emits: ['update:modelValue', 'apply', 'reload'],
+  data() {
+    return {
+      allowDrops: false
+    };
+  },
+  computed: {
+    ops() {
+      return Array.isArray(this.diff && this.diff.ops) ? this.diff.ops : [];
+    },
+    sqls() {
+      return Array.isArray(this.diff && this.diff.sqls) ? this.diff.sqls : [];
+    },
+    executedList() {
+      return Array.isArray(this.syncResult && this.syncResult.executed)
+        ? this.syncResult.executed
+        : [];
+    }
+  },
+  watch: {
+    modelValue(open) {
+      if (open) {
+        this.allowDrops = false;
+      }
+    }
+  },
+  methods: {
+    opLabel(op) {
+      const map = {
+        'create-table': 'CREATE TABLE',
+        'add-column': 'ADD COLUMN',
+        'alter-column': 'ALTER COLUMN',
+        'drop-column': 'DROP COLUMN'
+      };
+      return map[op] || String(op || '');
+    },
+    opVariant(op) {
+      if (op === 'drop-column') return 'error';
+      if (op === 'alter-column') return 'warning';
+      if (op === 'add-column') return 'primary';
+      return 'success';
+    },
+    opData(op) {
+      return (op && op.column) || null;
+    },
+    opName(op) {
+      const data = this.opData(op);
+      return data && data.name ? data.name : '—';
+    },
+    opType(op) {
+      const data = this.opData(op);
+      return data && data.type ? data.type : '—';
+    },
+    opAlter(op) {
+      if (op && op.op === 'alter-column' && op.new) {
+        return `${op.new.name} (${op.new.type})`;
+      }
+      if (op && op.op === 'create-table') return 'creates new table';
+      return '—';
+    }
+  }
+};
+</script>

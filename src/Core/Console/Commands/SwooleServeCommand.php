@@ -147,6 +147,16 @@ final class SwooleServeCommand implements CommandInterface
 
         $get = isset($swooleRequest->get) && is_array($swooleRequest->get) ? $swooleRequest->get : [];
         $post = isset($swooleRequest->post) && is_array($swooleRequest->post) ? $swooleRequest->post : [];
+        $contentType = $headers['Content-Type'] ?? $headers['content-type'] ?? '';
+        if (str_contains($contentType, 'application/json')) {
+            $raw = $swooleRequest->getContent();
+            if ($raw !== '' && $raw !== false) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $post = $decoded;
+                }
+            }
+        }
         $cookie = isset($swooleRequest->cookie) && is_array($swooleRequest->cookie) ? $swooleRequest->cookie : [];
         $files = isset($swooleRequest->files) && is_array($swooleRequest->files) ? $swooleRequest->files : [];
 

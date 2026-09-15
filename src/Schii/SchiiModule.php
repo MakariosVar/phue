@@ -24,6 +24,8 @@ use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
 use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
 use Phue\Schii\Endpoint\SchemaSyncEndpoint;
+use Phue\Schii\Endpoint\AuditEndpoint;
+use Phue\Schii\Endpoint\AuthorizedAuditEndpoint;
 use Phue\Schii\Schema\SchemaInspector;
 use Phue\Schii\Schema\SchemaSyncEngine;
 use Phue\Schii\Schema\SchemaRegistry;
@@ -293,6 +295,23 @@ class SchiiModule extends Module
             }
         );
 
+        // AuditEndpoint & AuthorizedAuditEndpoint Dependency Bindings
+        $this->container->bind(
+            AuditEndpoint::class,
+            fn(Container $c): AuditEndpoint => new AuditEndpoint()
+        );
+
+        $this->container->bind(
+            AuthorizedAuditEndpoint::class,
+            function (Container $c): AuthorizedAuditEndpoint {
+                return new AuthorizedAuditEndpoint(
+                    $c->get(AuditEndpoint::class),
+                    $c->get(AuthManager::class),
+                    $c->get(RbacManager::class)
+                );
+            }
+        );
+
         /** @var bool $requireAuth */
         $requireAuth = $schiiConfig->requireAuth;
 
@@ -300,6 +319,11 @@ class SchiiModule extends Module
         $crudHandler = $requireAuth
             ? AuthorizedModelEndpoint::class
             : ModelEndpoint::class;
+
+        /** @var class-string $auditHandler */
+        $auditHandler = $requireAuth
+            ? AuthorizedAuditEndpoint::class
+            : AuditEndpoint::class;
 
         $this->container->bind(
             RuntimeGenerator::class,
@@ -343,21 +367,33 @@ class SchiiModule extends Module
             $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
 
+            // Audit Log Routes (τοποθετούνται εδώ πριν τα dynamic {entity} routes για αποφυγή συγκρούσεων)
+            $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/audit/{entity}", [$auditHandler, 'forEntity'], middleware: $middleware);
+
             // Protected CRUD Operations Endpoints
             $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
             $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/diff", [SchemaSyncEndpoint::class, 'diff'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
             $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
             $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
 
-            // Phii Panel & Generation Routes
-            $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
-            $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
+            // Advanced Schii Operations Endpoints (Bulk, Export, Import)
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/bulk", [$crudHandler, 'bulk'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/export", [$crudHandler, 'export'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/import", [$crudHandler, 'import'], middleware: $middleware);
 
             // Admin Console View Route
             /** @var string $consolePrefix */
             $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
             $this->router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);
+
+            // Phii Panel & Generation / Preview / Apply Routes
+            $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
+            $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
+            $this->router->addRoute('POST', "{$phiiPrefix}/preview", [PhiiController::class, 'preview']);
+            $this->router->addRoute('POST', "{$phiiPrefix}/apply", [PhiiController::class, 'apply']);
         }
     }
 }

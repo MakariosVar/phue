@@ -11,6 +11,8 @@ use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Controller\PhiiController;
+use Phue\Schii\Endpoint\AuditEndpoint;
+use Phue\Schii\Endpoint\ModelEndpoint;
 use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
 use Phue\Schii\Endpoint\SchemaSyncEndpoint;
 use PHPUnit\Framework\TestCase;
@@ -101,6 +103,74 @@ PHP);
         $sync = $router->dispatch('POST', '/api/schii/schema/profiles/sync');
         $this->assertInstanceOf(RouteMatch::class, $sync);
         $this->assertSame([SchemaSyncEndpoint::class, 'sync'], $sync->getHandler());
+
+        $diff = $router->dispatch('GET', '/api/schii/schema/profiles/diff');
+        $this->assertInstanceOf(RouteMatch::class, $diff);
+        $this->assertSame([SchemaSyncEndpoint::class, 'diff'], $diff->getHandler());
+    }
+
+    public function testModuleRegistersAdvancedCrudRoutes(): void
+    {
+        $app = new Application($this->tmpBase);
+        $router = $app->getContainer()->get(Router::class);
+
+        $bulk = $router->dispatch('POST', '/api/schii/profiles/bulk');
+        $this->assertInstanceOf(RouteMatch::class, $bulk);
+        $this->assertSame([ModelEndpoint::class, 'bulk'], $bulk->getHandler());
+
+        $export = $router->dispatch('GET', '/api/schii/profiles/export');
+        $this->assertInstanceOf(RouteMatch::class, $export);
+        $this->assertSame([ModelEndpoint::class, 'export'], $export->getHandler());
+
+        $import = $router->dispatch('POST', '/api/schii/profiles/import');
+        $this->assertInstanceOf(RouteMatch::class, $import);
+        $this->assertSame([ModelEndpoint::class, 'import'], $import->getHandler());
+    }
+
+    public function testModuleRegistersPhiiPreviewAndApplyRoutes(): void
+    {
+        $app = new Application($this->tmpBase);
+        $router = $app->getContainer()->get(Router::class);
+
+        $preview = $router->dispatch('POST', '/phii/preview');
+        $this->assertInstanceOf(RouteMatch::class, $preview);
+        $this->assertSame([PhiiController::class, 'preview'], $preview->getHandler());
+
+        $apply = $router->dispatch('POST', '/phii/apply');
+        $this->assertInstanceOf(RouteMatch::class, $apply);
+        $this->assertSame([PhiiController::class, 'apply'], $apply->getHandler());
+    }
+
+    public function testAuditLiteralRouteWinsOverEntityParamRoute(): void
+    {
+        // requireAuth=false registers the plain AuditEndpoint; the literal /audit
+        // route is declared before the generic /{entity} routes and must not be
+        // captured as a CRUD listing for an entity literally named "audit".
+        $app = new Application($this->tmpBase);
+        $router = $app->getContainer()->get(Router::class);
+
+        $audit = $router->dispatch('GET', '/api/schii/audit');
+        $this->assertInstanceOf(RouteMatch::class, $audit);
+        $this->assertSame([AuditEndpoint::class, 'index'], $audit->getHandler());
+
+        $auditEntity = $router->dispatch('GET', '/api/schii/audit/profiles');
+        $this->assertInstanceOf(RouteMatch::class, $auditEntity);
+        $this->assertSame([AuditEndpoint::class, 'forEntity'], $auditEntity->getHandler());
+    }
+
+    public function testSchemaLiteralRoutesWinOverEntityParamRoutes(): void
+    {
+        $app = new Application($this->tmpBase);
+        $router = $app->getContainer()->get(Router::class);
+
+        // /schema (no entity) and /schema/{entity} must stay dedicated to metadata
+        $schema = $router->dispatch('GET', '/api/schii/schema');
+        $this->assertInstanceOf(RouteMatch::class, $schema);
+        $this->assertSame([ModelEndpoint::class, 'listSchemas'], $schema->getHandler());
+
+        $schemaEntity = $router->dispatch('GET', '/api/schii/schema/user');
+        $this->assertInstanceOf(RouteMatch::class, $schemaEntity);
+        $this->assertSame([ModelEndpoint::class, 'schema'], $schemaEntity->getHandler());
     }
 
     public function testWrongVerbOnExistingRouteRejected(): void

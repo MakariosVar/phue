@@ -18,15 +18,22 @@ final readonly class SchiiConfig
     /**
      * Initializes a new immutable Schii Configuration instance.
      *
-     * @param bool $enabled Whether Schii is enabled.
-     * @param string $apiPrefix Base URI prefix for dynamically exposed Schii REST endpoints.
-     * @param string $prefix Base URI Schii Admin console endpoints.
-     * @param string $entityNamespace Fully qualified PHP namespace where Schii models reside.
-     * @param bool $requireAuth Whether automatic database UI and REST endpoints require authorized access (default: true for security).
-     * @param bool $autoMigrate Whether automatic database schema migration is enabled during boot.
-     * @param string $cachePrefix Cache key prefix for compiled model schema descriptors.
-     * @param array<int, string|callable> $middleware Array of middleware pipeline callables/classes for Schii routes.
+     * @param bool                        $enabled         Whether Schii is enabled.
+     * @param string                      $apiPrefix       Base URI prefix for dynamically exposed Schii REST endpoints.
+     * @param string                      $prefix          Base URI Schii Admin console endpoints.
+     * @param string                      $entityNamespace Fully qualified PHP namespace where Schii models reside.
+     * @param bool                        $requireAuth     Whether automatic database UI and REST endpoints require authorized access.
+     * @param bool                        $autoMigrate     Whether automatic database schema migration is enabled during boot.
+     * @param string                      $cachePrefix     Cache key prefix for compiled model schema descriptors.
+     * @param array<int, string|callable> $middleware      Array of middleware pipeline callables/classes for Schii routes.
      * @param callable|array{0: class-string, 1: string}|null $authResolver Custom identity lookup callable.
+     * @param string                      $exportDir       Export directory path.
+     * @param string                      $phiiNamespace   Phii namespace.
+     * @param string                      $phiiPrefix      Phii prefix.
+     * @param array{enabled: bool, limit: int} $audit      Audit log configurations.
+     * @param array{maxUpload: string, allowedMime: array<int, string>} $import Import limits and allowed mime types.
+     * @param array{allowInProduction: bool} $phii         Phii production guards.
+     * @param array{autoInfer: bool}      $relations       Relations auto-inference setting.
      */
     public function __construct(
         public bool $enabled = true,
@@ -41,23 +48,17 @@ final readonly class SchiiConfig
         public string $exportDir = 'storage/generated',
         public string $phiiNamespace = 'App\\Models',
         public string $phiiPrefix = '/phii',
+        public array $audit = ['enabled' => true, 'limit' => 200],
+        public array $import = ['maxUpload' => '10M', 'allowedMime' => ['text/csv', 'application/json']],
+        public array $phii = ['allowInProduction' => false],
+        public array $relations = ['autoInfer' => false],
     ) {}
 
     /**
      * Creates a SchiiConfig instance from an associative options array,
      * overriding defaults only for keys that are explicitly supplied.
      *
-     * @param array{
-     *     enabled?: bool,
-     *     apiPrefix?: string,
-     *     prefix?: string,
-     *     entityNamespace?: string,
-     *     requireAuth?: bool,
-     *     autoMigrate?: bool,
-     *     cachePrefix?: string,
-     *     middleware?: array<int, string|callable>,
-     *     authResolver?: callable|array{0: class-string, 1: string}|null
-     * } $options Associative array of configuration parameter overrides.
+     * @param array<string, mixed> $options Associative array of configuration parameter overrides.
      * @return self Fresh SchiiConfig instance populated with merged options.
      */
     public static function fromArray(array $options): self
@@ -75,23 +76,17 @@ final readonly class SchiiConfig
             exportDir: $options['exportDir'] ?? 'storage/generated',
             phiiNamespace: $options['phiiNamespace'] ?? 'App\\Models',
             phiiPrefix: $options['phiiPrefix'] ?? '/phii',
+            audit: $options['audit'] ?? ['enabled' => true, 'limit' => 200],
+            import: $options['import'] ?? ['maxUpload' => '10M', 'allowedMime' => ['text/csv', 'application/json']],
+            phii: $options['phii'] ?? ['allowInProduction' => false],
+            relations: $options['relations'] ?? ['autoInfer' => false],
         );
     }
 
     /**
      * Converts the current configuration object into an associative array representation.
      *
-     * @return array{
-     *     enabled: bool,
-     *     apiPrefix: string,
-     *     prefix: string,
-     *     entityNamespace: string,
-     *     requireAuth: bool,
-     *     autoMigrate: bool,
-     *     cachePrefix: string,
-     *     middleware: array<int, string|callable>,
-     *     authResolver: callable|array{0: class-string, 1: string}|null
-     * } Associative array containing all configuration properties.
+     * @return array<string, mixed> Associative array containing all configuration properties.
      */
     public function toArray(): array
     {
@@ -108,6 +103,10 @@ final readonly class SchiiConfig
             'exportDir' => $this->exportDir,
             'phiiNamespace' => $this->phiiNamespace,
             'phiiPrefix' => $this->phiiPrefix,
+            'audit' => $this->audit,
+            'import' => $this->import,
+            'phii' => $this->phii,
+            'relations' => $this->relations,
         ];
     }
 }

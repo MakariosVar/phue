@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Generator;
 
+use Phue\Generator\FileMutation;
+
 /**
  * Generates CRUD and resource controllers following project console command conventions.
  *
@@ -12,21 +14,21 @@ namespace Phue\Generator;
 final class ControllerGenerator
 {
     /**
-     * Generate a controller file with routing attributes.
+     * Generate a controller file mutation with routing attributes.
      *
-     * @param string              $moduleName Module slug.
-     * @param string              $modelName  Model name.
-     * @param string              $basePath   Target directory path.
-     * @param array<int, string>  $actions    List of CRUD actions to generate.
+     * @param string             $moduleName Module slug.
+     * @param string             $modelName  Model name.
+     * @param string             $basePath   Target directory path.
+     * @param array<int, string> $actions    List of CRUD actions to generate.
      *
-     * @return string Path to the generated controller file.
+     * @return array<int, FileMutation> List of file mutations.
      */
     public function generate(
         string $moduleName,
         string $modelName,
         string $basePath,
         array $actions = ['index', 'store', 'show', 'update', 'delete']
-    ): string {
+    ): array {
         $templateFile = __DIR__ . '/templates/controller.php';
         $template = file_get_contents($templateFile);
         if ($template === false) {
@@ -46,13 +48,8 @@ final class ControllerGenerator
         );
 
         $filePath = rtrim($basePath, '/') . "/{$controllerName}.php";
-        if ($basePath !== '' && !is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
 
-        file_put_contents($filePath, $output);
-
-        return $filePath;
+        return [new FileMutation($filePath, $output)];
     }
 
     /**

@@ -1,0 +1,129 @@
+<template>
+  <ph-modal
+    :model-value="modelValue"
+    title="Schii Audit Logs"
+    size="xl"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <ph-flex direction="row" align="center" gap="sm" wrap="wrap" class="mb-3">
+      <div style="min-width: 180px;">
+        <ph-input
+          v-model="entityFilter"
+          placeholder="Entity filter (e.g. profiles)"
+          style="margin-bottom: 0;"
+        />
+      </div>
+      <div style="min-width: 140px;">
+        <ph-select
+          v-model="verbFilter"
+          :options="verbOptions"
+          placeholder="Any verb"
+          style="margin-bottom: 0;"
+        />
+      </div>
+      <ph-button variant="outline" size="sm" @click="emitRefresh">Refresh</ph-button>
+      <ph-button variant="ghost" size="sm" @click="clearFilters">Clear</ph-button>
+    </ph-flex>
+
+    <div v-if="loading" class="py-3">
+      <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
+    </div>
+
+    <div v-else-if="logs.length" class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Verb</th>
+            <th>Entity</th>
+            <th>User</th>
+            <th>When</th>
+            <th>Payload</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(log, i) in logs" :key="i">
+            <td><ph-badge :label="log.verb" :variant="verbVariant(log.verb)" /></td>
+            <td><code>{{ log.entity }}</code></td>
+            <td>{{ log.user || '—' }}</td>
+            <td>{{ formatTime(log.timestamp) }}</td>
+            <td class="text-truncate" style="max-width: 260px;" :title="prettyPayload(log.payload)">
+              {{ prettyPayload(log.payload) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ph-text v-else color="muted">No audit entries match the current filters.</ph-text>
+
+    <template #footer>
+      <ph-button variant="ghost" @click="$emit('update:modelValue', false)">Close</ph-button>
+    </template>
+  </ph-modal>
+</template>
+
+<script>
+export default {
+  name: 'SchiiAuditPanel',
+  props: {
+    modelValue: {
+      type: Boolean,
+      default: false
+    },
+    logs: {
+      type: Array,
+      default: () => []
+    },
+    loading: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'refresh'],
+  data() {
+    return {
+      entityFilter: '',
+      verbFilter: ''
+    };
+  },
+  computed: {
+    verbOptions() {
+      return ['GET', 'POST', 'PUT', 'DELETE'].map(v => ({ label: v, value: v }));
+    }
+  },
+  methods: {
+    emitRefresh() {
+      this.$emit('refresh', {
+        entity: this.entityFilter.trim() || null,
+        verb: this.verbFilter || null
+      });
+    },
+    clearFilters() {
+      this.entityFilter = '';
+      this.verbFilter = '';
+      this.$emit('refresh', { entity: null, verb: null });
+    },
+    verbVariant(verb) {
+      const map = { GET: 'info', POST: 'primary', PUT: 'warning', DELETE: 'danger' };
+      return map[String(verb || '').toUpperCase()] || 'secondary';
+    },
+    formatTime(ts) {
+      if (!ts) return '—';
+      try {
+        return new Date(ts * 1000).toLocaleString();
+      } catch {
+        return String(ts);
+      }
+    },
+    prettyPayload(payload) {
+      if (payload === null || payload === undefined) return '';
+      if (typeof payload === 'string') return payload;
+      try {
+        return JSON.stringify(payload);
+      } catch {
+        return String(payload);
+      }
+    }
+  }
+};
+</script>

@@ -1,0 +1,78 @@
+<template>
+  <div>
+    <ph-flex direction="row" align="center" gap="sm" wrap="wrap" class="mb-2">
+      <ph-badge :label="`${plan.length} mutation(s)`" variant="info" />
+      <ph-badge
+        :label="existingCount === 0 ? 'No files exist yet' : `${existingCount} file(s) already exist`"
+        :variant="existingCount ? 'warning' : 'success'"
+      />
+      <ph-text size="sm" color="muted" class="mb-0">Preview only — nothing is written until you Apply.</ph-text>
+    </ph-flex>
+
+    <ph-stack gap="xs">
+      <div v-for="(item, i) in plan" :key="i" class="border rounded p-2">
+        <ph-flex direction="row" justify="space-between" align="center" gap="md" wrap="wrap">
+          <div class="d-flex align-items-center gap-2 flex-grow-1">
+            <ph-badge
+              :variant="item.willOverwrite ? 'warning' : (item.exists ? 'info' : 'success')"
+              :label="item.willOverwrite ? 'OVERWRITE' : (item.exists ? 'EXISTS' : 'NEW')"
+            />
+            <ph-text size="sm" as="code" class="mb-0 text-break">{{ item.path }}</ph-text>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <ph-text size="sm" color="muted" class="mb-0">{{ item.contentLength || 0 }} chars</ph-text>
+            <ph-button variant="ghost" size="sm" @click="toggleContent(item.path)">
+              {{ isOpen(item.path) ? 'Hide content' : 'Preview content' }}
+            </ph-button>
+          </div>
+        </ph-flex>
+        <pre v-if="isOpen(item.path)" class="m-0 mt-2 p-2 border rounded bg-body-secondary small"><code>{{ item.content }}</code></pre>
+      </div>
+    </ph-stack>
+
+    <hr />
+
+    <ph-flex direction="row" justify="space-between" align="center" gap="md" wrap="wrap">
+      <ph-checkbox v-model="wantsBackup" label="Create ZIP backup before writing" />
+      <ph-button variant="primary" :loading="applying" @click="$emit('apply', { backup: wantsBackup })">
+        Apply plan
+      </ph-button>
+    </ph-flex>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhiiPreviewPanel',
+  props: {
+    plan: {
+      type: Array,
+      default: () => []
+    },
+    applying: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['apply'],
+  data() {
+    return {
+      wantsBackup: true,
+      expanded: {}
+    };
+  },
+  computed: {
+    existingCount() {
+      return this.plan.filter(p => p.exists).length;
+    }
+  },
+  methods: {
+    isOpen(path) {
+      return !!this.expanded[path];
+    },
+    toggleContent(path) {
+      this.expanded[path] = !this.expanded[path];
+    }
+  }
+};
+</script>

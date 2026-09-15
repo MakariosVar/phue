@@ -1,0 +1,85 @@
+<template>
+  <div>
+    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="md" class="mb-2">
+      <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
+        <div style="min-width: 240px;">
+          <ph-input
+            v-model="searchText"
+            type="search"
+            placeholder="Search records..."
+            style="margin-bottom: 0;"
+            @keyup.enter="doSearch"
+          />
+        </div>
+        <ph-button variant="secondary" size="sm" @click="doSearch">Search</ph-button>
+        <ph-button variant="ghost" size="sm" @click="$emit('refresh')">Refresh</ph-button>
+      </ph-flex>
+
+      <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
+        <ph-button variant="primary" size="sm" @click="$emit('create')">+ New {{ entity }}</ph-button>
+        <ph-button variant="outline" size="sm" @click="$emit('schema-diff')">Schema Diff</ph-button>
+        <ph-button variant="outline" size="sm" @click="$emit('audit')">Audit</ph-button>
+        <ph-button variant="outline" size="sm" @click="$emit('import-open')">Import</ph-button>
+        <ph-button variant="ghost" size="sm" @click="$emit('export-csv')">Export CSV</ph-button>
+        <ph-button variant="ghost" size="sm" @click="$emit('export-json')">Export JSON</ph-button>
+      </ph-flex>
+    </ph-flex>
+
+    <div v-if="selected.length" class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+      <ph-badge :label="`${selected.length} selected`" variant="info" pill />
+      <span class="text-body-secondary small me-1">Apply to selection:</span>
+      <ph-button variant="danger" size="sm" @click="$emit('bulk-delete')">Delete</ph-button>
+      <ph-button variant="outline" size="sm" @click="$emit('bulk-activate')">Activate</ph-button>
+      <ph-button variant="ghost" size="sm" @click="$emit('bulk-deactivate')">Deactivate</ph-button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'SchiiRecordToolbar',
+  props: {
+    entity: {
+      type: String,
+      default: ''
+    },
+    selected: {
+      type: Array,
+      default: () => []
+    },
+    query: {
+      type: String,
+      default: ''
+    }
+  },
+  emits: [
+    'update:query',
+    'search',
+    'refresh',
+    'create',
+    'schema-diff',
+    'audit',
+    'import-open',
+    'export-csv',
+    'export-json',
+    'bulk-delete',
+    'bulk-activate',
+    'bulk-deactivate'
+  ],
+  computed: {
+    searchText: {
+      get() {
+        return this.query;
+      },
+      set(val) {
+        this.$emit('update:query', val);
+      }
+    }
+  },
+  methods: {
+    doSearch() {
+      this.$emit('search');
+    }
+  }
+};
+</script>
