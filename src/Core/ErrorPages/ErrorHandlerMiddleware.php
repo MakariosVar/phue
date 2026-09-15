@@ -9,6 +9,7 @@ use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
+use Phue\Core\Http\Exceptions\HttpException;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -35,16 +36,29 @@ class ErrorHandlerMiddleware
         } catch (Throwable $e) {
             $this->logger->error('Unhandled exception: ' . $e->getMessage(), ['exception' => $e]);
 
-            // Determine status code based on exception type
+            $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
+                || $request->isXmlHttpRequest();
+
+            // Early return for HttpException so that custom messages and status codes 
+            // are always preserved verbatim, even in production mode.
+            if ($e instanceof HttpException) {
+                $statusCode = $e->getStatusCode();
+                if ($acceptsJson) {
+                    $response = Response::json(['error' => $e->getMessage()], $statusCode);
+                } else {
+                    $response = new Response($e->getMessage(), $statusCode);
+                }
+
+                return $response;
+            }
+
+            // Determine status code based on exception type for other exceptions
             $statusCode = match (true) {
                 $e instanceof InvalidArgumentException => 400,
                 $e instanceof RouteNotFoundException => 404,
                 $e instanceof MethodNotAllowedException => 405,
                 default => 500,
             };
-
-            $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
-                || $request->isXmlHttpRequest();
 
             if ($acceptsJson) {
                 if ($this->debug) {

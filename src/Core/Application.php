@@ -446,6 +446,14 @@ class Application
 
         try {
             $response = $pipeline($request);
+        } catch (\Phue\Core\Http\Exceptions\HttpException $e) {
+            $statusCode = $e->getStatusCode();
+            $logger->warning('HTTP ' . $statusCode . ' Client Error: ' . $e->getMessage(), ['exception' => $e]);
+            $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
+                || $request->isXmlHttpRequest();
+            $response = $acceptsJson 
+                ? Response::json(['error' => $e->getMessage()], $statusCode) 
+                : new Response($e->getMessage(), $statusCode);
         } catch (\InvalidArgumentException $e) {
             $logger->warning('HTTP 400 Bad Request: ' . $e->getMessage(), ['exception' => $e]);
             $msg = $this->debug ? $e->getMessage() : 'Bad Request';

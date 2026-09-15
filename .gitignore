@@ -18,6 +18,7 @@ composer.lock
 /storage/generated
 
 tests/Production/_tmp_conftest/storage/logs
+tests/Fixtures/RestApp/storage/logs
 
 .env
 !.env.example
