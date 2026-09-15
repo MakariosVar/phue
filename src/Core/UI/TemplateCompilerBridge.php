@@ -90,15 +90,18 @@ class TemplateCompilerBridge
         $error = curl_error($ch);
         $ch = null;
 
-        // Fail-Closed
         if ($response === false || $statusCode !== 200) {
-            throw new RuntimeException("SSR Compiler service failure (Status {$statusCode}): {$error}");
+            $this->logCompileFailure($template, $response, $statusCode, $error, 'HTTP');
+            $bodySnippet = $response !== false ? substr($response, 0, 500) : '(empty)';
+            throw new RuntimeException("SSR Compiler service failure (Status {$statusCode}): {$error}. Debug log: " . $this->debugLogPath());
         }
 
         /** @var array{ok?: bool, code?: string, error?: string} $data */
         $data = json_decode($response, true);
         if (empty($data['ok']) || !isset($data['code'])) {
-            throw new RuntimeException("SSR Compiler error: " . ($data['error'] ?? 'Unknown error'));
+            $ssrError = $data['error'] ?? 'Unknown error';
+            $this->logCompileFailure($template, $response, $statusCode, $error, 'COMPILE:' . $ssrError);
+            throw new RuntimeException("SSR Compiler error: {$ssrError}. Debug log: " . $this->debugLogPath());
         }
 
         // Store compiled JS code in persistent cache
@@ -107,5 +110,56 @@ class TemplateCompilerBridge
         }
 
         return $data['code'];
+    }
+
+    /**
+     * Logs server-side rendering (SSR) compilation failures to a daily log file.
+     *
+     * @param string     $template   The template string that failed to compile or render.
+     * @param mixed      $response   The raw response from the SSR engine (string, false, or other type).
+     * @param int        $statusCode The HTTP status code returned during the compilation request.
+     * @param string     $error      The cURL error message if a network or transport failure occurred.
+     * @param string     $context    Additional contextual identifier or message for the failure.
+     *
+     * @return void
+     */
+    private function logCompileFailure(string $template, $response, int $statusCode, string $error, string $context): void
+    {
+        $logDir = dirname(__DIR__, 3) . '/storage/logs';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        $logFile = $logDir . '/ssr-compile-' . date('Y-m-d') . '.log';
+        $hash = sha1($template);
+        $bodySnippet = is_string($response) ? substr($response, 0, 2000) : ($response === false ? '(empty/curl-fail)' : gettype($response));
+        $entry = "\n" . str_repeat('=', 80) . "\n"
+            . "Timestamp: " . date('Y-m-d H:i:s') . "\n"
+            . "Context:   {$context}\n"
+            . "Template SHA1: {$hash}\n"
+            . "HTTP Status: {$statusCode}\n"
+            . "Curl Error: {$error}\n"
+            . "SSR Response: {$bodySnippet}\n"
+            . str_repeat('-', 80) . "\n"
+            . "TEMPLATE (first 5000 chars):\n"
+            . substr($template, 0, 5000) . "\n"
+            . str_repeat('=', 80) . "\n";
+        @file_put_contents($logFile, $entry, FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * Resolves the file path of the most recent SSR compile log, or a default daily path if none exist.
+     *
+     * @return string Absolute file path to the target log file.
+     */
+    private function debugLogPath(): string
+    {
+        $logDir = dirname(__DIR__, 3) . '/storage/logs';
+        $pattern = $logDir . '/ssr-compile-*.log';
+        $files = glob($pattern);
+        if (empty($files)) {
+            return $logDir . '/ssr-compile-' . date('Y-m-d') . '.log';
+        }
+        rsort($files);
+        return $files[0];
     }
 }

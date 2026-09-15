@@ -109,7 +109,8 @@ class PhueTemplateParser
         if ($scriptBlock !== null) {
             $occurrences = substr_count(strtolower($scriptBlock['raw']), '</script');
             if ($occurrences > 1) {
-                throw new RuntimeException("Security Exception: <script> block in {$filePath} contains invalid literal closing script tag.");
+                $scriptStartLine = $scriptBlock['startLine'] ?? 1;
+                throw new RuntimeException("Security Exception: <script> block in {$filePath} on line {$scriptStartLine} contains invalid literal closing script tag.");
             }
             $scriptContent = trim($scriptBlock['body']);
         }
@@ -151,7 +152,7 @@ class PhueTemplateParser
                 $startLine = substr_count(substr($content, 0, $tagMatchOffset), "\n") + 1;
 
                 if (isset($blocks[$tagName])) {
-                    throw new RuntimeException("Duplicate top-level <{$tagName}> section in {$filePath}");
+                    throw new RuntimeException("Duplicate top-level <{$tagName}> section in {$filePath} on line {$startLine}");
                 }
 
                 $openingTag = $match[0][0];
@@ -182,7 +183,7 @@ class PhueTemplateParser
                 }
 
                 if ($depth !== 0) {
-                    throw new RuntimeException("Unclosed top-level <{$tagName}> section in {$filePath}");
+                    throw new RuntimeException("Unclosed top-level <{$tagName}> section in {$filePath} opened on line {$startLine}");
                 }
 
                 $body = substr($content, $bodyStart, $bodyEnd - $bodyStart);
@@ -197,22 +198,28 @@ class PhueTemplateParser
 
                 $offset = $tagMatchOffset + $rawLength;
                 $offset += strspn($content, " \t\r\n", $offset);
-            } elseif (preg_match($scriptPattern, $content, $match, 0, $offset)) {
+            } elseif (preg_match($scriptPattern, $content, $match, PREG_OFFSET_CAPTURE, $offset)) {
                 if (isset($blocks['script'])) {
-                    throw new RuntimeException("Duplicate top-level <script> section in {$filePath}");
+                    $scriptStartLine = substr_count(substr($content, 0, $match[0][1]), "\n") + 1;
+                    throw new RuntimeException("Duplicate top-level <script> section in {$filePath} on line {$scriptStartLine}");
                 }
 
+                $scriptStartLine = substr_count(substr($content, 0, $match[0][1]), "\n") + 1;
+
                 $blocks['script'] = [
-                    'raw'  => $match[0],
-                    'body' => $match[1],
+                    'raw'       => $match[0][0],
+                    'body'      => $match[1][0],
+                    'startLine' => $scriptStartLine,
                 ];
 
-                $offset += strlen($match[0]);
+                $offset += strlen($match[0][0]);
                 $offset += strspn($content, " \t\r\n", $offset);
             } else {
                 $remaining = substr($content, $offset);
                 if (trim($remaining) !== '') {
-                    throw new RuntimeException("Structural Error: Unexpected top-level content or malformed section at offset {$offset} in {$filePath}");
+                    $errorLine = substr_count(substr($content, 0, $offset), "\n") + 1;
+                    $snippet = trim(substr($remaining, 0, 40));
+                    throw new RuntimeException("Structural Error: Unexpected top-level content or malformed section at line {$errorLine}, offset {$offset} in {$filePath}. Found snippet: '{$snippet}'");
                 }
                 break;
             }
@@ -225,7 +232,7 @@ class PhueTemplateParser
      * Evaluates isolated PHP code blocks, utilizing disk caching for OPCache compliance when available.
      *
      * @param string               $phpCode   Raw string containing PHP logic from <php> tag.
-     * @param array<string, mixed> $params    Variables extracted into local closure scope.
+     * @param array<string, mixed> $params   Variables extracted into local closure scope.
      * @param string|null          $filePath  Original .phue file path for stack trace mapping.
      * @param int                  $startLine Starting line number of the <php> block in the source file.
      *
