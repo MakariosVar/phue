@@ -16,6 +16,9 @@ use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
 use Phue\Core\Database\Connection;
+use Phue\Core\Ssr\NullSsrEngine;
+use Phue\Core\Ssr\UnixSsrClient;
+use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Schii\Config\SchiiConfig;
 use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Schii\Endpoint\ModelEndpoint;
@@ -32,6 +35,7 @@ use Phue\Core\Ssr\SsrEngine;
 use Phue\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Auth\AuthManager;
 use Phue\Auth\RbacManager;
+use Psr\SimpleCache\CacheInterface;
 
 /**
  * Class SchiiModule
@@ -74,6 +78,19 @@ class SchiiModule extends Module
             }
         );
 
+        // Directory where compiled component PHP blocks are written for OPCache execution
+        $viewsCacheDir = $this->basePath . '/storage/cache/views';
+
+        // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
+        $this->container->singleton('phui.loader', function () use ($viewsCacheDir): PhueComponentLoader {
+            return new PhueComponentLoader(
+                componentsDir: $this->basePath . '/src/Core/UI/Phui',
+                parser: null,
+                persistentCache: $this->container->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir
+            );
+        });
+
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
@@ -82,7 +99,7 @@ class SchiiModule extends Module
             AuthManager::class,
             function (Container $c) use ($schiiConfig): AuthManager {
                 /** @var callable|null $resolver */
-                $resolver = $schiiConfig->authResolver 
+                $resolver = $schiiConfig->authResolver
                     ?? [\Phue\Auth\BaseUser::class, 'findIdentityByAuthKey'];
 
                 $bearerAuth = new BearerTokenAuthenticator(
@@ -148,7 +165,7 @@ class SchiiModule extends Module
 
         $this->container->bind(
             SchemaInspectorEndpoint::class,
-            function (Container $c): SchemaInspectorEndpoint {
+            function (Container $c) use ($schiiConfig): SchemaInspectorEndpoint {
                 return new SchemaInspectorEndpoint(
                     $c->get(SchemaRegistry::class),
                     $c->has(Connection::class) ? $c->get(Connection::class) : null,
@@ -159,7 +176,7 @@ class SchiiModule extends Module
 
         $this->container->bind(
             SchemaSyncEndpoint::class,
-            function (Container $c): SchemaSyncEndpoint {
+            function (Container $c) use ($schiiConfig): SchemaSyncEndpoint {
                 return new SchemaSyncEndpoint(
                     $c->get(SchemaSyncEngine::class),
                     $schiiConfig->entityNamespace ?? 'App\\Models'
@@ -186,7 +203,12 @@ class SchiiModule extends Module
         if ($this->container->has(ComponentLoaderRegistry::class)) {
             /** @var ComponentLoaderRegistry $loaderRegistry */
             $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
-            $loaderRegistry->addLoader($this->container->get('schii.loader'));
+            $loaderRegistry->addLoader(function() use ($loaderRegistry): PhueComponentLoader {
+                /** @var PhueComponentLoader $loader */
+                $loader = $this->container->get('schii.loader');
+                $loader->setRegistry($loaderRegistry);
+                return $loader;
+            });
         }
 
         $this->container->singleton('schii.renderer', function ($c) {
@@ -197,16 +219,32 @@ class SchiiModule extends Module
                 layoutName: 'AppLayout',
                 uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
                 partialRenderer: $c->get(PhuePartialRenderer::class),
-                ssrEngine: $c->get(SsrEngine::class),
-                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
+                ssrEngine: $c->get(NullSsrEngine::class),
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class),
+                requestResolver: fn () => $c->get(\Phue\Core\Request::class)
             );
         });
 
-        // Register Component Loader & Renderer Services (Phii)
         $this->container->singleton(
             'phii.loader',
             fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
         );
+
+        // Register Component Loader & Renderer Services (Phii)
+        if ($this->container->has(ComponentLoaderRegistry::class)) {
+            /** @var ComponentLoaderRegistry $loaderRegistry */
+            $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
+            $loaderRegistry->addLoader(function() use ($loaderRegistry): ?PhueComponentLoader {
+                try {
+                    /** @var PhueComponentLoader $loader */
+                    $loader = $this->container->get('phii.loader');
+                    $loader->setRegistry($loaderRegistry);
+                    return $loader;
+                } catch (Throwable) {
+                    return null;
+                }
+            });
+        }
 
         if ($this->container->has(ComponentLoaderRegistry::class)) {
             /** @var ComponentLoaderRegistry $loaderRegistry */
@@ -222,8 +260,9 @@ class SchiiModule extends Module
                 layoutName: 'AppLayout',
                 uriResolver: fn() => \Phue\Core\Request::capture()->getUri(),
                 partialRenderer: $c->get(PhuePartialRenderer::class),
-                ssrEngine: $c->get(SsrEngine::class),
-                loaderRegistry: $c->get(ComponentLoaderRegistry::class)
+                ssrEngine: $c->get(NullSsrEngine::class),
+                loaderRegistry: $c->get(ComponentLoaderRegistry::class),
+                requestResolver: fn () => $c->get(\Phue\Core\Request::class)
             );
         });
 
@@ -258,8 +297,8 @@ class SchiiModule extends Module
         $requireAuth = $schiiConfig->requireAuth;
 
         /** @var class-string $crudHandler */
-        $crudHandler = $requireAuth 
-            ? AuthorizedModelEndpoint::class 
+        $crudHandler = $requireAuth
+            ? AuthorizedModelEndpoint::class
             : ModelEndpoint::class;
 
         $this->container->bind(
@@ -319,6 +358,6 @@ class SchiiModule extends Module
             /** @var string $consolePrefix */
             $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
             $this->router->addRoute('GET', $consolePrefix, [ConsoleController::class, 'index']);
-        }        
+        }
     }
 }
