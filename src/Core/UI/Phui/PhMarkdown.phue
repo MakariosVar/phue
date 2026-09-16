@@ -1,0 +1,42 @@
+<php>
+/**
+ * Metadata provider block for PhMarkdown — SSR markdown renderer.
+ *
+ * Receives either raw markdown ($markdown) or a base-relative file path ($src),
+ * parses server-side via Phue\Core\Utils\MarkdownParser, and returns the
+ * rendered HTML as the static html payload (consumed by PhuePartialRenderer
+ * in Direct Static HTML mode — no client hydration needed).
+ */
+
+/** @var string|null $markdown */
+$markdown = $markdown ?? null;
+
+/** @var string|null $src */
+$src = $src ?? null;
+
+/** @var string $html */
+$html = '';
+
+if ($markdown === null && $src !== null) {
+    $basePath = \Phue\Core\Console\PathResolver::resolveBasePath();
+    $target = $basePath . '/' . ltrim($src, '/');
+
+    if (is_file($target)) {
+        $markdown = (string) file_get_contents($target);
+    }
+}
+
+if (is_string($markdown) && $markdown !== '') {
+    $html = (new \Phue\Core\Utils\MarkdownParser())->parse($markdown);
+}
+
+return [
+    'title' => 'Markdown',
+    'state' => [],
+    'html' => $html,
+];
+</php>
+
+<template>
+<!-- PhMarkdown renders server-side: the parsed HTML is injected as static html -->
+</template>
