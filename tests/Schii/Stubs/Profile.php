@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Stubs;
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
 
 #[UI(label: 'Profiles', icon: 'card', layout: 'cards', description: 'User profile cards')]
 class Profile extends BaseActiveRecord

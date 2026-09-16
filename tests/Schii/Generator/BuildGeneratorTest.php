@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Generator;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Generator\BuildGenerator;
-use Phue\Schii\Generator\PhiiExportSchema;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Generator\BuildGenerator;
+use Phue\Modules\Schii\Generator\PhiiExportSchema;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\User;
 
 /**

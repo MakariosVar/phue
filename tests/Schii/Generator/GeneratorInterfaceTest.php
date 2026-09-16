@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Generator;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Generator\BuildGenerator;
-use Phue\Schii\Generator\FileGeneratorInterface;
-use Phue\Schii\Generator\GeneratorInterface;
-use Phue\Schii\Generator\RuntimeGenerator;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Generator\BuildGenerator;
+use Phue\Modules\Schii\Generator\FileGeneratorInterface;
+use Phue\Modules\Schii\Generator\GeneratorInterface;
+use Phue\Modules\Schii\Generator\RuntimeGenerator;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Core\Routing\Router;
-use Phue\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 
 /**
  * Generator contract conformance: name contracts and FileGeneratorInterface

@@ -3,8 +3,8 @@
 namespace Phue\Tests\DevTools;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Core\DevTool\RequestProfiler;
-use Phue\Core\DevTool\Stopwatch;
+use Phue\Modules\DevTool\RequestProfiler;
+use Phue\Modules\DevTool\Stopwatch;
 
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 class RequestProfilerTest extends TestCase

@@ -9,8 +9,8 @@ use Phue\Core\Application;
 use Phue\Core\Container;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Phue\Server\FpmAdapter;
-use Phue\Server\RoadRunnerAdapter;
+use Phue\Modules\Server\FpmAdapter;
+use Phue\Modules\Server\RoadRunnerAdapter;
 
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 class ServerAdapterTest extends TestCase
@@ -78,7 +78,7 @@ class ServerAdapterTest extends TestCase
             ->with($request)
             ->willReturn($expectedResponse);
 
-        $adapter = new \Phue\Server\SwooleAdapter();
+        $adapter = new \Phue\Modules\Server\SwooleAdapter();
         $adapter->boot($app);
 
         $response = $adapter->handleRequest($request);
@@ -89,7 +89,7 @@ class ServerAdapterTest extends TestCase
 
     public function testSwooleAdapterThrowsExceptionIfNotBooted(): void
     {
-        $adapter = new \Phue\Server\SwooleAdapter();
+        $adapter = new \Phue\Modules\Server\SwooleAdapter();
         $request = new Request('/test', 'GET');
 
         $this->expectException(\RuntimeException::class);
@@ -100,7 +100,7 @@ class ServerAdapterTest extends TestCase
 
     public function testSwooleAdapterRunThrowsIfNotBooted(): void
     {
-        $adapter = new \Phue\Server\SwooleAdapter();
+        $adapter = new \Phue\Modules\Server\SwooleAdapter();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/must be booted/');
@@ -135,7 +135,7 @@ class ServerAdapterTest extends TestCase
         $app = $this->createMock(Application::class);
         $app->method('getContainer')->willReturn($container);
 
-        $adapter = new \Phue\Server\SwooleAdapter();
+        $adapter = new \Phue\Modules\Server\SwooleAdapter();
         $adapter->boot($app);
 
         $request = new Request('/test', 'GET');
@@ -156,8 +156,8 @@ class ServerAdapterTest extends TestCase
 
     public function testSwooleAdapterDefaultConstructorValues(): void
     {
-        $adapter = new \Phue\Server\SwooleAdapter();
-        $this->assertInstanceOf(\Phue\Server\SwooleAdapter::class, $adapter);
+        $adapter = new \Phue\Modules\Server\SwooleAdapter();
+        $this->assertInstanceOf(\Phue\Modules\Server\SwooleAdapter::class, $adapter);
     }
 
     public function testFpmAdapterRunCapturesRequestEmitsResponse(): void

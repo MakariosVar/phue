@@ -3,11 +3,11 @@
 namespace Phue\Tests\DevTools;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Core\DevTool\DevToolMiddleware;
-use Phue\Core\DevTool\Dumper;
-use Phue\Core\DevTool\DebugToolbar;
-use Phue\Core\DevTool\RequestProfiler;
-use Phue\Core\DevTool\Stopwatch;
+use Phue\Modules\DevTool\DevToolMiddleware;
+use Phue\Modules\DevTool\Dumper;
+use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\RequestProfiler;
+use Phue\Modules\DevTool\Stopwatch;
 use Phue\Core\Request;
 use Phue\Core\Response;
 

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Phue\Tests\Compiler;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Compiler\AotCompatibilityChecker;
-use Phue\Compiler\AotCompatibilityReport;
-use Phue\Compiler\FallbackStrategy;
-use Phue\Compiler\WiringGenerator;
+use Phue\Modules\Compiler\AotCompatibilityChecker;
+use Phue\Modules\Compiler\AotCompatibilityReport;
+use Phue\Modules\Compiler\FallbackStrategy;
+use Phue\Modules\Compiler\WiringGenerator;
 use Phue\Tests\Compiler\Fixtures\AbstractAotTargetClass;
 use Phue\Tests\Compiler\Fixtures\CallUserFuncArrayAotTargetClass;
 use Phue\Tests\Compiler\Fixtures\ExtractAotTargetClass;

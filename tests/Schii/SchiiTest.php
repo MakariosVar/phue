@@ -6,10 +6,10 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 /**
  * Stub ActiveRecord model used for testing Schii attributes and endpoints.

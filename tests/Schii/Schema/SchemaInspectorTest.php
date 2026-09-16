@@ -6,8 +6,8 @@ namespace Phue\Tests\Schii\Schema;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Connection;
-use Phue\Schii\Schema\ColumnDefinition;
-use Phue\Schii\Schema\SchemaInspector;
+use Phue\Modules\Schii\Schema\ColumnDefinition;
+use Phue\Modules\Schii\Schema\SchemaInspector;
 
 /**
  * SchemaInspector against a real in-memory SQLite database.

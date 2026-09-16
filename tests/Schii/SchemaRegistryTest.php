@@ -6,10 +6,10 @@ namespace Phue\Tests\Schii;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
-use Phue\Schii\Schema\ModelSchema;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Schema\ModelSchema;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Psr\SimpleCache\CacheInterface;
 
 #[UI(label: 'Tagged Cats', icon: 'cat', layout: 'table')]

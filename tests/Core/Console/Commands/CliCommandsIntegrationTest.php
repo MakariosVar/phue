@@ -11,8 +11,8 @@ use Phue\Core\Console\Commands\MigrateRollbackCommand;
 use Phue\Core\Console\Commands\SchiiMigrateCommand;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
 
 /**
  * Integration tests executing the real CLI commands against an isolated

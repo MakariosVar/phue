@@ -6,9 +6,9 @@ namespace Phue\Tests\Schii;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Generator\PhiiExportField;
-use Phue\Schii\Generator\PhiiExportSchema;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Generator\PhiiExportField;
+use Phue\Modules\Schii\Generator\PhiiExportSchema;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\DataMapperEntity;
 use Phue\Tests\Schii\Stubs\Profile;
 use Phue\Tests\Schii\Stubs\User;

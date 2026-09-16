@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Phue\Tests\Rest\Stubs;
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Rest\Attribute\Rest;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
+use Phue\Modules\Rest\Attribute\Rest;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
 
 #[UI(label: 'Article', icon: 'file-text')]
 #[Rest(public: true, operations: ['index', 'show'])]

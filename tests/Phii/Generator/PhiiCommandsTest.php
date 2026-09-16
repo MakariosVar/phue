@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Phue\Tests\Phii\Generator;
 
 use Phue\Core\Console\CommandInterface;
-use Phue\Generator\Commands\ControllerGeneratorCommand;
-use Phue\Generator\Commands\CrudGeneratorCommand;
-use Phue\Generator\Commands\MigrationGeneratorCommand;
-use Phue\Generator\Commands\ModelGeneratorCommand;
-use Phue\Generator\Commands\ModuleGeneratorCommand;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Phii\Generator\Commands\ControllerGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\CrudGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\MigrationGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\ModelGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\ModuleGeneratorCommand;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\Profile;
 use PHPUnit\Framework\TestCase;
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Events;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Events\Bus\RedisStreamDriver;
+use Phue\Modules\Events\Bus\RedisStreamDriver;
 use Redis;
 use RuntimeException;
 

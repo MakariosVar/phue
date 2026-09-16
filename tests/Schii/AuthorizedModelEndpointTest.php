@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Auth\AuthManager;
-use Phue\Auth\Authenticator\AuthenticatorInterface;
-use Phue\Auth\IdentityInterface;
-use Phue\Auth\RbacManager;
+use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\Authenticator\AuthenticatorInterface;
+use Phue\Modules\Auth\IdentityInterface;
+use Phue\Modules\Auth\RbacManager;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 final class AuthorizedAdminUser implements IdentityInterface
 {

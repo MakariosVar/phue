@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Command;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Commands\SchiiServeCommand;
+use Phue\Modules\Schii\Commands\SchiiServeCommand;
 use Phue\Core\Routing\Router;
-use Phue\Schii\Generator\RuntimeGenerator;
-use Phue\Schii\Schema\SchemaRegistry;
-use Phue\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Generator\RuntimeGenerator;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 
 /**
  * SchiiServeCommand: identity contract and missing-public-dir guard.

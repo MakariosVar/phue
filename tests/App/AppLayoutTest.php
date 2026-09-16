@@ -7,7 +7,7 @@ namespace Phue\Tests\App;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
-use Phue\Auth\IdentityInterface;
+use Phue\Modules\Auth\IdentityInterface;
 use PHPUnit\Framework\TestCase;
 
 /**

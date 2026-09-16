@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Phue\Core\Console\Commands;
 
 use Phue\Core\Console\CommandInterface;
-use Phue\Schii\Migration\AutoMigrator;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Migration\AutoMigrator;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 /**
  * CLI Command to run Schii declarative auto-migration for a target model class.

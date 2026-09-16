@@ -9,10 +9,10 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 /**
  * Hardening / edge-case suite for the Schii REST ModelEndpoint.

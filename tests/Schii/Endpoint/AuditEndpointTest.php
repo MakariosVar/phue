@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Endpoint;
 
 use Phue\Core\Request;
-use Phue\Schii\Audit\SchiiAudit;
-use Phue\Schii\Endpoint\AuditEndpoint;
+use Phue\Modules\Schii\Audit\SchiiAudit;
+use Phue\Modules\Schii\Endpoint\AuditEndpoint;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 

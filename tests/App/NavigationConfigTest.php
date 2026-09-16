@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\App;
 
 use App\Config\NavigationConfig;
-use Phue\Auth\IdentityInterface;
+use Phue\Modules\Auth\IdentityInterface;
 use PHPUnit\Framework\TestCase;
 
 /**

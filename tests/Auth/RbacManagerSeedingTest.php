@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Auth;
 
-use Phue\Auth\RbacManager;
+use Phue\Modules\Auth\RbacManager;
 use PHPUnit\Framework\TestCase;
 
 /**

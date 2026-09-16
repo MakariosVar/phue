@@ -9,12 +9,12 @@ use Phue\Core\Routing\RouteMatch;
 use Phue\Core\Routing\Router;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
-use Phue\Schii\Config\SchiiConfig;
-use Phue\Schii\Controller\PhiiController;
-use Phue\Schii\Endpoint\AuditEndpoint;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
-use Phue\Schii\Endpoint\SchemaSyncEndpoint;
+use Phue\Modules\Schii\Config\SchiiConfig;
+use Phue\Modules\Schii\Controller\PhiiController;
+use Phue\Modules\Schii\Endpoint\AuditEndpoint;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Endpoint\SchemaInspectorEndpoint;
+use Phue\Modules\Schii\Endpoint\SchemaSyncEndpoint;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -42,7 +42,7 @@ final class PhiiRoutingTest extends TestCase
 <?php
 return [
     'debug' => true,
-    'modules' => ['\\Phue\\Schii\\SchiiModule'],
+    'modules' => ['\\Phue\\Modules\\Schii\\SchiiModule'],
 ];
 PHP);
 
@@ -219,7 +219,7 @@ PHP);
 
     public function testModuleOwnsPhiiComponentFileWithExactCasing(): void
     {
-        $frontend = dirname(__DIR__, 3) . '/src/Schii/Frontend';
+        $frontend = dirname(__DIR__, 3) . '/src/Modules/Schii/Frontend';
         $this->assertFileExists("{$frontend}/Phii.phue");
         $this->assertFileDoesNotExist("{$frontend}/phii.phue", 'Component file must be named Phii.phue (case-sensitive).');
     }

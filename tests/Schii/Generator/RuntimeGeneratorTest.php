@@ -6,10 +6,10 @@ namespace Phue\Tests\Schii\Generator;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Routing\Router;
-use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Generator\RuntimeGenerator;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Generator\RuntimeGenerator;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 /**
  * RuntimeGenerator: REST route registration on a real Router and the

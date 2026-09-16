@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Phue\Tests\Auth;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Auth\Authenticator\BearerTokenAuthenticator;
-use Phue\Auth\Authenticator\SessionAuthenticator;
-use Phue\Auth\AuthManager;
-use Phue\Auth\IdentityInterface;
-use Phue\Auth\Middleware\AccessControlMiddleware;
-use Phue\Auth\RbacManager;
+use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
+use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\IdentityInterface;
+use Phue\Modules\Auth\Middleware\AccessControlMiddleware;
+use Phue\Modules\Auth\RbacManager;
 use Phue\Core\Request;
 use Phue\Core\Response;
 

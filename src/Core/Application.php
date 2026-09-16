@@ -8,7 +8,7 @@ use Phue\Core\Asset\AssetsController;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\AssetServer;
 use Phue\Core\Asset\HtmlShellRenderer;
-use Phue\Cache\FileCache;
+use Phue\Core\Cache\FileCache;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
@@ -101,7 +101,7 @@ class Application
 
         // Enable debug middleware if in debug mode and it's enabled
         if ($this->debug && $this->config->get('app.devTool', false)) {
-            $this->use(\Phue\Core\DevTool\DevToolMiddleware::class);
+            $this->use(\Phue\Modules\DevTool\DevToolMiddleware::class);
         }
 
         // Register core framework singletons into DI container
@@ -270,9 +270,9 @@ class Application
 
         $this->container->singleton(ComponentRenderer::class, function ($c) {
             $userResolver = function () use ($c) {
-                if ($c->has(\Phue\Auth\AuthManager::class)) {
-                    /** @var \Phue\Auth\AuthManager $auth */
-                    $auth = $c->get(\Phue\Auth\AuthManager::class);
+                if ($c->has(\Phue\Modules\Auth\AuthManager::class)) {
+                    /** @var \Phue\Modules\Auth\AuthManager $auth */
+                    $auth = $c->get(\Phue\Modules\Auth\AuthManager::class);
                     return $auth->getUser();
                 }
                 return null;

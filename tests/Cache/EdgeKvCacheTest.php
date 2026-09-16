@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Cache;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Cache\EdgeKvCache;
+use Phue\Core\Cache\EdgeKvCache;
 
 /**
  * Full PSR-16 compliance tests for EdgeKvCache.

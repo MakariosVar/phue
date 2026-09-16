@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\Database;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Cache\EdgeKvCache;
+use Phue\Core\Cache\EdgeKvCache;
 use Phue\Core\Database\Drivers\NeonDriver;
 use Phue\Core\Database\Drivers\TursoDriver;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Phue\Server\WasmAdapter;
+use Phue\Modules\Server\WasmAdapter;
 
 /**
  * Unit tests for Edge & WASM components including TursoDriver, NeonDriver, WasmAdapter, and EdgeKvCache.

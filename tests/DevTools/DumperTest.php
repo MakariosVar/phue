@@ -3,7 +3,7 @@
 namespace Phue\Tests\DevTools;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Core\DevTool\Dumper;
+use Phue\Modules\DevTool\Dumper;
 
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 class DumperTest extends TestCase

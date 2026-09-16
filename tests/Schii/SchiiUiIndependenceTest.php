@@ -8,14 +8,14 @@ use Phue\Core\Application;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
 use Phue\Core\UI\PhueComponentLoader;
-use Phue\Schii\SchiiModule;
+use Phue\Modules\Schii\SchiiModule;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Schii module independence & UI surface contracts:
  *  - module entities come from the CONFIGURED namespace (never an App hardcode),
  *  - the module consumes the APPLICATION config (apiPrefix, namespace),
- *  - the module owns its frontend (.phue under src/Schii/Frontend) and registers its page.
+ *  - the module owns its frontend (.phue under src/Modules/Schii/Frontend) and registers its page.
  *
  * @package Phue\Tests\Schii
  */
@@ -43,7 +43,7 @@ final class SchiiUiIndependenceTest extends TestCase
 <?php
 return [
     'debug' => true,
-    'modules' => ['\\Phue\\Schii\\SchiiModule'],
+    'modules' => ['\\Phue\\Modules\\Schii\\SchiiModule'],
 ];
 PHP);
 
@@ -87,8 +87,8 @@ PHP);
         $forbidden = ['App\Models', 'use App\\', 'new App\\'];
         $hits = [];
 
-        $files = glob(dirname(__DIR__, 2) . '/src/Schii/**/*.php') ?: [];
-        $files = array_merge($files, glob(dirname(__DIR__, 2) . '/src/Schii/*.php') ?: []);
+        $files = glob(dirname(__DIR__, 2) . '/src/Modules/Schii/**/*.php') ?: [];
+        $files = array_merge($files, glob(dirname(__DIR__, 2) . '/src/Modules/Schii/*.php') ?: []);
 
         foreach (array_unique($files) as $file) {
             $source = strip_comments((string) file_get_contents($file));

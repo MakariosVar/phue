@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Schema;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Schema\ColumnDefinition;
-use Phue\Schii\Schema\SchemaDiff;
-use Phue\Schii\Schema\SchemaOperation;
+use Phue\Modules\Schii\Schema\ColumnDefinition;
+use Phue\Modules\Schii\Schema\SchemaDiff;
+use Phue\Modules\Schii\Schema\SchemaOperation;
 
 /**
  * SchemaDiff: operation bookkeeping and per-dialect SQL generation.

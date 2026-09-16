@@ -1,6 +1,6 @@
 <php>
 use App\Config\NavigationConfig;
-use Phue\Auth\IdentityInterface;
+use Phue\Modules\Auth\IdentityInterface;
 
 /**
  * AppLayout SSR Component

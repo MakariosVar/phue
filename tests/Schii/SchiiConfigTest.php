@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Config\SchiiConfig;
+use Phue\Modules\Schii\Config\SchiiConfig;
 
 /**
  * Test suite verifying SchiiConfig default values, custom overrides, and array transformation.

@@ -6,9 +6,9 @@ namespace Phue\Tests\Schii\Controller;
 
 use Phue\Core\Application;
 use Phue\Core\Request;
-use Phue\Schii\Config\SchiiConfig;
-use Phue\Schii\Controller\PhiiController;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Config\SchiiConfig;
+use Phue\Modules\Schii\Controller\PhiiController;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\Profile;
 use PHPUnit\Framework\TestCase;
 

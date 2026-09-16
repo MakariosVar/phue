@@ -9,8 +9,8 @@ use Phue\Core\Container;
 use Phue\Core\EventDispatcher;
 use Phue\Core\Module;
 use Phue\Core\Routing\Router;
-use Phue\Schii\Config\SchiiConfig;
-use Phue\Schii\SchiiModule;
+use Phue\Modules\Schii\Config\SchiiConfig;
+use Phue\Modules\Schii\SchiiModule;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -102,7 +102,7 @@ final class ModuleTest extends TestCase
     {
         $tmpDir = sys_get_temp_dir() . '/phue_module_init_' . uniqid();
         mkdir($tmpDir . '/config', 0777, true);
-        file_put_contents($tmpDir . '/config/app.php', "<?php\nreturn ['debug' => true, 'modules' => ['\\Phue\\Schii\\SchiiModule']];\n");
+        file_put_contents($tmpDir . '/config/app.php', "<?php\nreturn ['debug' => true, 'modules' => ['\\Phue\\Modules\\Schii\\SchiiModule']];\n");
         file_put_contents($tmpDir . '/config/schii.php', "<?php\nreturn ['apiPrefix' => '/api/schii', 'entityNamespace' => 'App\\Models'];\n");
 
         $container = new Container();

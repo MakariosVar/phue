@@ -7,12 +7,12 @@ namespace Phue\Tests\Schii\Schema;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
-use Phue\Schii\Schema\SchemaInspector;
-use Phue\Schii\Schema\SchemaOperation;
-use Phue\Schii\Schema\SchemaRegistry;
-use Phue\Schii\Schema\SchemaSyncEngine;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Schema\SchemaInspector;
+use Phue\Modules\Schii\Schema\SchemaOperation;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Schema\SchemaSyncEngine;
 
 /**
  * Syncing models on a real in-memory SQLite database: diff detection, dry-run

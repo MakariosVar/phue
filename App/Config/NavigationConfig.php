@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Config;
 
 use function Phue\Core\env;
-use Phue\Auth\IdentityInterface;
+use Phue\Modules\Auth\IdentityInterface;
 
 /**
  * Class NavigationConfig

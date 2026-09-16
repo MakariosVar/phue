@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Generator;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Generator\PhiiExportField;
-use Phue\Schii\Schema\FieldSchema;
+use Phue\Modules\Schii\Generator\PhiiExportField;
+use Phue\Modules\Schii\Schema\FieldSchema;
 
 /**
  * PhiiExportField: field mapping from FieldSchema, array round-trip fidelity

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Tests\App;
 
-use Phue\Auth\BaseUser;
-use Phue\Auth\IdentityInterface;
+use Phue\Modules\Auth\BaseUser;
+use Phue\Modules\Auth\IdentityInterface;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use App\Models\User;

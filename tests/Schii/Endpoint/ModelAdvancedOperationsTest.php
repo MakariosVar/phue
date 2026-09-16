@@ -7,8 +7,8 @@ namespace Phue\Tests\Schii\Endpoint;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use PHPUnit\Framework\TestCase;
 
 /**

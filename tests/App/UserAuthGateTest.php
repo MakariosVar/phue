@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Phue\Tests\App;
 
-use Phue\Auth\AuthManager;
-use Phue\Auth\Authenticator\BearerTokenAuthenticator;
-use Phue\Auth\RbacManager;
+use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Modules\Auth\RbacManager;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
-use Phue\Schii\Endpoint\AuthorizedModelEndpoint;
-use Phue\Schii\Endpoint\ModelEndpoint;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
+use Phue\Modules\Schii\Endpoint\ModelEndpoint;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use App\Models\User;
 use PHPUnit\Framework\TestCase;
 

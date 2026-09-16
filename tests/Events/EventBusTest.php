@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Phue\Tests\Events;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Events\Attribute\Broadcastable;
-use Phue\Events\Bus\InMemoryBusDriver;
-use Phue\Events\Sse\SseResponse;
-use Phue\Events\Sse\SseStreamer;
+use Phue\Modules\Events\Attribute\Broadcastable;
+use Phue\Modules\Events\Bus\InMemoryBusDriver;
+use Phue\Modules\Events\Sse\SseResponse;
+use Phue\Modules\Events\Sse\SseStreamer;
 
 #[Broadcastable(channel: 'test_orders')]
 final class DummyBroadcastModel {}

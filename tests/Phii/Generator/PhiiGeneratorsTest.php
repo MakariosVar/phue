@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Phii\Generator;
 
-use Phue\Generator\ApiGenerator;
-use Phue\Generator\ControllerGenerator;
-use Phue\Generator\CrudGenerator;
-use Phue\Generator\FileMutation;
-use Phue\Generator\MigrationGenerator;
-use Phue\Generator\ModelGenerator;
-use Phue\Generator\ModuleGenerator;
-use Phue\Schii\Generator\PhiiExportField;
-use Phue\Schii\Generator\PhiiExportSchema;
-use Phue\Schii\Schema\FieldSchema;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Phii\Generator\ApiGenerator;
+use Phue\Modules\Phii\Generator\ControllerGenerator;
+use Phue\Modules\Phii\Generator\CrudGenerator;
+use Phue\Modules\Phii\Generator\FileMutation;
+use Phue\Modules\Phii\Generator\MigrationGenerator;
+use Phue\Modules\Phii\Generator\ModelGenerator;
+use Phue\Modules\Phii\Generator\ModuleGenerator;
+use Phue\Modules\Schii\Generator\PhiiExportField;
+use Phue\Modules\Schii\Generator\PhiiExportSchema;
+use Phue\Modules\Schii\Schema\FieldSchema;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\Profile;
 use Phue\Tests\Schii\Stubs\User;
 use PHPUnit\Framework\TestCase;
@@ -345,6 +345,6 @@ final class PhiiGeneratorsTest extends TestCase
     {
         [$controller] = (new ApiGenerator())->generate($this->schema(), $this->dump);
 
-        $this->assertStringContainsString('namespace Phue\Schii\Api;', $controller->content);
+        $this->assertStringContainsString('namespace Phue\Modules\Schii\Api;', $controller->content);
     }
 }

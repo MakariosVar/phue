@@ -11,13 +11,13 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Database\Drivers\Pdo\MysqlDriver;
 use Phue\Core\Database\Drivers\Pdo\PostgresDriver;
 use Phue\Core\Database\Drivers\Pdo\SqliteDriver;
-use Phue\Schii\Attribute\Field;
-use Phue\Schii\Attribute\UI;
-use Phue\Schii\Migration\AutoMigrator;
-use Phue\Schii\Migration\SchemaToSqlConverter;
-use Phue\Schii\Schema\FieldSchema;
-use Phue\Schii\Schema\ModelSchema;
-use Phue\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Migration\AutoMigrator;
+use Phue\Modules\Schii\Migration\SchemaToSqlConverter;
+use Phue\Modules\Schii\Schema\FieldSchema;
+use Phue\Modules\Schii\Schema\ModelSchema;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 #[UI(label: 'Dynamic Products')]
 class MigratableProduct extends BaseActiveRecord

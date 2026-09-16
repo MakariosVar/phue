@@ -7,11 +7,11 @@ namespace Phue\Tests\Schii\Endpoint;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
-use Phue\Schii\Endpoint\SchemaInspectorEndpoint;
-use Phue\Schii\Endpoint\SchemaSyncEndpoint;
-use Phue\Schii\Schema\SchemaInspector;
-use Phue\Schii\Schema\SchemaRegistry;
-use Phue\Schii\Schema\SchemaSyncEngine;
+use Phue\Modules\Schii\Endpoint\SchemaInspectorEndpoint;
+use Phue\Modules\Schii\Endpoint\SchemaSyncEndpoint;
+use Phue\Modules\Schii\Schema\SchemaInspector;
+use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Modules\Schii\Schema\SchemaSyncEngine;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

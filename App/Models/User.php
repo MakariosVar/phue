@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Phue\Auth\BaseUser;
-use Phue\Schii\Attribute\Field;
+use Phue\Modules\Auth\BaseUser;
+use Phue\Modules\Schii\Attribute\Field;
 
 /**
  * Class User

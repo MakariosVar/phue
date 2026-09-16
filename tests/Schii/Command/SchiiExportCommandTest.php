@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Command;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Schii\Commands\SchiiExportCommand;
+use Phue\Modules\Schii\Commands\SchiiExportCommand;
 use Phue\Tests\Schii\Stubs\User;
 
 /**
