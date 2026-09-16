@@ -10,6 +10,7 @@ return [
     'trustedProxies' => [],
     'modules' => [
         \Phue\Modules\Auth\AuthModule::class,
+        \Phue\Modules\Rest\RestModule::class,
         \Phue\Modules\Schii\SchiiModule::class, // Comment this on production
     ],
 ];

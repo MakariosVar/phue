@@ -33,6 +33,20 @@ use ReflectionParameter;
 class RestModule extends Module
 {
     /**
+     * The ID of the module.
+     *
+     * @var string
+     */
+    public string $id = 'rest';
+
+    /**
+     * The modules required by this module.
+     *
+     * @var array<int, string>
+     */
+    public array $requires = ['auth'];
+
+    /**
      * Initializes configuration bindings, discovers annotated models, and registers REST & custom action routes.
      *
      * @return void

@@ -77,7 +77,7 @@ class SchiiModule extends Module
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
-        if ($schiiConfig->requireAuth) {
+        if ($schiiConfig->requireAuth && $this->container->has('module.auth')) {
             $this->requires[] = 'auth';
         }
     }
@@ -296,17 +296,19 @@ class SchiiModule extends Module
             }
         );
 
-        $this->container->bind(
-            AuthorizedModelEndpoint::class,
-            function (Container $c): AuthorizedModelEndpoint {
-                return new AuthorizedModelEndpoint(
-                    $c->get(ModelEndpoint::class),
-                    $c->get(AuthManager::class),
-                    $c->get(RbacManager::class),
-                    $c->get(SchemaRegistry::class)
-                );
-            }
-        );
+        if ($this->container->has('module.auth')) {
+            $this->container->bind(
+                AuthorizedModelEndpoint::class,
+                function (Container $c): AuthorizedModelEndpoint {
+                    return new AuthorizedModelEndpoint(
+                        $c->get(ModelEndpoint::class),
+                        $c->get(AuthManager::class),
+                        $c->get(RbacManager::class),
+                        $c->get(SchemaRegistry::class)
+                    );
+                }
+            );
+        }
 
         // AuditEndpoint & AuthorizedAuditEndpoint Dependency Bindings
         $this->container->bind(
@@ -314,19 +316,21 @@ class SchiiModule extends Module
             fn(Container $c): AuditEndpoint => new AuditEndpoint()
         );
 
-        $this->container->bind(
-            AuthorizedAuditEndpoint::class,
-            function (Container $c): AuthorizedAuditEndpoint {
-                return new AuthorizedAuditEndpoint(
-                    $c->get(AuditEndpoint::class),
-                    $c->get(AuthManager::class),
-                    $c->get(RbacManager::class)
-                );
-            }
-        );
+        if ($this->container->has('module.auth')) {
+            $this->container->bind(
+                AuthorizedAuditEndpoint::class,
+                function (Container $c): AuthorizedAuditEndpoint {
+                    return new AuthorizedAuditEndpoint(
+                        $c->get(AuditEndpoint::class),
+                        $c->get(AuthManager::class),
+                        $c->get(RbacManager::class)
+                    );
+                }
+            );
+        }
 
         /** @var bool $requireAuth */
-        $requireAuth = $schiiConfig->requireAuth;
+        $requireAuth = $schiiConfig->requireAuth && $this->container->has('module.auth');
 
         /** @var class-string $crudHandler */
         $crudHandler = $requireAuth
@@ -368,7 +372,7 @@ class SchiiModule extends Module
         $schiiConfig = $this->container->get(SchiiConfig::class);
 
         /** @var bool $requireAuth */
-        $requireAuth = $schiiConfig->requireAuth;
+        $requireAuth = $schiiConfig->requireAuth && $this->container->has('module.auth');
 
         /** @var class-string $crudHandler */
         $crudHandler = $requireAuth
