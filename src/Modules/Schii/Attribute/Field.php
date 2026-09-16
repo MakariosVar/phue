@@ -10,8 +10,16 @@ use Attribute;
 final readonly class Field
 {
     /**
-     * @param array<string, mixed> $options Επιλογές για select, radio, κλπ.
-     * @param array<string> $rules Κανόνες validation (π.χ. ['required', 'email', 'min:3'])
+     * @param string $type
+     * @param string $label
+     * @param string $widget
+     * @param bool $column
+     * @param bool $required
+     * @param bool $searchable
+     * @param bool $filterable
+     * @param bool $sortable
+     * @param array<string, mixed> $options Options for select, radio, etc.
+     * @param array<string> $rules Validation rules (e.g., ['required', 'email', 'min:3'])
      */
     public function __construct(
         public string $type = 'text',
