@@ -5,17 +5,41 @@
          colors="true"
          cacheDirectory=".phpunit.cache">
 
+    <!-- one testsuite per framework module + kit for cross-module tests. -->
     <testsuites>
-        <testsuite name="Phue Test Suite">
-            <directory suffix=".php">tests</directory>
-        <exclude>tests/Core/Stubs</exclude>
-        <exclude>tests/Schii/Stubs</exclude>
-        <exclude>tests/Rest/Stubs</exclude>
-        <exclude>tests/Compiler/Fixtures</exclude>
-        <exclude>tests/Fixtures</exclude>
-        <exclude>tests/Benchmark/BenchmarkRunner.php</exclude>
-        <exclude>tests/*/_tmp_*</exclude>
-
+        <testsuite name="core">
+            <directory suffix="Test.php">tests/Core</directory>
+        </testsuite>
+        <testsuite name="schii">
+            <directory suffix="Test.php">tests/Schii</directory>
+        </testsuite>
+        <testsuite name="rest">
+            <directory suffix="Test.php">tests/Rest</directory>
+        </testsuite>
+        <testsuite name="phii">
+            <directory suffix="Test.php">tests/Phii</directory>
+        </testsuite>
+        <testsuite name="auth">
+            <directory suffix="Test.php">tests/Auth</directory>
+        </testsuite>
+        <testsuite name="server">
+            <directory suffix="Test.php">tests/Server</directory>
+        </testsuite>
+        <testsuite name="events">
+            <directory suffix="Test.php">tests/Events</directory>
+        </testsuite>
+        <testsuite name="compiler">
+            <directory suffix="Test.php">tests/Compiler</directory>
+        </testsuite>
+        <testsuite name="devtools">
+            <directory suffix="Test.php">tests/DevTools</directory>
+        </testsuite>
+        <testsuite name="kit">
+            <directory suffix="Test.php">tests/App</directory>
+            <directory suffix="Test.php">tests/Benchmark</directory>
+            <directory suffix="Test.php">tests/Cache</directory>
+            <directory suffix="Test.php">tests/ErrorPages</directory>
+            <directory suffix="Test.php">tests/Production</directory>
         </testsuite>
     </testsuites>
 
