@@ -18,12 +18,7 @@ use Phue\Core\Console\Commands\MakeMigrationCommand;
 use Phue\Core\Console\Commands\MakeModelCommand;
 use Phue\Core\Console\Commands\MigrateCommand;
 use Phue\Core\Console\Commands\MigrateRollbackCommand;
-use Phue\Core\Console\Commands\SchiiMigrateCommand;
 use Phue\Core\Console\Commands\ServeCommand;
-use Phue\Core\Console\Commands\SwooleServeCommand;
-use Phue\Modules\Schii\Commands\SchiiExportCommand;
-use Phue\Modules\Schii\Commands\SchiiServeCommand;
-use Phue\Modules\Schii\SchiiModule;
 use Phue\Core\Console\Commands\NpmInstallCommand;
 use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
@@ -48,9 +43,6 @@ $app
     ->add(new NpmInstallCommand())
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand());
-
-// SwooleServeCommand
-$app->add(new SwooleServeCommand());
 
 // Module-specific commands
 foreach ($modules as $moduleClass) {

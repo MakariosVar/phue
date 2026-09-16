@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Phue\Core\Console\Commands;
+namespace Phue\Modules\Server\Commands;
 
 use Phue\Core\Application as PhueApplication;
 use Phue\Core\Console\CommandInterface;

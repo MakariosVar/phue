@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\Console\Commands;
 
 use Phue\Core\Console\Commands\AbstractDatabaseCommand;
-use Phue\Core\Console\Commands\SchiiMigrateCommand;
+use Phue\Modules\Schii\Commands\SchiiMigrateCommand;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

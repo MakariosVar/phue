@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Core\Console\Commands;
 
-use Phue\Core\Console\Commands\SwooleServeCommand;
+use Phue\Modules\Server\Commands\SwooleServeCommand;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
 

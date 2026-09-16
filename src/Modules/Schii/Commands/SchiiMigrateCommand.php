@@ -2,16 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Phue\Core\Console\Commands;
+namespace Phue\Modules\Schii\Commands;
 
 use Phue\Core\Console\CommandInterface;
 use Phue\Modules\Schii\Migration\AutoMigrator;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Core\Console\Commands\AbstractDatabaseCommand;
 
 /**
  * CLI Command to run Schii declarative auto-migration for a target model class.
  *
- * @package Phue\Core\Console\Commands
+ * @package Phue\Modules\Schii\Commands
  */
 final class SchiiMigrateCommand extends AbstractDatabaseCommand implements CommandInterface
 {

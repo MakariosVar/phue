@@ -99,11 +99,6 @@ class Application
         $this->events = new EventDispatcher();
         $this->debug = (bool) $this->config->get('app.debug', false);
 
-        // Enable debug middleware if in debug mode and it's enabled
-        if ($this->debug && $this->config->get('app.devTool', false)) {
-            $this->use(\Phue\Modules\DevTool\DevToolMiddleware::class);
-        }
-
         // Register core framework singletons into DI container
         $this->registerCoreBindings();
 

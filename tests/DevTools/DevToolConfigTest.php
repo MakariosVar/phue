@@ -77,7 +77,7 @@ class DevToolConfigTest extends TestCase
     "debug" => %s,
     "devTool" => %s,
     "trustedProxies" => [],
-    "modules" => [],
+    "modules" => [\Phue\Modules\DevTool\DevToolsModule::class],
 ];',
             $debug ? 'true' : 'false',
             $devTool ? 'true' : 'false'

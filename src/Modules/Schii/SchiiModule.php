@@ -362,6 +362,19 @@ class SchiiModule extends Module
     }
 
     /**
+     * Register commands
+     *
+     * @param \Phue\Core\Console\Application $console
+     * @return void
+     */
+    public function registerCommands(\Phue\Core\Console\Application $console): void
+    {
+        $console->add(new \Phue\Modules\Schii\Commands\SchiiMigrateCommand());
+        $console->add(new \Phue\Modules\Schii\Commands\SchiiExportCommand());
+        $console->add(new \Phue\Modules\Schii\Commands\SchiiServeCommand());
+    }
+
+    /**
      * Registers REST API and console routes.
      *
      * @return void
