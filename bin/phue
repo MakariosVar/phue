@@ -12,7 +12,10 @@ require __DIR__ . '/../vendor/autoload.php';
 use Phue\Core\Console\Application;
 use Phue\Core\Config;
 use Phue\Core\Module;
+use Phue\Core\Console\Commands\NewProjectCommand;
 use Phue\Core\Console\Commands\DeployCommand;
+use Phue\Core\Console\Commands\ModuleListCommand;
+use Phue\Core\Console\Commands\ModuleNewCommand;
 use Phue\Core\Console\Commands\MakeControllerCommand;
 use Phue\Core\Console\Commands\MakeMigrationCommand;
 use Phue\Core\Console\Commands\MakeModelCommand;
@@ -33,6 +36,7 @@ $app = new Application('1.0.0');
  * Register framework CLI commands into application engine container.
  */
 $app
+    ->add(new NewProjectCommand())
     ->add(new ServeCommand())
     ->add(new MakeControllerCommand())
     ->add(new MakeModelCommand())
@@ -40,6 +44,8 @@ $app
     ->add(new MigrateCommand())
     ->add(new MigrateRollbackCommand())
     ->add(new DeployCommand())
+    ->add(new ModuleListCommand())
+    ->add(new ModuleNewCommand())
     ->add(new NpmInstallCommand())
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand());
