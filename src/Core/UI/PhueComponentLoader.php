@@ -7,6 +7,8 @@ namespace Phue\Core\UI;
 use Exception;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Psr\SimpleCache\CacheInterface;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 
 /**
@@ -67,6 +69,13 @@ class PhueComponentLoader
      * @var TemplateCompilerBridge
      */
     private TemplateCompilerBridge $compilerBridge;
+
+    /**
+     * Lazy recursive child directory index mapping basename -> relative path.
+     *
+     * @var array<string, string>|null
+     */
+    private ?array $childIndex = null;
 
     /**
      * PhueComponentLoader constructor.
@@ -254,7 +263,6 @@ class PhueComponentLoader
 
         try {
             foreach ($children as $child) {
-                // Use full servable module hash via moduleHash instead of rawModuleHash
                 $servableHash = $this->registry !== null
                     ? $this->registry->moduleHash($child)
                     : $this->moduleHash($child);
@@ -276,7 +284,6 @@ class PhueComponentLoader
         $importStatements = !empty($imports) ? implode("\n", $imports) . "\n" : '';
         $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
 
-        // Precompile ONLY client DOM render function
         $renderFnCode = $this->compilerBridge->compile($structure['template'], ssr: false);
         $scriptContent = trim($structure['script'] ?? '');
 
@@ -322,7 +329,6 @@ class PhueComponentLoader
 
             $proxyBlock = implode("\n", $proxies) . "\n";
         } elseif (!empty($componentsObj)) {
-            // Non-root script components (e.g. Card): inject child components into default export
             $scriptContent = preg_replace_callback(
                 '/export\s+default\s*\{/s',
                 fn($matches) => "export default { components: { {$componentsObj} }, ",
@@ -363,7 +369,6 @@ class PhueComponentLoader
 
         $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
 
-        // Precompile ONLY SSR render function
         $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
         $scriptContent = trim($structure['script'] ?? '');
 
@@ -551,6 +556,61 @@ class PhueComponentLoader
     }
 
     /**
+     * Builds the lazy recursive child index mapping basenames to relative paths.
+     * Uses shallowest path first for deterministic collision policy.
+     *
+     * @return array<string, string>
+     */
+    private function getChildIndex(): array
+    {
+        if ($this->childIndex !== null) {
+            return $this->childIndex;
+        }
+
+        $index = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->componentsDir, RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        // Collect all candidate files with their directory depths to favor shallowest paths on collision
+        $candidates = [];
+
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'phue') {
+                $filePath = $file->getRealPath();
+                if ($filePath === false) {
+                    continue;
+                }
+
+                $relativePath = substr($filePath, strlen($this->componentsDir) + 1);
+                $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+                
+                $basename = pathinfo($relativePath, PATHINFO_FILENAME);
+                $depth = substr_count($relativePath, '/');
+
+                $candidates[] = [
+                    'basename' => $basename,
+                    'relativePath' => $relativePath,
+                    'depth' => $depth,
+                ];
+            }
+        }
+
+        // Sort by depth ascending so shallower paths take precedence
+        usort($candidates, fn($a, $b) => $a['depth'] <=> $b['depth']);
+
+        foreach ($candidates as $candidate) {
+            $basename = $candidate['basename'];
+            // First one wins (shallowest)
+            if (!isset($index[$basename])) {
+                $index[$basename] = $candidate['relativePath'];
+            }
+        }
+
+        return $this->childIndex = $index;
+    }
+
+    /**
      * Fetches component structure from disk or cache.
      *
      * @param string $name
@@ -562,10 +622,26 @@ class PhueComponentLoader
             throw new RuntimeException("Invalid component name format: '{$name}'");
         }
 
-        $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . $name . '.phue';
+        $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $name) . '.phue';
 
+        // Flat path check first (fast path)
         if (!file_exists($targetPath)) {
-            throw new RuntimeException("Phue component file not found: '{$name}'");
+            // Fallback to lazy recursive child index lookup by basename
+            $childIndex = $this->getChildIndex();
+            
+            if (isset($childIndex[$name])) {
+                $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $childIndex[$name]);
+            } else {
+                // If index lookup misses, invalidate cache/index once for Swoole freshness staleness check and retry
+                $this->childIndex = null;
+                $childIndex = $this->getChildIndex();
+
+                if (isset($childIndex[$name])) {
+                    $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $childIndex[$name]);
+                } else {
+                    throw new RuntimeException("Phue component file not found: '{$name}'");
+                }
+            }
         }
 
         $resolvedPath = realpath($targetPath);
