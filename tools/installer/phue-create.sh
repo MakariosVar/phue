@@ -13,7 +13,7 @@
 #   phue-create.sh                       (interactive checklist)
 #
 # From a URL:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/makarios-var/phue/main/tools/installer/phue-create.sh) my-app --template=web
+#   bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app --template=web
 
 set -euo pipefail
 
@@ -106,7 +106,7 @@ Interactive mode:
   checklist (up/down move, space toggles, enter confirms).
 
 From a URL:
-  bash <(curl -fsSL https://raw.githubusercontent.com/makarios-var/phue/main/tools/installer/phue-create.sh) my-app --template=web
+  bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app --template=web
 
 Run --list-templates to see the available templates.
 EOF
@@ -442,7 +442,7 @@ else
 fi
 
 if [[ -z "$REPO_ROOT" ]]; then
-    PHUE_REPO_URL="${PHUE_REPO_URL:-https://github.com/makarios-var/phue.git}"
+    PHUE_REPO_URL="${PHUE_REPO_URL:-https://github.com/MakariosVar/phue.git}"
     echo "${C_BLUE}ℹ${C_NC}  Phue source not found locally — cloning ${PHUE_REPO_URL} ..."
     need git "git is required to download the Phue framework."
     CLONE_PARENT="$(mktemp -d)"
