@@ -1,0 +1,9 @@
+{
+    "name": "api",
+    "description": "REST-first API: auth + secured #[Rest] CRUD + Schii schema admin",
+    "modules": [
+        "auth",
+        "rest",
+        "schii"
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "name": "realtime",
+    "description": "Real-time apps: Redis Streams events + SSE + auth + REST",
+    "modules": [
+        "auth",
+        "events",
+        "rest"
+    ]
+}

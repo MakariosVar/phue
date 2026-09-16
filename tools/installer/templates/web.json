@@ -1,0 +1,8 @@
+{
+    "name": "web",
+    "description": "Classic full-stack web app: auth + Schii admin console",
+    "modules": [
+        "auth",
+        "schii"
+    ]
+}

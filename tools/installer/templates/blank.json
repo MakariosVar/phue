@@ -1,0 +1,5 @@
+{
+    "name": "blank",
+    "description": "Core framework only, no modules, pure HTML-first start",
+    "modules": []
+}
