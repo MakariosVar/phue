@@ -13,7 +13,6 @@ return [
     'cachePrefix' => 'schii_schema_',
     'requireAuth' => false,
     'middleware' => [],
-    'authResolver' => ['App\\Models\\User', 'findIdentityByAuthKey'],
     'exportDir' => 'storage/generated',
     'phiiNamespace' => 'App\\Models',
     'phiiPrefix' => '/phii',

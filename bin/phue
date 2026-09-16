@@ -11,6 +11,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Console\Application;
 use Phue\Core\Config;
+use Phue\Core\Module;
 use Phue\Core\Console\Commands\DeployCommand;
 use Phue\Core\Console\Commands\MakeControllerCommand;
 use Phue\Core\Console\Commands\MakeMigrationCommand;
@@ -37,25 +38,29 @@ $app = new Application('1.0.0');
  * Register framework CLI commands into application engine container.
  */
 $app
-    ->add(new SwooleServeCommand())
     ->add(new ServeCommand())
     ->add(new MakeControllerCommand())
     ->add(new MakeModelCommand())
-    ->add(new SchiiMigrateCommand())
     ->add(new MakeMigrationCommand())
     ->add(new MigrateCommand())
-    ->add(new DeployCommand())
     ->add(new MigrateRollbackCommand())
+    ->add(new DeployCommand())
     ->add(new NpmInstallCommand())
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand());
 
-// Check if Schii is loaded and enable the Schii commands conditionally
-$isSchiiLoaded = in_array(SchiiModule::class, $modules, true);
-if ($isSchiiLoaded) {
-    $app
-        ->add(new SchiiExportCommand())
-        ->add(new SchiiServeCommand());
+// SwooleServeCommand
+$app->add(new SwooleServeCommand());
+
+// Module-specific commands
+foreach ($modules as $moduleClass) {
+    if (!class_exists($moduleClass)) {
+        fwrite(STDERR, "Module $moduleClass not found" . PHP_EOL);
+        continue;
+    }
+    /** @var Module $module */
+    $module = new $moduleClass();
+    $module->registerCommands($app);
 }
 
 exit($app->run($_SERVER['argv']));

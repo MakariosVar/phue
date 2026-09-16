@@ -38,6 +38,7 @@ use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\RbacManager;
 use Psr\SimpleCache\CacheInterface;
+use Throwable;
 
 /**
  * Class SchiiModule
@@ -51,11 +52,42 @@ use Psr\SimpleCache\CacheInterface;
 class SchiiModule extends Module
 {
     /**
+     * Module identifier.
+     */
+    public string $id = 'schii';
+
+    /**
+     * Required module dependencies.
+     *
+     * @var array<int, string>
+     */
+    public array $requires = [];
+
+    /**
      * Initializes module singletons, service bindings, component loaders, and REST routes.
      *
      * @return void
      */
     public function init(): void
+    {
+        $this->config();
+        $this->bindings();
+        $this->routes();
+
+        /** @var SchiiConfig $schiiConfig */
+        $schiiConfig = $this->container->get(SchiiConfig::class);
+
+        if ($schiiConfig->requireAuth) {
+            $this->requires[] = 'auth';
+        }
+    }
+
+    /**
+     * Configures Schii configuration and core UI loaders.
+     *
+     * @return void
+     */
+    protected function config(): void
     {
         // 1. Config Binding: Resolves and registers the SchiiConfig singleton
         $this->container->singleton(
@@ -92,36 +124,17 @@ class SchiiModule extends Module
                 viewsCacheDir: $viewsCacheDir
             );
         });
+    }
 
+    /**
+     * Registers schema registries, inspectors, generators, endpoints, and renderers.
+     *
+     * @return void
+     */
+    protected function bindings(): void
+    {
         /** @var SchiiConfig $schiiConfig */
         $schiiConfig = $this->container->get(SchiiConfig::class);
-
-        // 2. AuthManager Scoped with Framework Zero-Config Default Resolver
-        $this->container->scoped(
-            AuthManager::class,
-            function (Container $c) use ($schiiConfig): AuthManager {
-                /** @var callable|null $resolver */
-                $resolver = $schiiConfig->authResolver
-                    ?? [\Phue\Modules\Auth\BaseUser::class, 'findIdentityByAuthKey'];
-
-                $bearerAuth = new BearerTokenAuthenticator(
-                    tokenResolver: static function (string $token) use ($resolver): mixed {
-                        if (is_callable($resolver)) {
-                            return $resolver($token);
-                        }
-                        return null;
-                    }
-                );
-
-                return new AuthManager([$bearerAuth]);
-            }
-        );
-
-        // 3. RbacManager Singleton
-        $this->container->singleton(
-            RbacManager::class,
-            fn(): RbacManager => new RbacManager()
-        );
 
         // 4. SchemaRegistry Singleton
         $this->container->singleton(
@@ -320,11 +333,6 @@ class SchiiModule extends Module
             ? AuthorizedModelEndpoint::class
             : ModelEndpoint::class;
 
-        /** @var class-string $auditHandler */
-        $auditHandler = $requireAuth
-            ? AuthorizedAuditEndpoint::class
-            : AuditEndpoint::class;
-
         $this->container->bind(
             RuntimeGenerator::class,
             function (Container $c) use ($crudHandler): RuntimeGenerator {
@@ -347,6 +355,30 @@ class SchiiModule extends Module
                 );
             }
         );
+    }
+
+    /**
+     * Registers REST API and console routes.
+     *
+     * @return void
+     */
+    protected function routes(): void
+    {
+        /** @var SchiiConfig $schiiConfig */
+        $schiiConfig = $this->container->get(SchiiConfig::class);
+
+        /** @var bool $requireAuth */
+        $requireAuth = $schiiConfig->requireAuth;
+
+        /** @var class-string $crudHandler */
+        $crudHandler = $requireAuth
+            ? AuthorizedModelEndpoint::class
+            : ModelEndpoint::class;
+
+        /** @var class-string $auditHandler */
+        $auditHandler = $requireAuth
+            ? AuthorizedAuditEndpoint::class
+            : AuditEndpoint::class;
 
         // 7. Dynamic REST & Console Route Mappings
         /** @var string $apiPrefix */
@@ -367,7 +399,7 @@ class SchiiModule extends Module
             $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
 
-            // Audit Log Routes (τοποθετούνται εδώ πριν τα dynamic {entity} routes για αποφυγή συγκρούσεων)
+            // Audit Log Routes
             $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/audit/{entity}", [$auditHandler, 'forEntity'], middleware: $middleware);
 

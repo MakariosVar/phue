@@ -9,6 +9,7 @@ return [
     'devTool' => false,
     'trustedProxies' => [],
     'modules' => [
+        \Phue\Modules\Auth\AuthModule::class,
         \Phue\Modules\Schii\SchiiModule::class,
     ],
 ];

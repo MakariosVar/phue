@@ -43,7 +43,7 @@ final class SchiiUiIndependenceTest extends TestCase
 <?php
 return [
     'debug' => true,
-    'modules' => ['\\Phue\\Modules\\Schii\\SchiiModule'],
+    'modules' => ['\\Phue\\Modules\\Auth\\AuthModule', '\\Phue\\Modules\\Schii\\SchiiModule'],
 ];
 PHP);
 

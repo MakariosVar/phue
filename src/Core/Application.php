@@ -681,33 +681,63 @@ class Application
     }
 
     /**
-     * Instantiate and register application module extensions.
+     * Instantiate and register application module extensions with a two-pass load strategy.
+     *
+     * Pass 1: Validates existence, instantiates via DI, injects core infrastructure, 
+     * initializes, and registers each module into the container.
+     * Pass 2: Iterates through all loaded modules to ensure all declared module 
+     * dependencies (`requires`) are fully satisfied.
      *
      * @param array<int, string> $modules List of FQCNs representing application modules.
      *
      * @return void
+     * @throws \RuntimeException If a module class does not exist, fails type constraints, or lacks unmet requirements.
      */
     protected function loadModules(array $modules): void
     {
+        /** @var array<string, object> $loaded Keyed by module id */
+        $loaded = [];
+
+        // Pass 1: Mount all modules first to avoid dependency ordering bugs
         foreach ($modules as $moduleClass) {
             if (!class_exists($moduleClass)) {
-                continue;
+                throw new \RuntimeException(
+                    "Module class {$moduleClass} not found. Check config/app.php."
+                );
             }
 
             /** @var object $module */
             $module = $this->container->get($moduleClass);
 
-            if ($module instanceof Module) {
-                $module->id = $moduleClass;
-                $module->basePath = $this->basePath;
-                $module->setDependencies($this->router, $this->container, $this->events);
-                $module->init();
-            } elseif (method_exists($module, 'register')) {
-                // Fallback support for legacy non-Module classes with register()
-                $module->register($this->router, $this->container, $this->events);
+            if (!($module instanceof Module)) {
+                throw new \RuntimeException(
+                    "{$moduleClass} must extend Phue\Core\Module."
+                );
+            }
+
+            // Bind core infrastructure to the module
+            $module->basePath = $this->basePath;
+            $module->setDependencies($this->router, $this->container, $this->events);
+            $module->init();
+
+            // Register under "module.{id}" if a valid ID is present
+            if ($module->id !== '') {
+                $this->container->singleton("module.{$module->id}", fn () => $module);
+                $loaded[$module->id] = $module;
             }
 
             $this->modules[] = $module;
+        }
+
+        // Pass 2: Verify that all module 'requires' declarations are satisfied
+        foreach ($this->modules as $module) {
+            foreach ($module->requires as $depId) {
+                if (!isset($loaded[$depId])) {
+                    throw new \RuntimeException(
+                        "Module '{$module->id}' requires '{$depId}', which is not loaded. Add it to config/app.modules."
+                    );
+                }
+            }
         }
     }
 

@@ -6,11 +6,11 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Console\Application;
-use Phue\Module\Phii\Generator\Commands\ModuleGeneratorCommand;
-use Phue\Module\Phii\Generator\Commands\ModelGeneratorCommand;
-use Phue\Module\Phii\Generator\Commands\ControllerGeneratorCommand;
-use Phue\Module\Phii\Generator\Commands\MigrationGeneratorCommand;
-use Phue\Module\Phii\Generator\Commands\CrudGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\ModuleGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\ModelGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\ControllerGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\MigrationGeneratorCommand;
+use Phue\Modules\Phii\Generator\Commands\CrudGeneratorCommand;
 
 $app = new Application('1.0.0');
 

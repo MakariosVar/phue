@@ -9,6 +9,7 @@ return [
     'devTool' => env('APP_DEV_TOOL', true),
     'trustedProxies' => [],
     'modules' => [
+        \Phue\Modules\Auth\AuthModule::class,
         \Phue\Modules\Schii\SchiiModule::class, // Comment this on production
     ],
 ];

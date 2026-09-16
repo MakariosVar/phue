@@ -22,6 +22,9 @@ abstract class Module
     public array $controllerMap = [];
     /** @var array<string, mixed> */
     public array $urlRules = [];
+    public string $type = 'layer'; // 'layer' | 'kit'
+    /** @var array<int, string> */
+    public array $requires = [];
 
     protected Router $router;
     protected Container $container;
@@ -92,4 +95,35 @@ abstract class Module
 
         return null;
     }
+
+    /**
+     * Checks if the module requires database connection.
+     *
+     * @return bool
+     */
+    public function requiresDb(): bool
+    {
+        return false;
+    }
+
+    /** Override to register DI bindings. */
+    protected function bindings(): void {}
+
+    /** Override to register application routes. */
+    protected function routes(): void {}
+
+    /** Override to register console commands. */
+    public function registerCommands(\Phue\Core\Console\Application $console): void {}
+
+    /** Override to provide navigation items for AppLayout. */
+    protected function nav(): array { return []; }
+
+    /** Override to provide RBAC permission seeds. */
+    protected function permissions(): array { return []; }
+
+    /** Override to merge default config values with config/<id>.php. */
+    protected function config(): void {}
+
+    /** Override to register CSS/JS assets */
+    protected function assets(): array { return []; }
 }

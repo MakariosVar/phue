@@ -28,8 +28,7 @@
     "autoload": {
         "psr-4": {
             "Phue\\": "src/",
-            "App\\": "App/",
-            "Phue\\Generator\\": "src/Phii/Generator/"
+            "App\\": "App/"
         },
         "files": [
             "src/Core/functions.php"
