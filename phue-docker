@@ -55,13 +55,13 @@ run_start() {
     # Run cache clear if requested
     if [[ "$CLEAR_CACHE" == true ]]; then
         echo "🧹 Clearing cache..."
-        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/bin/phue cache:clear --type=all
+        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/phue cache:clear --type=all
     fi
 
     # Run optimize if requested
     if [[ "$OPTIMIZE" == true ]]; then
         echo "⚡ Optimizing caches..."
-        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/bin/phue optimize --type=all
+        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/phue optimize --type=all
     fi
 
     # Pre-clean stale socket inside container before starting servers
@@ -73,7 +73,7 @@ run_start() {
     # Added grep -v to filter out Vue warnings from Bun SSR logs
     docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" bash -c '
         trap "kill 0" EXIT SIGINT SIGTERM
-        ./bin/phue serve 2>&1 | sed "s/^/[PHUE SERVE] /" &
+        ./phue serve 2>&1 | sed "s/^/[PHUE SERVE] /" &
         (cd /app/ssr && NODE_ENV=production bun server.ts) 2>&1 | grep --line-buffered -v "\[Vue warn\]" | sed "s/^/[BUN SSR]    /" &
         wait -n
     '
