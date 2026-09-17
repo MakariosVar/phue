@@ -193,7 +193,7 @@ return [
         :id="docKey"
         :title="docTitle"
         :badge="docBadge"
-        description="Phue Framework documentation — verified against the source and organized in focused guides.">
+        description="Phue Framework documentation (v0.0.1)">
         <ph-row>
             <ph-col span="12" lg="2">
                 <div class="position-sticky" style="top: 5rem;">
