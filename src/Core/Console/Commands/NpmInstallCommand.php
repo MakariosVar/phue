@@ -14,6 +14,23 @@ use Phue\Core\Asset\NpmPackageManager;
 final class NpmInstallCommand implements CommandInterface
 {
     /**
+     * The group this command belongs to.
+     *
+     * Commands in the same group are listed together in the help output.
+     */
+    protected string $group = 'Dev';
+    
+    /**
+     * Gets the group this command belongs to.
+     *
+     * @return string Command group name.
+     */
+    public function getGroup(): string
+    {
+        return $this->group;
+    }
+
+    /**
      * Gets the unique command identifier name.
      */
     public function getName(): string

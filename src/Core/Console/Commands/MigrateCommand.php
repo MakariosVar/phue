@@ -16,6 +16,23 @@ use Phue\Core\Database\Migrator;
 final class MigrateCommand extends AbstractDatabaseCommand implements CommandInterface
 {
     /**
+     * The group this command belongs to.
+     *
+     * Commands in the same group are listed together in the help output.
+     */
+    protected string $group = 'Database';
+    
+    /**
+     * Gets the group this command belongs to.
+     *
+     * @return string Command group name.
+     */
+    public function getGroup(): string
+    {
+        return $this->group;
+    }
+
+    /**
      * Retrieves command identifier name.
      *
      * @return string Command name.

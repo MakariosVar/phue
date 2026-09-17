@@ -16,6 +16,23 @@ use Phue\Modules\Phii\Generator\FileMutation;
 final class NewProjectCommand implements CommandInterface
 {
     /**
+     * The group this command belongs to.
+     *
+     * Commands in the same group are listed together in the help output.
+     */
+    private string $group = 'Build';
+    
+    /**
+     * Gets the group this command belongs to.
+     *
+     * @return string Command group name.
+     */
+    public function getGroup(): string
+    {
+        return $this->group;
+    }
+
+    /**
      * Retrieves command identifier name.
      *
      * @return string Command name.

@@ -18,6 +18,13 @@ use RuntimeException;
 abstract class AbstractDatabaseCommand implements CommandInterface
 {
     /**
+     * The group this command belongs to.
+     *
+     * Commands in the same group are listed together in the help output.
+     */
+    protected string $group = 'Database';
+
+    /**
      * Resolves application database connection directly from environment config.
      *
      * @throws RuntimeException If config directory or database options are missing.
