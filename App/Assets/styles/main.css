@@ -1,0 +1,8 @@
+pre code {
+    background-color: var(--bs-body-color);
+    color: var(--bs-body-bg);
+    padding: 1rem;
+    border-radius: var(--bs-border-radius);
+    display: block;
+    overflow-x: auto;
+}
