@@ -127,7 +127,8 @@ class ComponentRenderer
                 state: $view->getState(),
                 scripts: $view->getScripts(),
                 inlineScript: null,
-                html: $view->getHtml()
+                html: $view->getHtml(),
+                styles: $view->getStyles()
             );
 
             return $this->renderView($title, $moduleView, $name);
@@ -179,13 +180,18 @@ class ComponentRenderer
                     state: $view->getState(),
                     scripts: $view->getScripts(),
                     inlineScript: $view->getInlineScript(),
-                    html: $renderedHtml
+                    html: $renderedHtml,
+                    styles: $view->getStyles()
                 );
             }
         }
 
         foreach ($view->getScripts() as $script) {
             $this->assetRegistry->addScript($script, isModule: true);
+        }
+
+        foreach ($view->getStyles() as $style) {
+            $this->assetRegistry->addRequestStyle($style);
         }
 
         $pageMarkup = $view->hasHtml() ? $view->getHtml() : $view->getTemplate();
