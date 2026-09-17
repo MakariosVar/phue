@@ -693,6 +693,32 @@ No emits.
 
 ## 7. Server-Side, HTML-first components
 
+### `<ph-markdown>`
+
+SSR markdown renderer. The `<php>` block receives either raw markdown
+(`$markdown`) or a base-relative file path (`$src`), parses server-side via
+`Phue\Core\Utils\MarkdownParser` (XSS-safe: content escaped before formatting,
+link schemes sanitized — `javascript:`/`data:` URIs are neutralized), and
+returns the rendered HTML as the static `html` payload. Consumed by
+`PhuePartialRenderer` in Direct Static HTML mode — **zero client JS, no
+hydration**.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `markdown` | `String` | `null` | Raw markdown string to parse |
+| `src` | `String` | `null` | Base-relative file path (e.g. `docs/Core.md`); used when `markdown` is absent |
+
+```php
+// From a layout/page <php> block:
+$guideHtml = $partialRenderer->renderPartial('PhMarkdown', ['src' => 'docs/Core.md']);
+// or inline:
+$inlineHtml = $partialRenderer->renderPartial('PhMarkdown', ['markdown' => '**bold** text']);
+```
+
+The parser supports headings, bold/italic, inline code, fenced code blocks,
+lists, links, blockquotes, and paragraphs — see
+`tests/Core/Markdown/MarkdownParserTest.php` for the full contract.
+
 ### `<ph-navigation>`
 
 PhNavigation is the **hybrid** navigation component: a full Vue 3 client
@@ -759,6 +785,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhInput | `<ph-input>` | Form control |
 | PhLink | `<ph-link>` | Navigation |
 | PhModal | `<ph-modal>` | Feedback |
+| PhMarkdown | `<ph-markdown>` | SSR partial (server-side markdown rendering) |
 | PhNavigation | `<ph-navigation>` | Navigation (hybrid SSR partial + client Vue) |
 | PhPagination | `<ph-pagination>` | Navigation |
 | `<ph-theme>` | Navigation / Utility | Theme switch toggle button (SSR-safe) |
