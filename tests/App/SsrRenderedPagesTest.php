@@ -89,6 +89,21 @@ final class SsrRenderedPagesTest extends TestCase
         $this->assertStringNotContainsString('{{', $container);
     }
 
+    public function testDocsEmitsItsDeclaredStylesAsHeadLinks(): void
+    {
+        // Docs.phue declares 'styles' => ['/assets/app/styles/main.css'].
+        // That metadata must flow: View->getStyles() → addRequestStyle() →
+        // HtmlShellRenderer emits a <link> tag in <head>.
+        $response = $this->app->handle(new Request('GET', '/docs'));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString(
+            '<link rel="stylesheet" href="/assets/app/styles/main.css">',
+            $response->getContent(),
+            'Docs page must emit its declared stylesheet in the shell <head>'
+        );
+    }
+
     public function testDocsRendersPrevNextAsPlainAnchors(): void
     {
         $response = $this->app->handle(new Request('GET', '/docs', ['doc' => 'core']));
