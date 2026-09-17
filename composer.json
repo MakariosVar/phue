@@ -3,7 +3,7 @@
     "name": "makarios-var/phue",
     "description": "Almost a web development framework.",
     "type": "library",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "authors": [
         {
             "name": "Makarios Vardaxis",
