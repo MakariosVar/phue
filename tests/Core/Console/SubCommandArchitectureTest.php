@@ -37,6 +37,7 @@ final class SubCommandArchitectureTest extends TestCase
         return new class implements \Phue\Core\Console\BaseCommandInterface {
             public function getName(): string { return 'traditional'; }
             public function getDescription(): string { return 'Traditional command'; }
+            public function getGroup(): string { return 'General'; }
             public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int {
                 fwrite($outputStream, "Traditional executed with: " . implode(' ', $args) . "\n");
                 return self::SUCCESS;
@@ -75,6 +76,7 @@ final class SubCommandArchitectureTest extends TestCase
         $command = new class implements \Phue\Core\Console\BaseCommandInterface {
             public function getName(): string { return 'traditional'; }
             public function getDescription(): string { return 'Traditional command'; }
+            public function getGroup(): string { return 'General'; }
             public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int {
                 fwrite($outputStream, "Traditional executed with: " . implode(' ', $args) . "\n");
                 return self::SUCCESS;
@@ -254,6 +256,7 @@ final class SubCommandArchitectureTest extends TestCase
         $command = new class implements \Phue\Core\Console\BaseCommandInterface {
             public function getName(): string { return 'module:new'; }
             public function getDescription(): string { return 'Create module'; }
+            public function getGroup(): string { return 'Build'; }
             public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int {
                 fwrite($outputStream, "Module new with: " . implode(' ', $args) . "\n");
                 return self::SUCCESS;
@@ -428,5 +431,55 @@ final class SubCommandArchitectureTest extends TestCase
         $output = stream_get_contents($out);
         $this->assertStringContainsString('Custom description from docblock', $output);
         $this->assertStringContainsString('No description', $output);
+    }
+
+    public function testHelpShowsGroupedCommands(): void
+    {
+        $generalCmd = new class implements BaseCommandInterface {
+            public function getName(): string { return 'serve'; }
+            public function getDescription(): string { return 'Serve the app'; }
+            public function getGroup(): string { return 'General'; }
+            public function execute(array $args = [], $outputStream = \STDOUT, $errorStream = \STDERR): int { return 0; }
+        };
+
+        $buildCmd = new class extends BaseCommand {
+            public function getName(): string { return 'module'; }
+            public function getDescription(): string { return 'Module management'; }
+            protected string $group = 'Build';
+            public function execute(array $args = [], $outputStream = \STDOUT, $errorStream = \STDERR): int { return 0; }
+        };
+
+        $devCmd = new class extends BaseCommand {
+            public function getName(): string { return 'cache:clear'; }
+            public function getDescription(): string { return 'Clear cache'; }
+            protected string $group = 'Dev';
+            public function execute(array $args = [], $outputStream = \STDOUT, $errorStream = \STDERR): int { return 0; }
+        };
+
+        $app = new Application();
+        $app->add($generalCmd);
+        $app->add($buildCmd);
+        $app->add($devCmd);
+
+        $out = fopen('php://memory', 'w+');
+        $err = fopen('php://memory', 'w+');
+        $app->run(['phue', '--help'], $out, $err);
+
+        rewind($out);
+        $output = stream_get_contents($out);
+
+        $this->assertStringContainsString('General:', $output);
+        $this->assertStringContainsString('Build:', $output);
+        $this->assertStringContainsString('Dev:', $output);
+        $this->assertStringContainsString('serve', $output);
+        $this->assertStringContainsString('module', $output);
+        $this->assertStringContainsString('cache:clear', $output);
+
+        $generalPos = strpos($output, 'General:');
+        $buildPos = strpos($output, 'Build:');
+        $devPos = strpos($output, 'Dev:');
+        $this->assertLessThan($buildPos, $generalPos, 'General group should come before Build');
+        $this->assertLessThan($devPos, $generalPos, 'General group should come before Dev');
+        $this->assertLessThan($devPos, $buildPos, 'Build group should come before Dev');
     }
 }

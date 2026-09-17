@@ -21,7 +21,7 @@ class NewProjectCommandTest extends TestCase
 
     public function testNewScaffoldsIsolationProject(): void
     {
-        $output = shell_exec('php /app/bin/phue new --modules=Auth 2>&1');
+        $output = shell_exec('php /app/phue new --modules=Auth 2>&1');
 
         // Parse tmp dir from output
         if (!preg_match('/at (\S+)/', $output ?? '', $matches)) {

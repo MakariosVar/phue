@@ -103,7 +103,7 @@ All modules live under `src/Modules/` and are registered in `config/app.php`.
 Inspect the current graph any time with:
 
 ```bash
-./bin/phue module:list
+./phue module:list
 ```
 
 | Module class | id | requires | What it provides |
@@ -137,7 +137,7 @@ Notes worth knowing:
 ### With the CLI
 
 ```bash
-./bin/phue module:new Queue --type=layer --requires=auth
+./phue module:new Queue --type=layer --requires=auth
 ```
 
 This scaffolds, following the module contract:
@@ -173,7 +173,7 @@ Add the FQCN to `config/app.php`:
 Then verify:
 
 ```bash
-./bin/phue module:list
+./phue module:list
 ```
 
 ### Registering CLI commands from a module

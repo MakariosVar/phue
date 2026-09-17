@@ -333,6 +333,8 @@ t_core_framework_copied_and_ssr_pruned() {
     assert_file "$TARGET/bin/phue"
     assert_file "$TARGET/bin/phue_test"
     assert_file "$TARGET/bin/phii"
+    assert_file "$TARGET/phue"
+    [[ -L "$TARGET/phue" ]] || fail "phue is not a symlink at root"
     assert_file "$TARGET/src/Core/Application.php"
     assert_file "$TARGET/src/Core/Module.php"
     assert_file "$TARGET/phue-docker"
@@ -341,6 +343,25 @@ t_core_framework_copied_and_ssr_pruned() {
     assert_no_dir "$TARGET/ssr/node_modules"
     assert_dir "$TARGET/storage/logs"
     assert_file "$TARGET/storage/logs/.gitkeep"
+}
+
+t_phue_symlink_created() {
+    setup
+    run_installer "$TARGET" --template=blank
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    [[ -L "$TARGET/phue" ]] || fail "phue is not a symlink at root"
+    local link_target
+    link_target="$(readlink "$TARGET/phue")"
+    [[ "$link_target" == "bin/phue" ]] || fail "phue symlink points to '$link_target', expected 'bin/phue'"
+}
+
+t_composer_uses_phue_script() {
+    setup
+    run_installer "$TARGET" --template=web
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    assert_contains "$TARGET/composer.json" '"phue": "php phue"'
 }
 
 # ---------------------------------------------------------------- run
@@ -363,6 +384,8 @@ run_test "no tty without template fails" t_no_tty_no_template_fails
 run_test "composer.json valid + psr-4 + name" t_composer_json_valid_and_named
 run_test "phpunit suites match modules" t_phpunit_suites_match_modules
 run_test "framework core copied + ssr pruned" t_core_framework_copied_and_ssr_pruned
+run_test "phue symlink created at root" t_phue_symlink_created
+run_test "composer.json uses phue script" t_composer_uses_phue_script
 
 printf '%s\n' "──────────────────────────────────────────"
 failed=$((TOTAL - PASS))

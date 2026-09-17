@@ -357,7 +357,7 @@ gen_composer() {
     "license": "MIT",
     "scripts": {
         "test": "phpunit",
-        "phue": "php bin/phue"
+        "phue": "php phue"
     },
     "require": {
         "php": ">=8.5",
@@ -513,6 +513,8 @@ echo ""
 
 # 1. Framework core
 copy_dir "$REPO_ROOT/bin" "$TARGET/bin"
+  ln -s bin/phue "$TARGET/phue" 2>/dev/null || true
+  chmod +x "$TARGET/phue" 2>/dev/null || true
 copy_dir "$REPO_ROOT/public" "$TARGET/public"
 copy_dir "$REPO_ROOT/config" "$TARGET/config"
 copy_dir "$REPO_ROOT/src/Core" "$TARGET/src/Core"
@@ -576,7 +578,7 @@ echo "  Path:    $TARGET"
 echo "  Modules: ${mod_list:-<none>}"
 echo ""
 echo "${C_BOLD}Next steps:${C_NC}"
-echo "  cd $PROJECT_DIR"
+echo "  ./phue _DIR"
 echo "  composer install"
-echo "  ./bin/phue serve"
+echo "  ./phue serve"
 echo ""

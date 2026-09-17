@@ -18,6 +18,11 @@ class DummyCommand implements CommandInterface
         return 'Runs a dummy test command.';
     }
 
+    public function getGroup(): string
+    {
+        return 'General';
+    }
+
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         fwrite($outputStream, "Executed dummy command");

@@ -46,7 +46,7 @@ bash /path/to/phue/tools/installer/phue-create.sh my-app --template=web
 # Install dependencies and run
 cd my-app
 composer install
-./bin/phue serve:php
+./phue serve:php
 ```
 
 Open `http://localhost:8000` — you have a working Phue app with routing, `.phue` pages, and whatever modules you picked.

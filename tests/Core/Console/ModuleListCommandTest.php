@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class ModuleListCommandTest extends TestCase
 {
-    private const SCRIPT = '/app/bin/phue';
+    private const SCRIPT = '/app/phue';
 
     /**
      * @return array{stdout: string, stderr: string, exit: int}

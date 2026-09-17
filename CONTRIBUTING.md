@@ -33,7 +33,7 @@ Docker is optional but it is the canonical test harness.
 
 ```bash
 composer install
-./bin/phue serve:php        # http://localhost:8000, docroot public/
+./phue serve:php        # http://localhost:8000, docroot public/
 ```
 
 ### Docker (recommended)

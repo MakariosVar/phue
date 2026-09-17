@@ -13,7 +13,7 @@ commands, then lets every configured module contribute its own commands, and
 runs.
 
 ```bash
-./bin/phue list      # or --help / -h
+./phue list      # or --help / -h
 ```
 
 ### How commands are registered
@@ -54,11 +54,11 @@ runs.
 Clears application cache by type.
 
 ```bash
-./bin/phue cache:clear                    # all types (default)
-./bin/phue cache:clear --type=general     # PSR-16 file cache (storage/cache/*.cache)
-./bin/phue cache:clear --type=views       # compiled views (storage/cache/views/*.php)
-./bin/phue cache:clear --type=schemas     # generated DB schemas (storage/generated/schemas/*)
-./bin/phue cache:clear --type=logs        # application logs (storage/logs/*)
+./phue cache:clear                    # all types (default)
+./phue cache:clear --type=general     # PSR-16 file cache (storage/cache/*.cache)
+./phue cache:clear --type=views       # compiled views (storage/cache/views/*.php)
+./phue cache:clear --type=schemas     # generated DB schemas (storage/generated/schemas/*)
+./phue cache:clear --type=logs        # application logs (storage/logs/*)
 ```
 
 #### `optimize`
@@ -66,11 +66,11 @@ Clears application cache by type.
 Clears **and warms** caches for production-ready performance.
 
 ```bash
-./bin/phue optimize                       # all types (default: general, views, schemas)
-./bin/phue optimize --type=general        # clear + warm general cache
-./bin/phue optimize --type=views          # pre-parse & compile all .phue components
-./bin/phue optimize --type=schemas        # pre-generate DB schemas for all ActiveRecord models
-./bin/phue optimize --dry-run             # show what would be optimized without executing
+./phue optimize                       # all types (default: general, views, schemas)
+./phue optimize --type=general        # clear + warm general cache
+./phue optimize --type=views          # pre-parse & compile all .phue components
+./phue optimize --type=schemas        # pre-generate DB schemas for all ActiveRecord models
+./phue optimize --dry-run             # show what would be optimized without executing
 ```
 
 > **Warming behavior:**
@@ -89,34 +89,34 @@ Clears **and warms** caches for production-ready performance.
 
 > **Naming note:** `serve:php` is the plain dev server and `serve` is the
 > Swoole one — the Swoole command is registered by the `Server` *module* with
-> the shorter name. Check `./bin/phue list` for the authoritative list.
+> the shorter name. Check `./phue list` for the authoritative list.
 
 ### Common examples
 
 ```bash
 # Dev server (override host/port)
-./bin/phue serve:php --port=8080 --host=127.0.0.1
+./phue serve:php --port=8080 --host=127.0.0.1
 
 # Swoole server (worker options)
-./bin/phue serve --port=8080 --host=127.0.0.1 --worker-num=4
+./phue serve --port=8080 --host=127.0.0.1 --worker-num=4
 
 # Generate code
-./bin/phue make:controller UserController
-./bin/phue make:model Product
-./bin/phue make:migration create_products_table
+./phue make:controller UserController
+./phue make:model Product
+./phue make:migration create_products_table
 
 # Database
-./bin/phue migrate
-./bin/phue migrate:rollback
-./bin/phue schii:migrate "App\Models\Product"
+./phue migrate
+./phue migrate:rollback
+./phue schii:migrate "App\Models\Product"
 
 # Modules
-./bin/phue module:list
-./bin/phue module:new Queue --type=layer --requires=auth
+./phue module:list
+./phue module:new Queue --type=layer --requires=auth
 
 # JS vendor packages
-./bin/phue npm:install vue
-./bin/phue npm:list
+./phue npm:install vue
+./phue npm:list
 ```
 
 ---
@@ -209,7 +209,7 @@ bash tools/installer/tests/run-tests.sh
 
 The compose file is `docker/dev/docker-compose.yml` (service `app`, container
 `phue_app`, port 8000). `start` pre-cleans the stale SSR socket, launches
-`./bin/phue serve` and the Bun SSR sidecar (`ssr/server.ts`), prefixing log
+`./phue serve` and the Bun SSR sidecar (`ssr/server.ts`), prefixing log
 lines with `[PHUE SERVE]` / `[BUN SSR]`.
 
 ---

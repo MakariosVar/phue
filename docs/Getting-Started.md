@@ -206,7 +206,7 @@ $name = env('APP_NAME', 'Phue App');
 ```bash
 cd my-app
 composer install
-./bin/phue serve:php        # http://localhost:8000, docroot public/
+./phue serve:php        # http://localhost:8000, docroot public/
 ```
 
 Then:
@@ -228,7 +228,7 @@ If the SQLite database doesn't exist yet, Schii's auto-migration creates tables 
 ```bash
 cd my-app
 composer install
-./bin/phue serve:php        # http://localhost:8000, docroot public/
+./phue serve:php        # http://localhost:8000, docroot public/
 ```
 
 Then:
@@ -248,20 +248,20 @@ If the SQLite database doesn't exist yet, Schii's auto-migration creates tables 
 Clear caches during development:
 
 ```bash
-./bin/phue cache:clear                    # all types (default)
-./bin/phue cache:clear --type=general     # PSR-16 file cache
-./bin/phue cache:clear --type=views       # compiled views
-./bin/phue cache:clear --type=schemas     # generated DB schemas
-./bin/phue cache:clear --type=logs        # application logs
+./phue cache:clear                    # all types (default)
+./phue cache:clear --type=general     # PSR-16 file cache
+./phue cache:clear --type=views       # compiled views
+./phue cache:clear --type=schemas     # generated DB schemas
+./phue cache:clear --type=logs        # application logs
 ```
 
 Optimize (clear + warm) for production-ready performance:
 
 ```bash
-./bin/phue optimize                       # all types (default: general, views, schemas)
-./bin/phue optimize --type=views          # pre-parse & compile all .phue components
-./bin/phue optimize --type=schemas        # pre-generate DB schemas for ActiveRecord models
-./bin/phue optimize --dry-run             # show what would be optimized without executing
+./phue optimize                       # all types (default: general, views, schemas)
+./phue optimize --type=views          # pre-parse & compile all .phue components
+./phue optimize --type=schemas        # pre-generate DB schemas for ActiveRecord models
+./phue optimize --dry-run             # show what would be optimized without executing
 ```
 
 > **Warming behavior:** `views` discovers & parses all `.phue` components; `schemas` generates schema files for all `App\Models\* extends BaseActiveRecord` classes.

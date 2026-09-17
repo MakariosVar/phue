@@ -55,7 +55,7 @@ final class SchiiMigrateCommand extends AbstractDatabaseCommand implements Comma
         if (!$modelClass) {
             fwrite(
                 $errorStream,
-                "Error: Model class name is required. Usage: ./bin/phue schii:migrate App\\Models\\Product\n",
+                "Error: Model class name is required. Usage: ./phue schii:migrate App\\Models\\Product\n",
             );
             return 1;
         }

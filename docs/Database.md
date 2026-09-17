@@ -360,7 +360,7 @@ $affected = $neon->execute('UPDATE users SET status = ? WHERE id = ?', ['active'
 Generate a timestamped migration file:
 
 ```bash
-./bin/phue make:migration create_orders_table
+./phue make:migration create_orders_table
 # Generates: database/migrations/<timestamp>_create_orders_table.php
 ```
 
@@ -386,8 +386,8 @@ final class M2026_09_03_014500_Create_Orders_Table extends Migration
 Run / roll back:
 
 ```bash
-./bin/phue migrate             # apply pending migrations
-./bin/phue migrate:rollback    # roll back the last applied batch
+./phue migrate             # apply pending migrations
+./phue migrate:rollback    # roll back the last applied batch
 ```
 
 The `Migrator` manages the tracking table, batching, and transaction isolation;
@@ -400,7 +400,7 @@ For model-driven tables, Schii can auto-migrate missing tables/columns — see
 [Schii](Schii.md#auto-migration).
 
 ```bash
-./bin/phue schii:migrate "App\Models\Product"
+./phue schii:migrate "App\Models\Product"
 ```
 
 ### SQL identifier safety (`SqlIdentifier.php`)

@@ -127,8 +127,8 @@ composer install      # inside docker container
 ## OR MANUAL RUN
 cd my-app
 composer install
-./bin/phue serve:php # Start standard FPM server or simply
-# ./bin/phue serve   # if swoole is enabled
+./phue serve:php # Start standard FPM server or simply
+# ./phue serve   # if swoole is enabled
 
 # if SSR_ENABLED in true in .env you need to run
 bun ./ssr/server.ts
@@ -350,7 +350,7 @@ $name = env('APP_NAME', 'Phue App');
 ```bash
 cd my-app
 composer install
-./bin/phue serve:       # http://localhost:8000, docroot public/
+./phue serve:       # http://localhost:8000, docroot public/
 ```
 
 Then:

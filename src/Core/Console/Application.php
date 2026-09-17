@@ -104,17 +104,38 @@ class Application
     {
         fwrite($outputStream, sprintf("\033[32mPhue Framework CLI Tool\033[0m v%s\n\n", $this->version));
         fwrite($outputStream, "\033[33mUsage:\033[0m\n");
-        fwrite($outputStream, "  ./bin/phue <command> [options] [arguments]\n\n");
+        fwrite($outputStream, "  ./phue <command> [options] [arguments]\n\n");
         fwrite($outputStream, "\033[33mAvailable Commands:\033[0m\n");
 
+        // Group command by their group attribute
+        $groupped = [];
         foreach ($this->commands as $name => $command) {
-            fwrite($outputStream, sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription()));
-            
-            // Show sub-commands for CommandInterface commands
-            if ($command instanceof CommandInterface && method_exists($command, 'getSubCommands')) {
-                $subCommands = $command->getSubCommands();
-                foreach ($subCommands as $subName => $subDescription) {
-                    fwrite($outputStream, sprintf("  \033[36m%-22s\033[0m %s\n", "  {$name}:{$subName}", $subDescription));
+            $group = $command->getGroup();
+            if (!isset($groupped[$group])) {
+                $groupped[$group] = [];
+            }
+            $groupped[$group][$name] = $command;
+        }
+
+        // Sort groups: "General" first, then alphabetical
+        ksort($groupped);
+        if (isset($groupped['General'])) {
+            $general = $groupped['General'];
+            unset($groupped['General']);
+            $groupped = ['General' => $general] + $groupped;
+        }
+
+        foreach ($groupped as $groupName => $commands) {
+            fwrite($outputStream, "\003[1m{$groupName}:\003[0m\n");
+
+            foreach ($commands as $name => $command) {
+                fwrite($outputStream, sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription()));
+
+                if ($command instanceof CommandInterface && method_exists($command, 'getSubCommands')) {
+                    $subCommands = $command->getSubCommands();
+                    foreach ($subCommands as $subName => $subDescription) {
+                        fwrite($outputStream, sprintf("  \033[36m%-22s\033[0m %s\n", "  {$name}:{$subName}", $subDescription));
+                    }
                 }
             }
         }

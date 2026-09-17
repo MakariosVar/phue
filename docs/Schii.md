@@ -254,7 +254,7 @@ Engine internals:
 ### CLI
 
 ```bash
-./bin/phue schii:migrate "App\Models\Product"
+./phue schii:migrate "App\Models\Product"
 ```
 
 ---

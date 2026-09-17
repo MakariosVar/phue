@@ -29,7 +29,7 @@ class MakeModelCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Creates a new Active Record Model class (e.g. ./bin/phue make:model User).';
+        return 'Creates a new Active Record Model class (e.g. ./phue make:model User).';
     }
 
     /**
@@ -41,7 +41,7 @@ class MakeModelCommand implements CommandInterface
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         if (empty($args[0])) {
-            fwrite($errorStream, "\033[31mError: Model name is required. Usage: ./bin/phue make:model <Name>\033[0m\n");
+            fwrite($errorStream, "\033[31mError: Model name is required. Usage: ./phue make:model <Name>\033[0m\n");
             return 1;
         }
 

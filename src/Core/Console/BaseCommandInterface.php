@@ -35,6 +35,12 @@ interface BaseCommandInterface
     public function getDescription(): string;
 
     /**
+     * Gets the command group form help listing (e.g. 'General', 'Build', 'Dev')
+     * Command in the same group are listed together.
+     */
+    public function getGroup(): string;
+
+    /**
      * Executes the command with the provided arguments.
      *
      * @param array<int, string> $args Command line arguments (excluding script and command name).

@@ -31,7 +31,7 @@ class MakeControllerCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Creates a new Controller class (e.g. ./bin/phue make:controller UserController).';
+        return 'Creates a new Controller class (e.g. ./phue make:controller UserController).';
     }
 
     /**
@@ -46,7 +46,7 @@ class MakeControllerCommand implements CommandInterface
     public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int
     {
         if (empty($args[0])) {
-            fwrite($errorStream, "\033[31mError: Controller name is required. Usage: ./bin/phue make:controller <Name>\033[0m\n");
+            fwrite($errorStream, "\033[31mError: Controller name is required. Usage: ./phue make:controller <Name>\033[0m\n");
             return 1;
         }
 

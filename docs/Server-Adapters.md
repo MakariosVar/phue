@@ -50,7 +50,7 @@ protected by the test suite (`tests/Server/PersistentServerAdapterTest.php`).
 The `ServerModule` registers the `serve` command (via `registerCommands()`):
 
 ```bash
-./bin/phue serve --port=8080 --host=127.0.0.1 --worker-num=4
+./phue serve --port=8080 --host=127.0.0.1 --worker-num=4
 ```
 
 The Swoole server provides persistent connections, coroutine support, and
@@ -89,7 +89,7 @@ servers:
 
 ```bash
 ./phue-docker start
-# [PHUE SERVE] ./bin/phue serve
+# [PHUE SERVE] ./phue serve
 # [BUN SSR]    (cd /app/ssr && bun server.ts)
 ```
 

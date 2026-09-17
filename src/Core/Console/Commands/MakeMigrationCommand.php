@@ -45,7 +45,7 @@ final class MakeMigrationCommand implements CommandInterface
         $name = $args[0] ?? null;
 
         if (!$name) {
-            fwrite($errorStream, "Error: Migration name is required. Usage: ./bin/phue make:migration <name>\n");
+            fwrite($errorStream, "Error: Migration name is required. Usage: ./phue make:migration <name>\n");
             return 1;
         }
 

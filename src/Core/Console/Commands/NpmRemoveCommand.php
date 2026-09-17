@@ -50,7 +50,7 @@ final class NpmRemoveCommand implements CommandInterface
 
         if ($packageName === null) {
             fwrite($errorStream, "\033[31mError: Please specify a package name to remove.\033[0m\n");
-            fwrite($errorStream, "Usage: ./bin/phue npm:remove <package>\n");
+            fwrite($errorStream, "Usage: ./phue npm:remove <package>\n");
             return 1;
         }
 

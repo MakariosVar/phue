@@ -39,7 +39,7 @@ class ModuleNewCommandTest extends TestCase
         $configFile = $this->tmpDir . "/config/{$id}.php";
         $testDir = $this->tmpDir . "/tests/{$name}";
 
-        $output = shell_exec('php /app/bin/phue module:new ' . $name . ' --type=layer --requires=auth --output=' . $this->tmpDir . ' 2>&1');
+        $output = shell_exec('php /app/phue module:new ' . $name . ' --type=layer --requires=auth --output=' . $this->tmpDir . ' 2>&1');
 
         // Command output
         $this->assertStringContainsString("Successfully created module '{$name}'", $output ?? '');
@@ -74,13 +74,13 @@ class ModuleNewCommandTest extends TestCase
 
     public function testModuleNewRejectsLowercaseName(): void
     {
-        $output = shell_exec('php /app/bin/phue module:new queue --output=' . $this->tmpDir . ' 2>&1');
+        $output = shell_exec('php /app/phue module:new queue --output=' . $this->tmpDir . ' 2>&1');
         $this->assertStringContainsString('must be alphabetic and in PascalCase', $output ?? '');
     }
 
     public function testModuleNewRejectsMissingName(): void
     {
-        $output = shell_exec('php /app/bin/phue module:new --output=' . $this->tmpDir . ' 2>&1');
+        $output = shell_exec('php /app/phue module:new --output=' . $this->tmpDir . ' 2>&1');
         $this->assertStringContainsString('Missing module name argument', $output ?? '');
     }
 

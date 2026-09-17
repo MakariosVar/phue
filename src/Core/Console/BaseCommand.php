@@ -22,6 +22,23 @@ use ReflectionMethod;
 abstract class BaseCommand implements CommandInterface
 {
     /**
+     * The group this command belongs to.
+     *
+     * Commands in the same group are listed together in the help output.
+     */
+    protected string $group = 'General';
+
+    /**
+     * Gets the command group.
+     *
+     * @return string
+     */
+    public function getGroup(): string
+    {
+        return $this->group;
+    }
+
+    /**
      * Executes the command with automatic sub-command routing.
      *
      * @param array<int, string> $args Command line arguments.
@@ -78,7 +95,7 @@ abstract class BaseCommand implements CommandInterface
         $subCommands = $this->getSubCommands();
 
         fwrite($outputStream, sprintf(
-            "\033[33mUsage:\033[0m\n  ./bin/phue %s:<sub-command> [arguments]\n\n",
+            "\033[33mUsage:\033[0m\n  ./phue %s:<sub-command> [arguments]\n\n",
             $this->getName()
         ));
 
