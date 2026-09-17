@@ -38,8 +38,17 @@ class AssetRegistry
      */
     private array $requestScripts = [];
 
-    /** @var array<int, string> Registered CSS Stylesheet URLs */
+    /** @var array<int, string> Globally registered CSS Stylesheet URLs */
     private array $styles = [];
+
+    /**
+     * CSS Stylesheet URLs registered for the current request.
+     *
+     * This pool is cleared by {@see beginRequest()}.
+     *
+     * @var array<int, string>
+     */
+    private array $requestStyles = [];
 
     /**
      * Map a URL prefix to a dynamic resolver callback.
@@ -172,9 +181,9 @@ class AssetRegistry
     }
 
     /**
-     * Add a CSS stylesheet URL to the HTML rendering queue.
+     * Add a global CSS stylesheet URL to the HTML rendering queue.
      *
-     * Styles remain registered on the registry and are not affected by
+     * Global styles remain registered on the registry and are not affected by
      * {@see beginRequest()}.
      *
      * @param string $url
@@ -185,6 +194,25 @@ class AssetRegistry
         if (!in_array($url, $this->styles, true)) {
             $this->styles[] = $url;
         }
+
+        return $this;
+    }
+
+    /**
+     * Add a CSS stylesheet URL to the current request queue (lazy style).
+     *
+     * Deduplicates against both global styles ($styles) and request styles ($requestStyles).
+     *
+     * @param string $url
+     * @return self
+     */
+    public function addRequestStyle(string $url): self
+    {
+        if (in_array($url, $this->styles, true) || in_array($url, $this->requestStyles, true)) {
+            return $this;
+        }
+
+        $this->requestStyles[] = $url;
 
         return $this;
     }
@@ -254,17 +282,15 @@ class AssetRegistry
     /**
      * Begin a new request asset collection.
      *
-     * Global scripts are preserved, while all scripts registered for the
-     * previous request are discarded.
-     *
-     * This should be called once at the beginning of each request before
-     * request-specific scripts are registered.
+     * Global scripts and styles are preserved, while request-scoped scripts
+     * and styles registered for the previous request are discarded.
      *
      * @return self
      */
     public function beginRequest(): self
     {
         $this->requestScripts = [];
+        $this->requestStyles = [];
 
         return $this;
     }
@@ -308,13 +334,26 @@ class AssetRegistry
     }
 
     /**
-     * Return registered CSS stylesheet URLs.
+     * Return CSS stylesheet URLs registered for the current request.
+     *
+     * @return array<int, string>
+     */
+    public function getRequestStyles(): array
+    {
+        return $this->requestStyles;
+    }
+
+    /**
+     * Return all registered CSS stylesheet URLs (global + per-request).
      *
      * @return array<int, string>
      */
     public function getStyles(): array
     {
-        return $this->styles;
+        return array_merge(
+            $this->styles,
+            $this->requestStyles
+        );
     }
 
     /**

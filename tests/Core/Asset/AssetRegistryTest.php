@@ -335,6 +335,89 @@ final class AssetRegistryTest extends TestCase
         $this->assertSame(['/assets/bootstrap.js'], $urls);
     }
 
+    public function testAddRequestStyleAppearsInRequestAndMergedStyles(): void
+    {
+        $registry = new AssetRegistry();
+        $registry->addRequestStyle('/assets/app/styles/main.css');
+
+        $this->assertContains('/assets/app/styles/main.css', $registry->getRequestStyles());
+        $this->assertContains('/assets/app/styles/main.css', $registry->getStyles());
+    }
+
+    public function testAddRequestStyleDeduplicatesAgainstGlobalStyles(): void
+    {
+        $registry = (new AssetRegistry())->addStyle('/assets/app/styles/theme.css');
+        $registry->addRequestStyle('/assets/app/styles/theme.css');
+
+        $this->assertCount(0, $registry->getRequestStyles(), 'Request pool must skip global-collision style');
+        $this->assertCount(1, $registry->getStyles());
+        $this->assertSame('/assets/app/styles/theme.css', $registry->getStyles()[0]);
+    }
+
+    public function testAddRequestStyleDeduplicatesWithinRequestPool(): void
+    {
+        $registry = new AssetRegistry();
+        $registry->addRequestStyle('/assets/app/styles/main.css')
+                 ->addRequestStyle('/assets/app/styles/main.css');
+
+        $this->assertCount(1, $registry->getRequestStyles());
+        $this->assertCount(1, $registry->getStyles());
+    }
+
+    public function testGetStylesMergesGlobalBeforeRequest(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addStyle('/assets/app/global.css')
+            ->addRequestStyle('/assets/app/page.css');
+
+        $this->assertSame(
+            ['/assets/app/global.css', '/assets/app/page.css'],
+            $registry->getStyles()
+        );
+    }
+
+    public function testBeginRequestClearsRequestStylesOnly(): void
+    {
+        $registry = (new AssetRegistry())
+            ->addStyle('/assets/app/global.css')
+            ->addRequestStyle('/assets/app/page.css');
+
+        $registry->beginRequest();
+
+        $this->assertSame([], $registry->getRequestStyles(), 'Request pool must be flushed');
+        $this->assertCount(1, $registry->getStyles(), 'Global styles survive');
+        $this->assertSame('/assets/app/global.css', $registry->getStyles()[0]);
+    }
+
+    public function testReenterSameRequestStyleAfterBeginRequestRegistersAgain(): void
+    {
+        $registry = new AssetRegistry();
+
+        // Request #1: style registered for the page shell.
+        $registry->beginRequest();
+        $registry->addRequestStyle('/assets/app/styles/page.css');
+        $this->assertCount(1, $registry->getRequestStyles());
+
+        // Request #2: re-visit of the same page in a persistent Swoole process.
+        // Without the two-pool design beginRequest would have silently dropped
+        // the re-declared style, starving the new shell of its CSS.
+        $registry->beginRequest();
+        $registry->addRequestStyle('/assets/app/styles/page.css');
+
+        $this->assertCount(1, $registry->getRequestStyles());
+        $this->assertSame('/assets/app/styles/page.css', $registry->getRequestStyles()[0]);
+    }
+
+    public function testGlobalStylesSurviveBeginRequest(): void
+    {
+        $registry = (new AssetRegistry())->addStyle('/assets/app/global.css');
+
+        $registry->beginRequest();
+
+        $this->assertCount(1, $registry->getStyles());
+        $this->assertSame('/assets/app/global.css', $registry->getStyles()[0]);
+    }
+
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {
