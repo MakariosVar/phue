@@ -517,12 +517,14 @@ class PhueComponentLoader
         $title = (string) ($meta['title'] ?? 'Phue App');
         $state = is_array($meta['state'] ?? null) ? $meta['state'] : [];
         $scripts = is_array($meta['scripts'] ?? null) ? $meta['scripts'] : [];
+        $styles = is_array($meta['styles'] ?? null) ? $meta['styles'] : [];
         $html = is_string($meta['html'] ?? null) ? $meta['html'] : null;
 
         $view = new View(
             template: $structure['template'],
             state: $state,
             scripts: $scripts,
+            styles: $styles,
             inlineScript: $structure['script'],
             html: $html
         );
