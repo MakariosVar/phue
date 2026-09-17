@@ -50,7 +50,13 @@ export default {
   emits: ['click'],
   computed: {
     isAnchor() {
-      return typeof this.href === 'string' && (this.href.startsWith('http') || this.href.startsWith('mailto:') || this.href.startsWith('#'));
+      if (typeof this.href !== 'string') {
+        return false;
+      }
+      return this.href.startsWith('http')
+        || this.href.startsWith('mailto:')
+        || this.href.startsWith('#')
+        || this.href.startsWith('/');
     },
     componentType() {
       return this.isAnchor ? 'a' : 'router-link';
