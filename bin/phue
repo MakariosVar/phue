@@ -27,6 +27,7 @@ use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
 use Phue\Core\Console\Commands\CacheClearCommand;
 use Phue\Core\Console\Commands\OptimizeCommand;
+use Phue\Core\Console\CommandInterface;
 
 $basePath = dirname(__DIR__);
 $config = new Config($basePath . '/config');
@@ -63,6 +64,17 @@ foreach ($modules as $moduleClass) {
     /** @var Module $module */
     $module = new $moduleClass();
     $module->registerCommands($app);
+}
+
+// Auto-discover user commands from App/Commands/
+$commandsDir = $basePath . '/App/Commands';
+if (is_dir($commandsDir)) {
+    foreach (glob($commandsDir . '/*.php') as $file) {
+        $className = 'App\\Commands\\' . basename($file, '.php');
+        if (class_exists($className) && is_subclass_of($className, CommandInterface::class)) {
+            $app->add(new $className());
+        }
+    }
 }
 
 exit($app->run($_SERVER['argv']));

@@ -12,7 +12,7 @@ class Application
     /**
      * Registered commands map indexed by command name.
      *
-     * @var array<string, CommandInterface>
+     * @var array<string, BaseCommandInterface>
      */
     protected array $commands = [];
 
@@ -30,7 +30,7 @@ class Application
     /**
      * Registers a CLI command.
      */
-    public function add(CommandInterface $command): static
+    public function add(BaseCommandInterface $command): static
     {
         $this->commands[$command->getName()] = $command;
         return $this;
@@ -38,6 +38,9 @@ class Application
 
     /**
      * Runs the console application using input arguments.
+     *
+     * Supports sub-commands via `command:sub` syntax for commands implementing
+     * {@see CommandInterface} (convention-based routing).
      *
      * @param array<int, string> $argv
      */
@@ -58,6 +61,13 @@ class Application
         $commandName = $argv[1] ?? 'list';
         $args = array_slice($argv, 2);
 
+        // Check if full command name (including colon) exists as registered command first
+        // This allows commands like "module:new" to work without being parsed as sub-commands
+        $subCommand = null;
+        if (!isset($this->commands[$commandName]) && str_contains($commandName, ':')) {
+            [$commandName, $subCommand] = explode(':', $commandName, 2);
+        }
+
         if ($commandName === 'list' || $commandName === '--help' || $commandName === '-h') {
             return $this->renderHelp($outputStream, $errorStream);
         }
@@ -68,8 +78,15 @@ class Application
             return 1;
         }
 
+        $command = $this->commands[$commandName];
+
+        // If sub-command provided, prepend it to args for CommandInterface routing
+        if ($subCommand !== null && $command instanceof \Phue\Core\Console\CommandInterface) {
+            array_unshift($args, $subCommand);
+        }
+
         try {
-            return $this->commands[$commandName]->execute($args, $outputStream, $errorStream);
+            return $command->execute($args, $outputStream, $errorStream);
         } catch (\Throwable $e) {
             fwrite($errorStream, sprintf("\033[31mCommand failed: %s\033[0m\n", $e->getMessage()));
             return 1;
@@ -92,6 +109,14 @@ class Application
 
         foreach ($this->commands as $name => $command) {
             fwrite($outputStream, sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription()));
+            
+            // Show sub-commands for CommandInterface commands
+            if ($command instanceof CommandInterface && method_exists($command, 'getSubCommands')) {
+                $subCommands = $command->getSubCommands();
+                foreach ($subCommands as $subName => $subDescription) {
+                    fwrite($outputStream, sprintf("  \033[36m%-22s\033[0m %s\n", "  {$name}:{$subName}", $subDescription));
+                }
+            }
         }
 
         fwrite($outputStream, "\n");

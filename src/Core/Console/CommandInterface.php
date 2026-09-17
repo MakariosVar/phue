@@ -1,40 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Phue\Core\Console;
 
 /**
- * Interface that all CLI commands must implement.
+ * Marker interface for convention-based commands with auto sub-command routing.
+ *
+ * Implement this interface (or extend {@see BaseCommand}) to get automatic
+ * sub-command routing based on public method names.
+ *
+ * Convention:
+ * - Public methods (except getName, getDescription) become sub-commands
+ * - Command invoked as `command:sub` routes to method `sub()`
+ * - Framework provides default `execute()` that routes to sub-method
  *
  * @package Phue\Core\Console
  */
-interface CommandInterface
+interface CommandInterface extends BaseCommandInterface
 {
-
-    /*
-     * SUCCESS status codes.
-     */
-    public const SUCCESS = 0;
-
-    /**
-     * FAILURE status codes.
-     */
-    public const FAILURE = 1;
-
-    /**
-     * Gets the unique command name (e.g., 'serve', 'make:controller').
-     */
-    public function getName(): string;
-
-    /**
-     * Gets a short description of the command for listings.
-     */
-    public function getDescription(): string;
-
-    /**
-     * Executes the command with the provided arguments.
-     *
-     * @param array<int, string> $args Command line arguments (excluding script and command name).
-     * @return int Exit status code (0 for success, non-zero for error).
-     */
-    public function execute(array $args, $outputStream = \STDOUT, $errorStream = \STDERR): int;
+    // No additional methods required
+    // Convention: all public methods (except getName, getDescription) = sub-commands
 }
