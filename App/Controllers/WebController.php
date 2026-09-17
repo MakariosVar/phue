@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Route;
 
@@ -24,10 +25,10 @@ class WebController extends Controller
     }
 
     #[Route('/docs', methods: ['GET'])]
-    public function docs(): Response
+    public function docs(Request $request): Response
     {
         return $this->ui->render('Pages/Docs', [
-            'testValue' => 'DocsPage'
+            'doc' => (string) $request->getQuery('doc', 'getting-started'),
         ]);
     }
 

@@ -1,16 +1,217 @@
 <php>
+use Phue\Core\Cache\FileCache;
+use Phue\Core\Console\PathResolver;
+use Phue\Core\Utils\MarkdownParser;
+
+/**
+ * Docs page — renders the framework documentation per guide.
+ *
+ * The controller passes ?doc=<key> as the $doc param. The key is validated
+ * against the guide whitelist (no path traversal possible), the matching
+ * docs/*.md file is parsed server-side (XSS-safe MarkdownParser) with an
+ * mtime-keyed FileCache entry, and the parsed HTML ships in state.
+ */
+
+$guides = [
+    'getting-started' => ['label' => 'Getting Started', 'file' => 'Getting-Started.md', 'badge' => 'start'],
+    'core'            => ['label' => 'Core',            'file' => 'Core.md',            'badge' => 'core'],
+    'modules'         => ['label' => 'Modules',         'file' => 'Modules.md',         'badge' => 'core'],
+    'database'        => ['label' => 'Database',        'file' => 'Database.md',        'badge' => 'core'],
+    'auth'            => ['label' => 'Auth & RBAC',     'file' => 'Auth-RBAC.md',       'badge' => 'core'],
+    'schii'           => ['label' => 'Schii',           'file' => 'Schii.md',           'badge' => 'module'],
+    'rest'            => ['label' => 'REST',            'file' => 'REST.md',            'badge' => 'module'],
+    'events'          => ['label' => 'Events',          'file' => 'Events.md',          'badge' => 'module'],
+    'server'          => ['label' => 'Server Adapters', 'file' => 'Server-Adapters.md', 'badge' => 'runtime'],
+    'cli'             => ['label' => 'CLI',             'file' => 'CLI.md',             'badge' => 'tooling'],
+    'phui'            => ['label' => 'PhUI Components', 'file' => 'PhUI_Components.md', 'badge' => 'frontend'],
+];
+
+/** @var string|null $doc */
+$docKey = (string) ($doc ?? 'getting-started');
+
+if (!isset($guides[$docKey])) {
+    $docKey = 'getting-started';
+}
+
+/** @var array{label: string, file: string, badge: string} $selected */
+$selected = $guides[$docKey];
+
+// Server-side parse with an mtime-keyed cache (same pattern as the loader's structure cache)
+$html = '';
+$basePath = PathResolver::resolveBasePath();
+$docFile = $basePath . '/docs/' . $selected['file'];
+
+if (is_file($docFile)) {
+    $cache = new FileCache($basePath . '/storage/cache');
+    $cacheKey = 'phue_docs_' . md5($docFile . '|' . (string) @filemtime($docFile));
+    $cached = $cache->get($cacheKey);
+
+    if (is_string($cached) && $cached !== '') {
+        $html = $cached;
+    } else {
+        $html = (new MarkdownParser())->parse((string) file_get_contents($docFile));
+        $cache->set($cacheKey, $html);
+    }
+}
+
+// Sidebar items + prev/next navigation
+$keys = array_keys($guides);
+
+$sidebarItems = [];
+foreach ($guides as $key => $guide) {
+    $sidebarItems[] = [
+        'label' => $guide['label'],
+        'href'  => '/docs?doc=' . $key,
+    ];
+}
+
+$position = array_search($docKey, $keys, true);
+$prev = null;
+$next = null;
+
+if ($position !== false && $position > 0) {
+    $prev = ['label' => $guides[$keys[$position - 1]]['label'], 'href' => '/docs?doc=' . $keys[$position - 1]];
+}
+if ($position !== false && $position < count($keys) - 1) {
+    $next = ['label' => $guides[$keys[$position + 1]]['label'], 'href' => '/docs?doc=' . $keys[$position + 1]];
+}
+
+// -------------------------------------------------------------- global search
+// One cacheable index entry per heading (h1–h3) across ALL guides, so the
+// sidebar can search the entire documentation client-side without a round-trip.
+// Anchors reuse the exact ids the MarkdownParser emits for headings.
+$indexFingerprint = [];
+foreach ($guides as $key => $guide) {
+    $guideFile = $basePath . '/docs/' . $guide['file'];
+    if (is_file($guideFile)) {
+        $indexFingerprint[] = $key . ':' . (string) @filemtime($guideFile);
+    }
+}
+
+$indexCache = new FileCache($basePath . '/storage/cache');
+$indexKey = 'phue_docs_index_' . md5(implode('|', $indexFingerprint));
+$searchIndex = $indexCache->get($indexKey);
+
+if (!is_array($searchIndex)) {
+    $stripInline = static function (string $text): string {
+        $text = (string) preg_replace('/`([^`]*)`/', '$1', $text);
+        $text = (string) preg_replace('/\[([^\]]+)\]\([^)]*\)/', '$1', $text);
+        $text = (string) preg_replace('/[*_>#]+/', ' ', $text);
+        $text = str_replace('|', ' ', $text);
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
+    };
+
+    $slugify = static function (string $text): string {
+        $slug = (string) preg_replace('/[^\p{L}\p{N}]+/u', '-', mb_strtolower($text, 'UTF-8'));
+
+        return trim($slug, '-');
+    };
+
+    $searchIndex = [];
+
+    foreach ($guides as $key => $guide) {
+        $guideFile = $basePath . '/docs/' . $guide['file'];
+        if (!is_file($guideFile)) {
+            continue;
+        }
+
+        $heading = $guide['label'];
+        $slug = '';
+        $buffer = [];
+        $inFence = false;
+
+        $flush = static function () use (&$searchIndex, $key, $guide, &$heading, &$slug, &$buffer): void {
+            $text = trim((string) preg_replace('/\s+/', ' ', implode(' ', $buffer)));
+            if ($text === '') {
+                return;
+            }
+
+            $searchIndex[] = [
+                'doc'     => $guide['label'],
+                'docKey'  => $key,
+                'heading' => $heading,
+                'href'    => '/docs?doc=' . $key . ($slug !== '' ? '#' . $slug : ''),
+                'text'    => mb_substr($text, 0, 160, 'UTF-8'),
+            ];
+            $buffer = [];
+        };
+
+        $guideLines = preg_split('/\r\n|\r|\n/', (string) @file_get_contents($guideFile)) ?: [];
+
+        foreach ($guideLines as $line) {
+            $raw = trim($line);
+
+            if (str_starts_with($raw, '```')) {
+                $inFence = !$inFence;
+                continue;
+            }
+            if ($inFence) {
+                continue;
+            }
+
+            if (preg_match('/^#{1,3}\s+(.+)$/', $raw, $matches)) {
+                $flush();
+                $heading = $stripInline($matches[1]);
+                $slug = $slugify($heading);
+                continue;
+            }
+
+            $text = $stripInline($raw);
+            if ($text !== '') {
+                $buffer[] = $text;
+            }
+        }
+
+        $flush();
+    }
+
+    $indexCache->set($indexKey, $searchIndex);
+}
+
 return [
-    'title' => 'Phue App - Docs',
+    'title' => 'Phue Docs — ' . $selected['label'],
     'state' => [
-        'testValue' => $testValue ?? 'none',
+        'sidebarItems' => $sidebarItems,
+        'searchIndex'  => $searchIndex,
+        'docKey'       => $docKey,
+        'docTitle'     => $selected['label'],
+        'docBadge'     => $selected['badge'],
+        'docFile'      => 'docs/' . $selected['file'],
+        'content'      => $html,
+        'prev'         => $prev,
+        'next'         => $next,
     ],
 ];
 </php>
 
 <template>
-<div class="d-flex flex-column gap-2 p-4">
-    <h2>Phue App - Docs</h2>
-    {{testValue}}
+<div class="d-flex flex-column gap-4 p-4">
+    <ph-breadcrumb :items="[{ label: 'Home', href: '/' }, { label: 'Docs' }]" />
+
+    <doc-section
+        :id="docKey"
+        :title="docTitle"
+        :badge="docBadge"
+        description="Phue Framework documentation — verified against the source and organized in focused guides.">
+        <ph-row>
+            <ph-col span="12" lg="2">
+                <div class="position-sticky" style="top: 5rem;">
+                    <doc-sidebar :items="sidebarItems" :active="docKey" :search-index="searchIndex" />
+                </div>
+            </ph-col>
+            <ph-col span="12" lg="10">
+                <ph-card>
+                    <div class="doc-content" v-html="content"></div>
+                </ph-card>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <ph-link v-if="prev" :href="prev.href">{{ prev.label }}</ph-link>
+                    <span v-else></span>
+                    <ph-link v-if="next" :href="next.href">{{ next.label }}</ph-link>
+                </div>
+            </ph-col>
+        </ph-row>
+    </doc-section>
 </div>
 </template>
 
@@ -18,12 +219,86 @@ return [
 import { createSSRApp, ref } from 'vue';
 
 export default function mountApp() {
+    window.__phueApp?.unmount?.();
+
+    if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+    }
+
     window.__phueApp = createSSRApp({
         setup() {
-            const testValue = ref(window.__INITIAL_STATE__.testValue);
-            return { testValue };
+            const sidebarItems = ref(window.__INITIAL_STATE__?.sidebarItems ?? []);
+            const searchIndex = ref(window.__INITIAL_STATE__?.searchIndex ?? []);
+            const docKey = ref(window.__INITIAL_STATE__?.docKey ?? 'getting-started');
+            const docTitle = ref(window.__INITIAL_STATE__?.docTitle ?? 'Docs');
+            const docBadge = ref(window.__INITIAL_STATE__?.docBadge ?? '');
+            const content = ref(window.__INITIAL_STATE__?.content ?? '');
+            const prev = ref(window.__INITIAL_STATE__?.prev ?? null);
+            const next = ref(window.__INITIAL_STATE__?.next ?? null);
+
+            return { sidebarItems, searchIndex, docKey, docTitle, docBadge, content, prev, next };
         }
     });
+
     window.__phueApp.mount('#app');
+
+    // Sticky topbar height (matches the sidebar's sticky `top: 5rem`).
+    const headerOffset = 80;
+
+    // Native fragment navigation (full page load) honours scroll-padding-top,
+    // so the browser's own anchor jump and our manual scroll agree on the
+    // sticky-header offset instead of fighting each other.
+    document.documentElement.style.scrollPaddingTop = headerOffset + 'px';
+
+    const scrollToSection = (attempt = 0) => {
+        let hash = window.location.hash.replace(/^#/, '');
+
+        try {
+            hash = decodeURIComponent(hash);
+        } catch (error) {
+            hash = '';
+        }
+
+        if (hash === '') {
+            window.scrollTo({ top: 0 });
+            return;
+        }
+
+        const target = document.getElementById(hash);
+
+        // Content may still be mounting on an SPA swap — retry briefly.
+        if (!target) {
+            if (attempt < 10) {
+                setTimeout(() => scrollToSection(attempt + 1), 50);
+            }
+            return;
+        }
+
+        const top = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+        window.scrollTo({ top: top < 0 ? 0 : top });
+
+        // Move focus to the target section for keyboard/screen-reader users.
+        if (!target.hasAttribute('tabindex')) {
+            target.setAttribute('tabindex', '-1');
+        }
+        target.focus({ preventScroll: true });
+    };
+
+    if (!window.__phueDocsScrollBound) {
+        window.__phueDocsScrollBound = true;
+        window.addEventListener('hashchange', scrollToSection);
+        window.addEventListener('load', scrollToSection);
+        window.addEventListener('pageshow', scrollToSection);
+        window.addEventListener('popstate', scrollToSection);
+    }
+
+    scrollToSection();
+
+    // phue-explorer commits the SPA navigation with history.pushState AFTER
+    // mounting this page, so location.hash is still the previous URL's hash
+    // during mount (pushState fires no hashchange either). Re-run once the URL
+    // is committed — and once more after layout/scroll metrics settle.
+    setTimeout(scrollToSection, 0);
+    setTimeout(scrollToSection, 120);
 }
 </script>

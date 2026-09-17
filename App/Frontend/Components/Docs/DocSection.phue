@@ -1,0 +1,39 @@
+<template>
+  <section :id="id" class="doc-section">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span v-if="icon" class="doc-section-icon fs-5">{{ icon }}</span>
+      <ph-heading :level="3" class="mb-0">{{ title }}</ph-heading>
+      <ph-badge v-if="badge" :label="badge" />
+    </div>
+    <p v-if="description" class="text-body-secondary mb-3">{{ description }}</p>
+    <slot />
+  </section>
+</template>
+
+<script>
+export default {
+  name: 'DocSection',
+  props: {
+    id: {
+      type: String,
+      required: true
+    },
+    title: {
+      type: String,
+      required: true
+    },
+    icon: {
+      type: String,
+      default: ''
+    },
+    badge: {
+      type: String,
+      default: ''
+    },
+    description: {
+      type: String,
+      default: ''
+    }
+  }
+};
+</script>

@@ -47,7 +47,7 @@ final class HydrationContractTest extends TestCase
             ],
             'Docs' => [
                 '/app/App/Frontend/Pages/Docs.phue',
-                ['testValue' => 'DocsPage'],
+                ['doc' => 'getting-started'],
             ],
             'UI' => [
                 '/app/App/Frontend/Pages/UI.phue',
@@ -71,13 +71,53 @@ final class HydrationContractTest extends TestCase
     public function testEverySimpleTemplateBindingHasMatchingStateKey(string $file, array $params): void
     {
         $parser = new PhueTemplateParser();
-        $structure = $parser->parseStructure($file);
+        $template = $parser->parseStructure($file)['template'];
         $stateKeys = array_keys($parser->parse($file, $params)->view->getState());
 
-        preg_match_all('/\{\{\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\}\}/', $structure['template'], $matches);
-        $bindings = array_values(array_unique($matches[1]));
+        $roots = [];
 
-        $this->assertNotEmpty($bindings, sprintf('%s exposes no simple template bindings to check.', basename($file)));
+        // `{{ key }}` and `{{ obj.prop }}` → root identifier.
+        preg_match_all(
+            '/\{\{\s*([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*)\s*\}\}/',
+            $template,
+            $mustaches
+        );
+        foreach ($mustaches[1] as $expression) {
+            $roots[] = explode('.', $expression)[0];
+        }
+
+        // `v-html="key"` / `v-html="obj.prop"` → root identifier.
+        preg_match_all(
+            '/v-html="\s*([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*)\s*"/',
+            $template,
+            $vHtml
+        );
+        foreach ($vHtml[1] as $expression) {
+            $roots[] = explode('.', $expression)[0];
+        }
+
+        // Locals introduced by the template itself (v-for aliases / slot scopes)
+        // are NOT state keys and must not be treated as binding drift.
+        preg_match_all(
+            '/v-for="\s*\(?\s*([A-Za-z_$][A-Za-z0-9_$]*)/',
+            $template,
+            $forAliases
+        );
+        $locals = $forAliases[1];
+
+        preg_match_all('/#\w+="\{([^}]*)\}"/', $template, $slotScopes);
+        foreach ($slotScopes[1] as $scope) {
+            foreach (explode(',', $scope) as $name) {
+                $name = trim(explode('=', $name)[0]);
+                if ($name !== '') {
+                    $locals[] = $name;
+                }
+            }
+        }
+
+        $bindings = array_values(array_unique(array_diff($roots, $locals)));
+
+        $this->assertNotEmpty($bindings, sprintf('%s exposes no template bindings to check.', basename($file)));
 
         foreach ($bindings as $binding) {
             $this->assertContains(
@@ -102,7 +142,7 @@ final class HydrationContractTest extends TestCase
         $structure = $parser->parseStructure($file);
         $stateKeys = array_keys($parser->parse($file, $params)->view->getState());
 
-        preg_match_all('/__INITIAL_STATE__\.([A-Za-z_$][A-Za-z0-9_$]*)/', (string) $structure['script'], $matches);
+        preg_match_all('/__INITIAL_STATE__\??\.([A-Za-z_$][A-Za-z0-9_$]*)/', (string) $structure['script'], $matches);
         $read = array_values(array_unique($matches[1]));
 
         $this->assertStringContainsString(

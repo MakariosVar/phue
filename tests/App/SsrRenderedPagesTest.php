@@ -83,8 +83,28 @@ final class SsrRenderedPagesTest extends TestCase
         $container = $this->mountContainer($response->getContent());
         $this->assertNotNull($container, 'Docs page must render a mount container.');
 
-        $this->assertStringContainsString('DocsPage', $container);
+        // Clean contract: controller resolves ?doc= (default: getting-started);
+        // the parsed guide HTML ships in state and renders via v-html.
+        $this->assertStringContainsString('Getting Started', $container);
         $this->assertStringNotContainsString('{{', $container);
+    }
+
+    public function testDocsRendersPrevNextAsPlainAnchors(): void
+    {
+        $response = $this->app->handle(new Request('GET', '/docs', ['doc' => 'core']));
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        $container = $this->mountContainer($response->getContent());
+        $this->assertNotNull($container, 'Docs page must render a mount container.');
+
+        $this->assertStringContainsString('href="/docs?doc=getting-started"', $container);
+        $this->assertStringContainsString('href="/docs?doc=modules"', $container);
+        $this->assertStringNotContainsString(
+            '<router-link',
+            $container,
+            'Relative internal links must render as <a> — the shell has no Vue Router, so <router-link> never mounts.'
+        );
     }
 
     public function testHomeSpaNavigationReturnsInterpolatedMarkup(): void
