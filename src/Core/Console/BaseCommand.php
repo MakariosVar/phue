@@ -127,7 +127,7 @@ abstract class BaseCommand implements CommandInterface
 
         foreach ($methods as $method) {
             // Skip base class methods and interface methods
-            if (in_array($method, ['getName', 'getDescription', 'execute', 'showHelp', 'getSubCommands'], true)) {
+            if (in_array($method, ['getName', 'getGroup', 'getDescription', 'execute', 'showHelp', 'getSubCommands'], true)) {
                 continue;
             }
 

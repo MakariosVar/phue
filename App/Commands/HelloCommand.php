@@ -17,6 +17,16 @@ use Phue\Core\Console\BaseCommand;
 final class HelloCommand extends BaseCommand
 {
     /**
+     * Gets the group this command belongs to.
+     *
+     * @return string Command group name.
+     */
+    public function getGroup(): string
+    {
+        return 'Custom';
+    }
+
+    /**
      * Retrieves command identifier name.
      */
     public function getName(): string
