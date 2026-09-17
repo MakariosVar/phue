@@ -223,18 +223,66 @@ If the SQLite database doesn't exist yet, Schii's auto-migration creates tables 
 
 ---
 
+## 5. First run
+
+```bash
+cd my-app
+composer install
+./bin/phue serve:php        # http://localhost:8000, docroot public/
+```
+
+Then:
+
+| URL | What you see |
+|---|---|
+| `/` | The Home page (`.phue` rendered through AppLayout) |
+| `/docs` | The Docs page |
+| `/ui` | The PhUI component showcase |
+| `/schii` | The Schii admin console (when `schii` is installed) |
+| `/phii` | The Phii code generator panel (when `schii` is installed) |
+
+If the SQLite database doesn't exist yet, Schii's auto-migration creates tables for your `#[UI]` models on the fly — see [Schii](Schii.md).
+
+### Cache commands (development & production)
+
+Clear caches during development:
+
+```bash
+./bin/phue cache:clear                    # all types (default)
+./bin/phue cache:clear --type=general     # PSR-16 file cache
+./bin/phue cache:clear --type=views       # compiled views
+./bin/phue cache:clear --type=schemas     # generated DB schemas
+./bin/phue cache:clear --type=logs        # application logs
+```
+
+Optimize (clear + warm) for production-ready performance:
+
+```bash
+./bin/phue optimize                       # all types (default: general, views, schemas)
+./bin/phue optimize --type=views          # pre-parse & compile all .phue components
+./bin/phue optimize --type=schemas        # pre-generate DB schemas for ActiveRecord models
+./bin/phue optimize --dry-run             # show what would be optimized without executing
+```
+
+> **Warming behavior:** `views` discovers & parses all `.phue` components; `schemas` generates schema files for all `App\Models\* extends BaseActiveRecord` classes.
+
+---
+
 ## 6. Running with Docker
 
 ```bash
-./phue-docker build     # Build the dev image
-./phue-docker up        # Start containers (app + redis)
-./phue-docker start     # Start containers + Phue HTTP + Bun SSR servers
-./phue-docker shell     # Interactive shell inside the app container
-./phue-docker down      # Stop containers
-./phue-docker clean     # Stop containers AND purge volumes (destructive)
+./phue-docker build           # Build the dev image
+./phue-docker up              # Start containers (app + redis)
+./phue-docker start           # Start containers + Phue HTTP + Bun SSR servers
+./phue-docker start -c        # Clear all caches before starting
+./phue-docker start -o        # Optimize (clear + warm) caches before starting
+./phue-docker start -co       # Both: clear then optimize
+./phue-docker shell           # Interactive shell inside the app container
+./phue-docker down            # Stop containers
+./phue-docker clean           # Stop containers AND purge volumes (destructive)
 ```
 
-See [CLI](CLI.md) for the full command list.
+See [CLI](CLI.md) for the full command list and `phue-docker start -h` for cache/optimize flags.
 
 ---
 

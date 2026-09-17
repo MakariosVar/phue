@@ -44,6 +44,39 @@ runs.
 | `npm:install` | `NpmInstallCommand` | Installs a JS vendor package (via Bun) into `storage/assets/vendor/` |
 | `npm:remove` | `NpmRemoveCommand` | Removes an installed JS vendor package |
 | `npm:list` | `NpmListCommand` | Lists currently installed JS vendor packages |
+| `cache:clear` | `CacheClearCommand` | Clears application cache by type: general, views, schemas, logs |
+| `optimize` | `OptimizeCommand` | Clears + warms caches (views, schemas, general) |
+
+### New cache commands
+
+#### `cache:clear`
+
+Clears application cache by type.
+
+```bash
+./bin/phue cache:clear                    # all types (default)
+./bin/phue cache:clear --type=general     # PSR-16 file cache (storage/cache/*.cache)
+./bin/phue cache:clear --type=views       # compiled views (storage/cache/views/*.php)
+./bin/phue cache:clear --type=schemas     # generated DB schemas (storage/generated/schemas/*)
+./bin/phue cache:clear --type=logs        # application logs (storage/logs/*)
+```
+
+#### `optimize`
+
+Clears **and warms** caches for production-ready performance.
+
+```bash
+./bin/phue optimize                       # all types (default: general, views, schemas)
+./bin/phue optimize --type=general        # clear + warm general cache
+./bin/phue optimize --type=views          # pre-parse & compile all .phue components
+./bin/phue optimize --type=schemas        # pre-generate DB schemas for all ActiveRecord models
+./bin/phue optimize --dry-run             # show what would be optimized without executing
+```
+
+> **Warming behavior:**
+> - **general**: clears FileCache; warming is on-demand (components load on first request)
+> - **views**: discovers all `.phue` files in `App/Frontend` + `src/Core/UI/Phui`, parses & compiles them via `PhueTemplateParser` to populate `storage/cache/views/`
+> - **schemas**: discovers all `App\Models\* extends BaseActiveRecord` classes and calls `SchemaRegistry::get()` to pre-generate schema files in `storage/generated/schemas/`
 
 ### Module commands (added via `registerCommands()`)
 
@@ -148,6 +181,31 @@ bash tools/installer/tests/run-tests.sh
 ./phue-docker status  # Container states
 ./phue-docker clean   # Stop containers AND purge volumes (destructive, asks for confirmation)
 ```
+
+### `start` / `restart` flags (cache & optimize)
+
+```bash
+# Clear all caches before starting
+./phue-docker start -c
+./phue-docker start --clear-cache
+
+# Optimize (clear + warm) caches before starting
+./phue-docker start -o
+./phue-docker start --optimize
+
+# Both: clear then optimize
+./phue-docker start -co
+./phue-docker restart -co
+./phue-docker start --clear-cache --optimize
+```
+
+| Flag | Description |
+|------|-------------|
+| `-c`, `--clear-cache` | Runs `cache:clear --type=all` inside the container before starting servers |
+| `-o`, `--optimize` | Runs `optimize --type=all` (clear + warm) inside the container before starting servers |
+| `-co`, `-oc` | Both: clear then optimize (equivalent to `-c -o`) |
+
+> Flags are only parsed for `start` and `restart` commands. They run **after** containers are up, inside the running app container.
 
 The compose file is `docker/dev/docker-compose.yml` (service `app`, container
 `phue_app`, port 8000). `start` pre-cleans the stale SSR socket, launches

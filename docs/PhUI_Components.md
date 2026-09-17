@@ -27,6 +27,37 @@ You just write the tag in kebab-case:
 The loader builds the `components: { PhButton, PhInput, ... }` map itself and
 only ships the JS module for the referenced components.
 
+### 1.1.1 Component Styles Metadata (`'styles'` in `<php>` block)
+
+A `.phue` component (page or partial) can declare its own stylesheet dependencies
+in the `<php>` block return array:
+
+```php
+<php>
+return [
+    'title' => 'My Page',
+    'styles' => ['/assets/app/styles/main.css', '/assets/app/styles/custom.css'],
+    'state' => [...],
+];
+</php>
+<template>
+<div>My component content</div>
+</template>
+```
+
+**Flow:**
+1. Component's `<php>` block returns `'styles' => [...]` (array of URLs)
+2. `PhueComponentLoader` passes it to `View` constructor (`$styles` param)
+3. `ComponentRenderer::renderView()` iterates `$view->getStyles()` and calls `$assetRegistry->addRequestStyle($url)` for each
+4. `HtmlShellRenderer` renders `<link rel="stylesheet" href="...">` in `<head>`
+5. `AssetRegistry::beginRequest()` clears the request pool — styles are **request-scoped**, no leak across pages
+
+> **Key point:** Styles are **request-scoped** (lazy). Each page/component declares its own styles, they're added to the request pool during render, and cleared on the next `beginRequest()`. No global pollution, no manual cleanup needed.
+
+> **BC note:** `$styles` was appended as the **last** `View` constructor parameter (after `$html`), so existing positional calls `new View($tpl, $state, $scripts, $inlineScript, $html)` remain 100% compatible.
+
+> **Asset URL convention:** Use absolute paths from registered asset sources, e.g. `/assets/app/styles/main.css` (serves `App/Assets/styles/main.css` via `registerSource('/assets/app', ...)` in `public/index.php`).
+
 ### 1.2 `v-model` is wired per component
 
 | Form | Prop updated | Trigger |

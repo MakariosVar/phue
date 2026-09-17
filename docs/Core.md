@@ -40,10 +40,13 @@ on top of these primitives.
 | `HealthController` | `Health/HealthController.php` | Auto-registered health endpoint |
 | `ComponentRenderer` | `UI/ComponentRenderer.php` | HTML-first rendering lifecycle: component → layout → shell |
 | `HtmlShellRenderer` | `Asset/HtmlShellRenderer.php` | Outer HTML5 shell with styles, scripts, state |
+| `AssetRegistry` | `Asset/AssetRegistry.php` | Asset registration + request-scoped lazy styles/scripts |
 | `ComponentLoaderRegistry` | `Frontend/ComponentLoaderRegistry.php` | Composite, fail-safe `.phue` component resolution |
 | `PhueComponentLoader` | `UI/PhueComponentLoader.php` | Loads & caches `.phue` components from a directory |
 | `PhuePartialRenderer` | `UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) |
 | `ComponentDiscoverer` | `UI/ComponentDiscoverer.php` | Auto-discovers components referenced by a template |
+| `PhueTemplateParser` | `UI/PhueTemplateParser.php` | Parses `.phue` SFCs (PHP/Template/Script blocks) |
+| `MarkdownParser` | `Utils/MarkdownParser.php` | XSS-safe markdown parser (fenced code blocks without structural newlines) |
 
 ---
 
@@ -89,13 +92,65 @@ The constructor does, in order:
 | `SsrEngine` (alias `ssr.engine`) | singleton | `BunSsrEngine` when `ssr.enabled`, else `NullSsrEngine` |
 | `ComponentLoaderRegistry` | singleton | Composite loader — priority: App/Frontend → App/Frontend/Components → PhUI |
 | `ComponentDiscoverer`, `PhuePartialRenderer`, `ComponentRenderer` | singleton | Rendering pipeline |
-| `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra |
+| `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts) |
 
 Two global middlewares are registered by default, in this order:
 
 1. `ErrorHandlerMiddleware` — runs first (outermost), so exceptions anywhere in
    the pipeline are rendered as proper error pages / JSON errors.
 2. `SecurityMiddleware` — defense-in-depth headers on every response.
+
+### 2.2.1 AssetRegistry: Request-Scoped Styles & Scripts
+
+The `AssetRegistry` manages two pools for both scripts and styles:
+
+| Pool | Behavior | Cleared by `beginRequest()` |
+|------|----------|-----------------------------|
+| **Global** | `addStyle($url)`, `addGlobalScript($url, $isModule)` — registered once, survives across requests | No |
+| **Request** | `addRequestStyle($url)`, `addRequestScript($url, $isModule)` — per-request lazy registration | **Yes** |
+
+`Application::handle()` calls `AssetRegistry::beginRequest()` at the start of every request, so request-scoped assets from a previous page never leak into the next one (critical for Swoole/RoadRunner persistent processes).
+
+**Deduplication:** `addRequestStyle($url)` silently skips if the URL already exists in **either** the global or request pool. This prevents duplicate `<link>` tags when multiple components declare the same stylesheet.
+
+**Rendering:** `HtmlShellRenderer` calls `AssetRegistry::getStyles()` (global + request merged) and emits `<link rel="stylesheet" href="...">` tags in the `<head>`.
+
+### 2.2.2 View Styles Metadata (`'styles'` in `.phue` `<php>` block)
+
+A `.phue` component (or page) can declare its own stylesheet dependencies in the `<php>` block return array:
+
+```php
+return [
+    'title' => 'My Page',
+    'styles' => ['/assets/app/styles/main.css', '/assets/app/styles/custom.css'],
+    'state' => [...],
+];
+```
+
+**Flow:**
+1. Component's `<php>` block returns `'styles' => [...]`
+2. `PhueComponentLoader` passes it to `View` constructor (`$styles` param, added at the end for BC)
+3. `ComponentRenderer::renderView()` iterates `$view->getStyles()` and calls `$assetRegistry->addRequestStyle($url)` for each
+4. `HtmlShellRenderer` renders `<link rel="stylesheet" href="...">` in `<head>`
+5. `beginRequest()` clears request pool — styles are **request-scoped**, no leak across pages
+
+> **BC note:** `$styles` was appended as the **last** constructor parameter in `View` (after `$html`), so the pre-styles positional signature `new View($tpl, $state, $scripts, $inlineScript, $html)` remains 100% compatible.
+
+### 2.2.3 `App/Assets/` — User-space asset directory
+
+Place your project's CSS/JS in `App/Assets/` (e.g. `App/Assets/styles/main.css`). In `public/index.php`, the source is registered:
+
+```php
+$registry->registerSource('/assets/app', $app->getBasePath() . '/App/Assets');
+```
+
+This makes `/assets/app/styles/main.css` serve `App/Assets/styles/main.css` via the `AssetsController` (route `/assets/{path}`). Declare it in your page/component:
+
+```php
+'styles' => ['/assets/app/styles/main.css'],
+```
+
+> **Note:** The Swoole serve command (`src/Modules/Server/Commands/SwooleServeCommand.php`) also registers this source so it works in both dev and production servers.
 
 The `ComponentRenderer` is wired with everything a page needs:
 
@@ -771,6 +826,33 @@ is a trusted reverse proxy:
 
 `HealthController` is auto-registered on the router by the `Application`, so the
 health endpoint is available without any wiring.
+
+---
+
+## 9.5 MarkdownParser: Fenced Code Blocks Without Structural Newlines
+
+The `MarkdownParser` (`src/Core/Utils/MarkdownParser.php`) parses fenced code blocks (``` ```). Previously, the parser emitted structural newlines around the code content due to the final `implode("\n", $htmlLines)` join, producing output like:
+
+```html
+<pre><code>
+$code = 'hello';
+</code></pre>
+```
+
+The leading/trailing newlines inside `<pre><code>` rendered as blank lines at the top/bottom of the code block — visible as "phantom whitespace" that no CSS padding could remove.
+
+**Fixed:** The parser now collects code block lines in a dedicated buffer and emits the entire `<pre><code>...</code></pre>` as a **single** HTML line entry, so the structural newlines from `implode("\n")` never enter the `<pre>`. Output is now:
+
+```html
+<pre><code>$code = 'hello';
+</code></pre>
+```
+
+- **Leading newline** after opening fence: removed
+- **Trailing newline** before closing fence: removed  
+- **Internal newlines** between code lines: **preserved** (joined by `\n`)
+
+This matches standard CommonMark/GFM rendering behavior and eliminates the "unremovable padding-top" visual artifact on code blocks styled with `padding` in CSS.
 
 ---
 
