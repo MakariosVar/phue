@@ -356,27 +356,13 @@ class PhueComponentLoader
             return null;
         }
 
-        $children = [];
-        if ($this->registry !== null) {
-            $discoverer = new ComponentDiscoverer($this->registry);
-            $children = $discoverer->scanTemplate($structure['template']);
-        }
-
-        $childNames = [];
-        foreach ($children as $child) {
-            $childNames[] = $child;
-        }
-
-        $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
-
         $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
         $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
-            $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
             return "{$ssrRenderFnCode}\n"
-                 . "export const __phueSsrRender = ssrRender;\n"
-                 . "export default { ssrRender: __phueSsrRender{$componentsProp} };\n";
+                    . "export const __phueSsrRender = ssrRender;\n"
+                    . "export default { ssrRender: __phueSsrRender };\n";
         }
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
@@ -400,31 +386,20 @@ class PhueComponentLoader
                 1
             );
 
-            $componentsProp = !empty($componentsObj) 
-                ? ", components: { ...(opts.components || {}), {$componentsObj} }" 
-                : '';
-
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ ssrRender: __phueSsrRender, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
             }
             if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
             }
 
             $proxyBlock = implode("\n", $proxies) . "\n";
-        } elseif (!empty($componentsObj)) {
-            $scriptContent = preg_replace_callback(
-                '/export\s+default\s*\{/s',
-                fn($matches) => "export default { components: { {$componentsObj} }, ",
-                $scriptContent,
-                1
-            );
         }
 
         return "{$ssrRenderFnCode}\n"
-             . "export const __phueSsrRender = ssrRender;\n"
-             . "{$proxyBlock}{$scriptContent}";
+                . "export const __phueSsrRender = ssrRender;\n"
+                . "{$proxyBlock}{$scriptContent}";
     }
 
     /**
