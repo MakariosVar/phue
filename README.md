@@ -16,7 +16,7 @@
 
 Phue is a modular PHP framework **>= 8.5** for building modern web applications.
 It is not another microframework and not another kitchen-sink monolith either —
-it sits intentionally in between, with an opinionated core and seven pluggable
+it sits intentionally in between, with an opinionated core and pluggable
 modules that you opt into per-project.
 
 The headline feature is **`.phue`** — a single-file component format that keeps
@@ -116,10 +116,22 @@ bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/
 # Or from a local clone of this repo
 bash tools/installer/phue-create.sh my-app --template=web
 
-# Install dependencies and run
+## DOCKER 
+./phue-docker build
+./phue-docker shell   # open docker container shell
+composer install      # inside docker container
+
+./phue-docker start   # runs docker up and starts both (swoole+bun) servers 
+./phue-docker restart # drop and recreate and start both (swoole+bun) servers
+
+## OR MANUAL RUN
 cd my-app
 composer install
-./bin/phue serve:php
+./bin/phue serve:php # Start standard FPM server or simply
+# ./bin/phue serve   # if swoole is enabled
+
+# if SSR_ENABLED in true in .env you need to run
+bun ./ssr/server.ts
 ```
 
 Open `http://localhost:8000` — you have a working Phue app with routing,
@@ -338,7 +350,7 @@ $name = env('APP_NAME', 'Phue App');
 ```bash
 cd my-app
 composer install
-./bin/phue serve:php        # http://localhost:8000, docroot public/
+./bin/phue serve:       # http://localhost:8000, docroot public/
 ```
 
 Then:
@@ -364,7 +376,11 @@ for your `#[UI]` models on the fly — see [Schii](docs/Schii.md).
 ./phue-docker start     # Start containers + Phue HTTP + Bun SSR servers
 ./phue-docker shell     # Interactive shell inside the app container
 ./phue-docker down      # Stop containers
+./phue-docker restart   # Safely stop containers (down) and start them back up
+./phue-docker status    # View current container states
+./phue-docker logs      # Stream live logs (tail 100)
 ./phue-docker clean     # Stop containers AND purge volumes (destructive)
+
 ```
 
 See [CLI](docs/CLI.md) for the full command list.
