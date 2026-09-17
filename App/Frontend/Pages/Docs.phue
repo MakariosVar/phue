@@ -171,6 +171,7 @@ if (!is_array($searchIndex)) {
 
 return [
     'title' => 'Phue Docs — ' . $selected['label'],
+    'styles' => ['/assets/app/styles/main.css'],
     'state' => [
         'sidebarItems' => $sidebarItems,
         'searchIndex'  => $searchIndex,
