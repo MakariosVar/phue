@@ -1,10 +1,11 @@
 # Phue Framework
 
 <p align="center">
-  <img src="public/Phue.svg" alt="Phue logo" width="140">
+    <img src="public/Phue.svg" alt="Phue logo" width="140">
 </p>
-
-**Almost a web development framework.**
+<p align="center">
+    <strong>Almost a web development framework.</strong>
+</p>
 
 [![License](https://img.shields.io/github/license/MakariosVar/phue?style=flat-square)](LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.5-8892BF.svg?style=flat-square&logo=php)](composer.json)
