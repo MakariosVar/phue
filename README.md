@@ -6,12 +6,13 @@
 <p align="center">
     <strong>Almost a web development framework.</strong>
 </p>
-
-[![License](https://img.shields.io/github/license/MakariosVar/phue?style=flat-square)](LICENSE)
-[![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.5-8892BF.svg?style=flat-square&logo=php)](composer.json)
-[![GitHub stars](https://img.shields.io/github/stars/MakariosVar/phue?style=flat-square)](https://github.com/MakariosVar/phue)
-[![GitHub last commit](https://img.shields.io/github/last-commit/MakariosVar/phue?style=flat-square)](https://github.com/MakariosVar/phue)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
+<p align="center">
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/MakariosVar/phue?style=flat-square" alt="License"></a>
+    <a href="composer.json"><img src="https://img.shields.io/badge/PHP-%3E%3D%208.5-8892BF.svg?style=flat-square&logo=php" alt="PHP >= 8.5"></a>
+    <a href="https://github.com/MakariosVar/phue"><img src="https://img.shields.io/github/stars/MakariosVar/phue?style=flat-square" alt="GitHub stars"></a>
+    <a href="https://github.com/MakariosVar/phue"><img src="https://img.shields.io/github/last-commit/MakariosVar/phue?style=flat-square" alt="GitHub last commit"></a>
+    <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs welcome"></a>
+</p>
 
 Phue is a modular PHP framework **>= 8.5** for building modern web applications.
 It is not another microframework and not another kitchen-sink monolith either —
