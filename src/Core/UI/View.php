@@ -15,18 +15,20 @@ class View
     /**
      * View constructor.
      *
-     * @param string      $template     In-DOM HTML markup reserved for Vue hydration.
-     * @param array<string, mixed> $state Initial state payload injected into window.__INITIAL_STATE__.
-     * @param array<int, string>   $scripts External ESM script URLs to be enqueued.
-     * @param string|null $inlineScript Inline ESM JavaScript logic extracted from the <script> block.
-     * @param string|null $html         Fully resolved server-rendered HTML markup (HTML-first / SSR mode).
+     * @param string $template              In-DOM HTML markup reserved for Vue hydration.
+     * @param array<string, mixed> $state   Initial state payload injected into window.__INITIAL_STATE__.
+     * @param array<int, string> $scripts   External ESM script URLs to be enqueued.
+     * @param string|null $inlineScript     Inline ESM JavaScript logic extracted from the <script> block.
+     * @param string|null $html             Fully resolved server-rendered HTML markup (HTML-first / SSR mode).
+     * @param array<int, string> $styles    External CSS style URLs to be enqueued.
      */
     public function __construct(
         private string $template,
         private array $state = [],
         private array $scripts = [],
         private ?string $inlineScript = null,
-        private ?string $html = null
+        private ?string $html = null,
+        private array $styles = []
     ) {}
 
     /**
@@ -57,6 +59,16 @@ class View
     public function getScripts(): array
     {
         return $this->scripts;
+    }
+
+    /**
+     * Retrieves external styles dependency URLs.
+     *
+     * @return array<int, string> List of style URLs.
+     */
+    public function getStyles(): array
+    {
+        return $this->styles;
     }
 
     /**
