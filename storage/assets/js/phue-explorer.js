@@ -38,7 +38,6 @@
    */
   async function loadAndMountModule(scriptUrl) {
     if (scriptUrl.includes('PhNavigation') || scriptUrl.includes('phue-explorer')) {
-
       return;
     }
 
@@ -67,6 +66,7 @@
 
   async function navigate(url, pushState = true) {
     try {
+      // 1. Fetch payload
       const response = await fetch(url, {
         headers: {
           'X-Phue-SPA': 'true'
@@ -78,14 +78,20 @@
         return;
       }
 
+      // 2. Parse payload
       const payload = await response.json();
 
-      // Update Document Title
+      // 3. Commit URL BEFORE mounting so scripts reading window.location get the updated URL
+      if (pushState) {
+        window.history.pushState({}, '', url);
+      }
+
+      // 4. Update Document Title
       if (payload.title) {
         document.title = payload.title;
       }
 
-      // Update #app content
+      // 5. Update #app DOM content & State
       const appContainer = document.getElementById('app');
       if (appContainer && payload.html) {
         if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
@@ -97,21 +103,34 @@
         window.__INITIAL_STATE__ = payload.state || {};
       }
 
-      // Load new page scripts and execute module entrypoint
+      // 6. Execute newly loaded page script modules
       if (Array.isArray(payload.scripts)) {
         for (const scriptUrl of payload.scripts) {
           await loadAndMountModule(scriptUrl);
         }
       }
 
-      // Sync Navigation active state
+      // 7. Sync navigation active state
       updateNavigationState(url);
 
-      if (pushState) {
-        window.history.pushState({}, '', url);
+      // 8. Handle Fragment Scrolling / Scroll Reset
+      if (window.location.hash) {
+        const targetEl = document.querySelector(window.location.hash);
+        if (targetEl) {
+          targetEl.scrollIntoView();
+        } else {
+          window.scrollTo(0, 0);
+        }
+      } else {
+        window.scrollTo(0, 0);
       }
+
+      // 9. Dispatch custom navigation event for reactive listeners
+      window.dispatchEvent(new CustomEvent('phue:navigate', { detail: { url } }));
+
     } catch (err) {
       console.error('SPA Navigation error:', err);
+      // Hard fallback on error (resets state cleanly if pushState occurred before mount failure)
       window.location.href = url;
     }
   }
