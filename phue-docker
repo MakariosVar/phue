@@ -9,7 +9,7 @@ SERVICE_NAME="app"
 usage() {
     echo "Phue - Docker Compose Wrapper"
     echo ""
-    echo "Usage: phue {up|start|down|build|restart|shell|logs|status|clean}"
+    echo "Usage: phue {up|start|down|build|restart|shell|logs|status|clean} [options]"
     echo ""
     echo "Commands:"
     echo "  up      : Safely start containers in detached mode"
@@ -21,6 +21,11 @@ usage() {
     echo "  logs    : Stream live logs (tail 100)"
     echo "  status  : View current container states"
     echo "  clean   : Stop containers AND purge associated volumes (destructive)"
+    echo ""
+    echo "Options (for start/restart):"
+    echo "  -c, --clear-cache    Clear all caches before starting"
+    echo "  -o, --optimize       Optimize (clear + warm) caches before starting"
+    echo "  -co                  Both clear cache and optimize"
     exit 0
 }
 
@@ -47,6 +52,18 @@ run_start() {
     echo "🚀 Starting containers..."
     docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
+    # Run cache clear if requested
+    if [[ "$CLEAR_CACHE" == true ]]; then
+        echo "🧹 Clearing cache..."
+        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/bin/phue cache:clear --type=all
+    fi
+
+    # Run optimize if requested
+    if [[ "$OPTIMIZE" == true ]]; then
+        echo "⚡ Optimizing caches..."
+        docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" php /app/bin/phue optimize --type=all
+    fi
+
     # Pre-clean stale socket inside container before starting servers
     docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" rm -f /tmp/phue-ssr.sock
 
@@ -70,6 +87,29 @@ case "$ACTION" in
         ;;
 
     start)
+        # Parse cache/optimize flags
+        CLEAR_CACHE=false
+        OPTIMIZE=false
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -c|--clear-cache)
+                    CLEAR_CACHE=true
+                    shift
+                    ;;
+                -o|--optimize)
+                    OPTIMIZE=true
+                    shift
+                    ;;
+                -co|-oc)
+                    CLEAR_CACHE=true
+                    OPTIMIZE=true
+                    shift
+                    ;;
+                *)
+                    break
+                    ;;
+            esac
+        done
         run_start "$@"
         ;;
 
@@ -87,6 +127,29 @@ case "$ACTION" in
         ;;
 
     restart)
+        # Parse cache/optimize flags
+        CLEAR_CACHE=false
+        OPTIMIZE=false
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -c|--clear-cache)
+                    CLEAR_CACHE=true
+                    shift
+                    ;;
+                -o|--optimize)
+                    OPTIMIZE=true
+                    shift
+                    ;;
+                -co|-oc)
+                    CLEAR_CACHE=true
+                    OPTIMIZE=true
+                    shift
+                    ;;
+                *)
+                    break
+                    ;;
+            esac
+        done
         echo "🔄 Stopping containers..."
         docker compose -f "$COMPOSE_FILE" down --remove-orphans
         echo "✅ Containers stopped."

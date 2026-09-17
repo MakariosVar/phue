@@ -26,6 +26,7 @@ use Phue\Core\Console\Commands\NpmInstallCommand;
 use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
 use Phue\Core\Console\Commands\CacheClearCommand;
+use Phue\Core\Console\Commands\OptimizeCommand;
 
 $basePath = dirname(__DIR__);
 $config = new Config($basePath . '/config');
@@ -50,7 +51,8 @@ $app
     ->add(new NpmInstallCommand())
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand())
-    ->add(new CacheClearCommand());
+    ->add(new CacheClearCommand())
+    ->add(new OptimizeCommand());
 
 // Module-specific commands
 foreach ($modules as $moduleClass) {
