@@ -292,6 +292,31 @@ export default function mountApp() {
         window.addEventListener('popstate', scrollToSection);
     }
 
+    // Ctrl/Cmd+K focuses the documentation search field. The listener lives on
+    // `window` (like the scroll handlers above) and is guarded so SPA remounts
+    // don't stack duplicates; it no-ops on any page without the search input.
+    if (!window.__phueDocsSearchShortcutBound) {
+        window.__phueDocsSearchShortcutBound = true;
+        window.addEventListener('keydown', (event) => {
+            if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
+                return;
+            }
+            if (event.key.toLowerCase() !== 'k') {
+                return;
+            }
+
+            const search = document.getElementById('doc-search-input');
+
+            if (!search) {
+                return;
+            }
+
+            event.preventDefault();
+            search.focus();
+            search.select();
+        });
+    }
+
     scrollToSection();
 
     // phue-explorer commits the SPA navigation with history.pushState AFTER
