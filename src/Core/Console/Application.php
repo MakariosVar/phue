@@ -126,7 +126,7 @@ class Application
         }
 
         foreach ($groupped as $groupName => $commands) {
-            fwrite($outputStream, "\003[1m{$groupName}:\003[0m\n");
+            fwrite($outputStream, "\033[1m{$groupName}:\033[0m\n");
 
             foreach ($commands as $name => $command) {
                 fwrite($outputStream, sprintf("  \033[32m%-22s\033[0m %s\n", $name, $command->getDescription()));
