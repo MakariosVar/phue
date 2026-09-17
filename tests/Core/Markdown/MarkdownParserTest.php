@@ -156,6 +156,33 @@ final class MarkdownParserTest extends TestCase
         $this->assertStringContainsString('</code></pre>', $html, 'Unclosed fence must be closed at end of input');
     }
 
+    public function testCodeBlockDoesNotStartWithStructuralBlankLine(): void
+    {
+        // The newline after the opening fence is structural, not content. If it
+        // leaks into <pre><code>, every code block renders a phantom blank line
+        // at the top that no amount of CSS padding/margin can remove (it is a
+        // text node, not layout padding).
+        $html = $this->parser->parse("```\n\$a = 1;\n```");
+
+        $this->assertStringContainsString('<pre><code>$a = 1;</code></pre>', $html);
+        $this->assertStringNotContainsString("<pre><code>\n", $html, 'No blank first line inside <pre><code>');
+    }
+
+    public function testCodeBlockDoesNotEndWithStructuralBlankLine(): void
+    {
+        $html = $this->parser->parse("```\n\$a = 1;\n```");
+
+        $this->assertStringNotContainsString("\n</code></pre>", $html, 'No blank last line inside <pre><code>');
+    }
+
+    public function testMultiLineCodeBlockKeepsInternalNewlinesButNoBoundaryBlankLines(): void
+    {
+        $html = $this->parser->parse("```\nline1\nline2\n```");
+
+        // Internal line separators survive; the structural newlines do not.
+        $this->assertStringContainsString("<pre><code>line1\nline2</code></pre>", $html);
+    }
+
     // ----------------------------------------------------------------- lists
 
     public function testParsesUnorderedLists(): void

@@ -19,6 +19,11 @@ namespace Phue\Core\Utils;
 final class MarkdownParser
 {
     /**
+     * @var list<string>
+     */
+    private array $codeLines = [];
+
+    /**
      * Parses a Markdown string into HTML format.
      *
      * @param string $markdown Raw markdown content.
@@ -62,9 +67,14 @@ final class MarkdownParser
             if (str_starts_with($trimmed, '```')) {
                 $flushParagraph();
                 if ($inCodeBlock) {
-                    $htmlLines[] = '</code></pre>';
+                    // Close: build the entire block as ONE htmlLine entry
+                    $content = implode("\n", $this->codeLines);
+                    $escaped = htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                    $htmlLines[] = '<pre><code>' . $escaped . '</code></pre>';
+                    $this->codeLines = [];
                     $inCodeBlock = false;
                 } else {
+                    // Open
                     if ($inList) {
                         $htmlLines[] = '</ul>';
                         $inList = false;
@@ -74,7 +84,7 @@ final class MarkdownParser
                         $inBlockquote = false;
                     }
                     $this->closeTable($htmlLines, $inTable, $pendingHeader, $tableAlign);
-                    $htmlLines[] = '<pre><code>';
+                    $this->codeLines = [];
                     $inCodeBlock = true;
                 }
                 continue;
@@ -82,7 +92,7 @@ final class MarkdownParser
 
             if ($inCodeBlock) {
                 // Escape code content securely
-                $htmlLines[] = htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $this->codeLines[] = $line;
                 continue;
             }
 
@@ -196,7 +206,10 @@ final class MarkdownParser
         // Close any remaining open structural tags
         $flushParagraph();
         if ($inCodeBlock) {
-            $htmlLines[] = '</code></pre>';
+            $content = implode("\n", $this->codeLines);
+            $escaped = htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $htmlLines[] = '<pre><code>' . $escaped . '</code></pre>';
+            $this->codeLines = [];
         }
         if ($inList) {
             $htmlLines[] = '</ul>';
