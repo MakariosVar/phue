@@ -86,7 +86,7 @@ final class ModuleNewCommand implements CommandInterface
         $moduleName = trim($moduleName ?? '');
 
         if (!$moduleName) {
-            fwrite($errorStream, "Error: Missing module name argument. Usage: bin/phue module:new <Name> [--type=layer|kit] [--requires=a,b] [--output=<path>]" . PHP_EOL);
+            fwrite($errorStream, "Error: Missing module name argument. Usage: ./phue module:new <Name> [--type=layer|kit] [--requires=a,b] [--output=<path>]" . PHP_EOL);
             return 1;
         }
 
@@ -252,7 +252,7 @@ PHP;
         fwrite($outputStream, PHP_EOL . "Successfully created module '{$moduleName}'!" . PHP_EOL);
         fwrite($outputStream, "Next steps:" . PHP_EOL);
         fwrite($outputStream, "  1. Register 'Phue\\Modules\\{$moduleName}\\{$moduleName}Module' inside config/app.php under 'app.modules'." . PHP_EOL);
-        fwrite($outputStream, "  2. Run 'bin/phue module:list' to verify your new module configuration graph." . PHP_EOL);
+        fwrite($outputStream, "  2. Run './phue module:list' to verify your new module configuration graph." . PHP_EOL);
 
         return 0;
     }

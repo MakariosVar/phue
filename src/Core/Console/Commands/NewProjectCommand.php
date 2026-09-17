@@ -72,7 +72,7 @@ final class NewProjectCommand implements CommandInterface
         }
 
         if (!$modulesFlag) {
-            fwrite($errorStream, "Error: Missing required flag '--modules=<moduleName>'. Usage: bin/phue new --modules=queue" . PHP_EOL);
+            fwrite($errorStream, "Error: Missing required flag '--modules=<moduleName>'. Usage: ./phue new --modules=queue" . PHP_EOL);
             return 1;
         }
 

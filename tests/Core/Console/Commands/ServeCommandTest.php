@@ -7,7 +7,7 @@ namespace Phue\Tests\Core\Console\Commands;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test booting the real PHP built-in web server via bin/phue serve.
+ * Integration test booting the real PHP built-in web server via ./phue serve.
  *
  * Exercises the actual ServeCommand flow end-to-end: argument parsing, doc-root
  * resolution, process launch and HTTP reachability.

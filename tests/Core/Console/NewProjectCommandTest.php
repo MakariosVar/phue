@@ -7,7 +7,7 @@ namespace Phue\Tests\Core\Console;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test for `bin/phue new --modules=<id>`.
+ * Integration test for `./phue new --modules=<id>`.
  *
  * Runs the real script as a subprocess, verifies the scaffolded
  * temp project has the right structure, then removes the temp dir.

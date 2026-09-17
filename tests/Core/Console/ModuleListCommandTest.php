@@ -7,7 +7,7 @@ namespace Phue\Tests\Core\Console;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test for `bin/phue module:list`.
+ * Integration test for `./phue module:list`.
  *
  * Runs the real script as a subprocess and asserts:
  * - exit code 0

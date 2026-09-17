@@ -92,7 +92,7 @@ modules a project needs — everything else stays out.
 
 > Want to know how it all fits together? Read [Core](docs/Core.md) and
 > [Modules](docs/Modules.md). Creating your own module is a first-class use case,
-> and `bin/phue module:new` scaffolds one for you.
+> and `phue module:new` scaffolds one for you.
 
 ---
 

@@ -7,7 +7,7 @@ namespace Phue\Tests\Core\Console;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test for `bin/phue module:new`.
+ * Integration test for `./phue module:new`.
  *
  * Runs the real script with `--output=<tmp>` so NO filesystem
  * pollution happens in /app. Verifies generated files, then deletes tmp.
