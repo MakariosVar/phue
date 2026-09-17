@@ -34,20 +34,27 @@ final class MarkdownParserTest extends TestCase
     {
         $html = $this->parser->parse("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
 
-        $this->assertStringContainsString('<h1>H1</h1>', $html);
-        $this->assertStringContainsString('<h2>H2</h2>', $html);
-        $this->assertStringContainsString('<h3>H3</h3>', $html);
-        $this->assertStringContainsString('<h4>H4</h4>', $html);
-        $this->assertStringContainsString('<h5>H5</h5>', $html);
-        $this->assertStringContainsString('<h6>H6</h6>', $html);
+        $this->assertStringContainsString('<h1 id="h1">H1</h1>', $html);
+        $this->assertStringContainsString('<h2 id="h2">H2</h2>', $html);
+        $this->assertStringContainsString('<h3 id="h3">H3</h3>', $html);
+        $this->assertStringContainsString('<h4 id="h4">H4</h4>', $html);
+        $this->assertStringContainsString('<h5 id="h5">H5</h5>', $html);
+        $this->assertStringContainsString('<h6 id="h6">H6</h6>', $html);
         $this->assertStringNotContainsString('<h7>', $html, '7+ # characters must not produce an h7 tag');
+    }
+
+    public function testHeadingsGetSlugAnchorIdsForDeepLinking(): void
+    {
+        $html = $this->parser->parse('## Getting Started & First Steps');
+
+        $this->assertStringContainsString('<h2 id="getting-started-first-steps">', $html);
     }
 
     public function testHeadingWithInlineFormatting(): void
     {
         $html = $this->parser->parse('## Title with **bold** and `code`');
 
-        $this->assertStringContainsString('<h2>Title with <strong>bold</strong> and <code>code</code></h2>', $html);
+        $this->assertStringContainsString('<h2 id="title-with-bold-and-code">Title with <strong>bold</strong> and <code>code</code></h2>', $html);
     }
 
     public function testHeadingRequiresSpaceAfterHash(): void
@@ -66,6 +73,24 @@ final class MarkdownParserTest extends TestCase
 
         $this->assertStringContainsString('<p>First paragraph.</p>', $html);
         $this->assertStringContainsString('<p>Second paragraph.</p>', $html);
+    }
+
+    public function testConsecutiveLinesJoinIntoOneParagraph(): void
+    {
+        $html = $this->parser->parse("First line\nsecond line\nthird line.");
+
+        $this->assertStringContainsString('<p>First line second line third line.</p>', $html);
+        $this->assertStringNotContainsString('<p>First line</p>', $html);
+    }
+
+    public function testInlineFormattingMaySpanLinesInsideParagraph(): void
+    {
+        $html = $this->parser->parse("**no whitelist, no import; auto-discovered\nfrom the template and imported into one module.**");
+
+        $this->assertStringContainsString(
+            '<p><strong>no whitelist, no import; auto-discovered from the template and imported into one module.</strong></p>',
+            $html
+        );
     }
 
     public function testEmptyInputReturnsEmptyString(): void
@@ -167,6 +192,116 @@ final class MarkdownParserTest extends TestCase
         $html = $this->parser->parse('* **bold** item with `code`');
 
         $this->assertStringContainsString('<li><strong>bold</strong> item with <code>code</code></li>', $html);
+    }
+
+    // ------------------------------------------------------ tables (regression: /docs renders `| a | b |` rows as plain <p>)
+
+    public function testParsesMarkdownTable(): void
+    {
+        $html = $this->parser->parse(
+            "| Requirement | Version | Why |\n"
+            . "| --- | --- | --- |\n"
+            . "| PHP | 8.3 | runtime |\n"
+            . "| Vue | 3.5 | UI |"
+        );
+
+        $this->assertStringContainsString('<table class="table">', $html, 'Tables must render as a <table>, not as plain <p> paragraphs.');
+        $this->assertStringContainsString('<thead>', $html);
+        $this->assertStringContainsString('<th>Requirement</th>', $html);
+        $this->assertStringContainsString('<tbody>', $html);
+        $this->assertStringContainsString('<td>8.3</td>', $html);
+        $this->assertStringContainsString('</table>', $html);
+    }
+
+    public function testParsesRealDocsTableWithEmptyLeadingHeaderCell(): void
+    {
+        $html = $this->parser->parse(
+            "| | Schii (Phue\\Modules\\Schii) | REST (Phue\\Modules\\Rest) |\n"
+            . "|---|---|---|\n"
+            . "| Declaration | #[UI]/#[Field] attributes | #[Rest] attribute |\n"
+            . "| Route prefix | apiPrefix (/api/schii) | prefix (/api) |"
+        );
+
+        $this->assertStringContainsString('<table class="table">', $html);
+        $this->assertStringContainsString('<thead><tr><th></th><th>Schii', $html, 'The first header cell is intentionally empty.');
+        $this->assertStringContainsString('<th>REST (Phue\\Modules\\Rest)</th>', $html);
+        $this->assertStringNotContainsString('<td>---</td>', $html, 'The separator row must be consumed, never rendered as data.');
+        $this->assertStringContainsString('<td>apiPrefix (/api/schii)</td>', $html);
+    }
+
+    public function testTableColonsProduceAlignmentClasses(): void
+    {
+        $html = $this->parser->parse(
+            "| Key | Value |\n"
+            . "| :--- | ---: |\n"
+            . "| a | 1 |"
+        );
+
+        $this->assertStringContainsString('<table class="table">', $html);
+        $this->assertStringContainsString('text-align:left', $html);
+        $this->assertStringContainsString('text-align:right', $html);
+    }
+
+    public function testEscapedPipesInsideTableCellsAreLiteral(): void
+    {
+        $html = $this->parser->parse(
+            "| Prop | Type |\n"
+            . "| --- | --- |\n"
+            . "| modelValue | `String \\| Number` |"
+        );
+
+        $this->assertStringContainsString('<table class="table">', $html);
+        $this->assertStringContainsString('<td><code>String | Number</code></td>', $html, 'A \\| inside a cell must be a literal pipe, not a column separator.');
+        $this->assertStringNotContainsString('<td>`String \\</td>', $html);
+    }
+
+    public function testEscapedPipesInTableHeaderDoNotBreakColumns(): void
+    {
+        $html = $this->parser->parse(
+            "| Key | `A \\| B` | C |\n"
+            . "| --- | --- | --- |\n"
+            . "| 1 | 2 | 3 |"
+        );
+
+        $this->assertStringContainsString('<th>Key</th>', $html);
+        $this->assertStringContainsString('<th><code>A | B</code></th>', $html);
+        $this->assertStringContainsString('<th>C</th>', $html);
+        $this->assertStringContainsString('<td>1</td><td>2</td><td>3</td>', $html);
+    }
+
+    public function testParagraphLookingLikeTableWithoutSeparatorStaysParagraph(): void
+    {
+        $html = $this->parser->parse("| not | a\n| table");
+
+        $this->assertStringContainsString('<p>', $html);
+        $this->assertStringNotContainsString('<table>', $html);
+    }
+
+    // ------------------------------------------------------- horizontal rule (regression: `---` renders as <p>---</p>)
+
+    public function testParsesHorizontalRule(): void
+    {
+        $html = $this->parser->parse("Text before.\n---\nText after.");
+
+        $this->assertStringContainsString('<hr>', $html, 'A lone `---` line must become an <hr>, not a <p>---</p>.');
+        $this->assertStringNotContainsString('<p>---</p>', $html);
+    }
+
+    public function testHorizontalRuleVariants(): void
+    {
+        foreach (["---", "***", "___"] as $variant) {
+            $html = $this->parser->parse($variant);
+            $this->assertStringContainsString('<hr>', $html, "Variant {$variant} must be an <hr>.");
+        }
+    }
+
+    public function testHeadingLikeDashesAreNotHorizontalRules(): void
+    {
+        // `---` spanning between text lines must be an <hr>;
+        // but `### ---` remains a heading, and `a---b` remains inline text.
+        $html = $this->parser->parse("### ---\n\nnot-an-hr---");
+
+        $this->assertStringContainsString('<h3>---</h3>', $html);
     }
 
     // ------------------------------------------------------------ blockquotes

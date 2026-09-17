@@ -55,7 +55,7 @@ final class PhMarkdownTest extends TestCase
 
         $view = $component->view;
         $this->assertTrue($view->hasHtml(), 'PhMarkdown must return static html (SSR mode)');
-        $this->assertStringContainsString('<h2>Title</h2>', $view->getHtml());
+        $this->assertStringContainsString('<h2 id="title">Title</h2>', $view->getHtml());
         $this->assertStringContainsString('<p>A paragraph.</p>', $view->getHtml());
     }
 
@@ -108,7 +108,7 @@ final class PhMarkdownTest extends TestCase
 
         $html = $partialRenderer->renderPartial('PhMarkdown', ['markdown' => '# Hello SSR']);
 
-        $this->assertStringContainsString('<h1>Hello SSR</h1>', $html);
+        $this->assertStringContainsString('<h1 id="hello-ssr">Hello SSR</h1>', $html);
         $this->assertStringNotContainsString('Partial rendering failed', $html);
     }
 

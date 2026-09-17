@@ -10,7 +10,9 @@ namespace Phue\Core\Utils;
  * A lightweight, pure-PHP line-based state machine markdown parser with zero external dependencies.
  * Enforces XSS-safety by construction (escaping content before formatting transformations)
  * and URL scheme sanitization for links.
- * Supports headings, bold/italic, inline code, fenced code blocks, lists, links, blockquotes, and paragraphs.
+ * Supports headings (with auto-generated anchor ids), bold/italic, inline code, fenced code
+ * blocks, lists, links, blockquotes, tables (header extraction + per-column alignment),
+ * horizontal rules, and paragraphs.
  *
  * @package Phue\Core\Utils
  */
@@ -33,10 +35,32 @@ final class MarkdownParser
         $inCodeBlock = false;
         $inList = false;
         $inBlockquote = false;
+        $paragraph = [];
+
+        // Consecutive plain-text lines form a single paragraph (soft line breaks),
+        // so inline formatting may span lines.
+        $flushParagraph = function () use (&$htmlLines, &$paragraph): void {
+            if ($paragraph === []) {
+                return;
+            }
+            $htmlLines[] = '<p>' . $this->parseInline(implode(' ', $paragraph)) . '</p>';
+            $paragraph = [];
+        };
+
+        // Table state machine.
+        $inTable = false;
+        // First table-looking row, buffered until the separator row confirms
+        // whether it is a header (or, if no separator follows, a plain body row).
+        $pendingHeader = null;
+        // Per-column alignment parsed from the separator row (`:---`, `---:`, `:---:`).
+        $tableAlign = null;
 
         foreach ($lines as $line) {
+            $trimmed = trim($line);
+
             // Handle Fenced Code Blocks (```)
-            if (str_starts_with(trim($line), '```')) {
+            if (str_starts_with($trimmed, '```')) {
+                $flushParagraph();
                 if ($inCodeBlock) {
                     $htmlLines[] = '</code></pre>';
                     $inCodeBlock = false;
@@ -49,6 +73,7 @@ final class MarkdownParser
                         $htmlLines[] = '</blockquote>';
                         $inBlockquote = false;
                     }
+                    $this->closeTable($htmlLines, $inTable, $pendingHeader, $tableAlign);
                     $htmlLines[] = '<pre><code>';
                     $inCodeBlock = true;
                 }
@@ -61,8 +86,51 @@ final class MarkdownParser
                 continue;
             }
 
+            // Handle Tables (| Cell | Cell |)
+            if ($this->isTableRow($trimmed)) {
+                $flushParagraph();
+                $cells = $this->splitRow($trimmed);
+                $isSeparator = $this->isSeparatorRow($cells);
+
+                if ($pendingHeader !== null) {
+                    if ($isSeparator) {
+                        // The buffered row was a header — wrap it in <thead>.
+                        $tableAlign = $this->parseAlignments($cells);
+                        $htmlLines[] = $this->openTableWithHeader($pendingHeader, $tableAlign);
+                        $pendingHeader = null;
+                        $inTable = true;
+                    } else {
+                        // No separator followed: the buffered row was plain data.
+                        $htmlLines[] = '<table class="table"><tbody>';
+                        $htmlLines[] = $this->renderRow($pendingHeader, 'td', null);
+                        $pendingHeader = null;
+                        $inTable = true;
+                        $htmlLines[] = $this->renderRow($cells, 'td', null);
+                    }
+                    continue;
+                }
+
+                if ($inTable) {
+                    // Separator rows inside a body are structural noise, not data.
+                    if (!$isSeparator) {
+                        $htmlLines[] = $this->renderRow($cells, 'td', $tableAlign);
+                    }
+                    continue;
+                }
+
+                // A stray separator without a preceding header is ignored.
+                if (!$isSeparator) {
+                    $pendingHeader = $cells;
+                }
+                continue;
+            }
+
+            // Any non-table line terminates an open (or pending) table.
+            $this->closeTable($htmlLines, $inTable, $pendingHeader, $tableAlign);
+
             // Handle Blockquotes (>)
-            if (str_starts_with(trim($line), '>')) {
+            if (str_starts_with($trimmed, '>')) {
+                $flushParagraph();
                 if ($inList) {
                     $htmlLines[] = '</ul>';
                     $inList = false;
@@ -71,7 +139,7 @@ final class MarkdownParser
                     $htmlLines[] = '<blockquote>';
                     $inBlockquote = true;
                 }
-                $content = trim(substr(trim($line), 1));
+                $content = trim(substr($trimmed, 1));
                 $htmlLines[] = '<p>' . $this->parseInline($content) . '</p>';
                 continue;
             } elseif ($inBlockquote) {
@@ -80,8 +148,8 @@ final class MarkdownParser
             }
 
             // Handle Unordered Lists (* or -)
-            $trimmed = trim($line);
             if (preg_match('/^[\*\-]\s+(.+)$/', $trimmed, $matches)) {
+                $flushParagraph();
                 if (!$inList) {
                     $htmlLines[] = '<ul>';
                     $inList = true;
@@ -97,24 +165,36 @@ final class MarkdownParser
                 $inList = false;
             }
 
-            // Handle Headings (# to ######)
+            // Handle Headings (# to ######) — with a slug anchor id for deep-linking.
             if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $matches)) {
+                $flushParagraph();
                 $level = strlen($matches[1]);
-                $htmlLines[] = "<h{$level}>" . $this->parseInline($matches[2]) . "</h{$level}>";
+                $slug = $this->slugify($matches[2]);
+                $idAttr = $slug !== '' ? ' id="' . $slug . '"' : '';
+                $htmlLines[] = "<h{$level}{$idAttr}>" . $this->parseInline($matches[2]) . "</h{$level}>";
+                continue;
+            }
+
+            // Handle Horizontal Rules (---, ***, ___)
+            if (preg_match('/^(?:\-{3,}|\*{3,}|_{3,})$/', $trimmed)) {
+                $flushParagraph();
+                $htmlLines[] = '<hr>';
                 continue;
             }
 
             // Handle Empty lines / Paragraph breaks
             if ($trimmed === '') {
+                $flushParagraph();
                 $htmlLines[] = '';
                 continue;
             }
 
-            // Default: Paragraph text
-            $htmlLines[] = '<p>' . $this->parseInline($trimmed) . '</p>';
+            // Default: paragraph text (buffered; consecutive lines join into one <p>)
+            $paragraph[] = $trimmed;
         }
 
         // Close any remaining open structural tags
+        $flushParagraph();
         if ($inCodeBlock) {
             $htmlLines[] = '</code></pre>';
         }
@@ -124,8 +204,151 @@ final class MarkdownParser
         if ($inBlockquote) {
             $htmlLines[] = '</blockquote>';
         }
+        $this->closeTable($htmlLines, $inTable, $pendingHeader, $tableAlign);
 
         return implode("\n", $htmlLines);
+    }
+
+    // ------------------------------------------------------------- tables
+
+    /**
+     * Whether a trimmed line has the shape of a table row (leading + trailing pipe).
+     */
+    private function isTableRow(string $trimmed): bool
+    {
+        return strlen($trimmed) > 1
+            && str_starts_with($trimmed, '|')
+            && str_ends_with($trimmed, '|');
+    }
+
+    /**
+     * Splits a `| a | b |` row into its trimmed cell values.
+     *
+     * @return list<string>
+     */
+    private function splitRow(string $trimmed): array
+    {
+        $inner = trim($trimmed, '|');
+
+        // Split on unescaped pipes only — `\|` is a literal pipe inside a cell (GFM).
+        $cells = preg_split('/(?<!\\\\)\|/', $inner);
+        if ($cells === false) {
+            return [$inner];
+        }
+
+        return array_map(
+            static fn (string $cell): string => str_replace('\\|', '|', $cell),
+            $cells
+        );
+    }
+
+    /**
+     * Whether every cell is a valid markdown table separator (`---`, `:---`, `---:`, `:---:`).
+     */
+    private function isSeparatorRow(array $cells): bool
+    {
+        if ($cells === []) {
+            return false;
+        }
+
+        foreach ($cells as $cell) {
+            if (preg_match('/^:?-{3,}:?$/', trim($cell)) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Maps separator cells to per-column alignment (`left`/`right`/`center`/null).
+     *
+     * @return list<string|null>
+     */
+    private function parseAlignments(array $cells): array
+    {
+        $alignments = [];
+
+        foreach ($cells as $cell) {
+            $cell = trim($cell);
+            $left = str_starts_with($cell, ':');
+            $right = str_ends_with($cell, ':');
+
+            $alignments[] = match (true) {
+                $left && $right => 'center',
+                $left => 'left',
+                $right => 'right',
+                default => null,
+            };
+        }
+
+        return $alignments;
+    }
+
+    /**
+     * Opens a Bootstrap-styled table with the first row promoted to a <thead>.
+     */
+    private function openTableWithHeader(array $headerCells, array $align): string
+    {
+        return '<table class="table">'
+            . '<thead>' . $this->renderRow($headerCells, 'th', $align) . '</thead>'
+            . '<tbody>';
+    }
+
+    /**
+     * Renders one <tr> of cells, applying the column alignment when present.
+     */
+    private function renderRow(array $cells, string $tag, ?array $align): string
+    {
+        $row = '<tr>';
+
+        foreach (array_values($cells) as $index => $cell) {
+            $alignment = $align[$index] ?? null;
+            $style = $alignment !== null ? ' style="text-align:' . $alignment . '"' : '';
+            $row .= "<{$tag}{$style}>" . $this->parseInline(trim($cell)) . "</{$tag}>";
+        }
+
+        return $row . '</tr>';
+    }
+
+    /**
+     * Flushes a pending single-row table and closes an open table body.
+     *
+     * @param list<string>      $htmlLines
+     * @param list<string>|null $pendingHeader
+     * @param list<string|null>|null $tableAlign
+     */
+    private function closeTable(array &$htmlLines, bool &$inTable, ?array &$pendingHeader, ?array &$tableAlign): void
+    {
+        if ($pendingHeader !== null) {
+            $htmlLines[] = '<table class="table"><tbody>';
+            $htmlLines[] = $this->renderRow($pendingHeader, 'td', null);
+            $pendingHeader = null;
+            $inTable = true;
+        }
+
+        if ($inTable) {
+            $htmlLines[] = '</tbody></table>';
+            $inTable = false;
+            $tableAlign = null;
+        }
+    }
+
+    /**
+     * Builds a URL-safe anchor id from raw heading text (supports unicode).
+     */
+    private function slugify(string $text): string
+    {
+        $plain = html_entity_decode(
+            strip_tags($this->parseInline($text)),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+
+        $slug = mb_strtolower($plain, 'UTF-8');
+        $slug = (string) preg_replace('/[^\p{L}\p{N}]+/u', '-', $slug);
+
+        return trim($slug, '-');
     }
 
     /**
