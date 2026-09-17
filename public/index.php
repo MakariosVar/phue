@@ -16,6 +16,7 @@ $registry = $app->getContainer()->get(AssetRegistry::class);
 
 // 1. App-level Source Code (/assets -> App/Frontend)
 $registry->registerSource('/assets', $app->getBasePath() . '/App/Frontend');
+$registry->registerSource('/assets/app', $app->getBasePath() . '/App/Assets');
 
 // 2. Downloaded 3rd-Party Vendor Dependencies (/assets/vendor -> storage/assets/vendor)
 $registry->registerSource('/assets/vendor', $app->getBasePath() . '/storage/assets/vendor');
