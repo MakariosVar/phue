@@ -223,7 +223,14 @@ if (typeof document !== 'undefined' && !document.getElementById('phue-v-cloak-st
 
 function api(url, opts = {}) {
     const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
-    return fetch(url, Object.assign({}, opts, { headers }));
+    return fetch(url, Object.assign({}, opts, { headers })).then(res => {
+        if (res.status === 401) {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
+        return res;
+    });
 }
 
 export default function mountApp() {

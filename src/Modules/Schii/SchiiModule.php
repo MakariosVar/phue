@@ -228,6 +228,21 @@ class SchiiModule extends Module
         }
 
         $this->container->singleton('schii.renderer', function ($c) {
+            $userResolver = function () use ($c) {
+                if ($c->has(\Phue\Modules\Auth\AuthManager::class)) {
+                    /** @var \Phue\Modules\Auth\AuthManager $auth */
+                    $auth = $c->get(\Phue\Modules\Auth\AuthManager::class);
+                    
+                    try {
+                        /** @var \Phue\Core\Request $request */
+                        $request = $c->get(\Phue\Core\Request::class);
+                        return $auth->authenticate($request);
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                }
+                return null;
+            };
             return new ComponentRenderer(
                 shellRenderer: $c->get(HtmlShellRenderer::class),
                 assetRegistry: $c->get(AssetRegistry::class),
@@ -237,7 +252,9 @@ class SchiiModule extends Module
                 partialRenderer: $c->get(PhuePartialRenderer::class),
                 ssrEngine: $c->get(NullSsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
-                requestResolver: fn () => $c->get(\Phue\Core\Request::class)
+                requestResolver: fn () => $c->get(\Phue\Core\Request::class),
+                userResolver: $userResolver
+                
             );
         });
 
