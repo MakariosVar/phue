@@ -7,16 +7,7 @@ declare(strict_types=1);
  */
 return [
     'roles' => [
-        'admin' => [
-            'admin.product.create',
-            'admin.product.read',
-            'admin.product.update',
-            'admin.product.delete',
-            'admin.user.create',
-            'admin.user.read',
-            'admin.user.update',
-            'admin.user.delete',
-        ],
+        'admin' => ['*'],
         'editor' => [
             'admin.product.read',
             'admin.product.update',
