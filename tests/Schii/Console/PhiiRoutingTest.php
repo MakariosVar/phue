@@ -117,14 +117,18 @@ PHP);
         $bulk = $router->dispatch('POST', '/api/schii/profiles/bulk');
         $this->assertInstanceOf(RouteMatch::class, $bulk);
         $this->assertSame([ModelEndpoint::class, 'bulk'], $bulk->getHandler());
+        $this->assertSame('profiles', $bulk->getParams()['entity'] ?? null);
 
         $export = $router->dispatch('GET', '/api/schii/profiles/export');
         $this->assertInstanceOf(RouteMatch::class, $export);
         $this->assertSame([ModelEndpoint::class, 'export'], $export->getHandler());
+        $this->assertSame('profiles', $export->getParams()['entity'] ?? null);
+        $this->assertArrayNotHasKey('id', $export->getParams(), 'Export must not be routed as {id}');
 
         $import = $router->dispatch('POST', '/api/schii/profiles/import');
         $this->assertInstanceOf(RouteMatch::class, $import);
         $this->assertSame([ModelEndpoint::class, 'import'], $import->getHandler());
+        $this->assertSame('profiles', $import->getParams()['entity'] ?? null);
     }
 
     public function testModuleRegistersPhiiPreviewAndApplyRoutes(): void

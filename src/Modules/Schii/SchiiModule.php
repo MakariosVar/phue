@@ -416,19 +416,18 @@ class SchiiModule extends Module
             $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/audit/{entity}", [$auditHandler, 'forEntity'], middleware: $middleware);
 
-            // Protected CRUD Operations Endpoints
-            $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
-            $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
-            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/diff", [SchemaSyncEndpoint::class, 'diff'], middleware: $middleware);
-            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
-            $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
-            $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
-
-            // Advanced Schii Operations Endpoints (Bulk, Export, Import)
+            // Advanced Schii Operations Endpoints (Bulk, Export, Import, Diff) - MUST be registered BEFORE {id} routes
             $this->router->addRoute('POST', "{$apiPrefix}/{entity}/bulk", [$crudHandler, 'bulk'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/{entity}/export", [$crudHandler, 'export'], middleware: $middleware);
             $this->router->addRoute('POST', "{$apiPrefix}/{entity}/import", [$crudHandler, 'import'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/diff", [SchemaSyncEndpoint::class, 'diff'], middleware: $middleware);
 
+            // Protected CRUD Operations Endpoints
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}", [$crudHandler, 'store'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'show'], middleware: $middleware);
+            $this->router->addRoute('PUT', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'update'], middleware: $middleware);
+            $this->router->addRoute('DELETE', "{$apiPrefix}/{entity}/{id}", [$crudHandler, 'delete'], middleware: $middleware);
             // Admin Console View Route
             /** @var string $consolePrefix */
             $consolePrefix = '/' . trim($schiiConfig->prefix ?? '/schii', '/');
