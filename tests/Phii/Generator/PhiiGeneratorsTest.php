@@ -249,20 +249,21 @@ final class PhiiGeneratorsTest extends TestCase
     {
         [$mutation] = (new MigrationGenerator())->generateFromSchema($this->schema(), $this->dump, 'sqlite');
 
-        $this->assertStringEndsWith('_create_profiles.php', $mutation->path);
+        $this->assertStringMatchesFormat('m%a_create_profiles.php', basename($mutation->path));
         $this->assertTrue($mutation->write());
         $this->assertPhpIsValid($mutation->path);
 
         $content = $mutation->content;
-        $this->assertStringContainsString("\$this->schema->create('profiles', function (Blueprint \$table)", $content);
-        $this->assertStringContainsString('$table->id();', $content);
-        $this->assertStringContainsString("\$table->text('full_name')", $content);
-        $this->assertStringContainsString("\$table->boolean('active')", $content);
-        $this->assertStringContainsString("\$this->schema->dropIfExists('profiles');", $content);
+        $this->assertStringContainsString('use Phue\Core\Database\Migration;', $content);
+        $this->assertMatchesRegularExpression('/final class M[\d_]+CreateProfiles extends Migration/', $content);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS', $content);
+        $this->assertStringContainsString('`profiles`', $content);
+        $this->assertStringContainsString('PRIMARY KEY', $content);
+        $this->assertStringContainsString("\$this->execute(\"DROP TABLE IF EXISTS `profiles`;\");", $content);
         $this->assertStringNotContainsString('{{ ', $content);
     }
 
-    public function testMigrationGeneratorEmitsDialectNeutralBlueprintMigration(): void
+    public function testMigrationGeneratorEmitsDriverSpecificSql(): void
     {
         [$mutation] = (new MigrationGenerator())->generateFromSchema($this->schema(), $this->dump . '/pg', 'pgsql');
 
@@ -270,9 +271,11 @@ final class PhiiGeneratorsTest extends TestCase
         $this->assertPhpIsValid($mutation->path);
 
         $content = $mutation->content;
-        $this->assertStringContainsString("\$table->text('full_name')", $content);
-        $this->assertStringNotContainsString('CREATE TABLE', $content);
-        $this->assertStringNotContainsString('SERIAL PRIMARY KEY', $content);
+        // Postgres identifiers are double-quoted: escaping must keep the file parseable.
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS', $content);
+        $this->assertStringContainsString('SERIAL PRIMARY KEY', $content);
+        $this->assertStringContainsString('\\"profiles\\"', $content);
+        $this->assertStringNotContainsString('`', $content);
         $this->assertStringNotContainsString('AUTOINCREMENT', $content);
         $this->assertStringNotContainsString('{{ ', $content);
     }

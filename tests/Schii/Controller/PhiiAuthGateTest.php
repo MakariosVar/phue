@@ -15,6 +15,7 @@ use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Controller\PhiiController;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Auth\Stubs\ExplorerAuthUser;
+use Phue\Tests\Schii\Stubs\Profile;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
@@ -113,12 +114,14 @@ final class PhiiAuthGateTest extends TestCase
         );
     }
 
-    private function samplePlan(): array
+    private function applyModelRequest(): Request
     {
-        return [[
-            'path' => "{$this->dump}/App/Models/GateProbe.php",
-            'content' => '<?php echo "must never land without admin.phii.manage";',
-        ]];
+        return new Request('POST', '/phii/apply', [], [
+            'generator' => 'model',
+            'entity' => Profile::class,
+            'module' => 'admin',
+            'options' => ['type' => 'active-record'],
+        ]);
     }
 
     public function testIndexAnonymousIsRejected(): void
@@ -130,10 +133,10 @@ final class PhiiAuthGateTest extends TestCase
 
     public function testApplyAnonymousIsRejected(): void
     {
-        $response = $this->controller()->apply(new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]));
+        $response = $this->controller()->apply($this->applyModelRequest());
 
         $this->assertSame(401, $response->getStatusCode());
-        $this->assertFileDoesNotExist($this->dump . '/App/Models/GateProbe.php', 'anonymous apply must not write');
+        $this->assertFileDoesNotExist($this->dump . '/App/Models/Profile.php', 'anonymous apply must not write');
     }
 
     public function testApplyForbiddenRoleIsRejected(): void
@@ -145,10 +148,10 @@ final class PhiiAuthGateTest extends TestCase
             $rbac->addRole('editor', ['admin.user.read']);
         });
 
-        $response = $controller->apply(new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]));
+        $response = $controller->apply($this->applyModelRequest());
 
         $this->assertSame(403, $response->getStatusCode(), 'a user without admin.phii.manage must be forbidden');
-        $this->assertFileDoesNotExist($this->dump . '/App/Models/GateProbe.php');
+        $this->assertFileDoesNotExist($this->dump . '/App/Models/Profile.php');
     }
 
     public function testApplyAdminWithPermissionIsAllowed(): void
@@ -160,9 +163,9 @@ final class PhiiAuthGateTest extends TestCase
             $rbac->addRole('admin', ['*']);
         });
 
-        $response = $controller->apply(new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]));
+        $response = $controller->apply($this->applyModelRequest());
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertFileExists($this->dump . '/App/Models/GateProbe.php');
+        $this->assertFileExists($this->dump . '/App/Models/Profile.php');
     }
 }

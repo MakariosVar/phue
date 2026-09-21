@@ -189,7 +189,11 @@ final class PhiiControllerTest extends TestCase
         $created = glob("{$this->dump}/database/migrations/*_create_profiles.php");
         $this->assertNotEmpty($created);
         $this->assertSame([$created[0]], $data['paths']);
-        $this->assertStringContainsString("create('profiles'", (string) file_get_contents($created[0]));
+
+        $content = (string) file_get_contents($created[0]);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS', $content);
+        $this->assertStringContainsString('`profiles`', $content);
+        $this->assertMatchesRegularExpression('/final class M[\d_]+CreateProfiles extends Migration/', $content);
     }
 
     public function testGenerateCrudArtifact(): void
@@ -272,26 +276,47 @@ final class PhiiControllerTest extends TestCase
 
     // ─────────────────────────────── Apply ───────────────────────────────
 
-    private function samplePlan(): array
+    private function applyModelRequest(array $body = []): Request
     {
-        return [[
-            'path' => "{$this->dump}/App/Models/Profile.php",
-            'content' => '<?php echo "generated";',
-        ]];
+        return new Request('POST', '/phii/apply', [], array_merge([
+            'generator' => 'model',
+            'entity' => Profile::class,
+            'module' => 'admin',
+            'options' => ['type' => 'active-record'],
+        ], $body));
     }
 
-    public function testApplyWritesProvidedPlan(): void
+    public function testApplyWritesServerDerivedArtifact(): void
     {
-        $request = new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]);
-        $response = $this->controller()->apply($request);
-
+        $response = $this->controller()->apply($this->applyModelRequest());
         $this->assertSame(200, $response->getStatusCode());
-        $data = json_decode($response->getContent(), true);
 
+        $data = json_decode($response->getContent(), true);
         $this->assertSame(1, $data['written']);
         $this->assertSame(0, $data['skipped']);
         $this->assertSame(0, $data['conflicts']);
         $this->assertFileExists("{$this->dump}/App/Models/Profile.php");
+    }
+
+    public function testApplyIgnoresClientSuppliedContent(): void
+    {
+        // A smuggled plan/content field must be ignored: apply re-derives the
+        // plan server-side from the generator inputs only.
+        $request = $this->applyModelRequest([
+            'plan' => [[
+                'path' => "{$this->dump}/App/Models/Profile.php",
+                'content' => '<?php // TAMPERED',
+            ]],
+            'content' => '<?php // WRONG',
+        ]);
+
+        $data = json_decode($this->controller()->apply($request)->getContent(), true);
+        $this->assertSame(1, $data['written']);
+
+        $written = (string) file_get_contents("{$this->dump}/App/Models/Profile.php");
+        $this->assertStringContainsString('class Profile', $written);
+        $this->assertStringNotContainsString('TAMPERED', $written);
+        $this->assertStringNotContainsString('WRONG', $written);
     }
 
     public function testApplyCountsExistingFileAsConflict(): void
@@ -302,55 +327,79 @@ final class PhiiControllerTest extends TestCase
             '<?php // existing'
         );
 
-        $request = new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]);
-        $data = json_decode($this->controller()->apply($request)->getContent(), true);
-
+        $data = json_decode($this->controller()->apply($this->applyModelRequest())->getContent(), true);
         $this->assertSame(1, $data['written']);
         $this->assertSame(1, $data['conflicts'], 'Overwriting an existing file must be reported as conflict.');
     }
 
-    public function testApplySkipsEntriesWithoutPath(): void
+    public function testApplyConflictPolicySkipLeavesExistingUntouched(): void
     {
-        $request = new Request('POST', '/phii/apply', [], [
-            'plan' => [['content' => 'no path provided']],
-        ]);
-        $data = json_decode($this->controller()->apply($request)->getContent(), true);
+        mkdir("{$this->dump}/App/Models", 0777, true);
+        file_put_contents(
+            "{$this->dump}/App/Models/Profile.php",
+            '<?php // existing'
+        );
+
+        $data = json_decode($this->controller()->apply($this->applyModelRequest(['conflictPolicy' => 'skip']))->getContent(), true);
 
         $this->assertSame(0, $data['written']);
         $this->assertSame(1, $data['skipped']);
+        $this->assertSame(1, $data['conflicts']);
+        $this->assertSame('<?php // existing', (string) file_get_contents("{$this->dump}/App/Models/Profile.php"));
     }
 
-    public function testApplyCreatesBackupWhenRequested(): void
+    public function testApplyRejectsMissingGenerator(): void
     {
-        if (!is_dir($this->dump)) {
-            mkdir($this->dump, 0777, true);
-        }
+        $request = new Request('POST', '/phii/apply', [], ['entity' => Profile::class]);
+        $response = $this->controller()->apply($request);
 
-        $request = new Request('POST', '/phii/apply', [], [
-            'plan' => $this->samplePlan(),
-            'backup' => true,
-        ]);
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFileDoesNotExist("{$this->dump}/App/Models/Profile.php");
+    }
 
-        $data = json_decode($this->controller()->apply($request)->getContent(), true);
+    public function testApplyRejectsUnknownGenerator(): void
+    {
+        $request = new Request('POST', '/phii/apply', [], ['generator' => 'nope', 'entity' => Profile::class]);
+        $this->assertSame(400, $this->controller()->apply($request)->getStatusCode());
+    }
+
+    public function testApplyPathsFilterRestrictsWrittenSet(): void
+    {
+        $data = json_decode($this->controller()->apply($this->applyModelRequest([
+            'paths' => ["{$this->dump}/App/Models/Profile.php"],
+        ]))->getContent(), true);
+
+        $this->assertSame(1, $data['written']);
+        $this->assertSame(0, $data['skipped']);
+        $this->assertFileExists("{$this->dump}/App/Models/Profile.php");
+
+        $empty = json_decode($this->controller()->apply($this->applyModelRequest(['paths' => []]))->getContent(), true);
+        $this->assertSame(0, $empty['written']);
+        $this->assertSame(1, $empty['skipped'], 'Unselected artifacts must be reported as skipped, never written.');
+    }
+
+    public function testApplyCreatesBackupByDefault(): void
+    {
+        $data = json_decode($this->controller()->apply($this->applyModelRequest())->getContent(), true);
 
         $this->assertIsString($data['backup']);
         $this->assertStringStartsWith('backup_', (string) basename((string) $data['backup']));
         $this->assertStringEndsWith('.zip', (string) $data['backup']);
     }
 
-    public function testApplyWithoutBackupReturnsNoBackupPath(): void
+    public function testApplyBackupSkippedWhenExplicitlyDisabled(): void
     {
-        $request = new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]);
-        $data = json_decode($this->controller()->apply($request)->getContent(), true);
+        $data = json_decode($this->controller()->apply($this->applyModelRequest(['backup' => false]))->getContent(), true);
 
         $this->assertNull($data['backup']);
+        $this->assertSame(1, $data['written']);
     }
 
     // ─────────────────────────────── Production gate ───────────────────────────────
 
     public function testApplyRejectedInProductionWithoutPermission(): void
     {
-        $request = new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]);
+        $request = $this->applyModelRequest();
         $response = $this->prodController()->apply($request);
 
         $this->assertSame(403, $response->getStatusCode());
@@ -383,7 +432,7 @@ final class PhiiControllerTest extends TestCase
 
     public function testApplyAllowedInProductionWhenExplicitlyEnabled(): void
     {
-        $request = new Request('POST', '/phii/apply', [], ['plan' => $this->samplePlan()]);
+        $request = $this->applyModelRequest();
         $response = $this->prodController(['phii' => ['allowInProduction' => true]])->apply($request);
 
         $this->assertSame(200, $response->getStatusCode());

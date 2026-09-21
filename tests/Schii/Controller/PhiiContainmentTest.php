@@ -6,16 +6,23 @@ namespace Phue\Tests\Schii\Controller;
 
 use Phue\Core\Application;
 use Phue\Core\Request;
+use Phue\Core\Response;
 use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Controller\PhiiController;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Schii\Stubs\Profile;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
 /**
- * P1 — `apply` is the arbitrary file-write surface: a crafted plan must never
- * escape the configured output root, regardless of `..` traversal, absolute
- * paths, symlinks, or sibling directories sharing a name prefix with the root.
+ * P1 — `apply` writes server-derived artifacts and no longer accepts any
+ * client-supplied `content` or raw plan paths, so arbitrary path traversal is
+ * structurally impossible (the written paths are generated inside the root).
+ * The surviving containment surfaces are still defended:
+ *   - a server-derived path that resolves through a symlink out of the root
+ *     must be rejected;
+ *   - the optional client `paths` selector is matched against the already
+ *     contained plan and can never force a write outside the root.
  *
  * @package Phue\Tests\Schii\Controller
  */
@@ -34,7 +41,6 @@ final class PhiiContainmentTest extends TestCase
     protected function tearDown(): void
     {
         $this->rmTree($this->dump);
-        $this->rmTree($this->dump . '-evil');
         parent::tearDown();
     }
 
@@ -71,39 +77,16 @@ final class PhiiContainmentTest extends TestCase
         );
     }
 
-    private function applyPath(string $path): \Phue\Core\Response
+    private function applyModel(array $body = []): Response
     {
-        $request = new Request('POST', '/phii/apply', [], [
-            'plan' => [['path' => $path, 'content' => 'pwned']],
-        ]);
+        $request = new Request('POST', '/phii/apply', [], array_merge([
+            'generator' => 'model',
+            'entity' => Profile::class,
+            'module' => 'admin',
+            'options' => ['type' => 'active-record'],
+        ], $body));
+
         return $this->controller()->apply($request);
-    }
-
-    public function testApplyRejectsDotDotTraversal(): void
-    {
-        $parent = dirname($this->dump);
-        $target = $parent . '/pwned_up_' . mt_rand(). '.txt';
-
-        $response = $this->applyPath("{$this->dump}/../../" . basename($target));
-
-        $this->assertSame(403, $response->getStatusCode(), '`..` climbing out of the root must be blocked');
-        $this->assertFileDoesNotExist($target, 'no file may land outside the root');
-    }
-
-    public function testApplyRejectsAbsolutePathOutsideRoot(): void
-    {
-        $outsideDir = sys_get_temp_dir() . '/phue_phii_outside_' . uniqid();
-        @mkdir($outsideDir, 0755, true);
-
-        try {
-            $target = $outsideDir . '/pwned_abs.txt';
-            $response = $this->applyPath($target);
-
-            $this->assertSame(403, $response->getStatusCode(), 'absolute paths outside the root must be blocked');
-            $this->assertFileDoesNotExist($target);
-        } finally {
-            $this->rmTree($outsideDir);
-        }
     }
 
     public function testApplyRejectsSymlinkEscape(): void
@@ -112,14 +95,14 @@ final class PhiiContainmentTest extends TestCase
         @mkdir($outsideDir, 0755, true);
 
         try {
-            $link = $this->dump . '/escape';
-            symlink($outsideDir, $link);
+            mkdir($this->dump . '/App', 0777, true);
+            symlink($outsideDir, $this->dump . '/App/Models');
 
-            $target = $outsideDir . '/pwned_link.txt';
-            $response = $this->applyPath($link . '/pwned_link.txt');
+            $target = $outsideDir . '/Profile.php';
+            $response = $this->applyModel();
 
             $this->assertSame(403, $response->getStatusCode(), 'writing through a symlink to outside must be blocked');
-            $this->assertFileDoesNotExist($target);
+            $this->assertFileDoesNotExist($target, 'no file may land outside the root through a symlink');
         } finally {
             $this->rmTree($outsideDir);
         }
@@ -127,16 +110,53 @@ final class PhiiContainmentTest extends TestCase
 
     public function testApplyBlocksSiblingDirSharingRootNamePrefix(): void
     {
+        // A hostile symlink whose target shares the root's name prefix must not
+        // be treated as being inside the real output root.
         $sibling = $this->dump . '-evil';
         @mkdir($sibling, 0755, true);
 
-        $response = $this->applyPath($this->dump . '/../' . basename($sibling) . '/pwned_prefix.txt');
+        try {
+            mkdir($this->dump . '/App', 0777, true);
+            symlink($sibling, $this->dump . '/App/Models');
 
-        $this->assertSame(
-            403,
-            $response->getStatusCode(),
-            'a sibling whose name begins with the root must not be reachable'
-        );
-        $this->assertFileDoesNotExist($sibling . '/pwned_prefix.txt', 'escape into a sibling tree must be blocked');
+            $response = $this->applyModel();
+
+            $this->assertSame(
+                403,
+                $response->getStatusCode(),
+                'a symlink resolving into a sibling tree must not be considered contained'
+            );
+            $this->assertFileDoesNotExist($sibling . '/Profile.php', 'escape into a sibling tree must be blocked');
+        } finally {
+            $this->rmTree($sibling);
+        }
+    }
+
+    public function testApplyPathsSelectorCannotForceWritesOutsideRoot(): void
+    {
+        $outsideDir = sys_get_temp_dir() . '/phue_phii_outside_' . uniqid();
+        @mkdir($outsideDir, 0755, true);
+
+        try {
+            $target = $outsideDir . '/pwned.txt';
+            $response = $this->applyModel([
+                'paths' => [
+                    $target,
+                    $this->dump . '/../phue_evil/pwned.txt',
+                ],
+                'backup' => false,
+            ]);
+
+            // The selector only ever matches already-contained plan paths; the
+            // foreign strings select nothing, so nothing outside may be written.
+            $this->assertSame(200, $response->getStatusCode());
+            $data = json_decode($response->getContent(), true);
+            $this->assertArrayHasKey('written', $data);
+            $this->assertSame(0, $data['written'], 'client path selection cannot create files outside the root');
+            $this->assertFileDoesNotExist($target);
+            $this->assertFileDoesNotExist(sys_get_temp_dir() . '/phue_evil/pwned.txt');
+        } finally {
+            $this->rmTree($outsideDir);
+        }
     }
 }
