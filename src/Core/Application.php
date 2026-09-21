@@ -268,7 +268,14 @@ class Application
                 if ($c->has(\Phue\Modules\Auth\AuthManager::class)) {
                     /** @var \Phue\Modules\Auth\AuthManager $auth */
                     $auth = $c->get(\Phue\Modules\Auth\AuthManager::class);
-                    return $auth->getUser();
+                    
+                    try {
+                        /** @var \Phue\Core\Request $request */
+                        $request = $c->get(\Phue\Core\Request::class);
+                        return $auth->authenticate($request);
+                    } catch (\Throwable) {
+                        return null;
+                    }
                 }
                 return null;
             };

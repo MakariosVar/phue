@@ -8,6 +8,7 @@ use Phue\Core\Module;
 use Phue\Core\Container;
 use Phue\Core\Config;
 use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
+use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 
 /**
  * Class AuthModule
@@ -78,14 +79,19 @@ class AuthModule extends Module
                     }
                 );
 
-                return new AuthManager([$bearerAuth]);
+                $sessionAuth = new SessionAuthenticator(
+                    identityClass: \App\Models\User::class,
+                    sessionKey: '__user_id'
+                );
+                return new AuthManager([$sessionAuth, $bearerAuth]);
+
             }
         );
 
         // RbacManager Singleton
         $this->container->singleton(
             RbacManager::class,
-            fn(): RbacManager => new RbacManager()
+            fn(): RbacManager => new RbacManager('config/rbac_seeding.php')
         );
     }
 }
