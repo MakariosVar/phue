@@ -43,7 +43,7 @@ final class RuntimeGeneratorTest extends TestCase
         ], array_keys($patterns));
 
         $this->assertSame(
-            ['index', 'store', 'show', 'update', 'destroy'],
+            ['index', 'store', 'show', 'update', 'delete'],
             array_values($patterns),
         );
     }

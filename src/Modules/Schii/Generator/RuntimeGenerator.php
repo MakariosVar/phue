@@ -135,7 +135,7 @@ final class RuntimeGenerator implements GeneratorInterface
             sprintf('POST %s', $basePath) => 'store',
             sprintf('GET %s/{id}', $basePath) => 'show',
             sprintf('PUT %s/{id}', $basePath) => 'update',
-            sprintf('DELETE %s/{id}', $basePath) => 'destroy',
+            sprintf('DELETE %s/{id}', $basePath) => 'delete',
         ];
     }
 
