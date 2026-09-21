@@ -165,12 +165,33 @@ const options = {
 export default options;
 
 if (typeof window !== 'undefined') {
-  const initialState = window.__NAV_STATE__ || {};
-  const el = document.getElementById('nav');
-  if (el) {
+  const mountNav = (navState) => {
+    const el = document.getElementById('nav');
+    if (!el) return;
+
+    // Clean up existing instance if present
+    if (window.__phueNavApp && typeof window.__phueNavApp.unmount === 'function') {
+      window.__phueNavApp.unmount();
+      window.__phueNavApp = null;
+    }
+
+    el.innerHTML = ''; // Clear stale markup to avoid hydration mismatch
+
+    const initialState = navState || window.__NAV_STATE__ || {};
     const app = createSSRApp(options, initialState);
-    app.mount(el);
-  }
+    window.__phueNavApp = app.mount(el);
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    mountNav();
+  });
+
+  // Listen to Phue SPA navigation events to update nav dynamically
+  window.addEventListener('phue:navigate', (e) => {
+    if (e.detail && e.detail.navState) {
+      mountNav(e.detail.navState);
+    }
+  });
 }
 </script>
 

@@ -198,7 +198,16 @@ class ComponentRenderer
 
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
-
+        
+        $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
+        $navState = [
+            'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
+            'actions'     => NavigationConfig::getAppActions($user),
+            'activeRoute' => $uri,
+            'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal',
+            'themeConfig' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppThemeToggle() : []
+        ];
+      
         if ($isSpaRequest) {
             $requestScripts = $this->assetRegistry->getRequestScripts();
             $flatScriptUrls = array_map(
@@ -207,20 +216,13 @@ class ComponentRenderer
             );
 
             return Response::json([
-                'title'   => $title,
-                'html'    => $pageMarkup,
-                'state'   => $view->getState(),
-                'scripts' => array_values(array_filter($flatScriptUrls)),
+                'title'    => $title,
+                'html'     => $pageMarkup,
+                'state'    => $view->getState(),
+                'scripts'  => array_values(array_filter($flatScriptUrls)),
+                'navState' => $navState,
             ]);
         }
-
-        $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
-        $navState = [
-            'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
-            'actions'     => NavigationConfig::getAppActions($user),
-            'activeRoute' => $uri,
-            'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal'
-        ];
 
         $mountedPageContent = '<div id="app">' . $pageMarkup . '</div>';
         $appContent = $this->applyLayoutIfConfigured($mountedPageContent);

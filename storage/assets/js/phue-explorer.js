@@ -126,7 +126,9 @@
       }
 
       // 9. Dispatch custom navigation event for reactive listeners
-      window.dispatchEvent(new CustomEvent('phue:navigate', { detail: { url } }));
+      window.dispatchEvent(new CustomEvent('phue:navigate', { 
+        detail: { url, navState: payload.navState } 
+      }));
 
     } catch (err) {
       console.error('SPA Navigation error:', err);
