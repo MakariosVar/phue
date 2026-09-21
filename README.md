@@ -258,6 +258,7 @@ my-app/
 │   │   ├── Controller.php            # Abstract base (injects ComponentRenderer)
 │   │   └── WebController.php         # #[Route] home controller
 │   ├── Errors/                       # Custom 404/500 error pages
+│   ├── Commands/                     # Custom CLI commands
 │   ├── Frontend/
 │   │   ├── AppLayout.phue            # Master layout shell
 │   │   ├── Components/               # Your reusable .phue components
