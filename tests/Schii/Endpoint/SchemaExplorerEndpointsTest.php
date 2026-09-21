@@ -114,7 +114,7 @@ final class SchemaExplorerEndpointsTest extends TestCase
         $data = json_decode($response->getContent(), true);
 
         $this->assertSame('profiles', $data['table']);
-        $ops = array_column($data['operations'], 'op');
+        $ops = array_column($data['ops'] ?? $data['operations'] ?? [], 'op');
         $this->assertContains('drop-column', $ops, 'legacy column must be planned for removal');
 
         // Dry run must never touch the database

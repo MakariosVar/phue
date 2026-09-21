@@ -28,8 +28,8 @@ final class SchemaInspectorEndpoint
      */
     public function __construct(
         private readonly SchemaRegistry $schemaRegistry,
-        private readonly SchemaInspector $schemaInspector,
-        private readonly Connection $connection,
+        private readonly ?SchemaInspector $schemaInspector = null,
+        private readonly ?Connection $connection = null,
         private readonly string $entityNamespace = "App\\Models",
     ) {}
 
@@ -59,6 +59,9 @@ final class SchemaInspectorEndpoint
         $instance = new $modelClass();
         $tableName = $instance->getTable();
 
+        if ($this->schemaInspector === null) {
+            return Response::json(['error' => 'Schema inspector not available'], 503);
+        }
         $columns = $this->schemaInspector->inspect($tableName);
 
         $columnsData = array_map(

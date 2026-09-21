@@ -67,7 +67,10 @@ final class SchemaSyncEndpoint
 
         $plan = $this->syncEngine->diff($modelClass);
 
-        return Response::json($plan);
+        $pdo = $this->syncEngine->getPdo();
+        $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? 'sqlite';
+
+        return Response::json($plan->toArray((string) $driver));
     }
 
     /**
