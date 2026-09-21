@@ -297,6 +297,20 @@ final class ComponentLoaderRegistryTest extends TestCase
         $this->assertSame($expectedInput, $registry->moduleFor('PhInput', substr(sha1($expectedInput), 0, 8)));
     }
 
+    public function testLoaderErrorsAreLoggedWhenLoggerConfigured(): void
+    {
+        $logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+        $logger->expects($this->once())
+            ->method('warning')
+            ->with($this->stringContains('ComponentLoaderRegistry error in load: failed'));
+
+        $registry = new ComponentLoaderRegistry($logger);
+        $registry->addLoader(fn () => throw new \RuntimeException('failed'));
+
+        $result = $registry->load('NonExistent');
+        $this->assertNull($result);
+    }
+
     private function rmTree(string $dir): void
     {
         if (!is_dir($dir)) {

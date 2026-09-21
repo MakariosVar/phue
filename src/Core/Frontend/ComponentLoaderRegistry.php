@@ -7,11 +7,12 @@ namespace Phue\Core\Frontend;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\PhueComponentLoader;
 use Throwable;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class ComponentLoaderRegistry
  *
- * Composite loader stack with fail-safe execution.
+ * Composite loader stack with fail-safe execution and error resilience.
  *
  * @package Phue\Core\Frontend
  */
@@ -23,6 +24,21 @@ class ComponentLoaderRegistry
     private array $loaders = [];
 
     /**
+     * Optional PSR-3 logger instance for recording loader failures.
+     */
+    private ?LoggerInterface $logger;
+
+    /**
+     * ComponentLoaderRegistry constructor.
+     *
+     * @param LoggerInterface|null $logger
+     */
+    public function __construct(?LoggerInterface $logger = null)
+    {
+        $this->logger = $logger;
+    }
+
+    /**
      * Register a loader instance or a lazy factory callable that returns a loader.
      *
      * @param PhueComponentLoader|callable $loader
@@ -32,6 +48,18 @@ class ComponentLoaderRegistry
     public function addLoader(PhueComponentLoader|callable $loader): void
     {
         $this->loaders[] = $loader;
+    }
+
+    /**
+     * Helper to log exceptions caught during candidate loader execution.
+     */
+    private function logLoaderError(Throwable $e, string $method): void
+    {
+        if ($this->logger !== null) {
+            $this->logger->warning(sprintf('ComponentLoaderRegistry error in %s: %s', $method, $e->getMessage()), [
+                'exception' => $e,
+            ]);
+        }
     }
 
     /**
@@ -54,7 +82,8 @@ class ComponentLoaderRegistry
                 }
 
                 return $loader->load($name, $params);
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -85,7 +114,8 @@ class ComponentLoaderRegistry
                     $hash = substr(sha1($script), 0, 8);
                     return "/assets/phue/{$name}.{$hash}.phue.js";
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -116,7 +146,8 @@ class ComponentLoaderRegistry
                 if ($hash !== null) {
                     return $hash;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -140,7 +171,8 @@ class ComponentLoaderRegistry
                 if ($loader !== null && $loader->hasComponent($name)) {
                     return true;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -172,7 +204,8 @@ class ComponentLoaderRegistry
                 if ($script !== null) {
                     return $script;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -202,7 +235,8 @@ class ComponentLoaderRegistry
                 if ($hash !== null) {
                     return "/assets/phue/{$name}.{$hash}.phue.js";
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -232,7 +266,8 @@ class ComponentLoaderRegistry
                 if ($hash !== null) {
                     return $hash;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -264,7 +299,8 @@ class ComponentLoaderRegistry
                 if ($module !== null) {
                     return $module;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
@@ -295,7 +331,8 @@ class ComponentLoaderRegistry
                 if ($module !== null) {
                     return $module;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
                 continue;
             }
         }
