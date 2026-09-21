@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Core\UI;
 
+use App\Config\NavigationConfig;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\View;
+use Phue\Modules\Auth\IdentityInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -166,5 +168,72 @@ final class ComponentRendererTest extends TestCase
 
         $this->assertNotSame([], $second['scripts'], 'Re-visited SPA page must ship its module scripts');
         $this->assertContains('/assets/phue/Products.abcd1234.phue.js', $second['scripts']);
+    }
+
+    public function testSpaPayloadCarriesNavStateReflectingAuth(): void
+    {
+        $labels = static fn (array $actions): array => array_column($actions, 'label');
+
+        // Guest: SPA payload must carry navState so the client can refresh #nav.
+        $guestRequest = new Request('GET', '/login', headers: ['X-Phue-SPA' => 'true']);
+        $guestRenderer = new ComponentRenderer(
+            new HtmlShellRenderer(new AssetRegistry()),
+            new AssetRegistry(),
+            requestResolver: fn (): Request => $guestRequest,
+            userResolver: fn (): ?IdentityInterface => null
+        );
+
+        $guestPayload = json_decode(
+            $guestRenderer->render('Login', new View('<div>Login</div>'))->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        $this->assertArrayHasKey('navState', $guestPayload, 'SPA payload must expose navState for #nav refresh');
+        $this->assertContains('Login', $labels($guestPayload['navState']['actions']));
+        $this->assertNotContains('Logout', $labels($guestPayload['navState']['actions']));
+
+        // Authenticated: same render must flip the right-slot actions.
+        $userRequest = new Request('GET', '/schii', headers: ['X-Phue-SPA' => 'true']);
+        $userRenderer = new ComponentRenderer(
+            new HtmlShellRenderer(new AssetRegistry()),
+            new AssetRegistry(),
+            requestResolver: fn (): Request => $userRequest,
+            userResolver: fn (): ?IdentityInterface => $this->identity('admin')
+        );
+
+        $userPayload = json_decode(
+            $userRenderer->render('Schii', new View('<div>Schii</div>'))->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        $this->assertArrayHasKey('navState', $userPayload);
+        $this->assertContains('Logout', $labels($userPayload['navState']['actions']));
+        $this->assertNotContains('Login', $labels($userPayload['navState']['actions']));
+    }
+
+    private function identity(string $authKey): IdentityInterface
+    {
+        return new class($authKey) implements IdentityInterface {
+            public function __construct(private readonly string $authKey) {}
+
+            public function getId(): int|string
+            {
+                return 1;
+            }
+
+            public static function findIdentity(int|string $id): ?self
+            {
+                return null;
+            }
+
+            public function getAuthKey(): ?string
+            {
+                return $this->authKey;
+            }
+        };
     }
 }
