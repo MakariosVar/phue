@@ -715,36 +715,48 @@ final class ModelEndpoint
             }
         }
 
-        // 2. Dynamic Filtering across filterable fields
+        // 2. Dynamic Filtering across filterable fields (support flat & filter[field_name] syntax)
+        $filterInputs = $request->input("filter") ?? $request->getQuery("filter");
+        if (!is_array($filterInputs)) {
+            $filterInputs = [];
+        }
+
         foreach ($schema->fields as $field) {
             if ($field->filterable) {
-                $value =
-                    $request->input($field->name) ??
-                    $request->getQuery($field->name);
+                $value = $filterInputs[$field->name] 
+                    ?? ($request->input($field->name) ?? $request->getQuery($field->name));
+
                 if ($value !== "" && $value !== null) {
                     $query->where($field->name, "=", $value);
                 }
             }
         }
 
-        // 3. Dynamic Sorting
-        /** @var string|null $sort */
-        $sort = $request->input("sort") ?? $request->getQuery("sort");
-        /** @var string $direction */
-        $direction =
-            strtoupper(
-                (string) ($request->input("direction") ??
-                    ($request->getQuery("direction") ?? "ASC")),
-            ) === "DESC"
-                ? "DESC"
-                : "ASC";
+        // 3. Dynamic Sorting (support separate sort/direction & combined sort=field:asc/desc formats)
+        /** @var string|null $sortParam */
+        $sortParam = $request->input("sort") ?? $request->getQuery("sort");
+        $sortField = null;
+        $direction = null;
+
+        if ($sortParam) {
+            if (str_contains($sortParam, ':')) {
+                [$sortField, $sortDir] = explode(':', $sortParam, 2);
+                $direction = strtoupper($sortDir) === 'DESC' ? 'DESC' : 'ASC';
+            } else {
+                $sortField = $sortParam;
+                $direction = strtoupper(
+                    (string) ($request->input("direction") ??
+                        ($request->getQuery("direction") ?? "ASC")),
+                ) === "DESC" ? "DESC" : "ASC";
+            }
+        }
 
         if (
-            $sort &&
-            isset($schema->fields[$sort]) &&
-            $schema->fields[$sort]->sortable
+            $sortField &&
+            isset($schema->fields[$sortField]) &&
+            $schema->fields[$sortField]->sortable
         ) {
-            $query->orderBy($sort, $direction);
+            $query->orderBy($sortField, $direction ?? 'ASC');
         }
 
         return $query;
