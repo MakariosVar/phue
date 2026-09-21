@@ -1,0 +1,135 @@
+<php>
+return [
+    'title' => 'Sign In — Phue',
+    'state' => [
+        'error' => $error ?? null,
+    ],
+    'scripts' => [],
+];
+</php>
+
+<template>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-sm-10 col-md-8 col-lg-5 col-xl-4">
+            <ph-card class="shadow-sm border-0">
+                <div class="text-center mb-4">
+                    <ph-heading :level="2" class="mb-1">Sign In</ph-heading>
+                    <ph-text color="muted">Enter your credentials to access the console</ph-text>
+                </div>
+
+                <ph-alert
+                    v-if="errorMessage"
+                    variant="error"
+                    :message="errorMessage"
+                    dismissible
+                    class="mb-3"
+                    @dismiss="errorMessage = null"
+                />
+
+                <form @submit.prevent="submitLogin">
+                    <div class="mb-3">
+                        <ph-input
+                            v-model="username"
+                            label="Username"
+                            placeholder="e.g. admin"
+                            required
+                            :disabled="loading"
+                        />
+                    </div>
+                    <div class="mb-4">
+                        <ph-input
+                            v-model="password"
+                            type="password"
+                            label="Password"
+                            placeholder="••••••••"
+                            required
+                            :disabled="loading"
+                        />
+                    </div>
+                    <ph-button
+                        type="submit"
+                        variant="primary"
+                        block
+                        :loading="loading"
+                    >
+                        Sign In
+                    </ph-button>
+                </form>
+            </ph-card>
+        </div>
+    </div>
+</div>
+</template>
+
+<script>
+import { createApp, ref } from 'vue';
+
+export default function mountApp() {
+    window.__phueApp?.unmount?.();
+
+    window.__phueApp = createApp({
+        setup() {
+            const username = ref('');
+            const password = ref('');
+            const loading = ref(false);
+            const errorMessage = ref(window.__INITIAL_STATE__?.error || null);
+
+            const submitLogin = async () => {
+                if (!username.value || !password.value) {
+                    errorMessage.value = 'Please enter both username and password.';
+                    return;
+                }
+
+                loading.value = true;
+                errorMessage.value = null;
+
+                try {
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({
+                            username: username.value,
+                            password: password.value,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (response.ok && data.success) {
+                        window.location.href = data.redirect || '/schii';
+                    } else {
+                        errorMessage.value = data.error || 'Authentication failed. Please check your credentials.';
+                    }
+                } catch (err) {
+                    errorMessage.value = 'A network error occurred. Please try again.';
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            return {
+                username,
+                password,
+                loading,
+                errorMessage,
+                submitLogin,
+            };
+        }
+    });
+
+    window.__phueApp.mount('#app');
+}
+
+if (typeof window !== 'undefined' && !window.__phueExplorerInitialized) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountApp);
+    } else {
+        mountApp();
+    }
+}
+</script>
