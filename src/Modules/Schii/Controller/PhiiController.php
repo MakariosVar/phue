@@ -404,8 +404,10 @@ final class PhiiController
 
         $realDir = realpath($current);
 
-        // Validate that the nearest existing ancestor resolves and is contained within $realRoot
-        if ($realDir === false || !str_starts_with($realDir, $realRoot)) {
+        // Strict component boundary check
+        $isWithinRoot = ($realDir === $realRoot) || str_starts_with($realDir, $realRoot . DIRECTORY_SEPARATOR);
+
+        if ($realDir === false || !$isWithinRoot) {
             throw new \DomainException("Security Violation: Path traversal attempt detected for '{$path}'.");
         }
 
