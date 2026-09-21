@@ -8,6 +8,8 @@ use Phue\Core\Database\ActiveRecord\ActiveQuery;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Schii\Audit\SchiiAudit;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Throwable;
 
@@ -26,6 +28,7 @@ final class ModelEndpoint
      * ModelEndpoint constructor.
      *
      * @param SchemaRegistry                         $schemaRegistry Registry parsing model reflection schema definitions.
+     * @param AuthManager|null                       $authManager    Authentication manager for resolving current user.
      * @param array<string, class-string<BaseActiveRecord>> $entityMapping  Explicit map of entity slugs to ActiveRecord classes.
      * @param string                                 $entityNamespace Base PHP namespace for dynamic entity resolutions.
      */
@@ -33,7 +36,26 @@ final class ModelEndpoint
         private readonly SchemaRegistry $schemaRegistry,
         private array $entityMapping = [],
         private string $entityNamespace = "App\\Models",
+        private readonly ?AuthManager $authManager = null,
     ) {}
+
+    /**
+     * Helper to resolve the authenticated user ID.
+     */
+    private function getAuthUserId(Request $request): ?string
+    {
+        if ($this->authManager !== null && method_exists($this->authManager, 'authenticate')) {
+            try {
+                $user = $this->authManager->authenticate($request);
+                if ($user && method_exists($user, 'getId')) {
+                    return (string) $user->getId();
+                }
+            } catch (Throwable) {
+                // Ignore auth failures for optional or unauthenticated contexts
+            }
+        }
+        return null;
+    }
 
     /**
      * Register an explicit entity slug mapping with its corresponding ActiveRecord class.
@@ -244,6 +266,14 @@ final class ModelEndpoint
             );
         }
 
+        // Audit Log Hook for store (POST)
+        SchiiAudit::log(
+            (string) $entity,
+            'POST',
+            $this->getAuthUserId($request),
+            ['id' => method_exists($model, 'getId') ? $model->getId() : null, 'data' => $inputData]
+        );
+
         return Response::json(["data" => $model->toArray()], 201);
     }
 
@@ -305,6 +335,14 @@ final class ModelEndpoint
             );
         }
 
+        // Audit Log Hook for update (PUT)
+        SchiiAudit::log(
+            (string) $entity,
+            'PUT',
+            $this->getAuthUserId($request),
+            ['id' => $id, 'data' => $inputData]
+        );
+
         return Response::json(["data" => $model->toArray()]);
     }
 
@@ -339,6 +377,14 @@ final class ModelEndpoint
                 500,
             );
         }
+
+        // Audit Log Hook for delete (DELETE)
+        SchiiAudit::log(
+            (string) $entity,
+            'DELETE',
+            $this->getAuthUserId($request),
+            ['id' => $id]
+        );
 
         return Response::json(["message" => "Resource deleted successfully"]);
     }
@@ -402,6 +448,13 @@ final class ModelEndpoint
                     if ($model->delete()) {
                         $deletedCount++;
                         $results[] = ["id" => $id, "status" => "deleted"];
+                        // Audit log per deleted item in bulk
+                        SchiiAudit::log(
+                            (string) $entity,
+                            'BULK_DELETE',
+                            $this->getAuthUserId($request),
+                            ['id' => $id]
+                        );
                     } else {
                         $failedCount++;
                         $results[] = ["id" => $id, "status" => "failed", "error" => "Deletion failed"];
@@ -420,6 +473,13 @@ final class ModelEndpoint
                     if ($model->save()) {
                         $updatedCount++;
                         $results[] = ["id" => $id, "status" => "updated", "data" => $model->toArray()];
+                        // Audit log per updated item in bulk
+                        SchiiAudit::log(
+                            (string) $entity,
+                            'BULK_UPDATE',
+                            $this->getAuthUserId($request),
+                            ['id' => $id, 'data' => $inputData]
+                        );
                     } else {
                         $failedCount++;
                         $results[] = ["id" => $id, "status" => "failed", "errors" => $model->getErrors()];
