@@ -202,7 +202,7 @@ final class AppLayoutTest extends TestCase
         $this->assertStringContainsString('<div class="ms-auto', $html);
         $this->assertStringContainsString('aria-label="Toggle theme"', $html);
         $this->assertStringContainsString('Login', $html);
-        $this->assertStringNotContainsString('Profile', $html);
+        $this->assertStringNotContainsString('Logout', $html);
     }
 
     public function testTopbarActionsRespectIdentityVisibility(): void
@@ -212,7 +212,7 @@ final class AppLayoutTest extends TestCase
             'user' => $this->identity('admin'),
         ]);
 
-        $this->assertStringContainsString('Profile', $html);
+        $this->assertStringContainsString('Logout', $html);
         $this->assertStringNotContainsString('Login', $html);
     }
 

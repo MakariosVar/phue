@@ -104,14 +104,14 @@ final class NavigationConfigTest extends TestCase
         $actions = NavigationConfig::getAppActions(null);
 
         $this->assertContains('Login', array_column($actions, 'label'));
-        $this->assertNotContains('Profile', array_column($actions, 'label'));
+        $this->assertNotContains('Logout', array_column($actions, 'label'));
     }
 
     public function testAppActionsForIdentityExposeAuthedActions(): void
     {
         $actions = NavigationConfig::getAppActions($this->identity('admin'));
 
-        $this->assertContains('Profile', array_column($actions, 'label'));
+        $this->assertContains('Logout', array_column($actions, 'label'));
         $this->assertNotContains('Login', array_column($actions, 'label'));
     }
 

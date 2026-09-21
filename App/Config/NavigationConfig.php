@@ -152,7 +152,7 @@ class NavigationConfig
                 fn (?IdentityInterface $u): bool => $u === null
             ),
             self::visible(
-                self::item('Profile', '/profile'),
+                self::item('Logout', '/logout'),
                 fn (?IdentityInterface $u): bool => $u !== null
             ),
         ];
