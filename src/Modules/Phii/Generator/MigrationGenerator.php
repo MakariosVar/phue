@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace Phue\Modules\Phii\Generator;
 
+use Phue\Core\Database\SqlIdentifier;
 use Phue\Modules\Phii\Generator\FileMutation;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
-use Phue\Modules\Schii\Schema\ModelSchema;
 use Phue\Modules\Schii\Migration\SchemaToSqlConverter;
+use Phue\Modules\Schii\Schema\FieldSchema;
+use Phue\Modules\Schii\Schema\ModelSchema;
 
 /**
- * Generates database migration file mutations (up/down SQL and schema blueprint) from Schii export schemas.
+ * Generates database migration file mutations from Schii export schemas.
+ *
+ * Filenames follow the framework's migration convention (`m{stamp}_{order}_...`),
+ * identical to the `bin/phue make:migration` output, so the generated class name
+ * round-trips through Migrator::classNameFromFile().
  *
  * @package Phue\Modules\Phii\Generator
  */
@@ -27,7 +33,7 @@ final class MigrationGenerator
      */
     public function generateFromSchema(
         PhiiExportSchema $schema,
-        string $basePath = '',
+        string $basePath = 'database/migrations',
         string $driver = 'sqlite'
     ): array {
         $templateFile = __DIR__ . '/templates/migration.php';
@@ -37,32 +43,44 @@ final class MigrationGenerator
         }
 
         $tableName = $schema->table;
-        $timestamp = date('Y_m_d_His');
-        $fileName = "{$timestamp}_create_{$tableName}.php";
+
+        // Same-second uniqueness via microsecond order suffix, kept lexicographically sortable.
+        $stamp = date('Y_m_d_His');
+        $order = (int) (microtime(true) * 1_000_000) % 1_000_000;
+        $baseName = sprintf('m%s_%06d_create_%s', $stamp, $order, $tableName);
+        $fileName = $baseName . '.php';
+        $className = implode('', array_map('ucfirst', explode('_', $baseName)));
 
         $upSql = $this->generateUpSql($schema, $driver);
-        $downSql = $this->generateDownSql($schema);
+        $downSql = $this->generateDownSql($schema, $driver);
 
-        $columnsCode = $this->buildColumnsCode($schema->fields, $driver);
+        // SQL is embedded inside a double-quoted PHP string literal in the template,
+        // so any quote, backslash or dollar sign must be escaped to keep the artifact
+        // parseable regardless of driver (pgsql/mysql quote identifiers with ").
+        $asPhpString = static fn (string $sql): string => str_replace(
+            ['\\', '$', '"'],
+            ['\\\\', '\\$', '\\"'],
+            $sql
+        );
 
         $output = str_replace(
-            ['{{ TABLE_NAME }}', '{{ COLUMNS }}', '{{ UP_SQL }}', '{{ DOWN_SQL }}'],
-            [$tableName, $columnsCode, $upSql, $downSql],
+            ['{{ TABLE_NAME }}', '{{ CLASS_NAME }}', '{{ UP_SQL }}', '{{ DOWN_SQL }}'],
+            [$tableName, $className, $asPhpString($upSql), $asPhpString($downSql)],
             $template
         );
 
-        $filePath = rtrim($basePath, '/') . "/{$fileName}";
+        $filePath = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
 
         return [new FileMutation($filePath, $output)];
     }
 
     /**
-     * Generate CREATE TABLE SQL statements reuse SchemaToSqlConverter.
+     * Generate the CREATE TABLE SQL statement reusing SchemaToSqlConverter.
      *
-     * @param PhiiExportSchema $schema
-     * @param string           $driver
+     * @param PhiiExportSchema $schema Export schema definition.
+     * @param string           $driver Database driver name.
      *
-     * @return string
+     * @return string Single CREATE TABLE statement.
      */
     public function generateUpSql(PhiiExportSchema $schema, string $driver): string
     {
@@ -73,31 +91,34 @@ final class MigrationGenerator
     }
 
     /**
-     * Generate DROP TABLE SQL statement.
+     * Generate the DROP TABLE SQL statement.
      *
-     * @param PhiiExportSchema $schema
+     * @param PhiiExportSchema $schema Export schema definition.
      *
-     * @return string
+     * @return string Single DROP TABLE statement.
      */
-    public function generateDownSql(PhiiExportSchema $schema): string
+    public function generateDownSql(PhiiExportSchema $schema, string $driver = 'sqlite'): string
     {
-        return "DROP TABLE IF EXISTS `{$schema->table}`;";
+        $quotedTable = SqlIdentifier::quote($schema->table, $driver);
+
+        return "DROP TABLE IF EXISTS {$quotedTable};";
     }
 
     /**
      * Convert PhiiExportSchema to ModelSchema compatible with SchemaToSqlConverter.
      *
-     * @param PhiiExportSchema $schema
+     * @param PhiiExportSchema $schema Export schema definition.
      *
-     * @return ModelSchema
+     * @return ModelSchema Schema understood by the SQL converter.
      */
     private function convertToModelSchema(PhiiExportSchema $schema): ModelSchema
     {
         $fields = [];
+
         foreach ($schema->fields as $key => $field) {
-            $fields[$key] = method_exists($field, 'toFieldSchema') 
-                ? $field->toFieldSchema() 
-                : new \Phue\Modules\Schii\Schema\FieldSchema(
+            $fields[$key] = method_exists($field, 'toFieldSchema')
+                ? $field->toFieldSchema()
+                : new FieldSchema(
                     name: $field->name,
                     type: $field->type,
                     label: $field->label ?? '',
@@ -122,29 +143,5 @@ final class MigrationGenerator
             fields: $fields,
             permissions: $schema->permissions
         );
-    }
-
-    /**
-     * Builds blueprint column lines for migration file.
-     *
-     * @param array<int, mixed> $fields
-     * @param string            $driver
-     *
-     * @return string
-     */
-    private function buildColumnsCode(array $fields, string $driver): string
-    {
-        $lines = [];
-
-        foreach ($fields as $field) {
-            $name = $field->name ?? 'column';
-            if ($name === 'id') {
-                continue;
-            }
-            $type = $field->type ?? 'string';
-            $lines[] = sprintf("            \$table->%s('%s');", $type, $name);
-        }
-
-        return implode("\n", $lines);
     }
 }

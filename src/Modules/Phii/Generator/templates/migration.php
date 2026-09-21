@@ -2,27 +2,22 @@
 
 declare(strict_types=1);
 
-use Phue\Core\Database\Schema\Blueprint;
-use Phue\Core\Database\Migrations\Migration;
+use Phue\Core\Database\Migration;
 
 /**
- * Migration for creating table '{{ TABLE_NAME }}.
+ * Migration for creating table '{{ TABLE_NAME }}'.
  *
  * @generated Phii Code Generator
  */
-return new class extends Migration
+final class {{ CLASS_NAME }} extends Migration
 {
     public function up(): void
     {
-        $this->schema->create('{{ TABLE_NAME }}', function (Blueprint $table) {
-            $table->id();
-            {{ COLUMNS }}
-            $table->timestamps();
-        });
+        $this->execute("{{ UP_SQL }}");
     }
 
     public function down(): void
     {
-        $this->schema->dropIfExists('{{ TABLE_NAME }}');
+        $this->execute("{{ DOWN_SQL }}");
     }
-};
+}
