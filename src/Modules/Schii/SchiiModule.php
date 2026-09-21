@@ -23,7 +23,9 @@ use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Endpoint\SchemaInspectorEndpoint;
+use Phue\Modules\Schii\Endpoint\AuthorizedSchemaInspectorEndpoint;
 use Phue\Modules\Schii\Endpoint\SchemaSyncEndpoint;
+use Phue\Modules\Schii\Endpoint\AuthorizedSchemaSyncEndpoint;
 use Phue\Modules\Schii\Endpoint\AuditEndpoint;
 use Phue\Modules\Schii\Endpoint\AuthorizedAuditEndpoint;
 use Phue\Modules\Schii\Schema\SchemaInspector;
@@ -190,6 +192,19 @@ class SchiiModule extends Module
             }
         );
 
+        if ($this->container->has('module.auth')) {
+            $this->container->bind(
+                AuthorizedSchemaInspectorEndpoint::class,
+                function (Container $c): AuthorizedSchemaInspectorEndpoint {
+                    return new AuthorizedSchemaInspectorEndpoint(
+                        $c->get(SchemaInspectorEndpoint::class),
+                        $c->get(AuthManager::class),
+                        $c->get(RbacManager::class)
+                    );
+                }
+            );
+        }
+
         $this->container->bind(
             SchemaSyncEndpoint::class,
             function (Container $c) use ($schiiConfig): SchemaSyncEndpoint {
@@ -199,6 +214,19 @@ class SchiiModule extends Module
                 );
             }
         );
+
+        if ($this->container->has('module.auth')) {
+            $this->container->bind(
+                AuthorizedSchemaSyncEndpoint::class,
+                function (Container $c): AuthorizedSchemaSyncEndpoint {
+                    return new AuthorizedSchemaSyncEndpoint(
+                        $c->get(SchemaSyncEndpoint::class),
+                        $c->get(AuthManager::class),
+                        $c->get(RbacManager::class)
+                    );
+                }
+            );
+        }
 
         $this->container->bind(
             BuildGenerator::class,
@@ -410,6 +438,16 @@ class SchiiModule extends Module
             ? AuthorizedAuditEndpoint::class
             : AuditEndpoint::class;
 
+        /** @var class-string $schemaInspectorHandler */
+        $schemaInspectorHandler = $requireAuth
+            ? AuthorizedSchemaInspectorEndpoint::class
+            : SchemaInspectorEndpoint::class;
+
+        /** @var class-string $schemaSyncHandler */
+        $schemaSyncHandler = $requireAuth
+            ? AuthorizedSchemaSyncEndpoint::class
+            : SchemaSyncEndpoint::class;
+
         // 7. Dynamic REST & Console Route Mappings
         /** @var string $apiPrefix */
         $apiPrefix = '/' . trim($schiiConfig->apiPrefix ?? '/api/schii', '/');
@@ -421,9 +459,15 @@ class SchiiModule extends Module
             /** @var string $phiiPrefix */
             $phiiPrefix = '/' . trim($schiiConfig->phiiPrefix ?? '/phii', '/');
 
+            // Advanced Schii Operations Endpoints & Diff - MUST be registered BEFORE {id} routes
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/bulk", [$crudHandler, 'bulk'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/export", [$crudHandler, 'export'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/import", [$crudHandler, 'import'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/diff", [$schemaSyncHandler, 'diff'], middleware: $middleware);
+
             // Inspector & Sync routes (placed before generic {entity} CRUD routes)
-            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [SchemaInspectorEndpoint::class, 'structure'], middleware: $middleware);
-            $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [SchemaSyncEndpoint::class, 'sync'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [$schemaInspectorHandler, 'structure'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [$schemaSyncHandler, 'sync'], middleware: $middleware);
 
             // Public Schema Metadata Endpoints
             $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
@@ -432,12 +476,6 @@ class SchiiModule extends Module
             // Audit Log Routes
             $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/audit/{entity}", [$auditHandler, 'forEntity'], middleware: $middleware);
-
-            // Advanced Schii Operations Endpoints (Bulk, Export, Import, Diff) - MUST be registered BEFORE {id} routes
-            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/bulk", [$crudHandler, 'bulk'], middleware: $middleware);
-            $this->router->addRoute('GET', "{$apiPrefix}/{entity}/export", [$crudHandler, 'export'], middleware: $middleware);
-            $this->router->addRoute('POST', "{$apiPrefix}/{entity}/import", [$crudHandler, 'import'], middleware: $middleware);
-            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/diff", [SchemaSyncEndpoint::class, 'diff'], middleware: $middleware);
 
             // Protected CRUD Operations Endpoints
             $this->router->addRoute('GET', "{$apiPrefix}/{entity}", [$crudHandler, 'index'], middleware: $middleware);
