@@ -27,16 +27,17 @@ final class ModuleGenerator
         string $basePath = '',
         array $options = ['auth' => false, 'api' => false]
     ): array {
-        $moduleDir = rtrim($basePath, '/') . "/App/Modules/{$moduleName}";
+        $cleanBasePath = rtrim($basePath, DIRECTORY_SEPARATOR);
+        $moduleDir = $cleanBasePath . DIRECTORY_SEPARATOR . 'App' . DIRECTORY_SEPARATOR . 'Modules' . DIRECTORY_SEPARATOR . $moduleName;
         
         $mutations = [];
 
         // 1. Render module-config.php template as a FileMutation
-        $templateFile = __DIR__ . '/templates/module-config.php';
+        $templateFile = __DIR__ . DIRECTORY_SEPARATOR . 'templates' . DIRECTORY_SEPARATOR . 'module-config.php';
         $template = file_get_contents($templateFile);
         if ($template !== false) {
             $configContent = str_replace('{{ MODULE_NAME }}', $moduleName, $template);
-            $configFile = "{$moduleDir}/Config/module.php";
+            $configFile = $moduleDir . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'module.php';
             
             $mutations[] = new FileMutation($configFile, $configContent);
         }
@@ -44,7 +45,7 @@ final class ModuleGenerator
         // 2. Add .gitkeep mutations for core subdirectories to ensure full skeleton generation
         $subDirs = ['Config', 'Controller', 'Views', 'Model'];
         foreach ($subDirs as $subDir) {
-            $gitkeepPath = "{$moduleDir}/{$subDir}/.gitkeep";
+            $gitkeepPath = $moduleDir . DIRECTORY_SEPARATOR . $subDir . DIRECTORY_SEPARATOR . '.gitkeep';
             $mutations[] = new FileMutation($gitkeepPath, "");
         }
 

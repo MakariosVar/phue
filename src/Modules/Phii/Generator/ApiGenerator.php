@@ -40,11 +40,12 @@ final class ApiGenerator
             $template
         );
 
-        $filePath = rtrim($basePath, '/') . "/{$controllerName}.php";
+        $cleanBasePath = rtrim($basePath, DIRECTORY_SEPARATOR);
+        $filePath = $cleanBasePath . DIRECTORY_SEPARATOR . "{$controllerName}.php";
 
         $routeSlug = strtolower($schema->entity);
         $routeSnippet = $this->generateRoutes($schema);
-        $routePath = rtrim($basePath, '/') . "/routes-{$routeSlug}-snippet.php";
+        $routePath = $cleanBasePath . DIRECTORY_SEPARATOR . "routes-{$routeSlug}-snippet.php";
 
         return [
             new FileMutation($filePath, $output),
