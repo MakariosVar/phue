@@ -16,6 +16,9 @@ use Phue\Modules\Schii\Attribute\Field;
  */
 class User extends BaseUser
 {
+    #[Field(type: 'integer')]
+    public int $id;
+
     #[Field(type: 'text')]
     public string $username;
 
