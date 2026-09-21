@@ -52,6 +52,7 @@ final readonly class SchiiConfig
         public array $import = ['maxUpload' => '10M', 'allowedMime' => ['text/csv', 'application/json']],
         public array $phii = ['allowInProduction' => false],
         public array $relations = ['autoInfer' => false],
+        public string $outputRoot = ''
     ) {}
 
     /**
@@ -80,6 +81,7 @@ final readonly class SchiiConfig
             import: $options['import'] ?? ['maxUpload' => '10M', 'allowedMime' => ['text/csv', 'application/json']],
             phii: $options['phii'] ?? ['allowInProduction' => false],
             relations: $options['relations'] ?? ['autoInfer' => false],
+            outputRoot: $options['outputRoot'] ?? ''
         );
     }
 
@@ -107,6 +109,7 @@ final readonly class SchiiConfig
             'import' => $this->import,
             'phii' => $this->phii,
             'relations' => $this->relations,
+            'outputRoot' => $this->outputRoot,
         ];
     }
 }

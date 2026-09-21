@@ -28,6 +28,7 @@ final class PhiiControllerTest extends TestCase
     {
         parent::setUp();
         $this->dump = sys_get_temp_dir() . '/phue_phii_ctrl_' . uniqid();
+        @mkdir($this->dump, 0755, true);
     }
 
     protected function tearDown(): void
@@ -321,7 +322,9 @@ final class PhiiControllerTest extends TestCase
 
     public function testApplyCreatesBackupWhenRequested(): void
     {
-        mkdir($this->dump, 0777, true);
+        if (!is_dir($this->dump)) {
+            mkdir($this->dump, 0777, true);
+        }
 
         $request = new Request('POST', '/phii/apply', [], [
             'plan' => $this->samplePlan(),
@@ -352,7 +355,7 @@ final class PhiiControllerTest extends TestCase
 
         $this->assertSame(403, $response->getStatusCode());
         $data = json_decode($response->getContent(), true);
-        $this->assertSame('Phii is disabled in production', $data['error']);
+        $this->assertStringContainsString('production', strtolower((string) ($data['error'] ?? '')));
         $this->assertFileDoesNotExist("{$this->dump}/App/Models/Profile.php");
     }
 

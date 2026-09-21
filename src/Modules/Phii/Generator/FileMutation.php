@@ -8,7 +8,7 @@ namespace Phue\Modules\Phii\Generator;
  * Class FileMutation
  *
  * Represents an isolated file mutation with a target path and file content,
- * serving as the single source of writing operations.
+ * serving as the single source of atomic writing operations.
  *
  * @package Phue\Modules\Phii\Generator
  */
@@ -26,7 +26,8 @@ final readonly class FileMutation
     ) {}
 
     /**
-     * Ensures the target directory exists and writes the content to the file.
+     * Ensures the target directory exists and performs an atomic write operation 
+     * using a temporary file with exclusive locking followed by a rename.
      *
      * @return bool True on success, false on failure.
      */
@@ -38,6 +39,35 @@ final readonly class FileMutation
             return false;
         }
 
-        return file_put_contents($this->path, $this->content) !== false;
+        // Generate a secure unique temporary file in the same directory for atomicity
+        $tempFile = tempnam($dir, 'phii_mut_');
+        if ($tempFile === false) {
+            return false;
+        }
+
+        try {
+            // Write content with exclusive lock to the temporary file
+            $bytesWritten = file_put_contents($tempFile, $this->content, LOCK_EX);
+            if ($bytesWritten === false) {
+                @unlink($tempFile);
+                return false;
+            }
+
+            // Atomically rename temporary file to target path
+            if (!rename($tempFile, $this->path)) {
+                @unlink($tempFile);
+                return false;
+            }
+
+            // Ensure proper permissions on the target file
+            @chmod($this->path, 0644);
+
+            return true;
+        } catch (\Throwable) {
+            if (file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+            return false;
+        }
     }
 }

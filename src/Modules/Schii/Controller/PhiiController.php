@@ -104,6 +104,7 @@ final class PhiiController
     {
         $state = [
             'apiPrefix' => $this->config->apiPrefix ?? '/api/schii',
+            'phiiPrefix' => $this->config->phiiPrefix ?? '/phii',
             'phiiNamespace' => $this->config->phiiNamespace ?? 'Phue\\Phii',
             'module' => 'admin',
         ];
@@ -112,7 +113,7 @@ final class PhiiController
     }
 
     /**
-     * Execute direct file generation based on planned mutations.
+     * Execute direct file generation based on planned mutations with backup and conflict check.
      *
      * @param Request $request HTTP Request instance with parsed body data.
      * @return Response JSON response containing written file paths or error details.
@@ -120,16 +121,32 @@ final class PhiiController
     public function generate(Request $request): Response
     {
         try {
+            $this->assertProductionAccess();
+
             $body = (array) $request->getParsedBody();
             $generator = $body['generator'] ?? null;
-            $basePath = $this->config->exportDir ?? $this->app->getBasePath();
+            $force = (bool) ($body['force'] ?? false);
+            $outputRoot = $this->resolveOutputRoot();
 
-            $mutations = $this->planMutations((string) $generator, $body, $basePath);
+            $mutations = $this->planMutations((string) $generator, $body, $outputRoot);
+            
+            // Auto backup-by-default before write if requested or configured
+            $doBackup = (bool) ($body['backup'] ?? true);
+            if ($doBackup && !empty($mutations)) {
+                $this->backupManager->createBackup($outputRoot);
+            }
+
             $writtenPaths = [];
-
             foreach ($mutations as $mutation) {
-                if ($mutation->write()) {
-                    $writtenPaths[] = $mutation->path;
+                $safePath = $this->ensureContainment($mutation->path, $outputRoot);
+
+                if (file_exists($safePath) && !$force) {
+                    throw new \RuntimeException("Conflict: File already exists at '{$safePath}' and overwrite is disabled.");
+                }
+
+                $containedMutation = new FileMutation($safePath, $mutation->content);
+                if ($containedMutation->write()) {
+                    $writtenPaths[] = $safePath;
                 }
             }
 
@@ -144,6 +161,8 @@ final class PhiiController
                 $code = 403;
             } elseif ($e instanceof \InvalidArgumentException) {
                 $code = 400;
+            } elseif ($e instanceof \RuntimeException) {
+                $code = 409; // Conflict
             }
             return new Response(
                 json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
@@ -162,23 +181,26 @@ final class PhiiController
     public function preview(Request $request): Response
     {
         try {
+            $this->assertProductionAccess();
             $body = (array) $request->getParsedBody();
             $generator = $body['generator'] ?? null;
             $entity = $body['entity'] ?? null;
-            $basePath = $this->config->exportDir ?? $this->app->getBasePath();
+            $outputRoot = $this->resolveOutputRoot();
 
-            $mutations = $this->planMutations((string) $generator, $body, $basePath);
+            $mutations = $this->planMutations((string) $generator, $body, $outputRoot);
             $plan = [];
 
             foreach ($mutations as $mutation) {
-                $exists = file_exists($mutation->path);
+                $safePath = $this->ensureContainment($mutation->path, $outputRoot);
+                $exists = file_exists($safePath);
+                
                 $plan[] = [
-                    'path' => $mutation->path,
+                    'path' => $safePath,
                     'content' => $mutation->content,
                     'exists' => $exists,
                     'willOverwrite' => $exists,
                     'contentLength' => mb_strlen($mutation->content),
-                    'summary' => 'Mutation for ' . basename($mutation->path),
+                    'summary' => 'Mutation for ' . basename($safePath),
                 ];
             }
 
@@ -207,7 +229,7 @@ final class PhiiController
     }
 
     /**
-     * Apply explicit file mutations from an execution plan with optional backup support.
+     * Apply explicit file mutations from an execution plan with path containment and conflict resolution.
      *
      * @param Request $request HTTP Request instance containing the plan and options.
      * @return Response JSON response detailing written counts, skips, conflicts, and backup paths.
@@ -215,24 +237,13 @@ final class PhiiController
     public function apply(Request $request): Response
     {
         try {
+            $this->assertProductionAccess();
+
             $body = (array) $request->getParsedBody();
-            
-            // Production environment security gate check
-            $isProd = (method_exists($this->app, 'environment') && $this->app->environment() === 'production')
-                || (method_exists($this->app, 'isProduction') && $this->app->isProduction());
-            $allowProd = (bool) ($this->config->phii['allowInProduction'] ?? false);
-
-            if ($isProd && !$allowProd) {
-                return new Response(
-                    json_encode(['error' => 'Phii is disabled in production'], JSON_THROW_ON_ERROR),
-                    403,
-                    ['Content-Type' => 'application/json']
-                );
-            }
-
             $planInput = $body['plan'] ?? [];
             $doBackup = (bool) ($body['backup'] ?? false);
-            $basePath = $this->config->exportDir ?? $this->app->getBasePath();
+            $conflictPolicy = $body['conflictPolicy'] ?? 'overwrite';
+            $outputRoot = $this->resolveOutputRoot();
 
             $written = 0;
             $skipped = 0;
@@ -240,23 +251,29 @@ final class PhiiController
             $backupPath = null;
 
             if ($doBackup && !empty($planInput)) {
-                $backupPath = $this->backupManager->createBackup($basePath);
+                $backupPath = $this->backupManager->createBackup($outputRoot);
             }
 
             foreach ($planInput as $item) {
-                $path = $item['path'] ?? null;
+                $rawPath = $item['path'] ?? null;
                 $content = $item['content'] ?? null;
 
-                if (!$path) {
+                if (!$rawPath) {
                     $skipped++;
                     continue;
                 }
 
-                if (file_exists($path)) {
+                $safePath = $this->ensureContainment($rawPath, $outputRoot);
+
+                if (file_exists($safePath)) {
                     $conflicts++;
+                    if ($conflictPolicy === 'skip') {
+                        $skipped++;
+                        continue;
+                    }
                 }
 
-                $mutation = new FileMutation($path, (string) $content);
+                $mutation = new FileMutation($safePath, (string) $content);
                 if ($mutation->write()) {
                     $written++;
                 } else {
@@ -277,32 +294,105 @@ final class PhiiController
         } catch (\Throwable $e) {
             return new Response(
                 json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
-                500,
+                403,
                 ['Content-Type' => 'application/json']
             );
         }
     }
 
     /**
-     * Plan file mutations and enforce production safety gates.
+     * Resolve output root directory securely, preventing writes to phantom trees.
      *
-     * @param string               $generator Generator type identifier.
-     * @param array<string, mixed> $body      Request body parameters.
-     * @param string               $basePath  Base application path.
-     * @return array<int, FileMutation> List of planned file mutations.
-     * @throws \DomainException If Phii is executed in production without explicit permission.
-     * @throws \InvalidArgumentException If required parameters are missing or generator type is invalid.
+     * @return string Resolved absolute base path or configured output root.
      */
-    private function planMutations(string $generator, array $body, string $basePath): array
+    private function resolveOutputRoot(): string
     {
-        $isProd = (method_exists($this->app, 'environment') && $this->app->environment() === 'production')
-            || (method_exists($this->app, 'isProduction') && $this->app->isProduction());
+        $configuredRoot = ($this->config->outputRoot !== '')
+            ? $this->config->outputRoot
+            : (!empty($this->config->exportDir) ? $this->config->exportDir : null);
+        if ($configuredRoot) {
+            return rtrim($configuredRoot, DIRECTORY_SEPARATOR);
+        }
+
+        $storageGenerated = $this->app->getBasePath();
+
+        if (!is_dir($storageGenerated)) {
+            @mkdir($storageGenerated, 0755, true);
+        }
+
+        return $storageGenerated;
+    }
+
+    /**
+     * Enforce strict path containment within the allowed output root to prevent path traversal.
+     *
+     * @param string $path Target path to evaluate.
+     * @param string $outputRoot Allowed base root directory.
+     * @return string Canonical safe path.
+     * @throws \DomainException If path escapes the container root.
+     */
+    private function ensureContainment(string $path, string $outputRoot): string
+    {
+        // If relative path given, append to outputRoot
+        if (!str_starts_with($path, DIRECTORY_SEPARATOR) && !preg_match('/^[A-Za-z]:\\\\/', $path)) {
+            $path = $outputRoot . DIRECTORY_SEPARATOR . $path;
+        }
+
+        $realRoot = realpath($outputRoot) ?: $outputRoot;
+
+        // Find the nearest existing ancestor directory
+        $current = dirname($path);
+        while ($current !== false && !file_exists($current)) {
+            $parent = dirname($current);
+            if ($parent === $current) {
+                break; // Reached the root without finding an existing directory
+            }
+            $current = $parent;
+        }
+
+        $realDir = realpath($current);
+
+        // Validate that the nearest existing ancestor resolves and is contained within $realRoot
+        if ($realDir === false || !str_starts_with($realDir, $realRoot)) {
+            throw new \DomainException("Security Violation: Path traversal attempt detected for '{$path}'.");
+        }
+
+        // Return safe canonical path combining the real existing base directory, 
+        // the remaining relative parts, and the basename.
+        return dirname($path) . DIRECTORY_SEPARATOR . basename($path);
+    }
+
+    /**
+     * Verify whether environment permits Phii generation execution.
+     *
+     * @return void
+     * @throws \DomainException If in production and not allowed.
+     */
+    private function assertProductionAccess(): void
+    {
+        $appEnv = (method_exists($this->app, 'environment') && $this->app->environment() !== '')
+            ? $this->app->environment()
+            : ($_ENV['APP_ENV'] ?? (getenv('APP_ENV') ?: 'development'));
+
+        $isProd = strtolower((string) $appEnv) === 'production';
         $allowProd = (bool) ($this->config->phii['allowInProduction'] ?? false);
 
         if ($isProd && !$allowProd) {
-            throw new \DomainException("Phii is disabled in production");
+            throw new \DomainException("Phii code generation is disabled in production environments.");
         }
+    }
 
+    /**
+     * Plan file mutations and generate code structures.
+     *
+     * @param string               $generator Generator type identifier.
+     * @param array<string, mixed> $body      Request body parameters.
+     * @param string               $outputRoot Safe output base path.
+     * @return array<int, FileMutation> List of planned file mutations.
+     * @throws \InvalidArgumentException If required parameters are missing or generator type is invalid.
+     */
+    private function planMutations(string $generator, array $body, string $outputRoot): array
+    {
         $entity = $body['entity'] ?? null;
         $module = $body['module'] ?? 'admin';
         $options = $body['options'] ?? [];
@@ -317,25 +407,25 @@ final class PhiiController
             case 'model':
                 $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
                 $type = $options['type'] ?? 'active-record';
-                $mutations = $this->modelGenerator->generateFromSchema($schema, $type, "{$basePath}/App/Models");
+                $mutations = $this->modelGenerator->generateFromSchema($schema, $type, "{$outputRoot}/App/Models");
                 break;
 
             case 'controller':
                 $modelClass = $this->resolveModelClass($entity);
                 $modelName = (new \ReflectionClass($modelClass))->getShortName();
                 $actions = $options['actions'] ?? ['index', 'store', 'show', 'update', 'delete'];
-                $mutations = $this->controllerGenerator->generate($module, $modelName, "{$basePath}/App/Modules/{$module}/Controller", $actions);
+                $mutations = $this->controllerGenerator->generate($module, $modelName, "{$outputRoot}/App/Modules/{$module}/Controller", $actions);
                 break;
 
             case 'migration':
                 $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
                 $driver = $options['driver'] ?? 'sqlite';
-                $mutations = $this->migrationGenerator->generateFromSchema($schema, "{$basePath}/database/migrations", $driver);
+                $mutations = $this->migrationGenerator->generateFromSchema($schema, "{$outputRoot}/database/migrations", $driver);
                 break;
 
             case 'crud':
                 $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
-                $mutations = $this->crudGenerator->generate($schema, $module, $basePath);
+                $mutations = $this->crudGenerator->generate($schema, $module, $outputRoot);
                 break;
 
             case 'module':
@@ -344,7 +434,7 @@ final class PhiiController
                     'auth' => (bool) ($options['auth'] ?? false),
                     'api' => (bool) ($options['api'] ?? false),
                 ];
-                $mutations = $this->moduleGenerator->generate($moduleName, $basePath, $modOptions);
+                $mutations = $this->moduleGenerator->generate($moduleName, $outputRoot, $modOptions);
                 break;
 
             default:

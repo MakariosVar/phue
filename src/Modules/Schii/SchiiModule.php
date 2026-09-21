@@ -183,6 +183,7 @@ class SchiiModule extends Module
             function (Container $c) use ($schiiConfig): SchemaInspectorEndpoint {
                 return new SchemaInspectorEndpoint(
                     $c->get(SchemaRegistry::class),
+                    $c->has(SchemaInspector::class) ? $c->get(SchemaInspector::class) : null,
                     $c->has(Connection::class) ? $c->get(Connection::class) : null,
                     $schiiConfig->entityNamespace ?? 'App\\Models'
                 );
@@ -261,12 +262,6 @@ class SchiiModule extends Module
             });
         }
 
-        if ($this->container->has(ComponentLoaderRegistry::class)) {
-            /** @var ComponentLoaderRegistry $loaderRegistry */
-            $loaderRegistry = $this->container->get(ComponentLoaderRegistry::class);
-            $loaderRegistry->addLoader($this->container->get('phii.loader'));
-        }
-
         $this->container->singleton('phii.renderer', function ($c) {
             return new ComponentRenderer(
                 shellRenderer: $c->get(HtmlShellRenderer::class),
@@ -291,7 +286,8 @@ class SchiiModule extends Module
                 return new ModelEndpoint(
                     $c->get(SchemaRegistry::class),
                     [],
-                    $config->entityNamespace ?? 'App\\Models'
+                    $config->entityNamespace ?? 'App\\Models',
+                    $c->has('module.auth') ? $c->get(AuthManager::class) : null,
                 );
             }
         );
@@ -440,9 +436,9 @@ class SchiiModule extends Module
 
             // Phii Panel & Generation / Preview / Apply Routes
             $this->router->addRoute('GET', $phiiPrefix, [PhiiController::class, 'index']);
-            $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate']);
-            $this->router->addRoute('POST', "{$phiiPrefix}/preview", [PhiiController::class, 'preview']);
-            $this->router->addRoute('POST', "{$phiiPrefix}/apply", [PhiiController::class, 'apply']);
+            $this->router->addRoute('POST', "{$phiiPrefix}/generate", [PhiiController::class, 'generate'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$phiiPrefix}/preview", [PhiiController::class, 'preview'], middleware: $middleware);
+            $this->router->addRoute('POST', "{$phiiPrefix}/apply", [PhiiController::class, 'apply'], middleware: $middleware);
         }
     }
 }

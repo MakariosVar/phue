@@ -11,11 +11,12 @@ return [
     'entityNamespace' => 'App\\Models',
     'autoMigrate' => true,
     'cachePrefix' => 'schii_schema_',
-    'requireAuth' => false,
+    'requireAuth' => true,
     'middleware' => [],
     'exportDir' => 'storage/generated',
     'phiiNamespace' => 'App\\Models',
     'phiiPrefix' => '/phii',
+    'outputRoot' => '',
     'audit' => [
         'enabled' => true,
         'limit' => 200,
