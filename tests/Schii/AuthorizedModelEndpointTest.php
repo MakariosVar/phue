@@ -146,14 +146,14 @@ final class AuthorizedModelEndpointTest extends TestCase
         $this->assertSame(403, $response->getStatusCode());
         $data = $this->decodeBody($response);
         $this->assertSame('Forbidden', $data['error'] ?? null);
-        $this->assertStringContainsString('admin.product.read', (string) ($data['message'] ?? ''));
+        $this->assertStringContainsString('admin.Product.read', (string) ($data['message'] ?? ''));
     }
 
     public function testBuildsExactPermissionStringFromEntityAndAction(): void
     {
         $user = new AuthorizedAdminUser(2);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('editor', ['admin.product.update']);
+        $rbac->addRole('editor', ['admin.Product.update']);
         $rbac->assign(2, 'editor');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -176,14 +176,14 @@ final class AuthorizedModelEndpointTest extends TestCase
 
         $this->assertSame(403, $response->getStatusCode());
         $data = $this->decodeBody($response);
-        $this->assertStringContainsString('admin.product.read', (string) ($data['message'] ?? ''));
+        $this->assertStringContainsString('admin.Product.read', (string) ($data['message'] ?? ''));
     }
 
     public function testStoreEntryPointMapsToCreatePermission(): void
     {
         $user = new AuthorizedAdminUser(4);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('author', ['admin.product.create']);
+        $rbac->addRole('author', ['admin.Product.create']);
         $rbac->assign(4, 'author');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -198,7 +198,7 @@ final class AuthorizedModelEndpointTest extends TestCase
     {
         $user = new AuthorizedAdminUser(5);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('editor', ['admin.product.read']);
+        $rbac->addRole('editor', ['admin.Product.read']);
         $rbac->assign(5, 'editor');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -207,14 +207,14 @@ final class AuthorizedModelEndpointTest extends TestCase
 
         $this->assertSame(403, $response->getStatusCode());
         $data = $this->decodeBody($response);
-        $this->assertStringContainsString('admin.product.create', (string) ($data['message'] ?? ''));
+        $this->assertStringContainsString('admin.Product.create', (string) ($data['message'] ?? ''));
     }
 
     public function testDeleteEntryPointMapsToDeletePermission(): void
     {
         $user = new AuthorizedAdminUser(6);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('admin', ['admin.product.delete']);
+        $rbac->addRole('admin', ['admin.Product.delete']);
         $rbac->assign(6, 'admin');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -228,7 +228,7 @@ final class AuthorizedModelEndpointTest extends TestCase
     {
         $user = new AuthorizedAdminUser(7);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('reader', ['admin.product.read']);
+        $rbac->addRole('reader', ['admin.Product.read']);
         $rbac->assign(7, 'reader');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -243,7 +243,7 @@ final class AuthorizedModelEndpointTest extends TestCase
     {
         $user = new AuthorizedAdminUser(42);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('admin', ['admin.product.read']);
+        $rbac->addRole('admin', ['admin.Product.read']);
         $rbac->assign(42, 'admin');
         $endpoint = $this->endpoint($user, $rbac);
 
@@ -261,12 +261,12 @@ final class AuthorizedModelEndpointTest extends TestCase
     {
         $user = new AuthorizedAdminUser(8);
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('admin', ['admin.product.read']);
+        $rbac->addRole('admin', ['admin.Product.read']);
         $rbac->assign(8, 'admin');
         $endpoint = $this->endpoint($user, $rbac);
 
         $request = new Request('GET', '/api/schii/products');
-        // Plural URL slug 'products' must map to permission admin.product.read
+        // Plural URL slug 'products' must map to permission admin.Product.read
         $response = $endpoint->index($request, ['entity' => 'products']);
 
         $this->assertNotSame(403, $response->getStatusCode());
@@ -285,6 +285,6 @@ final class AuthorizedModelEndpointTest extends TestCase
 
         $this->assertSame(403, $response->getStatusCode());
         $data = $this->decodeBody($response);
-        $this->assertStringContainsString('admin.product.read', (string) ($data['message'] ?? ''));
+        $this->assertStringContainsString('admin.Product.read', (string) ($data['message'] ?? ''));
     }
 }

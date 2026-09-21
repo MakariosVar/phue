@@ -35,10 +35,19 @@ final readonly class ModelSchema
     ) {}
 
     /**
+     * Returns the short class name representation of the entity.
+     *
+     * @return string Entity short name.
+     */
+    public function getShortClassName(): string
+    {
+        return $this->entity;
+    }
+
+    /**
      * Rehydrate a ModelSchema object instance from a raw array structure (e.g., L2 JSON cache).
      *
      * @param array<string, mixed> $data Serialized schema array.
-     *
      * @return self Rehydrated schema object instance.
      */
     public static function fromArray(array $data): self

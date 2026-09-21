@@ -26,11 +26,13 @@ final class SchemaRegistry
      * @param string|null $basePath The root directory path of the application (e.g., Application::getBasePath())
      * @param CacheInterface|null $cache Optional persistent PSR-16 cache implementation
      * @param string $cachePrefix Prefix key used for persistent caching
+     * @param string $defaultModelNamespace Default namespace for entity discovery and resolution
      */
     public function __construct(
         private readonly ?string $basePath = null,
         private readonly ?CacheInterface $cache = null,
-        private readonly string $cachePrefix = 'schii_schema_'
+        private readonly string $cachePrefix = 'schii_schema_',
+        private readonly string $defaultModelNamespace = 'App\\Models'
     ) {}
 
     /**
@@ -62,7 +64,7 @@ final class SchemaRegistry
                 $reflector = new ReflectionClass($fullClassName);
 
                 if ($reflector->isSubclassOf(BaseActiveRecord::class) && !$reflector->isAbstract()) {
-                    // Slugify: User -> user, UserProfile -> user-profiles
+                    // Slugify: User -> user, UserProfile -> user-profile (or user-profiles depending on convention)
                     $slug = strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $className));
                     $entities[] = $slug;
                 }
@@ -75,13 +77,8 @@ final class SchemaRegistry
     /**
      * Discover FQCNs (not slugs) for all concrete ActiveRecord classes in a namespace.
      *
-     * FILTER: `is_subclass_of($class, BaseActiveRecord::class) && !$reflector->isAbstract()` —
-     * same criteria as discoverEntities(). DataMapper Entities reside in the namespace
-     * but must not pass the filter (not BaseActiveRecord).
-     *
      * @param string $namespace e.g. 'App\\Models'
-     *
-     * @return array<class-string> e.g. ['App\\Models\\User', 'App\\Models\\Product']
+     * @return array<class-string> e.g. ['App\\Models\\User', 'App\\Models\\UserProfile']
      */
     public function discoverModelClasses(string $namespace): array
     {
@@ -116,13 +113,10 @@ final class SchemaRegistry
 
     /**
      * Converts a ModelSchema to a PhiiExportSchema.
-     * Resolves the table name via (new $modelClass())->getTable().
      *
      * @param class-string $modelClass
      * @param string $module
-     *
      * @return PhiiExportSchema
-     *
      * @throws InvalidArgumentException If not BaseActiveRecord subclass
      */
     public function toPhiiExportSchema(string $modelClass, string $module = 'admin'): PhiiExportSchema
@@ -141,7 +135,6 @@ final class SchemaRegistry
     /**
      * @param string $entityNamespace
      * @param string $module
-     *
      * @return array<class-string, PhiiExportSchema> Map of FQCN → export schema
      */
     public function getAllPhiiExportSchemas(
@@ -159,8 +152,7 @@ final class SchemaRegistry
     }
 
     /**
-     * Maps a target namespace to its physical directory path using multiple root bases
-     * (application basePath & process getcwd fallback).
+     * Maps a target namespace to its physical directory path using multiple root bases.
      *
      * @param string $namespace
      * @return string|null
@@ -170,22 +162,16 @@ final class SchemaRegistry
         $cleanNamespace = trim($namespace, '\\');
         $relativePath = str_replace('\\', '/', $cleanNamespace);
 
-        // 1. Collect candidate root directories (basePath + getcwd)
         $roots = array_filter(array_unique([
             $this->basePath ? rtrim($this->basePath, '/') : null,
             getcwd() ? rtrim(getcwd(), '/') : null,
         ]));
 
-        // 2. Scan candidates across all root directories
         foreach ($roots as $root) {
             $possiblePaths = [
-                // Direct path match (e.g. {root}/App/Models or {root}/Phue/Tests/Schii/Stubs)
                 "{$root}/{$relativePath}",
-                // App\ -> {root}/src/
                 "{$root}/src/" . preg_replace('#^App/#', '', $relativePath),
-                // Phue\Tests\ -> {root}/tests/
                 "{$root}/tests/" . preg_replace('#^Phue/Tests/#', '', $relativePath),
-                // Generic tests directory fallback
                 "{$root}/tests/{$relativePath}",
             ];
 
@@ -200,27 +186,57 @@ final class SchemaRegistry
     }
 
     /**
+     * Retrieves a ModelSchema by its slug, performing reverse slugification for multi-word 
+     * entities (e.g. 'user-profiles' -> 'UserProfile') and verifying class validity.
+     *
+     * @param string $slug Target entity slug (e.g., 'user-profiles', 'product').
+     * @return ModelSchema|null Resolved model schema or null if not found.
+     */
+    public function getSchemaBySlug(string $slug): ?ModelSchema
+    {
+        $normalizedSlug = strtolower(trim($slug));
+        
+        // Convert slug to StudlyCase class name (e.g., user-profiles -> UserProfiles, user-profile -> UserProfile)
+        $studlyName = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $normalizedSlug)));
+        
+        // Try singular/plural fallback variations if needed
+        $candidateClasses = [
+            rtrim($this->defaultModelNamespace, '\\') . '\\' . $studlyName,
+            rtrim($this->defaultModelNamespace, '\\') . '\\' . rtrim($studlyName, 's'),
+            rtrim($this->defaultModelNamespace, '\\') . '\\' . $studlyName . 's',
+        ];
+
+        foreach ($candidateClasses as $fqcn) {
+            if (class_exists($fqcn) && is_subclass_of($fqcn, BaseActiveRecord::class)) {
+                return $this->get($fqcn);
+            }
+        }
+
+        // Fallback: check already cached or discovered schemas
+        foreach ($this->memoryCache as $schema) {
+            $schemaSlug = strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $schema->entity));
+            if ($schemaSlug === $normalizedSlug || strtolower($schema->entity) === $normalizedSlug) {
+                return $schema;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Parses the specified Model class and returns its ModelSchema representation.
      *
-     * Resolves the schema sequentially via:
-     * 1. In-memory static array cache (L1).
-     * 2. Persistent storage cache with array-to-object rehydration (L2).
-     * 3. Reflection-based parsing on cache miss.
-     *
      * @param class-string $modelClass Fully qualified class name of the target model.
-     *
      * @return ModelSchema Rehydrated or newly parsed schema instance.
      */
     public function get(string $modelClass): ModelSchema
     {
-        // 1. In-Memory Static Cache Hit (L1)
         if (isset($this->memoryCache[$modelClass])) {
             return $this->memoryCache[$modelClass];
         }
 
         $cacheKey = $this->cachePrefix . md5($modelClass);
 
-        // 2. Persistent Cache Hit (L2 - Redis/File)
         if ($this->cache?->has($cacheKey)) {
             $cachedData = $this->cache->get($cacheKey);
 
@@ -231,7 +247,6 @@ final class SchemaRegistry
 
                     return $schema;
                 } catch (\Throwable) {
-                    // Cache is corrupt or schema version changed; fall back to parsing
                     $this->cache->delete($cacheKey);
                 }
             } elseif ($cachedData instanceof ModelSchema) {
@@ -241,10 +256,8 @@ final class SchemaRegistry
             }
         }
 
-        // 3. Cache Miss: Parsing via Reflection
         $schema = $this->parse($modelClass);
 
-        // Store in caches (L1 object instance, L2 array representation or object)
         $this->memoryCache[$modelClass] = $schema;
         $this->cache?->set($cacheKey, $schema->toArray());
 
@@ -262,7 +275,6 @@ final class SchemaRegistry
         $reflection = new ReflectionClass($modelClass);
         $entityName = $reflection->getShortName();
 
-        // 1. Parsing UI Attribute
         $uiAttr = $reflection->getAttributes(UI::class)[0] ?? null;
         /** @var UI|null $ui */
         $ui = $uiAttr?->newInstance();
@@ -271,7 +283,6 @@ final class SchemaRegistry
             ? $ui->label 
             : $this->humanize($entityName);
 
-        // 2. Parsing Properties & Field Attributes
         $fields = [];
         foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
             $fieldAttrs = $property->getAttributes(Field::class);
@@ -283,7 +294,6 @@ final class SchemaRegistry
             $field = $fieldAttrs[0]->newInstance();
             $propertyName = $property->getName();
 
-            // Calculate Fallback Label
             $fieldLabel = $field->label !== '' 
                 ? $field->label 
                 : $this->humanize($propertyName);
@@ -338,7 +348,6 @@ final class SchemaRegistry
 
     /**
      * Converts camelCase or snake_case identifiers into human-readable strings.
-     * e.g., 'email_verified_at' -> 'Email Verified At', 'firstName' -> 'First Name'
      *
      * @param string $input
      * @return string
@@ -350,7 +359,7 @@ final class SchemaRegistry
     }
 
     /**
-     * Clears the in-memory cache (e.g., between requests or during Swoole worker reset).
+     * Clears the in-memory cache.
      */
     public function clearMemoryCache(): void
     {

@@ -67,7 +67,7 @@ final class UserAuthGateTest extends TestCase
     public function testAuthorizedBearerPassesGateAndDelegates(): void
     {
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('admin', ['admin.product.read']);
+        $rbac->addRole('admin', ['admin.Product.read']);
 
         $response = $this->endpoint($rbac)->index($this->request('admin-bearer'), ['entity' => 'product']);
         $this->assertSame(404, $response->getStatusCode());
@@ -77,7 +77,7 @@ final class UserAuthGateTest extends TestCase
     public function testUnauthorizedBearerIsForbidden(): void
     {
         $rbac = new RbacManager($this->emptyRbacSeed);
-        $rbac->addRole('admin', ['admin.product.read']);
+        $rbac->addRole('admin', ['admin.Product.read']);
 
         $response = $this->endpoint($rbac)->index($this->request('editor-bearer'), ['entity' => 'product']);
         $this->assertSame(403, $response->getStatusCode());

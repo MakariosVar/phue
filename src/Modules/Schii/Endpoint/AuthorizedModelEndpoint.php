@@ -15,8 +15,8 @@ use Phue\Modules\Schii\Schema\SchemaRegistry;
  *
  * Authorization decorator surrounding core ModelEndpoint operations.
  * Intercepts incoming CRUD requests, checks user authentication via AuthManager,
- * normalizes action verbs and plural entities to singular permission strings,
- * checks RBAC access (`admin.{entity}.{verb}`), and delegates execution to ModelEndpoint.
+ * normalizes action verbs and entities via SchemaRegistry to permission strings,
+ * checks RBAC access, and delegates execution to ModelEndpoint.
  *
  * @package Phue\Modules\Schii\Endpoint
  */
@@ -158,9 +158,9 @@ class AuthorizedModelEndpoint
         }
 
         $rawEntity = $params['entity'] ?? '';
-        $entity = $this->normalizeEntitySingular($rawEntity);
+        $entity = $this->resolveEntityShortClass($rawEntity);
         $action = $this->normalizeActionPermission($rawAction);
-        
+
         $permission = "admin.{$entity}.{$action}";
 
         // Pass both user ID and explicit user roles from IdentityInterface
@@ -179,14 +179,40 @@ class AuthorizedModelEndpoint
     }
 
     /**
-     * Converts plural entity slugs into singular strings for permission matching (e.g., 'products' -> 'product').
+     * Resolves the entity short class name using SchemaRegistry or fallback singularization.
+     *
+     * @param string $entity Raw entity string from route parameters.
+     * @return string Resolved short class name / entity slug.
+     */
+    protected function resolveEntityShortClass(string $entity): string
+    {
+
+        // Attempt to fetch schema info to match registered ShortClass if available
+        $schema = $this->schemaRegistry->getSchemaBySlug($entity);
+        if ($schema && method_exists($schema, 'getShortClassName')) {
+            return $schema->getShortClassName();
+        }
+        $singular = $this->normalizeEntitySingular($entity);
+
+        return ucfirst($singular);
+    }
+
+    /**
+     * Converts plural entity slugs into singular strings, handling irregular exceptions (e.g., 'status', 'news').
      *
      * @param string $entity Raw entity string from route parameters.
      * @return string Normalized singular entity name.
      */
     protected function normalizeEntitySingular(string $entity): string
     {
-        $entity = strtolower($entity);
+        $entity = strtolower(trim($entity));
+        
+        // Exceptions where trailing 's' is part of the word
+        $uncountableExceptions = ['status', 'news', 'address', 'series', 'species'];
+        if (in_array($entity, $uncountableExceptions, true)) {
+            return $entity;
+        }
+
         if (str_ends_with($entity, 'ies')) {
             return substr($entity, 0, -3) . 'y';
         }
