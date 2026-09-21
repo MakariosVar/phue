@@ -135,4 +135,16 @@ final class AuditEndpointTest extends TestCase
 
         $this->assertSame(['id' => 42, 'diff' => ['legacy' => true]], $logs[0]['payload']);
     }
+
+    public function testAuditLogTrimsWhenExceedingMaxLimit(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            SchiiAudit::log('profiles', 'GET', "u{$i}", null, 10);
+        }
+
+        $logs = SchiiAudit::getLogs('profiles', limit: 50);
+        $this->assertCount(10, $logs, 'Audit log entries in memory must be trimmed to maxLimit');
+        // Latest log should be u19
+        $this->assertSame('u19', $logs[0]['user']);
+    }
 }

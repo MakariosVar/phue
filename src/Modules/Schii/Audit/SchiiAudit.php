@@ -25,10 +25,11 @@ final class SchiiAudit
      * @param string      $verb   HTTP verb or action name (e.g., GET, POST, DELETE).
      * @param string|null $user   User identifier or username.
      * @param mixed       $payload Optional additional data.
+     * @param int         $maxLimit Maximum capacity to keep in memory.
      *
      * @return void
      */
-    public static function log(string $entity, string $verb, ?string $user = null, mixed $payload = null): void
+    public static function log(string $entity, string $verb, ?string $user = null, mixed $payload = null, int $maxLimit = 200): void
     {
         self::$logs[] = [
             'entity' => $entity,
@@ -37,6 +38,11 @@ final class SchiiAudit
             'timestamp' => time(),
             'payload' => $payload,
         ];
+
+        // Trim logs if they exceed maxLimit
+        if (count(self::$logs) > $maxLimit) {
+            self::$logs = array_slice(self::$logs, - $maxLimit);
+        }
     }
 
     /**
