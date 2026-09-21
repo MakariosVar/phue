@@ -298,11 +298,20 @@ final class SchemaRegistry
                 ? $field->label 
                 : $this->humanize($propertyName);
 
+            $normalizedType = $this->normalizeType($field->type);
+
+            // Smart widget assignment: if widget is default ('input') and type is select, email, or date, 
+            // set widget to match the type unless explicitly overridden.
+            $widget = $field->widget;
+            if ($widget === 'input' && in_array($normalizedType, ['select', 'email', 'date'], true)) {
+                $widget = $normalizedType;
+            }
+
             $fields[$propertyName] = new FieldSchema(
                 name: $propertyName,
-                type: $this->normalizeType($field->type),
+                type: $normalizedType,
                 label: $fieldLabel,
-                widget: $field->widget,
+                widget: $widget,
                 column: $field->column,
                 required: $field->required,
                 searchable: $field->searchable,
@@ -310,6 +319,9 @@ final class SchemaRegistry
                 sortable: $field->sortable,
                 options: $field->options,
                 rules: $field->rules,
+                writable: $field->writable,
+                readonly: $field->readonly,
+                primaryKey: $field->primaryKey,
             );
         }
 
@@ -341,8 +353,7 @@ final class SchemaRegistry
         return match (strtolower($type)) {
             'integer', 'int' => 'int',
             'number', 'float', 'decimal', 'numeric' => 'float',
-            'email', 'select', 'string' => 'text',
-            default => $type,
+            default => strtolower($type),
         };
     }
 

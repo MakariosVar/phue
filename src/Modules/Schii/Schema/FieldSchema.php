@@ -25,6 +25,9 @@ final readonly class FieldSchema
      * @param bool                 $sortable   Order-by capability.
      * @param array<string, mixed> $options    UI or widget-specific component options.
      * @param array<string>        $rules      Validation rules.
+     * @param bool                 $writable   Whether the field is writable.
+     * @param bool                 $readonly   Whether the field is readonly.
+     * @param bool                 $primaryKey Whether the field is a primary key.
      */
     public function __construct(
         public string $name,
@@ -38,6 +41,9 @@ final readonly class FieldSchema
         public bool $sortable,
         public array $options = [],
         public array $rules = [],
+        public bool $writable = true,
+        public bool $readonly = false,
+        public bool $primaryKey = false,
     ) {}
 
     /**
@@ -61,6 +67,9 @@ final readonly class FieldSchema
             sortable: (bool) ($data['sortable'] ?? false),
             options: (array) ($data['options'] ?? []),
             rules: (array) ($data['rules'] ?? []),
+            writable: (bool) ($data['writable'] ?? true),
+            readonly: (bool) ($data['readonly'] ?? false),
+            primaryKey: (bool) ($data['primaryKey'] ?? false),
         );
     }
 
@@ -83,6 +92,9 @@ final readonly class FieldSchema
             'sortable' => $this->sortable,
             'options' => $this->options,
             'rules' => $this->rules,
+            'writable' => $this->writable,
+            'readonly' => $this->readonly,
+            'primaryKey' => $this->primaryKey,
         ];
     }
 }
