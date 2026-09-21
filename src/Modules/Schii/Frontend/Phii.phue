@@ -6,7 +6,6 @@ return [
     'state' => [
         'apiPrefix' => $phiiState['apiPrefix'] ?? '/api/schii',
         'phiiPrefix' => $phiiState['phiiPrefix'] ?? '/phii',
-        'phiiNamespace' => $phiiState['phiiNamespace'] ?? 'Phue\\Modules\\Phii',
         'module' => $phiiState['module'] ?? 'admin',
     ],
     'scripts' => [],
@@ -247,15 +246,21 @@ export default function mountApp() {
             const applyPlan = async ({ backup }) => {
                 if (!plan.value.length) return;
 
+                const options = parseOptions();
+                if (options === null) return;
+
                 applying.value = true;
                 errorMsg.value = null;
                 successMsg.value = null;
 
                 try {
+                    // The plan is NOT echoed back: apply re-derives all file content
+                    // server-side from the generator inputs. The client only picks a
+                    // backup policy.
                     const res = await api(`${phiiPrefix}/apply`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ plan: plan.value, backup }),
+                        body: JSON.stringify({ ...makePayload(options), backup }),
                     });
 
                     const data = await res.json().catch(() => ({}));

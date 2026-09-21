@@ -153,7 +153,6 @@ final class PhiiController
         $state = [
             'apiPrefix' => $this->config->apiPrefix ?? '/api/schii',
             'phiiPrefix' => $this->config->phiiPrefix ?? '/phii',
-            'phiiNamespace' => $this->config->phiiNamespace ?? 'Phue\\Phii',
             'module' => 'admin',
         ];
 
@@ -281,7 +280,7 @@ final class PhiiController
     /**
      * Apply explicit file mutations from an execution plan with path containment and conflict resolution.
      *
-     * @param Request $request HTTP Request instance containing the plan and options.
+     * @param Request $request HTTP Request instance with generator inputs and optional path selection.
      * @return Response JSON response detailing written counts, skips, conflicts, and backup paths.
      */
     public function apply(Request $request): Response
@@ -291,30 +290,44 @@ final class PhiiController
             $this->assertProductionAccess();
 
             $body = (array) $request->getParsedBody();
-            $planInput = $body['plan'] ?? [];
-            $doBackup = (bool) ($body['backup'] ?? false);
+            $generator = $body['generator'] ?? null;
+            $doBackup = (bool) ($body['backup'] ?? true);
             $conflictPolicy = $body['conflictPolicy'] ?? 'overwrite';
+            $selectedPaths = isset($body['paths']) && is_array($body['paths'])
+                ? array_values(array_map('strval', $body['paths']))
+                : null;
             $outputRoot = $this->resolveOutputRoot();
+
+            // The mutation plan is recomputed server-side: file content is NEVER taken
+            // from the request body. The client only supplies generator inputs and,
+            // optionally, the exact set of previously previewed paths to restrict to.
+            $mutations = $this->planMutations((string) $generator, $body, $outputRoot);
 
             $written = 0;
             $skipped = 0;
             $conflicts = 0;
             $backupPath = null;
 
-            if ($doBackup && !empty($planInput)) {
+            $wouldWrite = array_filter($mutations, function (FileMutation $mutation) use ($outputRoot, $selectedPaths): bool {
+                $safePath = $this->ensureContainment($mutation->path, $outputRoot);
+                return $selectedPaths === null || in_array($safePath, $selectedPaths, true);
+            });
+
+            if ($doBackup && !empty($wouldWrite)) {
                 $backupPath = $this->backupManager->createBackup($outputRoot);
             }
 
-            foreach ($planInput as $item) {
-                $rawPath = $item['path'] ?? null;
-                $content = $item['content'] ?? null;
+            foreach ($mutations as $mutation) {
+                $safePath = $this->ensureContainment($mutation->path, $outputRoot);
 
-                if (!$rawPath) {
+                if ($selectedPaths !== null && !in_array($safePath, $selectedPaths, true)) {
                     $skipped++;
                     continue;
                 }
 
-                $safePath = $this->ensureContainment($rawPath, $outputRoot);
+                if ($conflictPolicy !== 'overwrite' && $conflictPolicy !== 'skip') {
+                    throw new \InvalidArgumentException("Unsupported conflictPolicy: '{$conflictPolicy}'.");
+                }
 
                 if (file_exists($safePath)) {
                     $conflicts++;
@@ -324,8 +337,8 @@ final class PhiiController
                     }
                 }
 
-                $mutation = new FileMutation($safePath, (string) $content);
-                if ($mutation->write()) {
+                $containedMutation = new FileMutation($safePath, $mutation->content);
+                if ($containedMutation->write()) {
                     $written++;
                 } else {
                     $skipped++;
@@ -343,7 +356,14 @@ final class PhiiController
                 ['Content-Type' => 'application/json']
             );
         } catch (\Throwable $e) {
-            $code = $e->getCode() === 401 ? 401 : 403;
+            $code = 500;
+            if ($e instanceof \DomainException) {
+                $code = $e->getCode() === 401 ? 401 : 403;
+            } elseif ($e instanceof \InvalidArgumentException) {
+                $code = 400;
+            } elseif ($e instanceof \RuntimeException) {
+                $code = 409;
+            }
             return new Response(
                 json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
                 $code,
@@ -372,7 +392,7 @@ final class PhiiController
             @mkdir($storageGenerated, 0755, true);
         }
 
-        return $storageGenerated;
+        return rtrim($storageGenerated, DIRECTORY_SEPARATOR);
     }
 
     /**
@@ -404,7 +424,7 @@ final class PhiiController
 
         $realDir = realpath($current);
 
-        // Strict component boundary check
+        // Strict component boundary check preventing prefix spoofing attacks
         $isWithinRoot = ($realDir === $realRoot) || str_starts_with($realDir, $realRoot . DIRECTORY_SEPARATOR);
 
         if ($realDir === false || !$isWithinRoot) {
