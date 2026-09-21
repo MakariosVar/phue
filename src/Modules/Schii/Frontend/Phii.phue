@@ -113,6 +113,13 @@ return [
 <script type="module">
 import { createApp, ref, reactive, computed } from 'vue';
 
+if (typeof document !== 'undefined' && !document.getElementById('phue-v-cloak-style')) {
+    const style = document.createElement('style');
+    style.id = 'phue-v-cloak-style';
+    style.textContent = '[v-cloak] { display: none !important; }';
+    document.head.appendChild(style);
+}
+
 function api(url, opts = {}) {
     const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
     return fetch(url, Object.assign({}, opts, { headers }));
@@ -293,5 +300,11 @@ export default function mountApp() {
     window.__phueApp.mount('#app');
 }
 
-mountApp();
+if (typeof window !== 'undefined' && !window.__phueExplorerInitialized) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountApp);
+    } else {
+        mountApp();
+    }
+}
 </script>
