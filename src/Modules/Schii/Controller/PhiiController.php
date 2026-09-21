@@ -8,6 +8,8 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\UI\ComponentRenderer;
+use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Phii\Generator\ControllerGenerator;
 use Phue\Modules\Phii\Generator\CrudGenerator;
 use Phue\Modules\Phii\Generator\FileMutation;
@@ -39,6 +41,12 @@ final class PhiiController
     /** @var Application Core application instance. */
     private Application $app;
 
+    /** @var AuthManager|null Authentication manager. */
+    private ?AuthManager $authManager;
+
+    /** @var RbacManager|null RBAC permission manager. */
+    private ?RbacManager $rbacManager;
+
     /** @var ModelGenerator Generator for model classes. */
     private ModelGenerator $modelGenerator;
 
@@ -64,6 +72,8 @@ final class PhiiController
      * @param SchemaRegistry           $schemaRegistry      Schema registry.
      * @param SchiiConfig              $config              Schii configuration.
      * @param Application              $app                 Core application instance.
+     * @param AuthManager|null         $authManager         Optional auth manager.
+     * @param RbacManager|null         $rbacManager         Optional RBAC manager.
      * @param ModelGenerator|null      $modelGenerator      Optional model generator.
      * @param ControllerGenerator|null $controllerGenerator Optional controller generator.
      * @param MigrationGenerator|null  $migrationGenerator  Optional migration generator.
@@ -76,6 +86,8 @@ final class PhiiController
         SchemaRegistry $schemaRegistry,
         SchiiConfig $config,
         Application $app,
+        ?AuthManager $authManager = null,
+        ?RbacManager $rbacManager = null,
         ?ModelGenerator $modelGenerator = null,
         ?ControllerGenerator $controllerGenerator = null,
         ?MigrationGenerator $migrationGenerator = null,
@@ -87,6 +99,8 @@ final class PhiiController
         $this->schemaRegistry = $schemaRegistry;
         $this->config = $config;
         $this->app = $app;
+        $this->authManager = $authManager;
+        $this->rbacManager = $rbacManager;
         $this->modelGenerator = $modelGenerator ?? new ModelGenerator();
         $this->controllerGenerator = $controllerGenerator ?? new ControllerGenerator();
         $this->migrationGenerator = $migrationGenerator ?? new MigrationGenerator();
@@ -96,12 +110,46 @@ final class PhiiController
     }
 
     /**
+     * Authorizes the incoming request for Phii panel or code generation actions.
+     *
+     * @param Request $request Current HTTP request.
+     * @return void
+     * @throws \DomainException If unauthorized or forbidden.
+     */
+    private function authorizeRequest(Request $request): void
+    {
+        if ($this->authManager === null || $this->rbacManager === null) {
+            return;
+        }
+
+        $user = $this->authManager->authenticate($request);
+        if ($user === null) {
+            throw new \DomainException("Unauthorized", 401);
+        }
+
+        if (!$this->rbacManager->checkAccess($user->getId(), 'admin.phii.manage', $user->getRoles())) {
+            throw new \DomainException("Forbidden: Insufficient permissions to access Phii generator.", 403);
+        }
+    }
+
+    /**
      * Render the main Phii UI panel.
      *
+     * @param Request $request HTTP Request instance.
      * @return Response HTTP response containing the rendered Phii view.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        try {
+            $this->authorizeRequest($request);
+        } catch (\Throwable $e) {
+            return new Response(
+                json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
+                $e->getCode() === 401 ? 401 : 403,
+                ['Content-Type' => 'application/json']
+            );
+        }
+
         $state = [
             'apiPrefix' => $this->config->apiPrefix ?? '/api/schii',
             'phiiPrefix' => $this->config->phiiPrefix ?? '/phii',
@@ -121,6 +169,7 @@ final class PhiiController
     public function generate(Request $request): Response
     {
         try {
+            $this->authorizeRequest($request);
             $this->assertProductionAccess();
 
             $body = (array) $request->getParsedBody();
@@ -158,7 +207,7 @@ final class PhiiController
         } catch (\Throwable $e) {
             $code = 500;
             if ($e instanceof \DomainException) {
-                $code = 403;
+                $code = $e->getCode() === 401 ? 401 : 403;
             } elseif ($e instanceof \InvalidArgumentException) {
                 $code = 400;
             } elseif ($e instanceof \RuntimeException) {
@@ -181,6 +230,7 @@ final class PhiiController
     public function preview(Request $request): Response
     {
         try {
+            $this->authorizeRequest($request);
             $this->assertProductionAccess();
             $body = (array) $request->getParsedBody();
             $generator = $body['generator'] ?? null;
@@ -216,7 +266,7 @@ final class PhiiController
         } catch (\Throwable $e) {
             $code = 500;
             if ($e instanceof \DomainException) {
-                $code = 403;
+                $code = $e->getCode() === 401 ? 401 : 403;
             } elseif ($e instanceof \InvalidArgumentException) {
                 $code = 400;
             }
@@ -237,6 +287,7 @@ final class PhiiController
     public function apply(Request $request): Response
     {
         try {
+            $this->authorizeRequest($request);
             $this->assertProductionAccess();
 
             $body = (array) $request->getParsedBody();
@@ -292,9 +343,10 @@ final class PhiiController
                 ['Content-Type' => 'application/json']
             );
         } catch (\Throwable $e) {
+            $code = $e->getCode() === 401 ? 401 : 403;
             return new Response(
                 json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
-                403,
+                $code,
                 ['Content-Type' => 'application/json']
             );
         }

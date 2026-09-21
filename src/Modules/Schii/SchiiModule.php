@@ -396,7 +396,9 @@ class SchiiModule extends Module
                     $c->get('phii.renderer'),
                     $c->get(SchemaRegistry::class),
                     $c->get(SchiiConfig::class),
-                    $c->get(Application::class)
+                    $c->get(Application::class),
+                    $c->has('module.auth') ? $c->get(AuthManager::class) : null,
+                    $c->has('module.auth') ? $c->get(RbacManager::class) : null
                 );
             }
         );
