@@ -91,8 +91,6 @@ return [
                         @export-csv="exportRecords('csv')"
                         @export-json="exportRecords('json')"
                         @bulk-delete="askBulk('delete')"
-                        @bulk-activate="askBulk('activate')"
-                        @bulk-deactivate="askBulk('deactivate')"
                     />
 
                     <template v-if="loading">
@@ -129,6 +127,7 @@ return [
                         v-if="isTextWidget(field)"
                         v-model="form[field.name]"
                         :type="inputType(field)"
+                        :step="inputStep(field)"
                         :label="field.label || field.name"
                         :required="field.required"
                         :disabled="isEditing && field.name === 'id'"
@@ -175,7 +174,7 @@ return [
         <template #footer>
             <ph-button variant="ghost" @click="bulkConfirmOpen = false">Cancel</ph-button>
             <ph-button
-                :variant="pendingBulk && pendingBulk.type === 'delete' ? 'danger' : 'primary'"
+                variant="danger"
                 :loading="bulkSubmitting"
                 @click="confirmBulk"
             >Confirm</ph-button>
@@ -290,21 +289,16 @@ export default function mountApp() {
 
             const bulkTitle = computed(() => {
                 if (!pendingBulk.value) return 'Confirm bulk action';
-                const map = {
-                    delete: 'Delete selected records',
-                    activate: 'Activate selected records',
-                    deactivate: 'Deactivate selected records',
-                };
-                return map[pendingBulk.value.type] || 'Confirm bulk action';
+                return pendingBulk.value.type === 'delete'
+                    ? 'Delete selected records'
+                    : 'Confirm bulk action';
             });
 
             const bulkMessage = computed(() => {
                 if (!pendingBulk.value) return '';
                 const count = selected.value.length;
                 const action = pendingBulk.value.type;
-                const what = action === 'delete'
-                    ? 'deleted'
-                    : (action === 'activate' ? 'activated' : 'deactivated');
+                const what = action === 'delete' ? 'deleted' : 'updated';
                 const verb = action === 'delete' ? 'delete' : 'update';
                 return `This will ${verb} ${count} selected record(s). They will be ${what}. This cannot be undone.`;
             });
@@ -554,13 +548,12 @@ export default function mountApp() {
                     successMsg.value = 'Import finished.';
                     await loadRows();
                 } catch (err) {
+                    // Server returns top-level {imported, updated, validated, failed, errors}
                     importResult.value = {
-                        summary: {
-                            imported: 0,
-                            updated: 0,
-                            failed: 1,
-                            errors: [err?.message || 'Import failed.'],
-                        },
+                        imported: 0,
+                        updated: 0,
+                        failed: 1,
+                        errors: [err?.message || 'Import failed.'],
                     };
                 } finally {
                     importing.value = false;
@@ -645,10 +638,15 @@ export default function mountApp() {
 
             const isTextWidget = (f) => !(f.type === 'select' || f.widget === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea');
 
+            // Force a matched native input type. FieldSchema types are already
+            // normalized to 'int'/'float' server-side; legacy aliases are kept
+            // for robustness, and 'date' renders a real date picker (S5).
             const inputType = (f) =>
-                f.type === 'integer' || f.type === 'int' || f.type === 'number' || f.type === 'float'
+                f.type === 'int' || f.type === 'float' || f.type === 'integer' || f.type === 'number' || f.type === 'numeric'
                     ? 'number'
-                    : (f.type === 'email' ? 'email' : 'text');
+                    : (f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text'));
+
+            const inputStep = (f) => (f.type === 'float' ? 'any' : undefined);
 
             const selectOptions = (f) => {
                 if (!Array.isArray(f.options)) return [];
@@ -720,6 +718,7 @@ export default function mountApp() {
                 loadAudit,
                 isTextWidget,
                 inputType,
+                inputStep,
                 selectOptions,
             };
         }

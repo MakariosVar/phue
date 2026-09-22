@@ -10,6 +10,7 @@ use Phue\Modules\Schii\Generator\PhiiExportField;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\DataMapperEntity;
+use Phue\Tests\Schii\Stubs\MetricRecord;
 use Phue\Tests\Schii\Stubs\Profile;
 use Phue\Tests\Schii\Stubs\User;
 
@@ -94,8 +95,10 @@ final class SchemaRegistryExportTest extends TestCase
 
         $this->assertArrayHasKey(User::class, $schemas);
         $this->assertArrayHasKey(Profile::class, $schemas);
-        $this->assertCount(2, $schemas);
+        $this->assertArrayHasKey(MetricRecord::class, $schemas);
+        $this->assertCount(3, $schemas);
         $this->assertSame('admin', $schemas[User::class]->module);
+        $this->assertSame('admin', $schemas[MetricRecord::class]->module);
     }
 
     public function testExportFieldsRespectSchemaAttributeFlags(): void

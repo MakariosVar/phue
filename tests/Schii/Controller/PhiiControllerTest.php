@@ -54,7 +54,7 @@ final class PhiiControllerTest extends TestCase
         $config = SchiiConfig::fromArray(array_merge([
             'apiPrefix' => '/api/schii',
             'entityNamespace' => 'Phue\\Tests\\Schii\\Stubs',
-            'exportDir' => $this->dump,
+            'outputRoot' => $this->dump,
         ], $config));
 
         return new PhiiController(
@@ -77,7 +77,7 @@ final class PhiiControllerTest extends TestCase
         $config = SchiiConfig::fromArray(array_merge([
             'apiPrefix' => '/api/schii',
             'entityNamespace' => 'Phue\\Tests\\Schii\\Stubs',
-            'exportDir' => $this->dump,
+            'outputRoot' => $this->dump,
         ], $config));
 
         return new PhiiController(
@@ -96,6 +96,35 @@ final class PhiiControllerTest extends TestCase
         $this->assertSame(400, $response->getStatusCode());
         $data = json_decode($response->getContent(), true);
         $this->assertSame('Missing entity for generator.', $data['error']);
+    }
+
+    public function testGenerateRejectsBlankEntityString(): void
+    {
+        $request = new Request('POST', '/phii/generate', [], [
+            'generator' => 'crud',
+            'entity' => '   ',
+        ]);
+        $response = $this->controller()->generate($request);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $data = json_decode($response->getContent(), true);
+        $this->assertSame('Missing entity for generator.', $data['error']);
+    }
+
+    public function testGenerateModelFromShortNameResolvedAgainstModelNamespace(): void
+    {
+        $request = new Request('POST', '/phii/generate', [], [
+            'generator' => 'model',
+            'entity' => 'User',
+        ]);
+        $response = $this->controller()->generate($request);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true);
+        $path = "{$this->dump}/App/Models/User.php";
+        $this->assertContains($path, $data['paths']);
+        $this->assertFileExists($path);
+        $this->assertStringContainsString('class User', (string) file_get_contents($path));
     }
 
     public function testGenerateRejectsUnknownGenerator(): void

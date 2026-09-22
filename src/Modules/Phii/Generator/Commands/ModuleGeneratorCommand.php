@@ -79,7 +79,6 @@ final class ModuleGeneratorCommand implements CommandInterface
     {
         $outputDir = getcwd();
         $moduleName = null;
-        $options = ['auth' => false, 'api' => false];
 
         $isPreview = false;
         $isForce = false;
@@ -88,10 +87,6 @@ final class ModuleGeneratorCommand implements CommandInterface
         foreach ($args as $arg) {
             if (str_starts_with($arg, '--output=')) {
                 $outputDir = substr($arg, 9);
-            } elseif (str_starts_with($arg, '--auth=')) {
-                $options['auth'] = filter_var(substr($arg, 7), FILTER_VALIDATE_BOOL);
-            } elseif (str_starts_with($arg, '--api=')) {
-                $options['api'] = filter_var(substr($arg, 6), FILTER_VALIDATE_BOOL);
             } elseif ($arg === '--preview') {
                 $isPreview = true;
             } elseif ($arg === '--force') {
@@ -110,7 +105,7 @@ final class ModuleGeneratorCommand implements CommandInterface
 
         try {
             /** @var array<\Phue\Modules\Phii\Generator\FileMutation> $mutations */
-            $mutations = $this->generator->generate($moduleName, $outputDir, $options);
+            $mutations = $this->generator->generate($moduleName, $outputDir);
 
             $plan = [];
             $conflicts = 0;

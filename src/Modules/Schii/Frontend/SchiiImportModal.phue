@@ -89,6 +89,7 @@ export default {
         : 'full_name,email,active\nMaria,maria@example.com,1';
     },
     resultSummary() {
+      // Server response is top-level {imported, updated, validated, failed, errors}
       if (this.result && typeof this.result.summary === 'object' && this.result.summary) {
         return this.result.summary;
       }

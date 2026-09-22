@@ -29,8 +29,6 @@
       <ph-badge :label="`${selected.length} selected`" variant="info" pill />
       <span class="text-body-secondary small me-1">Apply to selection:</span>
       <ph-button variant="danger" size="sm" @click="$emit('bulk-delete')">Delete</ph-button>
-      <ph-button variant="outline" size="sm" @click="$emit('bulk-activate')">Activate</ph-button>
-      <ph-button variant="ghost" size="sm" @click="$emit('bulk-deactivate')">Deactivate</ph-button>
     </div>
   </div>
 </template>
@@ -62,9 +60,7 @@ export default {
     'import-open',
     'export-csv',
     'export-json',
-    'bulk-delete',
-    'bulk-activate',
-    'bulk-deactivate'
+    'bulk-delete'
   ],
   computed: {
     searchText: {

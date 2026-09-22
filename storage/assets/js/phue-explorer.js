@@ -7,6 +7,16 @@
   if (window.__phueExplorerInitialized) return;
   window.__phueExplorerInitialized = true;
 
+  // Inject the global [v-cloak] guard from the shell, before any module
+  // script mounts, so the app never flashes unmounted content (R1). Module
+  // scripts reuse the same style id, so this stays idempotent.
+  if (!document.getElementById('phue-v-cloak-style')) {
+    const style = document.createElement('style');
+    style.id = 'phue-v-cloak-style';
+    style.textContent = '[v-cloak] { display: none !important; }';
+    document.head.appendChild(style);
+  }
+
   /**
    * Updates active status classes and accessibility attributes on nav links during client transitions
    *

@@ -66,7 +66,7 @@ final class PhiiContainmentTest extends TestCase
         $config = SchiiConfig::fromArray([
             'apiPrefix' => '/api/schii',
             'entityNamespace' => 'Phue\\Tests\\Schii\\Stubs',
-            'exportDir' => $this->dump,
+            'outputRoot' => $this->dump,
         ]);
 
         return new PhiiController(

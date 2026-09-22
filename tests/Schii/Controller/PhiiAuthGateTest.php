@@ -95,7 +95,7 @@ final class PhiiAuthGateTest extends TestCase
         $config = SchiiConfig::fromArray([
             'apiPrefix' => '/api/schii',
             'entityNamespace' => 'Phue\\Tests\\Schii\\Stubs',
-            'exportDir' => $this->dump,
+            'outputRoot' => $this->dump,
         ]);
 
         $authManager = new AuthManager([new SessionAuthenticator(ExplorerAuthUser::class, '__user_id')]);

@@ -16,16 +16,14 @@ final class ModuleGenerator
     /**
      * Generate new module directory structure and configuration file mutations.
      *
-     * @param string              $moduleName Module name.
-     * @param string              $basePath   Project base path.
-     * @param array<string, bool> $options    Module options ('auth' => bool, 'api' => bool).
+     * @param string $moduleName Module name.
+     * @param string $basePath   Project base path.
      *
      * @return array<int, FileMutation> List of file mutations for the module configuration.
      */
     public function generate(
         string $moduleName,
-        string $basePath = '',
-        array $options = ['auth' => false, 'api' => false]
+        string $basePath = ''
     ): array {
         $cleanBasePath = rtrim($basePath, DIRECTORY_SEPARATOR);
         $moduleDir = $cleanBasePath . DIRECTORY_SEPARATOR . 'App' . DIRECTORY_SEPARATOR . 'Modules' . DIRECTORY_SEPARATOR . $moduleName;

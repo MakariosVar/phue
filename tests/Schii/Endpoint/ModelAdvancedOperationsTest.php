@@ -313,4 +313,73 @@ final class ModelAdvancedOperationsTest extends TestCase
         $request = new Request('POST', '/api/schii/nope/import', [], ['format' => 'json', 'data' => []]);
         $this->assertSame(404, $this->endpoint->import($request, ['entity' => 'nope'])->getStatusCode());
     }
+
+    // ─────────────────────────── Numeric type validation ───────────────────────────
+
+    private function endpointForMetricRecords(): ModelEndpoint
+    {
+        $this->db->execute("CREATE TABLE IF NOT EXISTS metric_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            ratio REAL
+        )");
+
+        return new ModelEndpoint(
+            new SchemaRegistry(),
+            entityNamespace: 'Phue\\Tests\\Schii\\Stubs'
+        );
+    }
+
+    public function testStoreRejectsNonNumericValueForIntField(): void
+    {
+        $endpoint = $this->endpointForMetricRecords();
+
+        $request = new Request('POST', '/api/schii/metric-records', [], [
+            'label' => 'A',
+            'score' => 'not-a-number',
+        ]);
+
+        $response = $endpoint->store($request, ['entity' => 'metric-records']);
+        $this->assertSame(422, $response->getStatusCode());
+
+        $data = $this->decode($response);
+        $this->assertSame('Validation failed', $data['error']);
+        $this->assertSame('Field \'score\' must be numeric', $data['errors']['score']);
+    }
+
+    public function testStoreRejectsNonNumericValueForFloatField(): void
+    {
+        $endpoint = $this->endpointForMetricRecords();
+
+        $request = new Request('POST', '/api/schii/metric-records', [], [
+            'label' => 'B',
+            'score' => 7,
+            'ratio' => '1.2px',
+        ]);
+
+        $response = $endpoint->store($request, ['entity' => 'metric-records']);
+        $this->assertSame(422, $response->getStatusCode());
+
+        $data = $this->decode($response);
+        $this->assertSame('Field \'ratio\' must be numeric', $data['errors']['ratio']);
+    }
+
+    public function testStoreAcceptsNumericIntAndFloatValues(): void
+    {
+        $endpoint = $this->endpointForMetricRecords();
+
+        $request = new Request('POST', '/api/schii/metric-records', [], [
+            'label' => 'C',
+            'score' => 11,
+            'ratio' => 2.5,
+        ]);
+
+        $response = $endpoint->store($request, ['entity' => 'metric-records']);
+        $this->assertSame(201, $response->getStatusCode());
+
+        $data = $this->decode($response);
+        $this->assertSame(11, $data['data']['score']);
+        $this->assertSame(2.5, $data['data']['ratio']);
+    }
 }

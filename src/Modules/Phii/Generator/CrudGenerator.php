@@ -35,7 +35,7 @@ final class CrudGenerator
      */
     public function getGeneratedTypes(): array
     {
-        return ['model', 'controller', 'migration', 'routes', 'views'];
+        return ['model', 'controller', 'migration'];
     }
 
     /**

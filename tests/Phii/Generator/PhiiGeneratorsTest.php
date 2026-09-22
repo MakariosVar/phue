@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Phii\Generator;
 
-use Phue\Modules\Phii\Generator\ApiGenerator;
 use Phue\Modules\Phii\Generator\ControllerGenerator;
 use Phue\Modules\Phii\Generator\CrudGenerator;
 use Phue\Modules\Phii\Generator\FileMutation;
@@ -16,7 +15,6 @@ use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Phue\Modules\Schii\Schema\FieldSchema;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\Profile;
-use Phue\Tests\Schii\Stubs\User;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -208,7 +206,7 @@ final class PhiiGeneratorsTest extends TestCase
 
     public function testModuleGeneratorSkeletonReplacesPlaceholdersAndWritesCleanly(): void
     {
-        $mutations = (new ModuleGenerator())->generate('Blog', $this->dump, ['auth' => true, 'api' => true]);
+        $mutations = (new ModuleGenerator())->generate('Blog', $this->dump);
 
         $this->assertCount(5, $mutations);
 
@@ -283,7 +281,7 @@ final class PhiiGeneratorsTest extends TestCase
     public function testCrudGeneratorReportsAllArtifactTypes(): void
     {
         $crud = new CrudGenerator();
-        $this->assertSame(['model', 'controller', 'migration', 'routes', 'views'], $crud->getGeneratedTypes());
+        $this->assertSame(['model', 'controller', 'migration'], $crud->getGeneratedTypes());
     }
 
     public function testCrudGeneratorScaffoldsModelControllerAndMigrationAsMutations(): void
@@ -308,46 +306,5 @@ final class PhiiGeneratorsTest extends TestCase
             $this->assertFileExists($mutation->path);
             $this->assertPhpIsValid($mutation->path);
         }
-    }
-
-    public function testApiGeneratorWritesControllerAndUniqueRouteSnippet(): void
-    {
-        $result = (new ApiGenerator())->generate($this->schema(), $this->dump);
-
-        $this->assertCount(2, $result);
-        [$controller, $routes] = $result;
-
-        $this->assertMutation($controller, $this->dump . '/ProfileApiController.php');
-        $this->assertTrue($controller->write());
-        $this->assertPhpIsValid($controller->path);
-        $this->assertStringContainsString('ProfileApiController', $controller->content);
-
-        $this->assertMutation($routes, $this->dump . '/routes-profile-snippet.php');
-        $this->assertStringContainsString('/api/v1/profile', $routes->content);
-        $this->assertStringContainsString('index', $routes->content);
-        $this->assertStringContainsString('show', $routes->content);
-        $this->assertStringContainsString('store', $routes->content);
-        $this->assertStringContainsString('update', $routes->content);
-        $this->assertStringContainsString('delete', $routes->content);
-    }
-
-    public function testApiGeneratorRouteSnippetNamesAreUniquePerEntity(): void
-    {
-        $profileSchema = $this->schema();
-        $userSchema = (new SchemaRegistry())->toPhiiExportSchema(User::class, 'admin');
-
-        [, $profileRoutes] = (new ApiGenerator())->generate($profileSchema, $this->dump);
-        [, $userRoutes] = (new ApiGenerator())->generate($userSchema, $this->dump);
-
-        $this->assertNotSame($profileRoutes->path, $userRoutes->path, 'Route snippet files must be unique per entity.');
-        $this->assertStringContainsString('/api/v1/profile', $profileRoutes->content);
-        $this->assertStringContainsString('/api/v1/user', $userRoutes->content);
-    }
-
-    public function testApiControllerNamespacePointsToSchiiApi(): void
-    {
-        [$controller] = (new ApiGenerator())->generate($this->schema(), $this->dump);
-
-        $this->assertStringContainsString('namespace Phue\Modules\Schii\Api;', $controller->content);
     }
 }

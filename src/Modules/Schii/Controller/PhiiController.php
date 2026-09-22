@@ -18,6 +18,7 @@ use Phue\Modules\Phii\Generator\ModelGenerator;
 use Phue\Modules\Phii\Generator\ModuleGenerator;
 use Phue\Modules\Phii\Generator\BackupManager;
 use Phue\Modules\Schii\Config\SchiiConfig;
+use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 
 /**
@@ -379,20 +380,15 @@ final class PhiiController
      */
     private function resolveOutputRoot(): string
     {
+        // The web generator writes into the real project tree, exactly like the
+        // CLI. `exportDir` is strictly an *export* location and is intentionally
+        // NOT used as the write target, so generated files never land in a
+        // phantom storage/generated/App/... tree.
         $configuredRoot = ($this->config->outputRoot !== '')
             ? $this->config->outputRoot
-            : (!empty($this->config->exportDir) ? $this->config->exportDir : null);
-        if ($configuredRoot) {
-            return rtrim($configuredRoot, DIRECTORY_SEPARATOR);
-        }
+            : $this->app->getBasePath();
 
-        $storageGenerated = $this->app->getBasePath();
-
-        if (!is_dir($storageGenerated)) {
-            @mkdir($storageGenerated, 0755, true);
-        }
-
-        return rtrim($storageGenerated, DIRECTORY_SEPARATOR);
+        return rtrim($configuredRoot, DIRECTORY_SEPARATOR);
     }
 
     /**
@@ -471,7 +467,7 @@ final class PhiiController
         $module = $body['module'] ?? 'admin';
         $options = $body['options'] ?? [];
 
-        if ($generator !== 'module' && $entity === null) {
+        if ($generator !== 'module' && ($entity === null || trim((string) $entity) === '')) {
             throw new \InvalidArgumentException('Missing entity for generator.');
         }
 
@@ -479,7 +475,7 @@ final class PhiiController
 
         switch ($generator) {
             case 'model':
-                $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
+                $schema = $this->resolveExportSchema($entity, $module);
                 $type = $options['type'] ?? 'active-record';
                 $mutations = $this->modelGenerator->generateFromSchema($schema, $type, "{$outputRoot}/App/Models");
                 break;
@@ -492,23 +488,19 @@ final class PhiiController
                 break;
 
             case 'migration':
-                $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
+                $schema = $this->resolveExportSchema($entity, $module);
                 $driver = $options['driver'] ?? 'sqlite';
                 $mutations = $this->migrationGenerator->generateFromSchema($schema, "{$outputRoot}/database/migrations", $driver);
                 break;
 
             case 'crud':
-                $schema = $this->schemaRegistry->toPhiiExportSchema($entity, $module);
+                $schema = $this->resolveExportSchema($entity, $module);
                 $mutations = $this->crudGenerator->generate($schema, $module, $outputRoot);
                 break;
 
             case 'module':
                 $moduleName = $entity ?? ($options['name'] ?? 'NewModule');
-                $modOptions = [
-                    'auth' => (bool) ($options['auth'] ?? false),
-                    'api' => (bool) ($options['api'] ?? false),
-                ];
-                $mutations = $this->moduleGenerator->generate($moduleName, $outputRoot, $modOptions);
+                $mutations = $this->moduleGenerator->generate($moduleName, $outputRoot);
                 break;
 
             default:
@@ -516,6 +508,33 @@ final class PhiiController
         }
 
         return $mutations;
+    }
+
+    /**
+     * Resolve an entity input into a schema export whose model class is valid.
+     *
+     * Accepts both fully qualified class names and short names (resolved against
+     * the registered entity namespaces), so the console can use values like
+     * 'Product' alongside 'App\Models\Product'. Yields 400-level friendly errors
+     * for unresolvable or non-ActiveRecord inputs instead of a bare subclass
+     * assertion.
+     *
+     * @param string $entity Model name or class string.
+     * @param string $module Target module identifier.
+     * @return PhiiExportSchema Resolved export schema.
+     * @throws \InvalidArgumentException If the model class cannot be resolved or is not an ActiveRecord.
+     */
+    private function resolveExportSchema(string $entity, string $module): PhiiExportSchema
+    {
+        $modelClass = $this->resolveModelClass($entity);
+
+        if (!is_subclass_of($modelClass, \Phue\Core\Database\ActiveRecord\BaseActiveRecord::class)) {
+            throw new \InvalidArgumentException(
+                sprintf("'%s' is not an ActiveRecord model.", $entity)
+            );
+        }
+
+        return $this->schemaRegistry->toPhiiExportSchema($modelClass, $module);
     }
 
     /**

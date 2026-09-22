@@ -272,6 +272,47 @@ final class AuthorizedModelEndpointTest extends TestCase
         $this->assertNotSame(403, $response->getStatusCode());
     }
 
+    public function testUncountableStatusSlugKeepsItsTrailingS(): void
+    {
+        $user = new AuthorizedAdminUser(30);
+        $rbac = new RbacManager($this->emptyRbacSeed);
+        $rbac->addRole('admin', ['admin.Status.read']);
+        $rbac->assign(30, 'admin');
+        $endpoint = $this->endpoint($user, $rbac);
+
+        // 'status' must not be singularized to 'statu' (S15 regression)
+        $response = $endpoint->index(new Request('GET', '/api/schii/status'), ['entity' => 'status']);
+        $this->assertNotSame(403, $response->getStatusCode(), 'status must resolve to admin.Status.read');
+        $this->assertNotSame(401, $response->getStatusCode());
+    }
+
+    public function testUncountableStatusIsNotCutToStatu(): void
+    {
+        $user = new AuthorizedAdminUser(31);
+        $rbac = new RbacManager($this->emptyRbacSeed);
+        $rbac->addRole('admin', ['admin.Statu.read']);
+        $rbac->assign(31, 'admin');
+        $endpoint = $this->endpoint($user, $rbac);
+
+        $response = $endpoint->index(new Request('GET', '/api/schii/status'), ['entity' => 'status']);
+
+        $this->assertSame(403, $response->getStatusCode(), 'admin.Statu.read must NOT satisfy admin.Status.read');
+    }
+
+    public function testUncountableNewsSlugKeepsItsTrailingS(): void
+    {
+        $user = new AuthorizedAdminUser(32);
+        $rbac = new RbacManager($this->emptyRbacSeed);
+        $rbac->addRole('admin', ['admin.News.read']);
+        $rbac->assign(32, 'admin');
+        $endpoint = $this->endpoint($user, $rbac);
+
+        // 'news' is uncountable: naive trailing-s strip would yield 'new'
+        $response = $endpoint->index(new Request('GET', '/api/schii/news'), ['entity' => 'news']);
+        $this->assertNotSame(403, $response->getStatusCode(), 'news must resolve to admin.News.read');
+        $this->assertNotSame(401, $response->getStatusCode());
+    }
+
     public function testPluralEntitySlugWithoutSingularPermissionIsRejected(): void
     {
         $user = new AuthorizedAdminUser(9);

@@ -161,7 +161,7 @@ export default function mountApp() {
                         ? parsed
                         : {};
                 } catch {
-                    errorMsg.value = 'Options must be valid JSON, e.g. {"auth": true}.';
+                    errorMsg.value = 'Options must be valid JSON, e.g. {"driver": "sqlite"}; or leave blank.';
                     return null;
                 }
             };

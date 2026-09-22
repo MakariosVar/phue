@@ -88,7 +88,7 @@ export default {
   },
   computed: {
     verbOptions() {
-      return ['GET', 'POST', 'PUT', 'DELETE'].map(v => ({ label: v, value: v }));
+      return ['GET', 'POST', 'PUT', 'DELETE', 'BULK_DELETE', 'BULK_UPDATE'].map(v => ({ label: v, value: v }));
     }
   },
   methods: {
@@ -104,7 +104,10 @@ export default {
       this.$emit('refresh', { entity: null, verb: null });
     },
     verbVariant(verb) {
-      const map = { GET: 'info', POST: 'primary', PUT: 'warning', DELETE: 'danger' };
+      const map = {
+        GET: 'info', POST: 'primary', PUT: 'warning', DELETE: 'danger',
+        BULK_DELETE: 'danger', BULK_UPDATE: 'warning'
+      };
       return map[String(verb || '').toUpperCase()] || 'secondary';
     },
     formatTime(ts) {

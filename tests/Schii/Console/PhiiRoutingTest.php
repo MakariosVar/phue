@@ -57,6 +57,19 @@ return [
     'requireAuth' => false,
 ];
 PHP);
+
+        file_put_contents($this->tmpBase . '/config/database.php', <<<'PHP'
+<?php
+return [
+    'default' => 'sqlite',
+    'connections' => [
+        'sqlite' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ],
+    ],
+];
+PHP);
     }
 
     protected function tearDown(): void
@@ -160,6 +173,23 @@ PHP);
         $auditEntity = $router->dispatch('GET', '/api/schii/audit/profiles');
         $this->assertInstanceOf(RouteMatch::class, $auditEntity);
         $this->assertSame([AuditEndpoint::class, 'forEntity'], $auditEntity->getHandler());
+    }
+
+    public function testSchemaInspectorEndpointResolvesFromContainer(): void
+    {
+        $app = new Application($this->tmpBase);
+        $container = $app->getContainer();
+
+        // S1 regression: the DI binding must resolve SchemaInspectorEndpoint
+        // with the correct constructor argument order (no TypeError/HTTP 500).
+        $inspector = $container->get(SchemaInspectorEndpoint::class);
+
+        $this->assertInstanceOf(SchemaInspectorEndpoint::class, $inspector);
+
+        $router = $container->get(Router::class);
+        $structure = $router->dispatch('GET', '/api/schii/schema/user/structure');
+        $this->assertInstanceOf(RouteMatch::class, $structure);
+        $this->assertSame([SchemaInspectorEndpoint::class, 'structure'], $structure->getHandler());
     }
 
     public function testSchemaLiteralRoutesWinOverEntityParamRoutes(): void

@@ -837,9 +837,10 @@ final class ModelEndpoint
 
             $rules = $fieldSchema->rules;
             if (
+                $fieldSchema->type === "int" ||
+                $fieldSchema->type === "float" ||
                 $fieldSchema->type === "number" ||
-                $fieldSchema->type === "numeric" ||
-                $fieldSchema->type === "float"
+                $fieldSchema->type === "numeric"
             ) {
                 $rules[] = "numeric";
             }

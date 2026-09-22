@@ -84,9 +84,11 @@ final class RuntimeGeneratorTest extends TestCase
 
         $patterns = $generator->registerAll('/api/schii', 'Phue\Tests\Schii\Stubs');
 
-        // user + profile = 2 models × 5 routes.
-        $this->assertCount(10, $patterns);
-        $this->assertCount(10, $this->capturedRoutes($router));
+        // user + profile + metric-record = 3 models × 5 routes.
+        $this->assertCount(15, $patterns);
+        $this->assertCount(15, $this->capturedRoutes($router));
+        $this->assertContains('GET /api/schii/metricrecord', $patterns);
+        $this->assertContains('DELETE /api/schii/metricrecord/{id}', $patterns);
     }
 
     public function testRegisterAllReturnsPatternListForMissingNamespace(): void

@@ -68,7 +68,7 @@ final class CrudGeneratorCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Generates full CRUD (Model, Controller, Migration, Routes, Views) for a Schii schema.';
+        return 'Generates full CRUD (Model, Controller, Migration) for a Schii schema.';
     }
 
     /**
