@@ -124,7 +124,7 @@ my-app/
 │   └── Models/                       # #[UI]/#[Field] entities (when schii is on)
 ├── bin/
 │   ├── phue                          # Main CLI
-│   ├── phue_test                     # Generator CLI (Phii)
+│   ├── phue_test                     # Wrapper for phpunit
 │   └── phii                          # Generator CLI alias
 ├── config/
 │   ├── app.php                       # App settings + modules list
