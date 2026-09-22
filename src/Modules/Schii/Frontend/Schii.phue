@@ -53,16 +53,16 @@ return [
                     <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
                 </div>
                 <ph-stack v-else-if="filteredEntities.length" gap="xs">
-                    <div v-for="item in filteredEntities" :key="item.slug">
+                    <div v-for="slug in filteredEntities" :key="slug">
                         <ph-button
-                            :variant="currentEntity === item.slug ? 'primary' : 'ghost'"
+                            :variant="currentEntity === slug ? 'primary' : 'ghost'"
                             block
                             class="text-start"
-                            @click="selectEntity(item.slug)"
+                            @click="selectEntity(slug)"
                         >
                             <span class="d-flex align-items-center gap-2">
-                                <span v-if="item.icon" aria-hidden="true">{{ item.icon }}</span>
-                                <span class="flex-grow-1">{{ item.label || item.slug }}</span>
+                                <span v-if="entityMeta[slug]?.icon" aria-hidden="true">{{ entityMeta[slug].icon }}</span>
+                                <span class="flex-grow-1">{{ entityMeta[slug]?.label || slug }}</span>
                             </span>
                         </ph-button>
                     </div>

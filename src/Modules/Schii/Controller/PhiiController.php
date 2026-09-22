@@ -137,16 +137,26 @@ final class PhiiController
      * Render the main Phii UI panel.
      *
      * @param Request $request HTTP Request instance.
-     * @return Response HTTP response containing the rendered Phii view.
+     * @return Response HTTP response containing the rendered Phii view or redirect.
      */
     public function index(Request $request): Response
     {
         try {
             $this->authorizeRequest($request);
         } catch (\Throwable $e) {
+            $code = $e->getCode() === 401 ? 401 : 403;
+
+            $accept = (string) ($request->getHeader('Accept') ?? '');
+            $wantsJson = str_contains(strtolower($accept), 'application/json')
+                || $request->getHeader('X-Requested-With') === 'XMLHttpRequest';
+
+            if ($code === 401 && !$wantsJson) {
+                return new Response('', 302, ['Location' => '/login']);
+            }
+
             return new Response(
                 json_encode(['error' => $e->getMessage()], JSON_THROW_ON_ERROR),
-                $e->getCode() === 401 ? 401 : 403,
+                $code,
                 ['Content-Type' => 'application/json']
             );
         }
@@ -380,10 +390,6 @@ final class PhiiController
      */
     private function resolveOutputRoot(): string
     {
-        // The web generator writes into the real project tree, exactly like the
-        // CLI. `exportDir` is strictly an *export* location and is intentionally
-        // NOT used as the write target, so generated files never land in a
-        // phantom storage/generated/App/... tree.
         $configuredRoot = ($this->config->outputRoot !== '')
             ? $this->config->outputRoot
             : $this->app->getBasePath();
@@ -401,34 +407,29 @@ final class PhiiController
      */
     private function ensureContainment(string $path, string $outputRoot): string
     {
-        // If relative path given, append to outputRoot
         if (!str_starts_with($path, DIRECTORY_SEPARATOR) && !preg_match('/^[A-Za-z]:\\\\/', $path)) {
             $path = $outputRoot . DIRECTORY_SEPARATOR . $path;
         }
 
         $realRoot = realpath($outputRoot) ?: $outputRoot;
 
-        // Find the nearest existing ancestor directory
         $current = dirname($path);
         while ($current !== false && !file_exists($current)) {
             $parent = dirname($current);
             if ($parent === $current) {
-                break; // Reached the root without finding an existing directory
+                break;
             }
             $current = $parent;
         }
 
         $realDir = realpath($current);
 
-        // Strict component boundary check preventing prefix spoofing attacks
         $isWithinRoot = ($realDir === $realRoot) || str_starts_with($realDir, $realRoot . DIRECTORY_SEPARATOR);
 
         if ($realDir === false || !$isWithinRoot) {
             throw new \DomainException("Security Violation: Path traversal attempt detected for '{$path}'.");
         }
 
-        // Return safe canonical path combining the real existing base directory, 
-        // the remaining relative parts, and the basename.
         return dirname($path) . DIRECTORY_SEPARATOR . basename($path);
     }
 
@@ -512,12 +513,6 @@ final class PhiiController
 
     /**
      * Resolve an entity input into a schema export whose model class is valid.
-     *
-     * Accepts both fully qualified class names and short names (resolved against
-     * the registered entity namespaces), so the console can use values like
-     * 'Product' alongside 'App\Models\Product'. Yields 400-level friendly errors
-     * for unresolvable or non-ActiveRecord inputs instead of a bare subclass
-     * assertion.
      *
      * @param string $entity Model name or class string.
      * @param string $module Target module identifier.
