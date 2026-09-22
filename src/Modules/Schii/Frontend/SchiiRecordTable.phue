@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-if="(selectable && rows.length) || visibleFields.length < fields.length" class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+    <div v-if="(selectable && rows.length) || (Array.isArray(visibleFields) && visibleFields.length < fields.length)" class="d-flex align-items-center gap-2 mb-2 flex-wrap">
       <template v-if="selectable && rows.length">
         <ph-checkbox
           :model-value="allOnPageSelected"
@@ -11,7 +11,7 @@
         <ph-badge v-if="selected.length" :label="`${selected.length} selected`" variant="info" pill />
         <ph-button v-if="selected.length" variant="ghost" size="sm" @click="clearSelection">Clear</ph-button>
       </template>
-      <span v-if="visibleFields.length < fields.length" class="text-body-secondary small ms-auto">
+      <span v-if="Array.isArray(visibleFields) && visibleFields.length < fields.length" class="text-body-secondary small ms-auto">
         {{ fields.length - visibleFields.length }} hidden column(s)
       </span>
     </div>
@@ -62,7 +62,6 @@
               <template v-if="col.key === '__actions'">
                 <div class="d-flex gap-2">
                   <ph-button variant="outline" size="sm" @click.stop="$emit('edit', row)" :aria-label="`Edit ${row.id || 'record'}`">Edit</ph-button>
-                  <ph-button variant="ghost" size="sm" @click.stop="$emit('detail', row)" :aria-label="`View detail for ${row.id || 'record'}`">Detail</ph-button>
                   <ph-button variant="danger" size="sm" @click.stop="$emit('delete-request', row.id)" :aria-label="`Delete ${row.id || 'record'}`">Delete</ph-button>
                 </div>
               </template>
@@ -133,7 +132,7 @@ export default {
       default: null
     }
   },
-  emits: ['update:selected', 'page-change', 'edit', 'delete-request', 'sort-change', 'detail'],
+  emits: ['update:selected', 'page-change', 'edit', 'delete-request', 'sort-change'],
   data() {
     return {};
   },

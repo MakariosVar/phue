@@ -16,13 +16,10 @@ return [
 <div class="phii-console p-4" v-cloak>
     <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
 
-    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
-        <div>
-            <ph-heading :level="1" class="mb-0">Phii Generator Console</ph-heading>
-            <ph-text color="muted">Plan, preview and apply schema-powered code generation</ph-text>
-        </div>
-        <ph-badge label="Schema-powered codegen" variant="info" pill />
-    </ph-flex>
+    <div class="page-header mb-4">
+        <ph-heading :level="1" class="mb-1">Phii Generator Console</ph-heading>
+        <ph-text color="muted">Plan, preview and apply schema-powered code generation</ph-text>
+    </div>
 
     <ph-row gutter="3">
         <ph-col span="12" lg="6">

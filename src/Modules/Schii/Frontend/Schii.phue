@@ -15,13 +15,10 @@ return [
 <div class="schii-console p-4" v-cloak>
     <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
     
-    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
-        <div>
-            <ph-heading :level="1" class="mb-0">Schii Console</ph-heading>
-            <ph-text color="muted">Zero-Controller Dynamic REST Management Interface</ph-text>
-        </div>
-        <ph-badge label="REST + Bulk + Import/Export + Audit" variant="info" pill />
-    </ph-flex>
+    <div class="page-header mb-4">
+        <ph-heading :level="1" class="mb-1">Schii Console</ph-heading>
+        <ph-text color="muted">Zero-Controller Dynamic REST Management Interface</ph-text>
+    </div>
 
     <ph-row gutter="3">
         <ph-col span="12" md="4" lg="3">

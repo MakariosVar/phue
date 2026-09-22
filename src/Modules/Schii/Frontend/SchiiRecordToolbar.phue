@@ -313,7 +313,32 @@ export default {
       const obj = {};
       this.localFilters.forEach(f => { obj[f.field] = f.value; });
       this.$emit('filters-change', obj);
+    },
+    closeAllDropdowns() {
+      this.dataDropdownOpen = false;
+      this.adminDropdownOpen = false;
+      this.columnsDropdownOpen = false;
+    },
+    handleClickOutside(event) {
+      const dropdowns = this.$el?.querySelectorAll('.dropdown');
+      if (dropdowns) {
+        let clickedInside = false;
+        dropdowns.forEach(dd => {
+          if (dd.contains(event.target)) {
+            clickedInside = true;
+          }
+        });
+        if (!clickedInside) {
+          this.closeAllDropdowns();
+        }
+      }
     }
+  },
+  mounted() {
+    document.addEventListener('click', this.handleClickOutside);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
   }
 };
 </script>
