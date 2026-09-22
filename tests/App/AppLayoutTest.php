@@ -139,11 +139,11 @@ final class AppLayoutTest extends TestCase
         $html = $this->renderLayout(['uri' => '/docs']);
 
         $this->assertStringContainsString(
-            '<li><a href="/docs" class="dropdown-item active" aria-current="page">Docs</a></li>',
+            '<a href="/docs" class="nav-link active" aria-current="page">Docs</a>',
             $html
         );
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Modules</a>',
+            '<a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">Modules</a>',
             $html
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);
