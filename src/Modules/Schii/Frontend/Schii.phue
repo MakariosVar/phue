@@ -106,7 +106,7 @@ return [
                     <template v-if="loading">
                         <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
                     </template>
-                    <ph-alert v-else-if="rowsError" variant="warning" :message="rowsError" dismissible class="mb-3" @dismiss="rowsError = null" />
+                    <ph-alert v-else-if="rowsError" variant="warning" :message="rowsError + (currentEntity && /no such table|table .* doesn't exist|SQLSTATE\\[HY000\\].*no such table/i.test(rowsError) ? ' — Use the Schema Diff button in the Admin dropdown to create the table.' : '')" dismissible class="mb-3" @dismiss="rowsError = null" />
 
                     <template v-else>
                         <schii-record-table
