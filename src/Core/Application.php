@@ -12,6 +12,7 @@ use Phue\Core\Cache\FileCache;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Security\CurrentUserInterface;
 use Phue\Core\Security\SecurityMiddleware;
 use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Core\Ssr\NullSsrEngine;
@@ -27,7 +28,6 @@ use Phue\Core\UI\PhuePartialRenderer;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Throwable;
-
 /**
  * Class Application
  *
@@ -268,7 +268,7 @@ class Application
                 if ($c->has(\Phue\Modules\Auth\AuthManager::class)) {
                     /** @var \Phue\Modules\Auth\AuthManager $auth */
                     $auth = $c->get(\Phue\Modules\Auth\AuthManager::class);
-                    
+
                     try {
                         /** @var \Phue\Core\Request $request */
                         $request = $c->get(\Phue\Core\Request::class);
@@ -291,7 +291,7 @@ class Application
                 userResolver: $userResolver,
                 ssrEngine: $c->get(SsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
-                themeConfig: \App\Config\NavigationConfig::getAppThemeToggle()
+                themeConfig: $this->config->get('app.themeToggle', [])
             );
         });
 
@@ -402,6 +402,20 @@ class Application
     }
 
     /**
+    * Retrieve the current authenticated user accessor instance, if available.
+    *
+    * @return CurrentUserInterface|null User accessor instance or null if not bound.
+    */
+    public function user(): ?CurrentUserInterface
+    {
+        if ($this->container->has(CurrentUserInterface::class)) {
+            return $this->container->get(CurrentUserInterface::class);
+        }
+
+        return null;
+    }
+
+    /**
      * Register a global HTTP middleware callable or class name to the stack.
      *
      * @param callable|string $middleware Callable implementation or class FQCN to be resolved via DI container.
@@ -453,8 +467,8 @@ class Application
             $logger->warning('HTTP ' . $statusCode . ' Client Error: ' . $e->getMessage(), ['exception' => $e]);
             $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
                 || $request->isXmlHttpRequest();
-            $response = $acceptsJson 
-                ? Response::json(['error' => $e->getMessage()], $statusCode) 
+            $response = $acceptsJson
+                ? Response::json(['error' => $e->getMessage()], $statusCode)
                 : new Response($e->getMessage(), $statusCode);
         } catch (\InvalidArgumentException $e) {
             $logger->warning('HTTP 400 Bad Request: ' . $e->getMessage(), ['exception' => $e]);
@@ -530,15 +544,15 @@ class Application
                 // 1. Check for Request type (Request class or subclass/interface)
                 if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
                     $args[] = $req;
-                } 
+                }
                 // 2. Direct route path parameter match by name (e.g. $id)
                 elseif (array_key_exists($paramName, $coercedParams)) {
                     $args[] = $coercedParams[$paramName];
-                } 
+                }
                 // 3. Any array-typed parameter receives the full route params map
                 elseif (in_array('array', $typeNames, true)) {
                     $args[] = $coercedParams;
-                } 
+                }
                 // 4. Fallback to default parameter value if available
                 elseif ($param->isDefaultValueAvailable()) {
                     $args[] = $param->getDefaultValue();
@@ -645,11 +659,11 @@ class Application
             $typeName = $type->getName();
 
             $resolvedParams[$name] = match ($typeName) {
-                'int' => is_numeric($rawValue) 
-                    ? (int) $rawValue 
+                'int' => is_numeric($rawValue)
+                    ? (int) $rawValue
                     : throw new \InvalidArgumentException("Parameter '{$name}' must be an integer."),
-                'float' => is_numeric($rawValue) 
-                    ? (float) $rawValue 
+                'float' => is_numeric($rawValue)
+                    ? (float) $rawValue
                     : throw new \InvalidArgumentException("Parameter '{$name}' must be a float."),
                 'bool' => filter_var($rawValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (
                     is_numeric($rawValue) ? (bool) (int) $rawValue : throw new \InvalidArgumentException("Parameter '{$name}' must be a boolean.")
@@ -685,9 +699,9 @@ class Application
     /**
      * Instantiate and register application module extensions with a two-pass load strategy.
      *
-     * Pass 1: Validates existence, instantiates via DI, injects core infrastructure, 
+     * Pass 1: Validates existence, instantiates via DI, injects core infrastructure,
      * initializes, and registers each module into the container.
-     * Pass 2: Iterates through all loaded modules to ensure all declared module 
+     * Pass 2: Iterates through all loaded modules to ensure all declared module
      * dependencies (`requires`) are fully satisfied.
      *
      * @param array<int, string> $modules List of FQCNs representing application modules.
@@ -746,14 +760,14 @@ class Application
     /**
      * Renders and formats unhandled exceptions into a 500 Internal Server Error response.
      *
-     * Logs the exception details using the configured logger. Detects if the client 
-     * expects a JSON response via the 'Accept' or 'X-Requested-With' headers. 
-     * If JSON is requested, it returns a detailed JSON payload (in debug mode) or a 
+     * Logs the exception details using the configured logger. Detects if the client
+     * expects a JSON response via the 'Accept' or 'X-Requested-With' headers.
+     * If JSON is requested, it returns a detailed JSON payload (in debug mode) or a
      * generic error message. Otherwise, it renders a custom HTML error page.
      *
      * @param Throwable $e       The unhandled exception or error instance.
      * @param Request   $request The current HTTP request instance.
-     * 
+     *
      * @return Response A JSON or HTML HTTP response with a 500 status code.
      */
     private function renderExceptionResponse(Throwable $e, Request $request): Response

@@ -8,6 +8,13 @@ return [
     'debug'   => env('APP_DEBUG', true),
     'devTool' => env('APP_DEV_TOOL', true),
     'trustedProxies' => [],
+    'themeToggle' => [
+        'enabled'      => true,
+        'storageKey'   => 'phue-theme',
+        'defaultTheme' => 'system', // 'system' | 'light' | 'dark'
+        'position'     => 'actions_prefix', // 'actions_prefix' | 'actions_suffix' | 'standalone'
+        'ariaLabel'    => 'Toggle theme',
+    ],
     'modules' => [
         \Phue\Modules\Auth\AuthModule::class,
         \Phue\Modules\Schii\SchiiModule::class, // Comment this on production

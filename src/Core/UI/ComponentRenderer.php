@@ -162,7 +162,7 @@ class ComponentRenderer
                         $components[$depName] = trim($source);
                     }
                 }
-                
+
                 if (!empty($components)) {
                     $context['components'] = $components;
                 }
@@ -198,16 +198,16 @@ class ComponentRenderer
 
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
-        
+
         $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
         $navState = [
             'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
-            'actions'     => NavigationConfig::getAppActions($user),
+            'actions'     => class_exists(NavigationConfig::class) ? NavigationConfig::getAppActions($user) : [],
             'activeRoute' => $uri,
             'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal',
-            'themeConfig' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppThemeToggle() : []
+            'themeConfig' => $this->themeConfig
         ];
-      
+
         if ($isSpaRequest) {
             $requestScripts = $this->assetRegistry->getRequestScripts();
             $flatScriptUrls = array_map(
@@ -285,7 +285,7 @@ JS,
                 'actions'     => NavigationConfig::getAppActions($user),
                 'activeRoute' => $uri,
                 'orientation' => NavigationConfig::getAppPlacement(),
-                'themeConfig' => NavigationConfig::getAppThemeToggle(),    
+                'themeConfig' => $this->themeConfig,    
             ];
 
             try {
