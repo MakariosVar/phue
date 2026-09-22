@@ -4,7 +4,7 @@
       <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
         <div style="min-width: 240px;">
           <ph-input
-            :model-value="searchText"
+            v-model="searchText"
             type="search"
             placeholder="Search records..."
             style="margin-bottom: 0;"
@@ -16,52 +16,84 @@
         <ph-button variant="ghost" size="sm" @click="$emit('refresh')">Refresh</ph-button>
 
         <div class="dropdown">
-          <ph-button variant="outline" size="sm" class="dropdown-toggle" @click="toggleFilters">
-            Filters
-            <ph-badge v-if="activeFilterCount" :label="String(activeFilterCount)" variant="primary" pill />
+          <ph-button variant="outline" size="sm" class="dropdown-toggle" @click="toggleDataDropdown" aria-haspopup="true" aria-expanded="dataDropdownOpen">
+            Data
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="ms-1">
+              <path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+            </svg>
           </ph-button>
-          <div v-if="filtersOpen" class="dropdown-menu show p-3" style="min-width: 300px;">
-            <ph-flex direction="row" align="center" gap="sm" class="mb-2">
-              <div class="flex-grow-1">
-                <ph-select
-                  :model-value="filterField"
-                  :options="filterableOptions"
-                  placeholder="Field"
-                  style="margin-bottom: 0;"
-                  @update:model-value="filterField = $event"
-                />
-              </div>
-              <ph-input
-                :model-value="filterValue"
-                placeholder="Value"
-                style="width: 120px; margin-bottom: 0;"
-                @update:model-value="filterValue = $event"
-                @keyup.enter="addFilter"
-              />
-              <ph-button variant="primary" size="sm" @click="addFilter">Add</ph-button>
-            </ph-flex>
-            <ph-stack v-if="localFilters.length" gap="xs">
-              <div v-for="(f, i) in localFilters" :key="i" class="d-flex align-items-center gap-2">
-                <ph-chip :label="`${f.field} = ${f.value}`" variant="info" removable @remove="removeFilter(i)" />
-              </div>
+          <div v-if="dataDropdownOpen" class="dropdown-menu show p-3" style="min-width: 280px;">
+            <ph-text weight="semibold" size="sm" class="mb-2">Import / Export</ph-text>
+            <ph-button variant="outline" block class="mb-2" @click="$emit('import-open')">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-2">
+                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+              </svg>
+              Import
+            </ph-button>
+            <ph-button variant="outline" block class="mb-2" @click="$emit('export-csv')">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-2">
+                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                <path d="M7.646 11.854a.5.5 0 0 1 .708 0l3-3a.5.5 0 0 1-.708-.708L8.5 10.293V1.5a.5.5 0 0 1 1 0v8.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3z"/>
+              </svg>
+              Export CSV
+            </ph-button>
+            <ph-button variant="outline" block class="mb-2" @click="$emit('export-json')">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-2">
+                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                <path d="M7.646 11.854a.5.5 0 0 1 .708 0l3-3a.5.5 0 0 1-.708-.708L8.5 10.293V1.5a.5.5 0 0 1 1 0v8.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3z"/>
+              </svg>
+              Export JSON
+            </ph-button>
+          </div>
+        </div>
+
+        <div class="dropdown">
+          <ph-button variant="outline" size="sm" class="dropdown-toggle" @click="toggleAdminDropdown" aria-haspopup="true" aria-expanded="adminDropdownOpen">
+            Admin
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="ms-1">
+              <path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+            </svg>
+          </ph-button>
+          <div v-if="adminDropdownOpen" class="dropdown-menu show p-3" style="min-width: 240px;">
+            <ph-button variant="outline" block class="mb-2" @click="$emit('schema-diff')">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-2">
+                <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+              </svg>
+              Schema Diff
+            </ph-button>
+            <ph-button variant="outline" block @click="$emit('audit')">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-2">
+                <path d="M8.5 1.5a.5.5 0 0 0-1 0V3a.5.5 0 0 0 1 0V1.5zM10 2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-9 3a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm0 4a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm13 1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5zM2 11a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-2z"/>
+              </svg>
+              Audit
+            </ph-button>
+          </div>
+        </div>
+
+        <div class="dropdown">
+          <ph-button variant="outline" size="sm" class="dropdown-toggle" @click="toggleColumnsDropdown" aria-haspopup="true" aria-expanded="columnsDropdownOpen">
+            Columns
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="ms-1">
+              <path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+            </svg>
+            <ph-badge v-if="hiddenCount > 0" :label="String(hiddenCount)" variant="primary" pill class="ms-1" />
+          </ph-button>
+          <div v-if="columnsDropdownOpen" class="dropdown-menu show p-3" style="min-width: 260px;">
+            <ph-text weight="semibold" size="sm" class="mb-2">Toggle column visibility</ph-text>
+            <ph-stack v-if="toggleableFields.length" gap="xs">
+              <label v-for="field in toggleableFields" :key="field.name" class="d-flex align-items-center gap-2 cursor-pointer small">
+                <input type="checkbox" :value="field.name" :checked="visibleFieldSet.has(field.name)" @change="toggleColumn(field.name)" />
+                <span>{{ field.label || field.name }}</span>
+              </label>
             </ph-stack>
-            <ph-text v-else color="muted" size="sm">No active filters. Add one above.</ph-text>
-            <hr class="my-2" />
-            <div class="d-flex justify-content-end gap-2">
-              <ph-button variant="ghost" size="sm" :disabled="!localFilters.length" @click="clearFilters">Clear</ph-button>
-              <ph-button variant="primary" size="sm" :disabled="!localFilters.length" @click="applyFilters">Apply</ph-button>
-            </div>
+            <ph-text v-else color="muted" size="sm">No toggleable columns.</ph-text>
           </div>
         </div>
       </ph-flex>
 
       <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
         <ph-button variant="primary" size="sm" @click="$emit('create')">+ New {{ entity }}</ph-button>
-        <ph-button variant="outline" size="sm" @click="$emit('schema-diff')">Schema Diff</ph-button>
-        <ph-button variant="outline" size="sm" @click="$emit('audit')">Audit</ph-button>
-        <ph-button variant="outline" size="sm" @click="$emit('import-open')">Import</ph-button>
-        <ph-button variant="ghost" size="sm" @click="$emit('export-csv')">Export CSV</ph-button>
-        <ph-button variant="ghost" size="sm" @click="$emit('export-json')">Export JSON</ph-button>
       </ph-flex>
     </ph-flex>
 
@@ -85,10 +117,25 @@
       </div>
     </ph-flex>
 
-    <div v-if="selected.length" class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+    <ph-flex v-if="selected.length" direction="row" align="center" gap="sm" wrap="wrap" class="mb-2">
       <ph-badge :label="`${selected.length} selected`" variant="info" pill />
-      <span class="text-body-secondary small me-1">Apply to selection:</span>
       <ph-button variant="danger" size="sm" @click="$emit('bulk-delete')">Delete</ph-button>
+    </ph-flex>
+
+    <div v-if="localFilters.length" class="d-flex align-items-center gap-2 mb-2 p-2 border rounded bg-light">
+      <ph-badge :label="`${localFilters.length} active filter(s)`" variant="primary" pill />
+      <div class="d-flex flex-wrap gap-1 flex-grow-1">
+        <ph-chip
+          v-for="(f, i) in localFilters"
+          :key="i"
+          :label="`${f.field}: ${f.value}`"
+          variant="info"
+          removable
+          @remove="removeFilter(i)"
+          size="sm"
+        />
+      </div>
+      <ph-button variant="ghost" size="sm" @click="clearFilters">Clear all</ph-button>
     </div>
   </div>
 </template>
@@ -124,6 +171,10 @@ export default {
     pageSize: {
       type: Number,
       default: 10
+    },
+    visibleFields: {
+      type: Array,
+      default: null
     }
   },
   emits: [
@@ -139,10 +190,14 @@ export default {
     'bulk-delete',
     'filters-change',
     'sort-change',
-    'page-size-change'
+    'page-size-change',
+    'visible-fields-change'
   ],
   data() {
     return {
+      dataDropdownOpen: false,
+      adminDropdownOpen: false,
+      columnsDropdownOpen: false,
       filtersOpen: false,
       filterField: '',
       filterValue: '',
@@ -174,14 +229,23 @@ export default {
     pageSizeOptions() {
       return [10, 25, 50, 100].map(n => ({ label: `${n} / page`, value: n }));
     },
-    activeFilterCount() {
-      return this.localFilters.length;
-    },
     hasControls() {
       return this.sortableFields.length > 0;
     },
     sortableFields() {
       return this.fields.filter(f => f.sortable);
+    },
+    toggleableFields() {
+      return this.fields.filter(f => f.name !== 'id' && !f.primaryKey);
+    },
+    visibleFieldSet() {
+      const vf = this.visibleFields;
+      if (!Array.isArray(vf)) return new Set(this.fields.map(f => f.name));
+      return new Set(vf);
+    },
+    hiddenCount() {
+      const visible = this.visibleFieldSet;
+      return this.fields.filter(f => !visible.has(f.name)).length;
     }
   },
   watch: {
@@ -199,8 +263,30 @@ export default {
     doSearch() {
       this.$emit('search');
     },
-    toggleFilters() {
-      this.filtersOpen = !this.filtersOpen;
+    toggleDataDropdown() {
+      this.dataDropdownOpen = !this.dataDropdownOpen;
+      this.adminDropdownOpen = false;
+      this.columnsDropdownOpen = false;
+    },
+    toggleAdminDropdown() {
+      this.adminDropdownOpen = !this.adminDropdownOpen;
+      this.dataDropdownOpen = false;
+      this.columnsDropdownOpen = false;
+    },
+    toggleColumnsDropdown() {
+      this.columnsDropdownOpen = !this.columnsDropdownOpen;
+      this.dataDropdownOpen = false;
+      this.adminDropdownOpen = false;
+    },
+    toggleColumn(fieldName) {
+      const current = Array.isArray(this.visibleFields) ? [...this.visibleFields] : this.fields.map(f => f.name);
+      const idx = current.indexOf(fieldName);
+      if (idx >= 0) {
+        current.splice(idx, 1);
+      } else {
+        current.push(fieldName);
+      }
+      this.$emit('visible-fields-change', current);
     },
     addFilter() {
       const field = this.filterField;

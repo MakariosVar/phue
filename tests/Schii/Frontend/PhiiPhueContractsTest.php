@@ -80,7 +80,7 @@ final class PhiiPhueContractsTest extends TestCase
     /**
      * The preview panel must render per-file status, expose a per-file
      * include/exclude toggle, and offer a conflict policy — the Phase 4 (V)
-     * requirements P5/D9. It must default to creating a backup before write.
+     * requirements P5/D9. The backup option is now handled in the parent confirm modal.
      */
     public function testPhiiPreviewPanelLocksConflictAndBackupContract(): void
     {
@@ -89,9 +89,7 @@ final class PhiiPhueContractsTest extends TestCase
 
         $this->assertStringContainsString('Overwrite existing', $template);
         $this->assertStringContainsString('Skip existing', $template);
-        $this->assertStringContainsString('Create ZIP backup before writing', $template);
-        $this->assertStringContainsString('wantsBackup: true', $script, 'backup must be the default choice');
-        $this->assertStringContainsString("@click=\"\$emit('apply', { backup: wantsBackup })\"", $template);
+        $this->assertStringContainsString("@click=\"\$emit('apply', { backup: true })\"", $template);
     }
 
     /**
@@ -150,7 +148,7 @@ final class PhiiPhueContractsTest extends TestCase
         $this->assertStringContainsString('`${phiiPrefix}/apply`', $script);
         $this->assertStringContainsString('paths: Array.isArray(selectedPaths.value) ? selectedPaths.value : undefined', $script);
         $this->assertStringContainsString('conflictPolicy: conflictPolicy.value', $script);
-        $this->assertStringContainsString('backup,', $script);
+        $this->assertStringContainsString('backup:', $script);
         $this->assertStringNotContainsString("'content'", $script, 'apply must NOT ship raw file content from the client');
     }
 
@@ -164,14 +162,33 @@ final class PhiiPhueContractsTest extends TestCase
         $this->assertStringContainsString('options,', $script);
     }
 
-    public function testPhiiJsonOptionsAreValidated(): void
+    public function testPhiiStructuredOptionsByGenerator(): void
     {
+        $template = $this->template('Phii.phue');
         $script = $this->script('Phii.phue');
 
-        $this->assertStringContainsString('JSON.parse(raw)', $script);
-        $this->assertStringContainsString(
-            "'Options must be valid JSON, e.g. {\"driver\": \"sqlite\"}; or leave blank.'",
-            $script
-        );
+        // Model type select for 'model' generator
+        $this->assertStringContainsString('modelTypeOptions', $script);
+        $this->assertStringContainsString('ActiveRecord', $script);
+        $this->assertStringContainsString('DataMapper', $script);
+
+        // Driver select for 'migration' generator (includes PostgreSQL)
+        $this->assertStringContainsString('driverOptions', $script);
+        $this->assertStringContainsString('PostgreSQL', $script);
+        $this->assertStringContainsString('pgsql', $script);
+
+        // Actions checkboxes for 'controller' generator
+        $this->assertStringContainsString('form.options.actions', $script);
+        $this->assertStringContainsString('index', $script);
+        $this->assertStringContainsString('store', $script);
+        $this->assertStringContainsString('show', $script);
+        $this->assertStringContainsString('update', $script);
+        $this->assertStringContainsString('delete', $script);
+
+        // Crud uses standard defaults (in template)
+        $this->assertStringContainsString('Uses standard defaults', $template);
+
+        // Module has no additional options (in template)
+        $this->assertStringContainsString('no additional options', $template);
     }
 }

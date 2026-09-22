@@ -107,9 +107,12 @@ export default {
     errorLines() {
       const errs = this.resultSummary.errors ?? this.result?.errors ?? [];
       if (Array.isArray(errs)) {
-        return errs.map(e => (typeof e === 'string' ? e : e.error || JSON.stringify(e)));
+        return errs.map((e, i) => {
+          const msg = typeof e === 'string' ? e : (e.error || e.message || JSON.stringify(e));
+          return `Row ${i + 1}: ${msg}`;
+        });
       }
-      return Object.values(errs).map(v => String(v));
+      return Object.entries(errs).map(([k, v]) => `Row ${k}: ${String(v)}`);
     },
     resultHasErrors() {
       return this.failedCount > 0 || this.errorLines.length > 0;

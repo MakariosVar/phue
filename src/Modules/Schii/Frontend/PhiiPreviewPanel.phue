@@ -65,14 +65,13 @@
     </div>
 
     <ph-flex direction="row" justify="space-between" align="center" gap="md" wrap="wrap">
-      <ph-checkbox v-model="wantsBackup" label="Create ZIP backup before writing" />
       <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
         <ph-badge :label="`${selectedCount}/${plan.length} selected`" variant="info" pill />
         <ph-button
           variant="primary"
           :loading="applying"
           :disabled="selectedCount === 0"
-          @click="$emit('apply', { backup: wantsBackup })"
+          @click="$emit('apply', { backup: true })"
         >Apply plan</ph-button>
       </ph-flex>
     </ph-flex>
@@ -103,7 +102,6 @@ export default {
   emits: ['apply', 'toggle-path', 'conflict-policy-change'],
   data() {
     return {
-      wantsBackup: true,
       expanded: {}
     };
   },

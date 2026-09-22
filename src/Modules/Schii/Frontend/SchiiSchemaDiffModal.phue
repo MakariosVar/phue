@@ -163,17 +163,33 @@ export default {
     },
     opName(op) {
       const data = this.opData(op);
-      return data && data.name ? data.name : '—';
+      if (data && data.name) return data.name;
+      if (op && op.op === 'add-column' && op.column) return op.column.name || '—';
+      if (op && op.op === 'drop-column' && op.column) return op.column.name || '—';
+      return '—';
     },
     opType(op) {
       const data = this.opData(op);
-      return data && data.type ? data.type : '—';
+      if (data && data.type) return data.type;
+      if (op && op.op === 'add-column' && op.column) return op.column.type || '—';
+      if (op && op.op === 'drop-column' && op.column) return op.column.type || '—';
+      return '—';
     },
     opAlter(op) {
       if (op && op.op === 'alter-column' && op.new) {
         return `${op.new.name} (${op.new.type})`;
       }
       if (op && op.op === 'create-table') return 'creates new table';
+      if (op && op.op === 'add-column' && op.column) {
+        const parts = [];
+        if (op.column.type) parts.push(op.column.type);
+        if (op.column.required) parts.push('NOT NULL');
+        if (op.column.default !== undefined && op.column.default !== null) parts.push(`DEFAULT ${op.column.default}`);
+        return parts.length ? parts.join(', ') : 'adds new column';
+      }
+      if (op && op.op === 'drop-column' && op.column) {
+        return 'removes column';
+      }
       return '—';
     }
   }

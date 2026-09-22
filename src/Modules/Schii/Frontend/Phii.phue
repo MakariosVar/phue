@@ -14,6 +14,8 @@ return [
 
 <template>
 <div class="phii-console p-4" v-cloak>
+    <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
+
     <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
         <div>
             <ph-heading :level="1" class="mb-0">Phii Generator Console</ph-heading>
@@ -22,27 +24,10 @@ return [
         <ph-badge label="Schema-powered codegen" variant="info" pill />
     </ph-flex>
 
-    <div class="mb-3">
-        <ph-alert
-            v-if="errorMsg"
-            variant="error"
-            :message="errorMsg"
-            dismissible
-            @dismiss="errorMsg = null"
-        />
-        <ph-alert
-            v-if="successMsg"
-            variant="success"
-            :message="successMsg"
-            dismissible
-            @dismiss="successMsg = null"
-        />
-    </div>
-
     <ph-row gutter="3">
         <ph-col span="12" lg="6">
             <ph-card title="Generate" subtitle="Pick a generator and scaffold application code from your schema." hoverable>
-                <form id="phii-generate-form" novalidate @submit.prevent="submitGenerate">
+                <form id="phii-generate-form" @submit.prevent="submitGenerate">
                     <ph-select
                         v-model="form.generator"
                         label="Generator Type"
@@ -51,67 +36,73 @@ return [
                         required
                     />
 
-                    <div class="position-relative">
+                    <div>
                         <ph-input
                             v-model="form.entity"
                             label="Entity / Model Name"
                             :placeholder="generator === 'module' ? 'e.g. Blog (new module)' : 'e.g. Profile'"
                             :helper-text="entityHelperText"
                             required
-                            autocomplete="off"
+                            :list="entitiesLoaded ? 'entity-suggestions' : undefined"
                             @input="onEntityInput"
-                            @focus="onEntityFocus"
-                            @keydown.down.prevent="moveSuggestion(1)"
-                            @keydown.up.prevent="moveSuggestion(-1)"
-                            @keydown.enter.prevent="acceptHighlightedSuggestion"
-                            @blur="suggestionsOpen = false"
                         />
-                        <div
-                            v-if="suggestionsOpen && filteredEntities.length"
-                            class="dropdown-menu show w-100"
-                            style="z-index: 1050;"
-                        >
-                            <button
-                                v-for="(s, i) in filteredEntities"
-                                :key="s"
-                                type="button"
-                                class="dropdown-item"
-                                :class="{ active: i === highlightedSuggestion }"
-                                @mousedown.prevent="form.entity = s; suggestionsOpen = false"
-                                @mouseenter="highlightedSuggestion = i"
-                            >{{ s }}</button>
-                            <div v-if="!entitiesLoaded && !filteredEntities.length" class="dropdown-item text-body-secondary disabled">
-                                Loading entities…
-                            </div>
-                        </div>
+                        <datalist v-if="entitiesLoaded" id="entity-suggestions">
+                            <option v-for="e in knownEntities" :key="e" :value="e" />
+                        </datalist>
                     </div>
 
                     <ph-row gutter="3">
                         <ph-col span="12" md="6">
-                            <ph-input v-model="form.module" label="Module" placeholder="admin" />
+                            <ph-input v-model="form.module" label="Module" placeholder="admin" required />
                         </ph-col>
                         <ph-col span="12" md="6">
-                            <ph-select
-                                v-if="form.generator === 'model'"
-                                v-model="form.type"
-                                label="Model Type"
-                                :options="modelTypeOptions"
-                                helper-text="ActiveRecord or DataMapper."
-                            />
-                            <ph-select
-                                v-else-if="form.generator === 'migration'"
-                                v-model="form.driver"
-                                label="Driver"
-                                :options="driverOptions"
-                                helper-text="SQL target dialect for the migration."
-                            />
-                            <ph-input
-                                v-else
-                                v-model="form.options"
-                                label="Options (JSON)"
-                                placeholder='{"auth": true}'
-                                :helper-text="optionsHelperText"
-                            />
+                            <template v-if="generator === 'model'">
+                                <ph-select
+                                    v-model="form.type"
+                                    label="Model Type"
+                                    :options="modelTypeOptions"
+                                    helper-text="ActiveRecord or DataMapper."
+                                    required
+                                />
+                            </template>
+                            <template v-else-if="generator === 'migration'">
+                                <ph-select
+                                    v-model="form.driver"
+                                    label="Driver"
+                                    :options="driverOptions"
+                                    helper-text="SQL target dialect for the migration."
+                                    required
+                                />
+                            </template>
+                            <template v-else-if="generator === 'controller'">
+                                <ph-checkbox
+                                    v-model="form.options.actions.index"
+                                    label="index"
+                                />
+                                <ph-checkbox
+                                    v-model="form.options.actions.store"
+                                    label="store"
+                                />
+                                <ph-checkbox
+                                    v-model="form.options.actions.show"
+                                    label="show"
+                                />
+                                <ph-checkbox
+                                    v-model="form.options.actions.update"
+                                    label="update"
+                                />
+                                <ph-checkbox
+                                    v-model="form.options.actions.delete"
+                                    label="delete"
+                                />
+                                <ph-text v-if="Object.keys(form.options.actions).length === 0" color="muted" size="sm" class="mt-2">No actions selected — all will be generated.</ph-text>
+                            </template>
+                            <template v-else-if="generator === 'crud'">
+                                <ph-text color="muted" size="sm">Uses standard defaults — Preview to inspect files</ph-text>
+                            </template>
+                            <template v-else-if="generator === 'module'">
+                                <ph-text color="muted" size="sm">Module scaffold — no additional options</ph-text>
+                            </template>
                         </ph-col>
                     </ph-row>
 
@@ -119,7 +110,7 @@ return [
                         <ph-button type="button" variant="outline" :loading="previewing" @click="previewPlan">
                             Preview
                         </ph-button>
-                        <ph-button type="submit" variant="primary" :loading="submitting">
+                        <ph-button type="button" variant="primary" :loading="submitting" @click="confirmGenerate">
                             Generate
                         </ph-button>
                     </div>
@@ -129,32 +120,28 @@ return [
 
         <ph-col span="12" lg="6">
             <ph-card title="Execution Plan" subtitle="Plan mutations, inspect diffs, then apply (with optional ZIP backup)." hoverable>
-                <template v-if="plan.length">
+                <template v-if="stage === 'preview' && plan.length">
                     <phii-preview-panel
                         :plan="plan"
                         :applying="applying"
                         :selected-paths="selectedPaths"
                         :conflict-policy="conflictPolicy"
-                        @apply="applyPlan"
+                        @apply="confirmApply"
                         @toggle-path="togglePath"
                         @conflict-policy-change="conflictPolicy = $event"
                     />
                 </template>
 
-                <template v-else-if="resultPaths.length">
-                    <ph-stack gap="xs">
-                        <div
-                            v-for="(path, i) in resultPaths"
-                            :key="i"
-                            class="d-flex align-items-start gap-2 border rounded p-2"
-                        >
-                            <ph-badge variant="success" label="OK" />
-                            <ph-text size="sm" as="code" class="mb-0 text-break">{{ path }}</ph-text>
-                        </div>
-                    </ph-stack>
+                <template v-else-if="stage === 'result' && result.length">
+                    <ph-alert variant="success" title="Generation complete">
+                        <ul class="mb-0 mt-1 small">
+                            <li v-for="path in result" :key="path"><ph-text size="sm" as="code" class="mb-0 text-break">{{ path }}</ph-text></li>
+                        </ul>
+                    </ph-alert>
+                    <ph-button variant="ghost" size="sm" class="mt-2" @click="stage = 'idle'; result = []">Dismiss</ph-button>
                 </template>
 
-                <template v-else-if="applyResult">
+                <template v-else-if="stage === 'applied' && applyResult">
                     <ph-alert variant="success" title="Plan applied">
                         <ul class="mb-0 mt-1 small">
                             <li>Written: {{ applyResult.written ?? 0 }}</li>
@@ -163,7 +150,7 @@ return [
                             <li v-if="applyResult.backup">Backup: {{ applyResult.backup }}</li>
                         </ul>
                     </ph-alert>
-                    <ph-button variant="ghost" size="sm" class="mt-2" @click="applyResult = null">Dismiss</ph-button>
+                    <ph-button variant="ghost" size="sm" class="mt-2" @click="stage = 'idle'; applyResult = null">Dismiss</ph-button>
                 </template>
 
                 <ph-text v-else color="muted">
@@ -173,6 +160,24 @@ return [
             </ph-card>
         </ph-col>
     </ph-row>
+
+    <ph-modal v-model="confirmGenerateOpen" title="Confirm Generate" size="md">
+        <ph-text>Generate <strong>{{ form.generator.toUpperCase() }}</strong> for <strong>{{ form.entity }}</strong> in module <strong>{{ form.module }}</strong>?</ph-text>
+        <ph-checkbox v-model="generateForce" label="Force overwrite existing files" />
+        <template #footer>
+            <ph-button variant="ghost" @click="confirmGenerateOpen = false">Cancel</ph-button>
+            <ph-button variant="primary" :loading="submitting" @click="executeGenerate">Generate</ph-button>
+        </template>
+    </ph-modal>
+
+    <ph-modal v-model="confirmApplyOpen" title="Confirm Apply" size="md">
+        <ph-text>Apply <strong>{{ selectedCount }}</strong> of <strong>{{ plan.length }}</strong> planned file(s)?</ph-text>
+        <ph-checkbox v-model="applyBackup" label="Create ZIP backup before writing" />
+        <template #footer>
+            <ph-button variant="ghost" @click="confirmApplyOpen = false">Cancel</ph-button>
+            <ph-button variant="danger" :loading="applying" @click="executeApply">Apply</ph-button>
+        </template>
+    </ph-modal>
 </div>
 </template>
 
@@ -204,26 +209,32 @@ export default function mountApp() {
             const submitting = ref(false);
             const previewing = ref(false);
             const applying = ref(false);
-            const errorMsg = ref(null);
-            const successMsg = ref(null);
-            const resultPaths = ref([]);
+            const toast = ref(null);
+            const result = ref([]);
             const applyResult = ref(null);
             const plan = ref([]);
             const selectedPaths = ref(null);
             const conflictPolicy = ref('overwrite');
+            const stage = ref('idle'); // idle | preview | result | applied
 
             const knownEntities = ref([]);
             const entitiesLoaded = ref(false);
-            const suggestionsOpen = ref(false);
-            const highlightedSuggestion = ref(-1);
 
             const form = reactive({
                 generator: 'crud',
                 entity: '',
                 module: initialState.module || 'admin',
-                options: '',
                 type: 'active-record',
                 driver: 'sqlite',
+                options: {
+                    actions: {
+                        index: true,
+                        store: true,
+                        show: true,
+                        update: true,
+                        delete: true,
+                    },
+                },
             });
 
             const generatorOptions = computed(() =>
@@ -238,25 +249,14 @@ export default function mountApp() {
             const driverOptions = computed(() => [
                 { label: 'SQLite', value: 'sqlite' },
                 { label: 'MySQL', value: 'mysql' },
+                { label: 'PostgreSQL', value: 'pgsql' },
             ]);
 
             const generator = computed(() => form.generator);
 
-            const optionsHelperText = computed(() => {
-                if (generator.value === 'crud') return 'Extra options for the CRUD scaffold.';
-                if (generator.value === 'controller') return 'Extra options for the controller.';
-                return 'Extra generator options (JSON object).';
-            });
-
             const entityHelperText = computed(() => {
                 if (generator.value === 'module') return 'Module slug — a brand new module will be scaffolded.';
                 return 'Autocompletes discovered entities; short names resolve against App\\Models.';
-            });
-
-            const filteredEntities = computed(() => {
-                const term = (form.entity || '').trim().toLowerCase();
-                if (!term) return knownEntities.value.slice(0, 50);
-                return knownEntities.value.filter(e => e.toLowerCase().includes(term)).slice(0, 50);
             });
 
             const loadEntities = async () => {
@@ -273,67 +273,46 @@ export default function mountApp() {
             };
 
             const onEntityInput = () => {
-                suggestionsOpen.value = true;
-                highlightedSuggestion.value = -1;
                 if (!entitiesLoaded.value) loadEntities();
             };
 
-            const onEntityFocus = () => {
-                suggestionsOpen.value = true;
-                if (!entitiesLoaded.value) loadEntities();
-            };
-
-            const moveSuggestion = (delta) => {
-                if (!filteredEntities.value.length) return;
-                const next = highlightedSuggestion.value + delta;
-                highlightedSuggestion.value = Math.max(0, Math.min(filteredEntities.value.length - 1, next));
-                if (filteredEntities.value[highlightedSuggestion.value]) {
-                    form.entity = filteredEntities.value[highlightedSuggestion.value];
+            const validateForm = () => {
+                const errors = [];
+                if (!form.entity.trim()) errors.push('Entity / Model Name is required.');
+                if (!form.module.trim()) errors.push('Module is required.');
+                if (generator.value === 'model' && !form.type) errors.push('Model Type is required.');
+                if (generator.value === 'migration' && !form.driver) errors.push('Driver is required.');
+                if (generator.value === 'controller') {
+                    const hasActions = Object.values(form.options.actions).some(v => v);
+                    if (!hasActions) errors.push('At least one controller action must be selected.');
                 }
+                return errors;
             };
 
-            const acceptHighlightedSuggestion = () => {
-                if (highlightedSuggestion.value >= 0 && filteredEntities.value[highlightedSuggestion.value]) {
-                    form.entity = filteredEntities.value[highlightedSuggestion.value];
+            const notify = (message, variant = 'info') => {
+                toast.value?.push({ message, variant });
+            };
+
+            const confirmGenerate = () => {
+                const errors = validateForm();
+                if (errors.length) {
+                    notify(errors.join(' '), 'error');
+                    return;
                 }
-                suggestionsOpen.value = false;
+                confirmGenerateOpen.value = true;
             };
 
-            const parseOptions = () => {
-                const raw = (form.options || '').trim();
-                if (!raw) return {};
-                try {
-                    const parsed = JSON.parse(raw);
-                    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-                        ? parsed
-                        : {};
-                } catch {
-                    errorMsg.value = 'Options must be valid JSON, e.g. {"driver": "sqlite"}; or leave blank.';
-                    return null;
-                }
-            };
-
-            const makePayload = (options) => ({
-                generator: form.generator,
-                entity: form.entity.trim(),
-                module: form.module.trim() || 'admin',
-                options,
-            });
-
-            const submitGenerate = async () => {
-                const options = parseOptions();
-                if (options === null) return;
+            const executeGenerate = async () => {
+                confirmGenerateOpen.value = false;
+                const options = buildOptions();
+                if (!options) return;
 
                 submitting.value = true;
-                errorMsg.value = null;
-                successMsg.value = null;
-                applyResult.value = null;
-
                 try {
                     const res = await api(`${phiiPrefix}/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(makePayload(options)),
+                        body: JSON.stringify({ ...makePayload(options), force: generateForce.value }),
                     });
 
                     const data = await res.json().catch(() => ({}));
@@ -342,30 +321,28 @@ export default function mountApp() {
                         throw new Error(data.error || data.message || `HTTP ${res.status}`);
                     }
 
-                    plan.value = [];
-                    resultPaths.value = Array.isArray(data.paths)
-                        ? data.paths
-                        : (data.paths ? [data.paths] : []);
-                    successMsg.value = resultPaths.value.length
-                        ? `Generated ${resultPaths.value.length} file(s) successfully.`
-                        : 'Generation completed successfully!';
+                    result.value = Array.isArray(data.paths) ? data.paths : (data.paths ? [data.paths] : []);
+                    stage.value = 'result';
+                    notify(result.value.length ? `Generated ${result.value.length} file(s).` : 'Generation completed.', 'success');
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to execute generate action.';
-                    resultPaths.value = [];
+                    notify(err?.message || 'Failed to execute generate action.', 'error');
+                    result.value = [];
                 } finally {
                     submitting.value = false;
                 }
             };
 
             const previewPlan = async () => {
-                const options = parseOptions();
-                if (options === null) return;
+                const errors = validateForm();
+                if (errors.length) {
+                    notify(errors.join(' '), 'error');
+                    return;
+                }
+
+                const options = buildOptions();
+                if (!options) return;
 
                 previewing.value = true;
-                errorMsg.value = null;
-                successMsg.value = null;
-                applyResult.value = null;
-
                 try {
                     const res = await api(`${phiiPrefix}/preview`, {
                         method: 'POST',
@@ -381,15 +358,58 @@ export default function mountApp() {
 
                     plan.value = Array.isArray(data.plan) ? data.plan : [];
                     selectedPaths.value = plan.value.map(p => p.path);
-                    resultPaths.value = [];
-                    successMsg.value = plan.value.length
-                        ? `Preview ready: ${plan.value.length} mutation(s).`
-                        : 'No mutations were planned.';
+                    result.value = [];
+                    applyResult.value = null;
+                    stage.value = 'preview';
+                    notify(plan.value.length ? `Preview ready: ${plan.value.length} mutation(s).` : 'No mutations were planned.', plan.value.length ? 'info' : 'warning');
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to preview plan.';
+                    notify(err?.message || 'Failed to preview plan.', 'error');
                     plan.value = [];
                 } finally {
                     previewing.value = false;
+                }
+            };
+
+            const confirmApply = ({ backup }) => {
+                if (!plan.value.length) return;
+                applyBackup.value = backup;
+                confirmApplyOpen.value = true;
+            };
+
+            const executeApply = async () => {
+                confirmApplyOpen.value = false;
+                const options = buildOptions();
+                if (!options) return;
+
+                applying.value = true;
+                try {
+                    const res = await api(`${phiiPrefix}/apply`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ...makePayload(options),
+                            backup: applyBackup.value,
+                            conflictPolicy: conflictPolicy.value,
+                            paths: Array.isArray(selectedPaths.value) ? selectedPaths.value : undefined,
+                        }),
+                    });
+
+                    const data = await res.json().catch(() => ({}));
+
+                    if (!res.ok) {
+                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                    }
+
+                    applyResult.value = data;
+                    plan.value = [];
+                    selectedPaths.value = null;
+                    result.value = [];
+                    stage.value = 'applied';
+                    notify(`Applied: ${data.written ?? 0} written, ${data.skipped ?? 0} skipped, ${data.conflicts ?? 0} conflict(s).${data.backup ? ` Backup: ${data.backup}` : ''}`, 'success');
+                } catch (err) {
+                    notify(err?.message || 'Failed to apply plan.', 'error');
+                } finally {
+                    applying.value = false;
                 }
             };
 
@@ -405,49 +425,30 @@ export default function mountApp() {
                 }
             };
 
-            const applyPlan = async ({ backup }) => {
-                if (!plan.value.length) return;
-
-                const options = parseOptions();
-                if (options === null) return;
-
-                applying.value = true;
-                errorMsg.value = null;
-                successMsg.value = null;
-
-                try {
-                    const res = await api(`${phiiPrefix}/apply`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            ...makePayload(options),
-                            backup,
-                            conflictPolicy: conflictPolicy.value,
-                            paths: Array.isArray(selectedPaths.value) ? selectedPaths.value : undefined,
-                        }),
-                    });
-
-                    const data = await res.json().catch(() => ({}));
-
-                    if (!res.ok) {
-                        throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                    }
-
-                    const written = typeof data.written === 'number' ? data.written : 0;
-                    const skipped = typeof data.skipped === 'number' ? data.skipped : 0;
-                    const conflicts = typeof data.conflicts === 'number' ? data.conflicts : 0;
-                    let msg = `Applied: ${written} written, ${skipped} skipped, ${conflicts} conflict(s).`;
-                    if (data.backup) msg += ` Backup: ${data.backup}`;
-                    successMsg.value = msg;
-                    applyResult.value = data;
-                    plan.value = [];
-                    resultPaths.value = [];
-                } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to apply plan.';
-                } finally {
-                    applying.value = false;
-                }
+            const buildOptions = () => {
+                const opts = {};
+                if (generator.value === 'model') opts.type = form.type;
+                else if (generator.value === 'migration') opts.driver = form.driver;
+                else if (generator.value === 'controller') opts.actions = { ...form.options.actions };
+                return opts;
             };
+
+            const makePayload = (options) => ({
+                generator: form.generator,
+                entity: form.entity.trim(),
+                module: form.module.trim() || 'admin',
+                options,
+            });
+
+            const selectedCount = computed(() => {
+                if (!Array.isArray(selectedPaths.value)) return plan.value.length;
+                return selectedPaths.value.length;
+            });
+
+            const confirmGenerateOpen = ref(false);
+            const generateForce = ref(false);
+            const confirmApplyOpen = ref(false);
+            const applyBackup = ref(true);
 
             onMounted(loadEntities);
 
@@ -457,32 +458,30 @@ export default function mountApp() {
                 modelTypeOptions,
                 driverOptions,
                 generator,
-                optionsHelperText,
                 entityHelperText,
                 form,
                 submitting,
                 previewing,
                 applying,
-                errorMsg,
-                successMsg,
-                resultPaths,
+                toast,
+                result,
                 applyResult,
                 plan,
                 selectedPaths,
                 conflictPolicy,
+                stage,
                 knownEntities,
                 entitiesLoaded,
-                suggestionsOpen,
-                highlightedSuggestion,
-                filteredEntities,
-                submitGenerate,
+                confirmGenerateOpen,
+                generateForce,
+                confirmApplyOpen,
+                applyBackup,
+                selectedCount,
+                submitGenerate: confirmGenerate,
                 previewPlan,
-                applyPlan,
+                applyPlan: confirmApply,
                 togglePath,
                 onEntityInput,
-                onEntityFocus,
-                moveSuggestion,
-                acceptHighlightedSuggestion,
             };
         }
     });

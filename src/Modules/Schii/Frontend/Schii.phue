@@ -13,6 +13,8 @@ return [
 
 <template>
 <div class="schii-console p-4" v-cloak>
+    <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
+    
     <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="lg" class="mb-4">
         <div>
             <ph-heading :level="1" class="mb-0">Schii Console</ph-heading>
@@ -21,26 +23,9 @@ return [
         <ph-badge label="REST + Bulk + Import/Export + Audit" variant="info" pill />
     </ph-flex>
 
-    <div class="mb-3">
-        <ph-alert
-            v-if="errorMsg"
-            variant="error"
-            :message="errorMsg"
-            dismissible
-            @dismiss="errorMsg = null"
-        />
-        <ph-alert
-            v-if="successMsg"
-            variant="success"
-            :message="successMsg"
-            dismissible
-            @dismiss="successMsg = null"
-        />
-    </div>
-
     <ph-row gutter="3">
         <ph-col span="12" md="4" lg="3">
-            <ph-card title="Entities" :bordered="false">
+            <ph-card :title="`Entities (${entities.length})`" :bordered="false">
                 <div class="mb-2">
                     <ph-input
                         v-model="entitySearch"
@@ -59,6 +44,7 @@ return [
                             block
                             class="text-start"
                             @click="selectEntity(slug)"
+                            :aria-current="currentEntity === slug ? 'page' : undefined"
                         >
                             <span class="d-flex align-items-center gap-2">
                                 <span v-if="entityMeta[slug]?.icon" aria-hidden="true">{{ entityMeta[slug].icon }}</span>
@@ -83,6 +69,9 @@ return [
                             <ph-text v-if="currentEntity" size="sm" color="muted" class="mb-0">
                                 {{ total }} record(s) &middot; page {{ page }} of {{ lastPage }}
                             </ph-text>
+                            <ph-text v-if="currentEntity && entityMeta[currentEntity]?.description" size="sm" color="muted" class="mb-0 mt-1">
+                                {{ entityMeta[currentEntity].description }}
+                            </ph-text>
                         </div>
                         <ph-badge v-if="currentEntity" :label="currentEntity" variant="info" pill />
                     </ph-flex>
@@ -101,6 +90,7 @@ return [
                         :filters="filters"
                         :sort="sort"
                         :page-size="pageSize"
+                        :visible-fields="visibleFields"
                         @search="search"
                         @refresh="loadRows"
                         @create="openCreateModal"
@@ -113,6 +103,7 @@ return [
                         @filters-change="onFiltersChange"
                         @sort-change="onSortChange"
                         @page-size-change="onPageSizeChange"
+                        @visible-fields-change="onVisibleFieldsChange"
                     />
 
                     <template v-if="loading">
@@ -310,8 +301,7 @@ export default function mountApp() {
             const rows = ref([]);
             const loading = ref(false);
             const rowsError = ref(null);
-            const errorMsg = ref(null);
-            const successMsg = ref(null);
+            const toast = ref(null);
 
             const page = ref(parseInt(queryParams.page) || 1);
             const lastPage = ref(1);
@@ -398,6 +388,10 @@ export default function mountApp() {
                 return !Object.values(fieldErrors.value).some(Boolean);
             });
 
+            const notify = (message, variant = 'info') => {
+                toast.value?.push({ message, variant });
+            };
+
             const fetchEntities = async () => {
                 loadingEntities.value = true;
                 try {
@@ -411,7 +405,7 @@ export default function mountApp() {
                     entities.value = slugs;
                     await hydrateEntityMeta(slugs);
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to discover entity schemas.';
+                    notify(err?.message || 'Failed to discover entity schemas.', 'error');
                 } finally {
                     loadingEntities.value = false;
                 }
@@ -481,7 +475,7 @@ export default function mountApp() {
                         }
                     }
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to load schema.';
+                    notify(err?.message || 'Failed to load schema.', 'error');
                 }
             };
 
@@ -562,6 +556,10 @@ export default function mountApp() {
                 pageSize.value = parseInt(val) || DEFAULT_PAGE_SIZE;
                 page.value = 1;
                 loadRows();
+            };
+
+            const onVisibleFieldsChange = (val) => {
+                visibleFields.value = val;
             };
 
             const resetForm = () => {
@@ -703,7 +701,7 @@ export default function mountApp() {
                         throw new Error(errData.error || errData.message || 'Failed to save record.');
                     }
                     closeModal();
-                    successMsg.value = isEditing.value ? 'Record updated.' : 'Record created.';
+                    notify(isEditing.value ? 'Record updated.' : 'Record created.', 'success');
                     dirty.value = false;
                     await loadRows();
                 } catch (err) {
@@ -729,10 +727,10 @@ export default function mountApp() {
                         const errData = await res.json().catch(() => ({}));
                         throw new Error(errData.error || errData.message || 'Failed to delete record.');
                     }
-                    successMsg.value = 'Record deleted.';
+                    notify('Record deleted.', 'success');
                     await loadRows();
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to delete record.';
+                    notify(err?.message || 'Failed to delete record.', 'error');
                 }
             };
 
@@ -760,12 +758,12 @@ export default function mountApp() {
                     }
                     const summary = data.summary || data;
                     const affected = summary.affected ?? summary.updated ?? summary.deleted ?? ids.length;
-                    successMsg.value = `Bulk ${type} complete: ${affected} record(s) affected.`;
+                    notify(`Bulk ${type} complete: ${affected} record(s) affected.`, 'success');
                     selected.value = [];
                     pendingBulk.value = null;
                     await loadRows();
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Bulk action failed.';
+                    notify(err?.message || 'Bulk action failed.', 'error');
                     pendingBulk.value = null;
                 } finally {
                     bulkSubmitting.value = false;
@@ -793,9 +791,9 @@ export default function mountApp() {
                     }
                     const blob = await res.blob();
                     blobDownload(blob, `${currentEntity.value}.${format}`);
-                    successMsg.value = `Exported ${currentEntity.value} as ${format.toUpperCase()}.`;
+                    notify(`Exported ${currentEntity.value} as ${format.toUpperCase()}.`, 'success');
                 } catch (err) {
-                    errorMsg.value = err?.message || `Failed to export ${format}.`;
+                    notify(err?.message || `Failed to export ${format}.`, 'error');
                 }
             };
 
@@ -813,7 +811,7 @@ export default function mountApp() {
                         throw new Error(data.error || data.message || `HTTP ${res.status}`);
                     }
                     importResult.value = data;
-                    successMsg.value = 'Import finished.';
+                    notify('Import finished.', 'success');
                     await loadRows();
                 } catch (err) {
                     // Server returns top-level {imported, updated, validated, failed, errors}
@@ -841,7 +839,7 @@ export default function mountApp() {
                     }
                     diff.value = data;
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to compute schema diff.';
+                    notify(err?.message || 'Failed to compute schema diff.', 'error');
                 } finally {
                     diffLoading.value = false;
                 }
@@ -868,7 +866,7 @@ export default function mountApp() {
                     }
                     diffResult.value = data;
                     if (data.success) {
-                        successMsg.value = 'Schema synchronized.';
+                        notify('Schema synchronized.', 'success');
                         await Promise.all([loadSchema(), loadRows()]);
                     }
                 } catch (err) {
@@ -892,7 +890,7 @@ export default function mountApp() {
                     }
                     auditLogs.value = Array.isArray(data.logs) ? data.logs : [];
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to load audit logs.';
+                    notify(err?.message || 'Failed to load audit logs.', 'error');
                     auditLogs.value = [];
                 } finally {
                     auditLoading.value = false;
@@ -948,8 +946,7 @@ export default function mountApp() {
                 rows,
                 loading,
                 rowsError,
-                errorMsg,
-                successMsg,
+                toast,
                 page,
                 lastPage,
                 total,
@@ -992,6 +989,7 @@ export default function mountApp() {
                 onSortChange,
                 onFiltersChange,
                 onPageSizeChange,
+                onVisibleFieldsChange,
                 loadRows,
                 openCreateModal,
                 openEditModal,

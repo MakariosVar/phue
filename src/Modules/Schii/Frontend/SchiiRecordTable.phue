@@ -32,8 +32,8 @@
                   @click="sortable(col) && toggleSort(col)"
                   @keyup.enter="sortable(col) && toggleSort(col)"
                 >{{ col.label || col.key }}</span>
-                <span v-if="isSortedAsc(col)" class="text-primary fw-bold small">▲</span>
-                <span v-else-if="isSortedDesc(col)" class="text-primary fw-bold small">▼</span>
+                <span v-if="isSortedAsc(col)" class="text-primary fw-bold small" aria-hidden="true">▲</span>
+                <span v-else-if="isSortedDesc(col)" class="text-primary fw-bold small" aria-hidden="true">▼</span>
               </ph-flex>
             </th>
           </tr>
@@ -41,14 +41,16 @@
         <tbody>
           <tr v-if="rows.length === 0">
             <td :colspan="columns.length + (selectable ? 1 : 0)" class="text-center text-body-secondary py-4">
-              No records found.
+              <ph-flex direction="column" align="center" gap="sm">
+                <ph-text color="muted">No records found.</ph-text>
+                <ph-button v-if="$parent && typeof $parent.openCreateModal === 'function'" variant="primary" size="sm" @click="$parent.openCreateModal()">Create first record</ph-button>
+              </ph-flex>
             </td>
           </tr>
           <tr
             v-for="(row, idx) in rows"
             :key="row.id ?? idx"
             :class="{ 'table-active': selected.includes(row.id) }"
-            @click="expandRow(row)"
           >
             <td v-if="selectable" class="text-center" @click.stop>
               <ph-checkbox
@@ -59,9 +61,9 @@
             <td v-for="col in columns" :key="col.key">
               <template v-if="col.key === '__actions'">
                 <div class="d-flex gap-2">
-                  <ph-button variant="outline" size="sm" @click.stop="$emit('edit', row)">Edit</ph-button>
-                  <ph-button variant="ghost" size="sm" @click.stop="expandedKey = (expandedKey === rowKey(row) ? null : rowKey(row))">Detail</ph-button>
-                  <ph-button variant="danger" size="sm" @click.stop="$emit('delete-request', row.id)">Delete</ph-button>
+                  <ph-button variant="outline" size="sm" @click.stop="$emit('edit', row)" :aria-label="`Edit ${row.id || 'record'}`">Edit</ph-button>
+                  <ph-button variant="ghost" size="sm" @click.stop="$emit('detail', row)" :aria-label="`View detail for ${row.id || 'record'}`">Detail</ph-button>
+                  <ph-button variant="danger" size="sm" @click.stop="$emit('delete-request', row.id)" :aria-label="`Delete ${row.id || 'record'}`">Delete</ph-button>
                 </div>
               </template>
               <template v-else>
@@ -78,19 +80,6 @@
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div v-if="expandedRow" class="border rounded mb-3 p-3">
-      <ph-flex direction="row" justify="space-between" align="center" gap="sm" class="mb-2">
-        <ph-text weight="semibold" size="sm" class="mb-0">Record detail</ph-text>
-        <ph-button variant="ghost" size="sm" @click="expandedRow = null">Close</ph-button>
-      </ph-flex>
-      <dl class="row mb-0 small">
-        <template v-for="field in fields" :key="field.name">
-          <dt class="col-3 col-md-2 text-body-secondary text-truncate">{{ field.label || field.name }}</dt>
-          <dd class="col-9 col-md-4 text-break mb-1">{{ formatCell(field, expandedRow[field.name]) }}</dd>
-        </template>
-      </dl>
     </div>
 
     <div v-if="lastPage > 1" class="d-flex justify-content-center mt-3">
@@ -144,11 +133,9 @@ export default {
       default: null
     }
   },
-  emits: ['update:selected', 'page-change', 'edit', 'delete-request', 'sort-change'],
+  emits: ['update:selected', 'page-change', 'edit', 'delete-request', 'sort-change', 'detail'],
   data() {
-    return {
-      expandedKey: null
-    };
+    return {};
   },
   computed: {
     columns() {
@@ -187,17 +174,6 @@ export default {
     },
     someOnPageSelected() {
       return this.onPageIds.some(id => this.isSelected(id)) && !this.allOnPageSelected;
-    },
-    expandedRow() {
-      if (!this.expandedKey) return null;
-      return this.rows.find(r => this.rowKey(r) === this.expandedKey) || null;
-    }
-  },
-  watch: {
-    'rows': function () {
-      if (!this.rows.some(r => this.rowKey(r) === this.expandedKey)) {
-        this.expandedKey = null;
-      }
     }
   },
   methods: {
@@ -262,10 +238,6 @@ export default {
       if (typeof value === 'number') return String(value);
       const s = String(value);
       return s.length > 120 ? `${s.slice(0, 120)}…` : s;
-    },
-    expandRow(row) {
-      const key = this.rowKey(row);
-      this.expandedKey = this.expandedKey === key ? null : key;
     },
     isSelected(id) {
       return this.selected.includes(id);
