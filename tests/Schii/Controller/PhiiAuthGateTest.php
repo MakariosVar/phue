@@ -10,6 +10,7 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Controller\PhiiController;
@@ -98,7 +99,7 @@ final class PhiiAuthGateTest extends TestCase
             'outputRoot' => $this->dump,
         ]);
 
-        $authManager = new AuthManager([new SessionAuthenticator(ExplorerAuthUser::class, '__user_id')]);
+        $authManager = new AuthManager([new SessionAuthenticator(ExplorerAuthUser::class, new SessionLoginStore())]);
         $rbacManager = new RbacManager();
         if ($rbacConfig !== null) {
             $rbacConfig($rbacManager);
@@ -128,7 +129,8 @@ final class PhiiAuthGateTest extends TestCase
     {
         $response = $this->controller()->index(new Request('GET', '/phii'));
 
-        $this->assertSame(401, $response->getStatusCode());
+        $this->assertSame(302, $response->getStatusCode(), 'anonymous /phii page must redirect to /login, not render');
+        $this->assertSame('/login', strtolower('/' . trim((string) ($response->getHeader('Location') ?? ''), '/')));
     }
 
     public function testApplyAnonymousIsRejected(): void

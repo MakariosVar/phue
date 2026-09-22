@@ -10,6 +10,7 @@ use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\IdentityInterface;
 use Phue\Modules\Auth\Middleware\AccessControlMiddleware;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 use Phue\Modules\Auth\RbacManager;
 use Phue\Core\Request;
 use Phue\Core\Response;
@@ -42,7 +43,7 @@ class AuthTest extends TestCase
 {
     public function testAuthManagerAuthenticatesViaChain(): void
     {
-        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, new SessionLoginStore());
         
         $tokenAuth = new BearerTokenAuthenticator(function (string $token) {
             return $token === 'valid-secret-token' ? new DummyUser(42, $token) : null;
@@ -139,7 +140,7 @@ class AuthTest extends TestCase
         $request = $this->createMock(Request::class);
         $request->method('getHeader')->willReturn(null);
 
-        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, new SessionLoginStore());
         $tokenAuth = new BearerTokenAuthenticator(fn(string $token) => null);
 
         $auth = new AuthManager([$sessionAuth, $tokenAuth]);
@@ -302,9 +303,9 @@ class AuthTest extends TestCase
 
     public function testSessionAuthenticatorReturnsIdentityWhenSessionHasUserId(): void
     {
-        $_SESSION['user_id'] = 7;
+        $_SESSION['__user_id'] = 7;
 
-        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, new SessionLoginStore());
         $request = $this->createMock(Request::class);
 
         $identity = $sessionAuth->authenticate($request);
@@ -317,7 +318,7 @@ class AuthTest extends TestCase
     {
         $_SESSION = [];
 
-        $sessionAuth = new SessionAuthenticator(DummyUser::class, 'user_id');
+        $sessionAuth = new SessionAuthenticator(DummyUser::class, new SessionLoginStore());
         $request = $this->createMock(Request::class);
 
         $result = $sessionAuth->authenticate($request);

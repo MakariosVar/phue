@@ -14,6 +14,7 @@ use Phue\Core\Request;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
@@ -62,7 +63,7 @@ final class SessionAuthFlowTest extends TestCase
 
     public function testSessionAuthenticatorResolvesIdentityFromSession(): void
     {
-        $authenticator = new SessionAuthenticator(User::class, '__user_id');
+        $authenticator = new SessionAuthenticator(User::class, new SessionLoginStore());
         $request = new Request('GET', '/schii');
 
         $this->assertNull($authenticator->authenticate($request));
@@ -147,7 +148,7 @@ final class SessionAuthFlowTest extends TestCase
 
     public function testAuthorizedModelEndpointAllowsAccessWithSessionAuth(): void
     {
-        $sessionAuth = new SessionAuthenticator(User::class, '__user_id');
+        $sessionAuth = new SessionAuthenticator(User::class, new SessionLoginStore());
         $authManager = new AuthManager([$sessionAuth]);
 
         $rbacManager = new RbacManager();

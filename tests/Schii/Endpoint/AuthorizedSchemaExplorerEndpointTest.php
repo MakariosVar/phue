@@ -9,6 +9,7 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\AuthManager;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Schii\Endpoint\AuthorizedSchemaInspectorEndpoint;
 use Phue\Modules\Schii\Endpoint\AuthorizedSchemaSyncEndpoint;
@@ -83,7 +84,7 @@ final class AuthorizedSchemaExplorerEndpointTest extends TestCase
 
     private function authManager(): AuthManager
     {
-        $authenticator = new SessionAuthenticator(ExplorerAuthUser::class, '__user_id');
+        $authenticator = new SessionAuthenticator(ExplorerAuthUser::class, new SessionLoginStore());
         return new AuthManager([$authenticator]);
     }
 

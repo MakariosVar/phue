@@ -82,7 +82,9 @@ final class AppLayoutTest extends TestCase
             }
 
             $actions = $params['actions'] ?? (\App\Config\NavigationConfig::getAppActions($user));
-            $themeConfig = $params['themeConfig'] ?? (\App\Config\NavigationConfig::getAppThemeToggle());
+            $root = dirname(__DIR__, 2);
+            $appConfig = file_exists($root . '/config/app.php') ? require $root . '/config/app.php' : [];
+            $themeConfig = $params['themeConfig'] ?? ($appConfig['themeToggle'] ?? []);
 
             $navState = [
                 'items'       => $items,

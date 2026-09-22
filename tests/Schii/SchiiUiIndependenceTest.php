@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii;
 
 use Phue\Core\Application;
+use Phue\Core\Database\Connection;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
 use Phue\Core\UI\PhueComponentLoader;
@@ -34,6 +35,10 @@ final class SchiiUiIndependenceTest extends TestCase
 
     protected function tearDown(): void
     {
+        unset($_SESSION['__user_id']);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         $this->rmTree($this->tmpBase);
     }
 
@@ -44,6 +49,19 @@ final class SchiiUiIndependenceTest extends TestCase
 return [
     'debug' => true,
     'modules' => ['\\Phue\\Modules\\Auth\\AuthModule', '\\Phue\\Modules\\Schii\\SchiiModule'],
+];
+PHP);
+
+        file_put_contents($this->tmpBase . '/config/database.php', <<<PHP
+<?php
+return [
+    'default' => 'sqlite',
+    'connections' => [
+        'sqlite' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ],
+    ],
 ];
 PHP);
 
@@ -62,6 +80,28 @@ PHP);
         $registry = $app->getContainer()->get(ComponentLoaderRegistry::class);
         $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
         $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/App/Frontend'));
+    }
+
+    private function authedSession(Application $app): void
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $db = $app->getContainer()->get(Connection::class);
+        $db->execute('CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            auth_key TEXT,
+            roles TEXT
+        )');
+        $db->execute(
+            "INSERT INTO users (username, password_hash, auth_key, roles) VALUES ('admin', ?, 'admin-token', '[\"admin\"]')",
+            [password_hash('secret', PASSWORD_BCRYPT)]
+        );
+
+        $_SESSION['__user_id'] = 1;
     }
 
     public function testModuleHonorsApplicationConfigPrefixAndNamespace(): void
@@ -123,6 +163,7 @@ PHP);
         $this->writeConfig('/api/schii', 'Phue\\Tests\\Schii\\Stubs');
 
         $app = new Application($this->tmpBase);
+        $this->authedSession($app);
         $this->addPhuiLoader($app);
 
         $page = $app->handle(new Request('GET', '/schii'));
@@ -148,6 +189,7 @@ PHP);
         $this->writeConfig('/custom/api', 'Phue\\Tests\\Schii\\Stubs');
 
         $app = new Application($this->tmpBase);
+        $this->authedSession($app);
         $this->addPhuiLoader($app);
 
         $page = $app->handle(new Request('GET', '/schii'));
