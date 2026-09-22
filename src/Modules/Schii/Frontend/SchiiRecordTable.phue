@@ -1,14 +1,19 @@
 <template>
   <div>
-    <div v-if="selectable && rows.length" class="d-flex align-items-center gap-2 mb-2">
-      <ph-checkbox
-        :model-value="allOnPageSelected"
-        :indeterminate="someOnPageSelected"
-        label="Select all on page"
-        @update:model-value="selectAllPage($event)"
-      />
-      <ph-badge v-if="selected.length" :label="`${selected.length} selected`" variant="info" pill />
-      <ph-button v-if="selected.length" variant="ghost" size="sm" @click="clearSelection">Clear</ph-button>
+    <div v-if="(selectable && rows.length) || visibleFields.length < fields.length" class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+      <template v-if="selectable && rows.length">
+        <ph-checkbox
+          :model-value="allOnPageSelected"
+          :indeterminate="someOnPageSelected"
+          label="Select all on page"
+          @update:model-value="selectAllPage($event)"
+        />
+        <ph-badge v-if="selected.length" :label="`${selected.length} selected`" variant="info" pill />
+        <ph-button v-if="selected.length" variant="ghost" size="sm" @click="clearSelection">Clear</ph-button>
+      </template>
+      <span v-if="visibleFields.length < fields.length" class="text-body-secondary small ms-auto">
+        {{ fields.length - visibleFields.length }} hidden column(s)
+      </span>
     </div>
 
     <div class="table-responsive">
@@ -16,7 +21,21 @@
         <thead>
           <tr>
             <th v-if="selectable" scope="col"></th>
-            <th v-for="col in columns" :key="col.key" scope="col">{{ col.label || col.key }}</th>
+            <th v-for="col in columns" :key="col.key" scope="col">
+              <ph-flex direction="row" align="center" gap="xs">
+                <span
+                  :class="['fw-semibold', { 'text-primary': sortable(col) }]"
+                  :style="sortable(col) ? 'cursor: pointer;' : ''"
+                  role="button"
+                  :tabindex="sortable(col) ? 0 : null"
+                  :aria-sort="sortAria(col)"
+                  @click="sortable(col) && toggleSort(col)"
+                  @keyup.enter="sortable(col) && toggleSort(col)"
+                >{{ col.label || col.key }}</span>
+                <span v-if="isSortedAsc(col)" class="text-primary fw-bold small">▲</span>
+                <span v-else-if="isSortedDesc(col)" class="text-primary fw-bold small">▼</span>
+              </ph-flex>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -25,31 +44,53 @@
               No records found.
             </td>
           </tr>
-          <tr v-for="(row, idx) in rows" :key="row.id ?? idx">
-            <td v-if="selectable" class="text-center">
+          <tr
+            v-for="(row, idx) in rows"
+            :key="row.id ?? idx"
+            :class="{ 'table-active': selected.includes(row.id) }"
+            @click="expandRow(row)"
+          >
+            <td v-if="selectable" class="text-center" @click.stop>
               <ph-checkbox
                 :model-value="isSelected(row.id)"
                 @update:model-value="toggleSelect(row.id, $event)"
               />
             </td>
             <td v-for="col in columns" :key="col.key">
-              <template v-if="isBoolField(col.key)">
-                <ph-badge
-                  :label="row[col.key] ? 'Yes' : 'No'"
-                  :variant="row[col.key] ? 'success' : 'secondary'"
-                />
-              </template>
-              <template v-else-if="col.key === '__actions'">
+              <template v-if="col.key === '__actions'">
                 <div class="d-flex gap-2">
-                  <ph-button variant="outline" size="sm" @click="$emit('edit', row)">Edit</ph-button>
-                  <ph-button variant="danger" size="sm" @click="$emit('delete-request', row.id)">Delete</ph-button>
+                  <ph-button variant="outline" size="sm" @click.stop="$emit('edit', row)">Edit</ph-button>
+                  <ph-button variant="ghost" size="sm" @click.stop="expandedKey = (expandedKey === rowKey(row) ? null : rowKey(row))">Detail</ph-button>
+                  <ph-button variant="danger" size="sm" @click.stop="$emit('delete-request', row.id)">Delete</ph-button>
                 </div>
               </template>
-              <template v-else>{{ row[col.key] ?? '—' }}</template>
+              <template v-else>
+                <ph-badge v-if="isBoolField(col)" :label="row[col.key] ? 'Yes' : 'No'" :variant="row[col.key] ? 'success' : 'secondary'" />
+                <ph-badge
+                  v-else-if="isSelectField(col)"
+                  :label="selectLabel(col, row[col.key])"
+                  variant="info"
+                  pill
+                />
+                <template v-else>{{ formatCell(col, row[col.key]) }}</template>
+              </template>
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="expandedRow" class="border rounded mb-3 p-3">
+      <ph-flex direction="row" justify="space-between" align="center" gap="sm" class="mb-2">
+        <ph-text weight="semibold" size="sm" class="mb-0">Record detail</ph-text>
+        <ph-button variant="ghost" size="sm" @click="expandedRow = null">Close</ph-button>
+      </ph-flex>
+      <dl class="row mb-0 small">
+        <template v-for="field in fields" :key="field.name">
+          <dt class="col-3 col-md-2 text-body-secondary text-truncate">{{ field.label || field.name }}</dt>
+          <dd class="col-9 col-md-4 text-break mb-1">{{ formatCell(field, expandedRow[field.name]) }}</dd>
+        </template>
+      </dl>
     </div>
 
     <div v-if="lastPage > 1" class="d-flex justify-content-center mt-3">
@@ -93,19 +134,50 @@ export default {
     selectable: {
       type: Boolean,
       default: false
+    },
+    visibleFields: {
+      type: Array,
+      default: null
+    },
+    sort: {
+      type: [String, Object],
+      default: null
     }
   },
-  emits: ['update:selected', 'page-change', 'edit', 'delete-request'],
+  emits: ['update:selected', 'page-change', 'edit', 'delete-request', 'sort-change'],
+  data() {
+    return {
+      expandedKey: null
+    };
+  },
   computed: {
     columns() {
-      const cols = this.fields.map(f => ({ key: f.name, label: f.label || f.name }));
-      cols.push({ key: '__actions', label: 'Actions' });
+      const cols = this.fields
+        .filter(f => this.isVisible(f))
+        .map(f => ({ key: f.name, label: f.label || f.name, field: f }));
+      cols.push({ key: '__actions', label: 'Actions', field: null });
       return cols;
     },
     boolFields() {
       return this.fields
         .filter(f => f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox')
         .map(f => f.name);
+    },
+    selectFields() {
+      return this.fields
+        .filter(f => f.type === 'select' || f.widget === 'select')
+        .reduce((acc, f) => {
+          acc[f.name] = f;
+          return acc;
+        }, {});
+    },
+    sortState() {
+      if (typeof this.sort === 'string') {
+        const idx = this.sort.indexOf(':');
+        if (idx === -1) return { field: this.sort, dir: 'asc' };
+        return { field: this.sort.slice(0, idx), dir: this.sort.slice(idx + 1) };
+      }
+      return this.sort || {};
     },
     onPageIds() {
       return this.rows.map(r => r.id).filter(id => id !== undefined && id !== null);
@@ -115,11 +187,85 @@ export default {
     },
     someOnPageSelected() {
       return this.onPageIds.some(id => this.isSelected(id)) && !this.allOnPageSelected;
+    },
+    expandedRow() {
+      if (!this.expandedKey) return null;
+      return this.rows.find(r => this.rowKey(r) === this.expandedKey) || null;
+    }
+  },
+  watch: {
+    'rows': function () {
+      if (!this.rows.some(r => this.rowKey(r) === this.expandedKey)) {
+        this.expandedKey = null;
+      }
     }
   },
   methods: {
+    rowKey(row) {
+      return row.id !== undefined && row.id !== null ? `id:${row.id}` : `idx:${row.__idx ?? JSON.stringify(row)}`;
+    },
+    isVisible(field) {
+      if (!Array.isArray(this.visibleFields)) return true;
+      return this.visibleFields.includes(field.name);
+    },
     isBoolField(key) {
       return this.boolFields.includes(key);
+    },
+    isSelectField(col) {
+      return !!this.selectFields[col.key];
+    },
+    selectLabel(col, value) {
+      const field = this.selectFields[col.key];
+      const opts = Array.isArray(field.options) ? field.options : [];
+      const opt = opts.find(o => (typeof o === 'object' ? (o.value ?? o.label) === value : o === value));
+      if (opt === undefined) return value ?? '—';
+      return typeof opt === 'object' ? (opt.label ?? opt.value) : String(opt);
+    },
+    sortable(col) {
+      return !!(col.field && col.field.sortable);
+    },
+    sortAria(col) {
+      if (this.sortState.field !== col.key) return null;
+      return this.sortState.dir === 'asc' ? 'ascending' : 'descending';
+    },
+    isSortedAsc(col) {
+      return this.sortState.field === col.key && this.sortState.dir !== 'desc';
+    },
+    isSortedDesc(col) {
+      return this.sortState.field === col.key && this.sortState.dir === 'desc';
+    },
+    toggleSort(col) {
+      if (!col.field || !col.field.sortable) return;
+      if (this.sortState.field !== col.key) {
+        this.$emit('sort-change', `${col.key}:asc`);
+      } else {
+        this.$emit('sort-change', `${col.key}:${this.sortState.dir === 'asc' ? 'desc' : 'asc'}`);
+      }
+    },
+    formatCell(col, value) {
+      if (value === null || value === undefined) return '—';
+      if (Array.isArray(value)) return value.join(', ');
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      }
+      if (col && (col.type === 'date' || col.widget === 'date') && typeof value === 'string' && value.includes('T')) {
+        try {
+          return new Date(value).toLocaleString();
+        } catch {
+          return value;
+        }
+      }
+      if (typeof value === 'number') return String(value);
+      const s = String(value);
+      return s.length > 120 ? `${s.slice(0, 120)}…` : s;
+    },
+    expandRow(row) {
+      const key = this.rowKey(row);
+      this.expandedKey = this.expandedKey === key ? null : key;
     },
     isSelected(id) {
       return this.selected.includes(id);

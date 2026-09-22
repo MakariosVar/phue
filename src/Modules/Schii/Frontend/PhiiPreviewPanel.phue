@@ -9,10 +9,24 @@
       <ph-text size="sm" color="muted" class="mb-0">Preview only — nothing is written until you Apply.</ph-text>
     </ph-flex>
 
+    <div class="mb-2">
+      <ph-checkbox
+        :model-value="allMutationsSelected"
+        label="Select all files"
+        :indeterminate="someMutationsSelected"
+        @update:model-value="toggleAll($event)"
+      />
+    </div>
+
     <ph-stack gap="xs">
       <div v-for="(item, i) in plan" :key="i" class="border rounded p-2">
         <ph-flex direction="row" justify="space-between" align="center" gap="md" wrap="wrap">
           <div class="d-flex align-items-center gap-2 flex-grow-1">
+            <ph-checkbox
+              :model-value="isSelectedPath(item.path)"
+              label=""
+              @update:model-value="$emit('toggle-path', item.path)"
+            />
             <ph-badge
               :variant="item.willOverwrite ? 'warning' : (item.exists ? 'info' : 'success')"
               :label="item.willOverwrite ? 'OVERWRITE' : (item.exists ? 'EXISTS' : 'NEW')"
@@ -20,9 +34,9 @@
             <ph-text size="sm" as="code" class="mb-0 text-break">{{ item.path }}</ph-text>
           </div>
           <div class="d-flex align-items-center gap-2">
-            <ph-text size="sm" color="muted" class="mb-0">{{ item.contentLength || 0 }} chars</ph-text>
+            <ph-badge :label="`${item.contentLength || 0} chars`" variant="secondary" pill />
             <ph-button variant="ghost" size="sm" @click="toggleContent(item.path)">
-              {{ isOpen(item.path) ? 'Hide content' : 'Preview content' }}
+              {{ isOpen(item.path) ? 'Collapse content' : 'Preview content' }}
             </ph-button>
           </div>
         </ph-flex>
@@ -32,11 +46,35 @@
 
     <hr />
 
+    <div class="mb-2">
+      <ph-text weight="semibold" size="sm" class="mb-1 d-block">Conflict policy</ph-text>
+      <ph-flex direction="row" gap="md" align="center" wrap="wrap">
+        <ph-radio
+          v-model="conflictPolicy"
+          name="phii-conflict-policy"
+          value="overwrite"
+          label="Overwrite existing"
+        />
+        <ph-radio
+          v-model="conflictPolicy"
+          name="phii-conflict-policy"
+          value="skip"
+          label="Skip existing"
+        />
+      </ph-flex>
+    </div>
+
     <ph-flex direction="row" justify="space-between" align="center" gap="md" wrap="wrap">
       <ph-checkbox v-model="wantsBackup" label="Create ZIP backup before writing" />
-      <ph-button variant="primary" :loading="applying" @click="$emit('apply', { backup: wantsBackup })">
-        Apply plan
-      </ph-button>
+      <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
+        <ph-badge :label="`${selectedCount}/${plan.length} selected`" variant="info" pill />
+        <ph-button
+          variant="primary"
+          :loading="applying"
+          :disabled="selectedCount === 0"
+          @click="$emit('apply', { backup: wantsBackup })"
+        >Apply plan</ph-button>
+      </ph-flex>
     </ph-flex>
   </div>
 </template>
@@ -52,9 +90,17 @@ export default {
     applying: {
       type: Boolean,
       default: false
+    },
+    selectedPaths: {
+      type: Array,
+      default: null
+    },
+    conflictPolicy: {
+      type: String,
+      default: 'overwrite'
     }
   },
-  emits: ['apply'],
+  emits: ['apply', 'toggle-path', 'conflict-policy-change'],
   data() {
     return {
       wantsBackup: true,
@@ -64,9 +110,41 @@ export default {
   computed: {
     existingCount() {
       return this.plan.filter(p => p.exists).length;
+    },
+    selectedCount() {
+      if (Array.isArray(this.selectedPaths)) {
+        return this.selectedPaths.length;
+      }
+      return this.plan.length;
+    },
+    allMutationsSelected() {
+      return this.plan.length > 0 && this.selectedCount === this.plan.length;
+    },
+    someMutationsSelected() {
+      return this.selectedCount > 0 && this.selectedCount < this.plan.length;
+    }
+  },
+  watch: {
+    conflictPolicy(val) {
+      this.$emit('conflict-policy-change', val);
     }
   },
   methods: {
+    isSelectedPath(path) {
+      return Array.isArray(this.selectedPaths) && this.selectedPaths.includes(path);
+    },
+    toggleAll(checked) {
+      this.plan.forEach(p => {
+        const selected = Array.isArray(this.selectedPaths) ? this.selectedPaths : this.plan.map(x => x.path);
+        const idx = selected.indexOf(p.path);
+        const included = idx >= 0;
+        if (checked && !included) {
+          this.$emit('toggle-path', p.path);
+        } else if (!checked && included) {
+          this.$emit('toggle-path', p.path);
+        }
+      });
+    },
     isOpen(path) {
       return !!this.expanded[path];
     },

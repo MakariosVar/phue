@@ -21,38 +21,53 @@ return [
         <ph-badge label="REST + Bulk + Import/Export + Audit" variant="info" pill />
     </ph-flex>
 
-    <ph-alert
-        v-if="errorMsg"
-        variant="error"
-        :message="errorMsg"
-        dismissible
-        class="mb-3"
-        @dismiss="errorMsg = null"
-    />
-    <ph-alert
-        v-if="successMsg"
-        variant="success"
-        :message="successMsg"
-        dismissible
-        class="mb-3"
-        @dismiss="successMsg = null"
-    />
+    <div class="mb-3">
+        <ph-alert
+            v-if="errorMsg"
+            variant="error"
+            :message="errorMsg"
+            dismissible
+            @dismiss="errorMsg = null"
+        />
+        <ph-alert
+            v-if="successMsg"
+            variant="success"
+            :message="successMsg"
+            dismissible
+            @dismiss="successMsg = null"
+        />
+    </div>
 
     <ph-row gutter="3">
         <ph-col span="12" md="4" lg="3">
             <ph-card title="Entities" :bordered="false">
+                <div class="mb-2">
+                    <ph-input
+                        v-model="entitySearch"
+                        type="search"
+                        placeholder="Search entities…"
+                        style="margin-bottom: 0;"
+                    />
+                </div>
                 <div v-if="loadingEntities">
                     <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
                 </div>
-                <ph-stack v-else-if="entities.length" gap="xs">
-                    <ph-button
-                        v-for="entity in entities"
-                        :key="entity"
-                        :variant="currentEntity === entity ? 'primary' : 'ghost'"
-                        block
-                        @click="selectEntity(entity)"
-                    >{{ entity }}</ph-button>
+                <ph-stack v-else-if="filteredEntities.length" gap="xs">
+                    <div v-for="item in filteredEntities" :key="item.slug">
+                        <ph-button
+                            :variant="currentEntity === item.slug ? 'primary' : 'ghost'"
+                            block
+                            class="text-start"
+                            @click="selectEntity(item.slug)"
+                        >
+                            <span class="d-flex align-items-center gap-2">
+                                <span v-if="item.icon" aria-hidden="true">{{ item.icon }}</span>
+                                <span class="flex-grow-1">{{ item.label || item.slug }}</span>
+                            </span>
+                        </ph-button>
+                    </div>
                 </ph-stack>
+                <ph-text v-else-if="entitySearch" color="muted" size="sm">No entities match “{{ entitySearch }}”.</ph-text>
                 <ph-text v-else color="muted" size="sm">No entities discovered.</ph-text>
             </ph-card>
         </ph-col>
@@ -63,13 +78,13 @@ return [
                     <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="md">
                         <div>
                             <ph-text weight="semibold" size="lg" class="mb-0">
-                                {{ currentEntity || 'Data Browser' }}
+                                {{ currentLabel || currentEntity || 'Data Browser' }}
                             </ph-text>
                             <ph-text v-if="currentEntity" size="sm" color="muted" class="mb-0">
                                 {{ total }} record(s) &middot; page {{ page }} of {{ lastPage }}
                             </ph-text>
                         </div>
-                        <ph-badge v-if="currentEntity" label="REST" variant="info" pill />
+                        <ph-badge v-if="currentEntity" :label="currentEntity" variant="info" pill />
                     </ph-flex>
                 </template>
 
@@ -82,6 +97,10 @@ return [
                         :entity="currentEntity"
                         v-model:query="query"
                         :selected="selected"
+                        :fields="fields"
+                        :filters="filters"
+                        :sort="sort"
+                        :page-size="pageSize"
                         @search="search"
                         @refresh="loadRows"
                         @create="openCreateModal"
@@ -91,11 +110,15 @@ return [
                         @export-csv="exportRecords('csv')"
                         @export-json="exportRecords('json')"
                         @bulk-delete="askBulk('delete')"
+                        @filters-change="onFiltersChange"
+                        @sort-change="onSortChange"
+                        @page-size-change="onPageSizeChange"
                     />
 
                     <template v-if="loading">
                         <ph-skeleton v-for="n in 4" :key="n" variant="text" width="100%" height="18" class="d-block mb-3" />
                     </template>
+                    <ph-alert v-else-if="rowsError" variant="warning" :message="rowsError" dismissible class="mb-3" @dismiss="rowsError = null" />
 
                     <template v-else>
                         <schii-record-table
@@ -103,11 +126,14 @@ return [
                             :rows="rows"
                             :page="page"
                             :last-page="lastPage"
+                            :visible-fields="visibleFields"
+                            :sort="sort"
                             v-model:selected="selected"
                             selectable
                             @page-change="onPageChange"
                             @edit="openEditModal"
                             @delete-request="askDelete"
+                            @sort-change="onSortChange"
                         />
                     </template>
                 </template>
@@ -116,8 +142,10 @@ return [
     </ph-row>
 
     <ph-modal v-model="showModal"
-              :title="isEditing ? 'Edit ' + currentEntity : 'Create ' + currentEntity"
-              size="lg">
+              :title="isEditing ? 'Edit ' + (currentLabel || currentEntity) : 'Create ' + (currentLabel || currentEntity)"
+              size="lg"
+              :closable="!dirty"
+              @close="requestCloseModal">
         <ph-alert v-if="formError" variant="error" :message="formError" class="mb-3" />
 
         <form id="schii-record-form" novalidate @submit.prevent="submitForm">
@@ -130,7 +158,10 @@ return [
                         :step="inputStep(field)"
                         :label="field.label || field.name"
                         :required="field.required"
+                        :error="fieldErrors[field.name]"
+                        :helper-text="fieldHelper(field)"
                         :disabled="isEditing && field.name === 'id'"
+                        @blur="touchField(field.name)"
                     />
                     <ph-select
                         v-else-if="field.type === 'select' || field.widget === 'select'"
@@ -138,6 +169,7 @@ return [
                         :label="field.label || field.name"
                         :options="selectOptions(field)"
                         :required="field.required"
+                        :error="fieldErrors[field.name]"
                     />
                     <ph-textarea
                         v-else-if="field.widget === 'textarea'"
@@ -145,9 +177,10 @@ return [
                         :label="field.label || field.name"
                         :rows="3"
                         :required="field.required"
+                        :error="fieldErrors[field.name]"
                     />
                     <ph-checkbox
-                        v-else-if="field.type === 'boolean' || field.widget === 'checkbox'"
+                        v-else-if="field.type === 'boolean' || field.type === 'bool' || field.widget === 'checkbox'"
                         v-model="form[field.name]"
                         :label="field.label || field.name"
                     />
@@ -156,8 +189,17 @@ return [
         </form>
 
         <template #footer>
-            <ph-button variant="ghost" @click="closeModal">Cancel</ph-button>
-            <ph-button variant="primary" :loading="submitting" @click="submitForm">Save</ph-button>
+            <ph-text v-if="dirty" size="sm" color="muted" class="me-auto">You have unsaved changes.</ph-text>
+            <ph-button variant="ghost" @click="requestCloseModal">Cancel</ph-button>
+            <ph-button variant="primary" :loading="submitting" @click="submitForm" :disabled="!isFormValid">Save</ph-button>
+        </template>
+    </ph-modal>
+
+    <ph-modal v-model="confirmCloseOpen" title="Discard changes?" size="sm">
+        <ph-text>You have unsaved changes in the current form. Discard them?</ph-text>
+        <template #footer>
+            <ph-button variant="ghost" @click="confirmCloseOpen = false">Keep editing</ph-button>
+            <ph-button variant="danger" @click="forceCloseModal">Discard</ph-button>
         </template>
     </ph-modal>
 
@@ -211,13 +253,30 @@ return [
 </template>
 
 <script type="module">
-import { createApp, ref, reactive, computed, onMounted } from 'vue';
+import { createApp, ref, reactive, computed, onMounted, watch } from 'vue';
 
 if (typeof document !== 'undefined' && !document.getElementById('phue-v-cloak-style')) {
     const style = document.createElement('style');
     style.id = 'phue-v-cloak-style';
     style.textContent = '[v-cloak] { display: none !important; }';
     document.head.appendChild(style);
+}
+
+function parseQuery(win) {
+    const out = {};
+    if (!win) return out;
+    const qs = win.location.search.replace(/^\?/, '');
+    if (!qs) return out;
+    new URLSearchParams(qs).forEach((v, k) => {
+        const match = /^filter\[(.+)\]$/.exec(k);
+        if (match) {
+            out.filter = out.filter || {};
+            out.filter[match[1]] = v;
+        } else {
+            out[k] = v;
+        }
+    });
+    return out;
 }
 
 function api(url, opts = {}) {
@@ -237,27 +296,53 @@ export default function mountApp() {
 
     window.__phueApp = createApp({
         setup() {
-            const PAGE_SIZE = 10;
+            const DEFAULT_PAGE_SIZE = 10;
             const apiPrefix = window.__INITIAL_STATE__?.apiPrefix || '/api/schii';
 
+            const queryParams = parseQuery(window);
+
             const entities = ref([]);
+            const entityMeta = ref({});
             const loadingEntities = ref(true);
-            const currentEntity = ref(null);
+            const entitySearch = ref('');
+            const currentEntity = ref(queryParams.entity || null);
             const fields = ref([]);
             const rows = ref([]);
             const loading = ref(false);
+            const rowsError = ref(null);
             const errorMsg = ref(null);
             const successMsg = ref(null);
 
-            const page = ref(1);
+            const page = ref(parseInt(queryParams.page) || 1);
             const lastPage = ref(1);
             const total = ref(0);
-            const query = ref('');
+            const query = ref(queryParams.q || '');
+            const filters = reactive({});
+            const sort = ref(queryParams.sort || '');
+            const pageSize = ref(parseInt(queryParams.limit) || DEFAULT_PAGE_SIZE);
+            const visibleFields = ref(null);
             const selected = ref([]);
+
+            Object.entries(queryParams.filter || {}).forEach(([k, v]) => {
+                if (v !== '') filters[k] = v;
+            });
 
             const writableFields = computed(() =>
                 fields.value.filter(f => !f.primaryKey && f.name !== 'id' && f.writable !== false && !f.readonly)
             );
+
+            const currentLabel = computed(() =>
+                (entityMeta.value[currentEntity.value] || {}).label || currentEntity.value
+            );
+
+            const filteredEntities = computed(() => {
+                const term = entitySearch.value.trim().toLowerCase();
+                if (!term) return entities.value;
+                return entities.value.filter(slug =>
+                    slug.toLowerCase().includes(term) ||
+                    ((entityMeta.value[slug] || {}).label || '').toLowerCase().includes(term)
+                );
+            });
 
             const showModal = ref(false);
             const isEditing = ref(false);
@@ -265,6 +350,12 @@ export default function mountApp() {
             const submitting = ref(false);
             const formError = ref(null);
             const form = reactive({});
+            const dirty = ref(false);
+            const dirtySnapshot = ref({});
+            const touched = ref({});
+            const fieldErrors = ref({});
+            const pendingClose = ref(false);
+            const confirmCloseOpen = ref(false);
 
             const confirmOpen = ref(false);
             const pendingDeleteId = ref(null);
@@ -287,12 +378,11 @@ export default function mountApp() {
             const auditLogs = ref([]);
             const auditLoading = ref(false);
 
-            const bulkTitle = computed(() => {
-                if (!pendingBulk.value) return 'Confirm bulk action';
-                return pendingBulk.value.type === 'delete'
+            const bulkTitle = computed(() =>
+                pendingBulk.value && pendingBulk.value.type === 'delete'
                     ? 'Delete selected records'
-                    : 'Confirm bulk action';
-            });
+                    : 'Confirm bulk action'
+            );
 
             const bulkMessage = computed(() => {
                 if (!pendingBulk.value) return '';
@@ -301,6 +391,11 @@ export default function mountApp() {
                 const what = action === 'delete' ? 'deleted' : 'updated';
                 const verb = action === 'delete' ? 'delete' : 'update';
                 return `This will ${verb} ${count} selected record(s). They will be ${what}. This cannot be undone.`;
+            });
+
+            const isFormValid = computed(() => {
+                currentFieldsValidate();
+                return !Object.values(fieldErrors.value).some(Boolean);
             });
 
             const fetchEntities = async () => {
@@ -312,12 +407,56 @@ export default function mountApp() {
                         throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
                     }
                     const data = await res.json();
-                    entities.value = Array.isArray(data) ? data : (data.entities || []);
+                    const slugs = Array.isArray(data) ? data : (data.entities || []);
+                    entities.value = slugs;
+                    await hydrateEntityMeta(slugs);
                 } catch (err) {
                     errorMsg.value = err?.message || 'Failed to discover entity schemas.';
                 } finally {
                     loadingEntities.value = false;
                 }
+            };
+
+            const hydrateEntityMeta = async (slugs) => {
+                const meta = {};
+                const chunk = Math.max(1, Math.min(slugs.length, 8));
+                for (let i = 0; i < slugs.length; i += chunk) {
+                    const batch = slugs.slice(i, i + chunk);
+                    await Promise.all(batch.map(async (slug) => {
+                        if (entityMeta.value[slug]) {
+                            meta[slug] = entityMeta.value[slug];
+                            return;
+                        }
+                        try {
+                            const res = await api(`${apiPrefix}/schema/${encodeURIComponent(slug)}`);
+                            if (!res.ok) return;
+                            const data = await res.json();
+                            meta[slug] = {
+                                label: data.label || slug,
+                                icon: data.icon || '',
+                                description: data.description || '',
+                            };
+                        } catch {
+                            meta[slug] = { label: slug, icon: '' };
+                        }
+                    }));
+                }
+                entityMeta.value = { ...entityMeta.value, ...meta };
+            };
+
+            const syncUrl = () => {
+                if (typeof window === 'undefined' || !window.history) return;
+                const params = new URLSearchParams();
+                if (currentEntity.value) params.set('entity', currentEntity.value);
+                if (page.value > 1) params.set('page', String(page.value));
+                if (query.value.trim()) params.set('q', query.value.trim());
+                if (sort.value) params.set('sort', sort.value);
+                if (pageSize.value !== DEFAULT_PAGE_SIZE) params.set('limit', String(pageSize.value));
+                Object.entries(filters).forEach(([k, v]) => {
+                    if (v !== '') params.set(`filter[${k}]`, String(v));
+                });
+                const qs = params.toString();
+                window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
             };
 
             const loadSchema = async () => {
@@ -326,6 +465,20 @@ export default function mountApp() {
                     if (res.ok) {
                         const data = await res.json();
                         fields.value = data.fields || [];
+                        visibleFields.value = data.fields
+                            .map(f => f.name);
+                        if (data.label !== currentLabel.value) {
+                            entityMeta.value[currentEntity.value] = {
+                                label: data.label || currentEntity.value,
+                                icon: data.icon || '',
+                                description: data.description || '',
+                            };
+                        }
+                        if (!Object.keys(filters).length) {
+                            data.fields.filter(f => f.filterable && f.required).forEach(f => {
+                                filters[f.name] = '';
+                            });
+                        }
                     }
                 } catch (err) {
                     errorMsg.value = err?.message || 'Failed to load schema.';
@@ -335,12 +488,18 @@ export default function mountApp() {
             const loadRows = async () => {
                 if (!currentEntity.value) return;
                 loading.value = true;
+                rowsError.value = null;
                 try {
                     const params = new URLSearchParams({
                         page: String(page.value),
-                        limit: String(PAGE_SIZE),
+                        limit: String(pageSize.value),
                     });
                     if (query.value.trim()) params.set('q', query.value.trim());
+                    if (sort.value) params.set('sort', sort.value);
+                    Object.entries(filters).forEach(([k, v]) => {
+                        if (v !== '' && v !== null && v !== undefined) params.set(`filter[${k}]`, String(v));
+                    });
+                    syncUrl();
 
                     const res = await api(`${apiPrefix}/${currentEntity.value}?${params.toString()}`);
                     if (!res.ok) {
@@ -353,10 +512,10 @@ export default function mountApp() {
                     total.value = typeof meta.total === 'number' ? meta.total : rows.value.length;
                     lastPage.value = Math.max(
                         1,
-                        meta.last_page ?? meta.pages ?? Math.ceil(total.value / PAGE_SIZE)
+                        meta.last_page ?? meta.pages ?? Math.ceil(total.value / pageSize.value)
                     );
                 } catch (err) {
-                    errorMsg.value = err?.message || 'Failed to load records.';
+                    rowsError.value = err?.message || 'Failed to load records.';
                     rows.value = [];
                 } finally {
                     loading.value = false;
@@ -368,6 +527,8 @@ export default function mountApp() {
                 currentEntity.value = entity;
                 page.value = 1;
                 query.value = '';
+                sort.value = '';
+                Object.keys(filters).forEach(k => delete filters[k]);
                 rows.value = [];
                 fields.value = [];
                 selected.value = [];
@@ -384,18 +545,43 @@ export default function mountApp() {
                 loadRows();
             };
 
+            const onSortChange = (val) => {
+                sort.value = val || '';
+                page.value = 1;
+                loadRows();
+            };
+
+            const onFiltersChange = (val) => {
+                Object.keys(filters).forEach(k => delete filters[k]);
+                Object.entries(val || {}).forEach(([k, v]) => { filters[k] = String(v); });
+                page.value = 1;
+                loadRows();
+            };
+
+            const onPageSizeChange = (val) => {
+                pageSize.value = parseInt(val) || DEFAULT_PAGE_SIZE;
+                page.value = 1;
+                loadRows();
+            };
+
             const resetForm = () => {
                 writableFields.value.forEach(f => {
-                    if (f.type === 'boolean' || f.widget === 'checkbox') {
+                    if (f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox') {
                         form[f.name] = false;
-                    } else if (f.type === 'select' && Array.isArray(f.options) && f.options.length) {
-                        const first = f.options[0];
-                        form[f.name] = typeof first === 'object' ? (first.value ?? first) : first;
+                    } else if (f.type === 'select' || f.widget === 'select') {
+                        const first = Array.isArray(f.options) ? f.options[0] : null;
+                        form[f.name] = first
+                            ? (typeof first === 'object' ? (first.value ?? first.label) : first)
+                            : '';
                     } else {
                         form[f.name] = '';
                     }
                 });
                 formError.value = null;
+                touched.value = {};
+                fieldErrors.value = {};
+                dirtySnapshot.value = JSON.stringify({ ...form });
+                dirty.value = false;
             };
 
             const openCreateModal = () => {
@@ -412,14 +598,84 @@ export default function mountApp() {
                 writableFields.value.forEach(f => {
                     form[f.name] = row[f.name] ?? '';
                 });
+                dirtySnapshot.value = JSON.stringify({ ...form });
+                dirty.value = false;
                 showModal.value = true;
             };
 
+            const requestCloseModal = () => {
+                if (!dirty.value) {
+                    showModal.value = false;
+                    return;
+                }
+                confirmCloseOpen.value = true;
+                pendingClose.value = true;
+            };
+
             const closeModal = () => {
+                confirmCloseOpen.value = false;
                 showModal.value = false;
             };
 
+            const forceCloseModal = () => {
+                confirmCloseOpen.value = false;
+                showModal.value = false;
+            };
+
+            const fieldHelper = (f) => {
+                if (f.helper || f.helperText) return f.helper || f.helperText;
+                if (f.placeholder) return f.placeholder;
+                if (f.rules && f.rules.length) return `Rules: ${f.rules.join(', ')}`;
+                return '';
+            };
+
+            const currentFieldsValidate = () => {
+                const errors = {};
+                writableFields.value.forEach(f => {
+                    const value = form[f.name];
+                    const isMissing = value === '' || value === null || value === undefined;
+                    if (f.required && isMissing) {
+                        errors[f.name] = `${f.label || f.name} is required.`;
+                        return;
+                    }
+                    if (isMissing || value === false) return;
+                    const rules = Array.isArray(f.rules) ? f.rules : [];
+                    const str = String(value);
+                    for (const rule of rules) {
+                        if (rule === 'email' && str && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+                            errors[f.name] = `${f.label || f.name} must be a valid email address.`;
+                            return;
+                        }
+                        if ((rule === 'numeric' || f.type === 'int' || f.type === 'float') && str && Number.isNaN(Number(str))) {
+                            errors[f.name] = `${f.label || f.name} must be a number.`;
+                            return;
+                        }
+                        if (String(rule).startsWith('min:') && str && str.length < parseInt(rule.slice(4), 10)) {
+                            errors[f.name] = `${f.label || f.name} must be at least ${rule.slice(4)} characters.`;
+                            return;
+                        }
+                        if (String(rule).startsWith('max:') && str && str.length > parseInt(rule.slice(4), 10)) {
+                            errors[f.name] = `${f.label || f.name} must be at most ${rule.slice(4)} characters.`;
+                            return;
+                        }
+                    }
+                });
+                fieldErrors.value = errors;
+                return errors;
+            };
+
+            const touchField = (name) => {
+                touched.value = { ...touched.value, [name]: true };
+                currentFieldsValidate();
+            };
+
             const submitForm = async () => {
+                const errors = currentFieldsValidate();
+                if (Object.keys(errors).length) {
+                    Object.keys(errors).forEach(k => { touched.value[k] = true; });
+                    formError.value = 'Please fix the highlighted fields.';
+                    return;
+                }
                 submitting.value = true;
                 formError.value = null;
                 try {
@@ -433,10 +689,22 @@ export default function mountApp() {
                     });
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
+                        const serverErrors = errData.errors;
+                        if (serverErrors && typeof serverErrors === 'object') {
+                            currentFieldsValidate();
+                            const mapped = {};
+                            Object.entries(serverErrors).forEach(([k, v]) => {
+                                const fieldName = writableFields.value.find(f => f.name === k) ? k : k.replace(/[^a-zA-Z0-9_]/g, '_');
+                                mapped[fieldName] = typeof v === 'string' ? v : v.error || String(v);
+                            });
+                            fieldErrors.value = { ...fieldErrors.value, ...mapped };
+                            throw new Error(errData.error || 'Validation failed.');
+                        }
                         throw new Error(errData.error || errData.message || 'Failed to save record.');
                     }
                     closeModal();
                     successMsg.value = isEditing.value ? 'Record updated.' : 'Record created.';
+                    dirty.value = false;
                     await loadRows();
                 } catch (err) {
                     formError.value = err?.message || 'Failed to save record.';
@@ -638,9 +906,6 @@ export default function mountApp() {
 
             const isTextWidget = (f) => !(f.type === 'select' || f.widget === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea');
 
-            // Force a matched native input type. FieldSchema types are already
-            // normalized to 'int'/'float' server-side; legacy aliases are kept
-            // for robustness, and 'date' renders a real date picker (S5).
             const inputType = (f) =>
                 f.type === 'int' || f.type === 'float' || f.type === 'integer' || f.type === 'number' || f.type === 'numeric'
                     ? 'number'
@@ -657,28 +922,51 @@ export default function mountApp() {
                 );
             };
 
-            onMounted(fetchEntities);
+            watch(form, () => {
+                dirty.value = JSON.stringify({ ...form }) !== dirtySnapshot.value;
+            }, { deep: true });
+
+            if (currentEntity.value) {
+                onMounted(async () => {
+                    await fetchEntities();
+                    await Promise.all([loadSchema(), loadRows()]);
+                });
+            } else {
+                onMounted(fetchEntities);
+            }
 
             return {
                 entities,
+                filteredEntities,
+                entityMeta,
+                entitySearch,
                 loadingEntities,
                 currentEntity,
+                currentLabel,
                 fields,
                 writableFields,
                 rows,
                 loading,
+                rowsError,
                 errorMsg,
                 successMsg,
                 page,
                 lastPage,
                 total,
                 query,
+                filters,
+                sort,
+                pageSize,
+                visibleFields,
                 selected,
                 showModal,
                 isEditing,
                 submitting,
                 formError,
                 form,
+                dirty,
+                fieldErrors,
+                confirmCloseOpen,
                 confirmOpen,
                 pendingDeleteId,
                 bulkConfirmOpen,
@@ -697,14 +985,22 @@ export default function mountApp() {
                 auditOpen,
                 auditLogs,
                 auditLoading,
+                isFormValid,
                 selectEntity,
                 onPageChange,
                 search,
+                onSortChange,
+                onFiltersChange,
+                onPageSizeChange,
                 loadRows,
                 openCreateModal,
                 openEditModal,
+                requestCloseModal,
                 closeModal,
+                forceCloseModal,
                 submitForm,
+                touchField,
+                fieldHelper,
                 askDelete,
                 confirmDelete,
                 askBulk,

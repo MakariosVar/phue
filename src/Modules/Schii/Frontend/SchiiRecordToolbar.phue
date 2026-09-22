@@ -4,15 +4,55 @@
       <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
         <div style="min-width: 240px;">
           <ph-input
-            v-model="searchText"
+            :model-value="searchText"
             type="search"
             placeholder="Search records..."
             style="margin-bottom: 0;"
+            @update:model-value="onQueryUpdate"
             @keyup.enter="doSearch"
           />
         </div>
         <ph-button variant="secondary" size="sm" @click="doSearch">Search</ph-button>
         <ph-button variant="ghost" size="sm" @click="$emit('refresh')">Refresh</ph-button>
+
+        <div class="dropdown">
+          <ph-button variant="outline" size="sm" class="dropdown-toggle" @click="toggleFilters">
+            Filters
+            <ph-badge v-if="activeFilterCount" :label="String(activeFilterCount)" variant="primary" pill />
+          </ph-button>
+          <div v-if="filtersOpen" class="dropdown-menu show p-3" style="min-width: 300px;">
+            <ph-flex direction="row" align="center" gap="sm" class="mb-2">
+              <div class="flex-grow-1">
+                <ph-select
+                  :model-value="filterField"
+                  :options="filterableOptions"
+                  placeholder="Field"
+                  style="margin-bottom: 0;"
+                  @update:model-value="filterField = $event"
+                />
+              </div>
+              <ph-input
+                :model-value="filterValue"
+                placeholder="Value"
+                style="width: 120px; margin-bottom: 0;"
+                @update:model-value="filterValue = $event"
+                @keyup.enter="addFilter"
+              />
+              <ph-button variant="primary" size="sm" @click="addFilter">Add</ph-button>
+            </ph-flex>
+            <ph-stack v-if="localFilters.length" gap="xs">
+              <div v-for="(f, i) in localFilters" :key="i" class="d-flex align-items-center gap-2">
+                <ph-chip :label="`${f.field} = ${f.value}`" variant="info" removable @remove="removeFilter(i)" />
+              </div>
+            </ph-stack>
+            <ph-text v-else color="muted" size="sm">No active filters. Add one above.</ph-text>
+            <hr class="my-2" />
+            <div class="d-flex justify-content-end gap-2">
+              <ph-button variant="ghost" size="sm" :disabled="!localFilters.length" @click="clearFilters">Clear</ph-button>
+              <ph-button variant="primary" size="sm" :disabled="!localFilters.length" @click="applyFilters">Apply</ph-button>
+            </div>
+          </div>
+        </div>
       </ph-flex>
 
       <ph-flex direction="row" align="center" gap="sm" wrap="wrap">
@@ -23,6 +63,26 @@
         <ph-button variant="ghost" size="sm" @click="$emit('export-csv')">Export CSV</ph-button>
         <ph-button variant="ghost" size="sm" @click="$emit('export-json')">Export JSON</ph-button>
       </ph-flex>
+    </ph-flex>
+
+    <ph-flex v-if="hasControls" direction="row" align="center" gap="sm" wrap="wrap" class="mb-2">
+      <div style="width: 180px;">
+        <ph-select
+          :model-value="sort"
+          :options="sortOptions"
+          placeholder="Sort…"
+          style="margin-bottom: 0; font-size: 0.875rem;"
+          @update:model-value="$emit('sort-change', $event)"
+        />
+      </div>
+      <div style="width: 110px;">
+        <ph-select
+          :model-value="pageSize"
+          :options="pageSizeOptions"
+          style="margin-bottom: 0; font-size: 0.875rem;"
+          @update:model-value="$emit('page-size-change', $event)"
+        />
+      </div>
     </ph-flex>
 
     <div v-if="selected.length" class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
@@ -48,6 +108,22 @@ export default {
     query: {
       type: String,
       default: ''
+    },
+    fields: {
+      type: Array,
+      default: () => []
+    },
+    filters: {
+      type: Object,
+      default: () => ({})
+    },
+    sort: {
+      type: String,
+      default: ''
+    },
+    pageSize: {
+      type: Number,
+      default: 10
     }
   },
   emits: [
@@ -60,21 +136,97 @@ export default {
     'import-open',
     'export-csv',
     'export-json',
-    'bulk-delete'
+    'bulk-delete',
+    'filters-change',
+    'sort-change',
+    'page-size-change'
   ],
+  data() {
+    return {
+      filtersOpen: false,
+      filterField: '',
+      filterValue: '',
+      localFilters: []
+    };
+  },
   computed: {
     searchText: {
       get() {
         return this.query;
       },
-      set(val) {
-        this.$emit('update:query', val);
+      set() {}
+    },
+    filterableFields() {
+      return this.fields.filter(f => f.filterable);
+    },
+    filterableOptions() {
+      return this.filterableFields.map(f => ({ label: f.label || f.name, value: f.name }));
+    },
+    sortOptions() {
+      const dirs = [{ label: 'ASC', value: 'asc' }, { label: 'DESC', value: 'desc' }];
+      const opts = [];
+      this.fields.filter(f => f.sortable).forEach(f => {
+        dirs.forEach(d => opts.push({ label: `${f.label || f.name} (${d.label})`, value: `${f.name}:${d.value}` }));
+      });
+      opts.unshift({ label: '— No sort —', value: '' });
+      return opts;
+    },
+    pageSizeOptions() {
+      return [10, 25, 50, 100].map(n => ({ label: `${n} / page`, value: n }));
+    },
+    activeFilterCount() {
+      return this.localFilters.length;
+    },
+    hasControls() {
+      return this.sortableFields.length > 0;
+    },
+    sortableFields() {
+      return this.fields.filter(f => f.sortable);
+    }
+  },
+  watch: {
+    filters: {
+      immediate: true,
+      handler(val) {
+        this.localFilters = Object.entries(val || {}).map(([field, value]) => ({ field, value: String(value) }));
       }
     }
   },
   methods: {
+    onQueryUpdate(val) {
+      this.$emit('update:query', val);
+    },
     doSearch() {
       this.$emit('search');
+    },
+    toggleFilters() {
+      this.filtersOpen = !this.filtersOpen;
+    },
+    addFilter() {
+      const field = this.filterField;
+      const value = String(this.filterValue || '').trim();
+      if (!field || !value) return;
+      const idx = this.localFilters.findIndex(f => f.field === field);
+      if (idx >= 0) {
+        this.localFilters[idx].value = value;
+      } else {
+        this.localFilters.push({ field, value });
+      }
+      this.filterValue = '';
+      this.applyFilters();
+    },
+    removeFilter(i) {
+      this.localFilters.splice(i, 1);
+      this.applyFilters();
+    },
+    clearFilters() {
+      this.localFilters = [];
+      this.applyFilters();
+    },
+    applyFilters() {
+      const obj = {};
+      this.localFilters.forEach(f => { obj[f.field] = f.value; });
+      this.$emit('filters-change', obj);
     }
   }
 };
