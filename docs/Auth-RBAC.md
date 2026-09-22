@@ -13,12 +13,17 @@ Related guides: [Core](Core.md), [Schii](Schii.md) (protected CRUD endpoints),
 
 | Component | File | Responsibility |
 |---|---|---|
-| `IdentityInterface` | `Modules/Auth/IdentityInterface.php` | Contract for authenticated identities |
+| `IdentityInterface` | `Core/Security/IdentityInterface.php` | Core security contract (`getId()`, `findIdentity()`, `getAuthKey()`) |
+| `CurrentUserInterface` | `Core/Security/CurrentUserInterface.php` | Contract for the current-user facade (`user()`, `isGuest()`, `can()`, ...) |
+| `IdentityInterface` | `Modules/Auth/IdentityInterface.php` | Auth-domain alias extending the Core contract (`extends`) |
 | `BaseUser` | `Modules/Auth/BaseUser.php` | ActiveRecord-backed identity base model |
 | `AuthManager` | `Modules/Auth/AuthManager.php` | Chain-of-responsibility request authenticator & state manager |
 | `BearerTokenAuthenticator` | `Modules/Auth/Authenticator/BearerTokenAuthenticator.php` | Bearer token authentication |
-| `SessionAuthenticator` | `Modules/Auth/Authenticator/SessionAuthenticator.php` | Session-based authentication |
+| `SessionAuthenticator` | `Modules/Auth/Authenticator/SessionAuthenticator.php` | Session-based authentication (reads the ID via a `LoginStoreInterface`) |
 | `RbacManager` | `Modules/Auth/RbacManager.php` | Roles, permissions, inheritance with cycle detection |
+| `LoginStoreInterface` | `Modules/Auth/Persistence/LoginStoreInterface.php` | Session storage contract (`getId()`, `store()`, `clear()`) |
+| `SessionLoginStore` | `Modules/Auth/Persistence/SessionLoginStore.php` | `$_SESSION`-backed implementation (key `__user_id`) |
+| `UserAccessor` | `Modules/Auth/UserAccessor.php` | Scoped current-user facade implementing `CurrentUserInterface` |
 | `AccessControlMiddleware` | `Modules/Auth/Middleware/AccessControlMiddleware.php` | Route middleware enforcing permission checks |
 
 > Historical note: this subsystem used to live in `Phue\Auth` (`src/Auth/`).
@@ -76,9 +81,10 @@ tracks state (`getUser()`, `login()`, `logout()`, `check()`).
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 
 $authManager = new AuthManager([
-    new SessionAuthenticator(App\Models\User::class),
+    new SessionAuthenticator(App\Models\User::class, new SessionLoginStore()),
     new BearerTokenAuthenticator(
         fn (string $token) => App\Models\User::findIdentityByAuthKey($token)
     ),
@@ -90,10 +96,18 @@ $user = $authManager->authenticate($request);
 
 ### How the module wires it
 
-`AuthModule::bindings()` registers `AuthManager` as **request-scoped** (it must
-not outlive a request) and `RbacManager` as a **singleton**:
+`AuthModule::bindings()` registers `LoginStoreInterface` as a **singleton**
+(with `SessionLoginStore` as its implementation), `AuthManager` as
+**request-scoped** (it must not outlive a request), `RbacManager` as a
+**singleton** (seeded from `config/rbac_seeding.php`), and `UserAccessor` as
+**request-scoped** behind the Core `CurrentUserInterface`:
 
 ```php
+$this->container->singleton(
+    LoginStoreInterface::class,
+    fn(): LoginStoreInterface => new SessionLoginStore()
+);
+
 $this->container->scoped(AuthManager::class, function (Container $c): AuthManager {
     $authConfig = $c->has(Config::class)
         ? $c->get(Config::class)->get('auth', [])
@@ -111,13 +125,52 @@ $this->container->scoped(AuthManager::class, function (Container $c): AuthManage
         }
     );
 
-    return new AuthManager([$bearerAuth]);
+    $sessionAuth = new SessionAuthenticator(
+        identityClass: \App\Models\User::class,
+        loginStore: $c->get(LoginStoreInterface::class)
+    );
+
+    return new AuthManager([$sessionAuth, $bearerAuth]);
 });
 
 $this->container->singleton(
     RbacManager::class,
-    fn(): RbacManager => new RbacManager()
+    fn(): RbacManager => new RbacManager('config/rbac_seeding.php')
 );
+
+$this->container->scoped(
+    CurrentUserInterface::class,
+    fn(Container $c): CurrentUserInterface => new UserAccessor(
+        authManager: $c->get(AuthManager::class),
+        rbacManager: $c->get(RbacManager::class),
+        loginStore: $c->get(LoginStoreInterface::class),
+        request: $c->get(Request::class)
+    )
+);
+```
+
+The chain order matters: the **session authenticator runs first**, so a logged-in
+browser user wins over a stray Bearer token; APIs without a session fall through
+to the Bearer authenticator.
+
+`UserAccessor` is registered against the Core `CurrentUserInterface`. Its
+constructor reads the request-bound `AuthManager`, `RbacManager` and
+`LoginStoreInterface` **lazily on first auth attempt** (memoized per request via
+the `resolved` flag), which keeps it Swoole-safe — no state crosses requests.
+Access it from anywhere with `$app->user()`:
+
+```php
+use Phue\Core\Security\CurrentUserInterface;
+
+/** @var CurrentUserInterface|null $user */
+$user = $app->user();
+
+if ($user === null || $user->isGuest()) {
+    // not authenticated
+} else {
+    $id   = $user->getId();          // int|string|null
+    $can  = $user->can('product.write'); // RBAC check (false for guests)
+}
 ```
 
 ### Zero-config auth

@@ -264,8 +264,10 @@ Engine internals:
 ### Console (`/schii`)
 
 `SchiiModule` routes `GET /schii` → `ConsoleController::index()` which returns
-`ComponentRenderer::render(...)`. The console page
-(`src/Modules/Schii/Frontend/Schii.phue`) is a **Vue 3 no-build app**:
+`ComponentRenderer::render(...)`. When the auth module is present, an anonymous
+visitor is redirected to `/login` (302) instead of rendering the console. The
+console page (`src/Modules/Schii/Frontend/Schii.phue`) is a **Vue 3 no-build
+app**:
 
 - Boots from `/assets/vendor/vue3/vue.esm-browser.js` and reads
   `window.__INITIAL_STATE__`.
@@ -283,6 +285,9 @@ Module frontend components (read-only, framework territory): `Schii.phue`,
 The Phii code generator panel: generate, preview, and apply file mutations from
 model schema metadata (`GET /phii`, `POST /phii/generate`, `POST /phii/preview`,
 `POST /phii/apply`). Gated by `phii.allowInProduction => false` by default.
+The panel also requires authentication: anonymous page requests are redirected
+to `/login` (302), while anonymous API calls (`generate`/`preview`/`apply`)
+receive a 401 JSON error.
 
 The Phii generator tooling also powers the CLI generators
 (`generate:model`, `generate:controller`, ... via `bin/phue_test` /

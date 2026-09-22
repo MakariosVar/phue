@@ -158,7 +158,8 @@ The `ComponentRenderer` is wired with everything a page needs:
 - `uriResolver` / `requestResolver` — current request access for nav state.
 - `userResolver` — reads the authenticated identity from
   `Phue\Modules\Auth\AuthManager` (when the auth module is installed).
-- `themeConfig` — from `App\Config\NavigationConfig::getAppThemeToggle()`.
+- `themeConfig` — from the `themeToggle` key in `config/app.php`
+  (`$config->get('app.themeToggle', [])`).
 
 Two controllers are auto-registered on the router: `AssetsController` (serves
 `/assets/*`) and `HealthController`.

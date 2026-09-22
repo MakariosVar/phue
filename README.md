@@ -253,7 +253,7 @@ For every project, the installer copies:
 ```
 my-app/
 ├── App/
-│   ├── Config/NavigationConfig.php   # Navigation items, brand, theme toggle
+│   ├── Config/NavigationConfig.php   # Navigation items, brand
 │   ├── Controllers/
 │   │   ├── Controller.php            # Abstract base (injects ComponentRenderer)
 │   │   └── WebController.php         # #[Route] home controller
