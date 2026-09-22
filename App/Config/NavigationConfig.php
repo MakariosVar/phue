@@ -42,13 +42,13 @@ class NavigationConfig
     {
         $allItems = [
             self::item('Home', '/'),
-            self::grouped(self::item('Docs', '/docs'), 'Explore'),
-            self::grouped(self::item('UI Components', '/ui'), 'Explore'),
+            self::item('Docs', '/docs'),
+            self::item('PHUI Components', '/ui'),
         ];
 
         if ((bool) env('SCHII_ENABLED', true)) {
-            $allItems[] = self::item('Schii', '/schii');
-            $allItems[] = self::item('Phii', '/phii');
+            $allItems[] =  self::grouped(self::item('Schii', '/schii'), 'Modules');
+            $allItems[] =  self::grouped(self::item('Phii', '/phii'), 'Modules');
         }
 
         return self::filterVisible($allItems, $user);
