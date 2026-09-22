@@ -9,27 +9,6 @@ namespace Phue\Modules\Auth;
  *
  * @package Phue\Modules\Auth
  */
-interface IdentityInterface
+interface IdentityInterface extends \Phue\Core\Security\IdentityInterface
 {
-    /**
-     * Get the unique identifier for the user identity.
-     *
-     * @return int|string
-     */
-    public function getId(): int|string;
-
-    /**
-     * Find an identity by its unique identifier.
-     *
-     * @param int|string $id
-     * @return self|null
-     */
-    public static function findIdentity(int|string $id): ?self;
-
-    /**
-     * Retrieve access token string if identity supports token authentication.
-     *
-     * @return string|null
-     */
-    public function getAuthKey(): ?string;
 }

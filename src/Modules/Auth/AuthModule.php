@@ -7,14 +7,19 @@ namespace Phue\Modules\Auth;
 use Phue\Core\Module;
 use Phue\Core\Container;
 use Phue\Core\Config;
+use Phue\Core\Request;
+use Phue\Core\Security\CurrentUserInterface;
 use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
+use Phue\Modules\Auth\Persistence\LoginStoreInterface;
+use Phue\Modules\Auth\Persistence\SessionLoginStore;
 
 /**
  * Class AuthModule
  *
  * Serves as the bootstrapping module for the authentication system.
- * Configures framework dependency injections, handles authentication resolvers, and registers REST API and console routes.
+ * Configures framework dependency injections, handles authentication resolvers, 
+ * session storage persistence, user accessors, and RBAC management.
  *
  * @package Phue\Modules\Auth
  */
@@ -46,6 +51,8 @@ class AuthModule extends Module
 
     /**
      * Initialize module
+     *
+     * @return void
      */
     public function init(): void
     {
@@ -54,10 +61,18 @@ class AuthModule extends Module
 
     /**
      * Register dependency injections
+     *
+     * @return void
      */
     protected function bindings(): void
     {
-        // AuthManager scoped
+        // Bind LoginStoreInterface to SessionLoginStore via a factory closure
+        $this->container->singleton(
+            LoginStoreInterface::class,
+            fn(): LoginStoreInterface => new SessionLoginStore()
+        );
+
+        // AuthManager scoped binding
         $this->container->scoped(
             AuthManager::class,
             function (Container $c): AuthManager {
@@ -79,12 +94,13 @@ class AuthModule extends Module
                     }
                 );
 
+                // SessionAuthenticator now relies on LoginStoreInterface instead of a hardcoded session key
                 $sessionAuth = new SessionAuthenticator(
                     identityClass: \App\Models\User::class,
-                    sessionKey: '__user_id'
+                    loginStore: $c->get(LoginStoreInterface::class)
                 );
-                return new AuthManager([$sessionAuth, $bearerAuth]);
 
+                return new AuthManager([$sessionAuth, $bearerAuth]);
             }
         );
 
@@ -93,6 +109,16 @@ class AuthModule extends Module
             RbacManager::class,
             fn(): RbacManager => new RbacManager('config/rbac_seeding.php')
         );
+
+        // CurrentUserInterface scoped binding to prevent Swoole request leakage
+        $this->container->scoped(
+            CurrentUserInterface::class,
+            fn(Container $c): CurrentUserInterface => new UserAccessor(
+                authManager: $c->get(AuthManager::class),
+                rbacManager: $c->get(RbacManager::class),
+                loginStore: $c->get(LoginStoreInterface::class),
+                request: $c->get(Request::class)
+            )
+        );
     }
 }
-
