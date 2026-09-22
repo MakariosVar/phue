@@ -436,6 +436,41 @@ No emits.
 <ph-skeleton variant="rectangular" width="200" height="120" />
 ```
 
+### `<ph-toast>`
+
+Programmatic notification stack, teleported to `body` under a fixed container.
+Toasts are pushed from a template ref — there is no global/JS singleton, so the
+component keeps zero state beyond what your page explicitly owns.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `position` | `String` | `'top-right'` | `top-right` \| `top-left` \| `top-center` \| `bottom-right` \| `bottom-left` \| `bottom-center` |
+| `duration` | `Number` | `5000` | Auto-dismiss ms (per-item override wins) |
+| `max` | `Number` | `5` | Excess toasts are dropped from the front |
+| `dismissible` | `Boolean` | `true` | Shows the `btn-close` |
+
+Emits: `dismiss` (toast id).
+
+Methods (on the template ref):
+
+| Method | Signature | Notes |
+|---|---|---|
+| `push` | `push(source)` | `source` = string (message) or `{ message, variant, title?, duration? }`; returns the toast id |
+| `remove` | `remove(id)` | Manual dismiss with fade-out |
+| `clear` | `clear()` | Drops the whole stack |
+
+`variant`: `info` | `success` | `warning` | `error` (colored left border via
+Bootstrap CSS variables — dark-mode safe). Hovering a toast pauses its countdown.
+
+```
+<ph-toast ref="toast" position="top-right" @dismiss="onToastDismiss" />
+
+<ph-button variant="primary" @click="toast.push({
+    variant: 'success', title: 'Saved',
+    message: 'Changes persisted.', duration: 3000
+  })">Mention success</ph-button>
+```
+
 ---
 
 ## 5. Navigation
@@ -829,6 +864,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhTabs | `<ph-tabs>` | Navigation |
 | PhText | `<ph-text>` | Typography |
 | PhTextarea | `<ph-textarea>` | Form control |
+| PhToast | `<ph-toast>` | Feedback |
 | Spacer | `<spacer>` | Layout |
 
 Live demonstrations of every component live on the built-in `/ui` showcase page
