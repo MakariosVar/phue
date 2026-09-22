@@ -143,7 +143,7 @@ final class AppLayoutTest extends TestCase
             $html
         );
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Explore</a>',
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Modules</a>',
             $html
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);

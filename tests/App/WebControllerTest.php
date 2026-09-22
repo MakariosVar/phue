@@ -312,7 +312,7 @@ final class WebControllerTest extends TestCase
             $content
         );
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Explore</a>',
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Modules</a>',
             $content
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $content);
