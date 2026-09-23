@@ -25,6 +25,9 @@ final readonly class PhiiExportField
      * @param bool                     $searchable Search query compatibility.
      * @param bool                     $filterable Filter panel capability.
      * @param bool                     $sortable   Order-by capability.
+     * @param bool                     $writable   Writable capability.
+     * @param bool                     $readonly   Read-only capability.
+     * @param bool                     $primaryKey Primary key indicator.
      * @param array<string, mixed>     $options    UI or widget-specific component options.
      * @param array<int|string, mixed> $rules      Validation rules.
      * @param array<string, mixed>     $extra      Additional export metadata.
@@ -39,6 +42,9 @@ final readonly class PhiiExportField
         public bool $searchable,
         public bool $filterable,
         public bool $sortable,
+        public bool $writable = true,
+        public bool $readonly = false,
+        public bool $primaryKey = false,
         public array $options = [],
         public array $rules = [],
         public array $extra = [],
@@ -65,6 +71,9 @@ final readonly class PhiiExportField
             sortable: $field->sortable,
             options: $field->options,
             rules: $field->rules,
+            writable: $field->writable,
+            readonly: $field->readonly,
+            primaryKey: $field->primaryKey,
             extra: [],
         );
     }
@@ -91,6 +100,9 @@ final readonly class PhiiExportField
             options: $data['options'] ?? [],
             rules: $data['rules'] ?? [],
             extra: $data['extra'] ?? [],
+            writable: (bool) ($data['writable'] ?? true),
+            readonly: (bool) ($data['readonly'] ?? false),
+            primaryKey: (bool) ($data['primaryKey'] ?? false),
         );
     }
 
@@ -114,6 +126,9 @@ final readonly class PhiiExportField
             'options' => $this->options,
             'rules' => $this->rules,
             'extra' => $this->extra,
+            'writable' => $this->writable,
+            'readonly' => $this->readonly,
+            'primaryKey' => $this->primaryKey,
         ];
     }
 }

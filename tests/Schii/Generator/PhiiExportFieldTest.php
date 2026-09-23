@@ -99,6 +99,9 @@ final class PhiiExportFieldTest extends TestCase
             'options' => [],
             'rules' => ['boolean'],
             'extra' => ['help' => 'Is this record active?'],
+            'writable' => true,
+            'readonly' => false,
+            'primaryKey' => false,
         ], $data);
     }
 

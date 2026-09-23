@@ -155,7 +155,9 @@ final readonly class PhiiExportSchema
     {
         $names = [];
         foreach ($this->fields as $field) {
-            $names[] = $field->name;
+            if (!$field->readonly && $field->writable) {
+               $names[] = $field->name;
+            }
         }
 
         return $names;

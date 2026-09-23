@@ -123,7 +123,7 @@ final class PhiiExportSchemaTest extends TestCase
             'description',
         ], array_keys($data));
         $this->assertIsArray($data['fields']);
-        $this->assertSame(['name', 'type', 'label', 'widget', 'column', 'required', 'searchable', 'filterable', 'sortable', 'options', 'rules', 'extra'], array_keys($data['fields'][1]));
+        $this->assertSame(['name', 'type', 'label', 'widget', 'column', 'required', 'searchable', 'filterable', 'sortable', 'options', 'rules', 'extra', 'writable', 'readonly', 'primaryKey'], array_keys($data['fields'][1]));
     }
 
     public function testFromArrayReconstructsIdenticalExport(): void
