@@ -293,4 +293,23 @@ final class SchemaDiffTest extends TestCase
             'A dropped index must not be re-created by a table rebuild triggered by an unrelated column.'
         );
     }
+
+    public function testDiffColumnCarriesIndexedFlag(): void
+    {
+        $column = new ColumnDefinition(name: 'email', type: 'text', indexed: true);
+
+        $this->assertTrue($column->indexed);
+        $this->assertFalse((new ColumnDefinition(name: 'name', type: 'text'))->indexed);
+    }
+
+    public function testBoolTypeMapsToBooleanPerDriver(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::AddColumn, 'column' => $this->column('active', 'boolean')],
+        ]);
+
+        $this->assertStringContainsString('"active" INTEGER', $diff->toSqls('sqlite')[0]);
+        $this->assertStringContainsString('`active` TINYINT(1)', $diff->toSqls('mysql')[0]);
+        $this->assertStringContainsString('"active" BOOLEAN', $diff->toSqls('pgsql')[0]);
+    }
 }

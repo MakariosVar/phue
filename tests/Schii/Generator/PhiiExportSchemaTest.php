@@ -172,4 +172,46 @@ final class PhiiExportSchemaTest extends TestCase
 
         $this->assertSame(['name'], $export->getColumnFieldNames());
     }
+
+    public function testFormFieldNamesExcludeNonWritable(): void
+    {
+        $schema = new ModelSchema(
+            entity: 'testuser',
+            className: User::class,
+            label: 'Test User',
+            icon: 'user',
+            layout: 'grid',
+            description: 'A test user',
+            fields: [
+                'id' => new FieldSchema(
+                    name: 'id',
+                    type: 'text',
+                    label: 'ID',
+                    widget: 'input',
+                    column: true,
+                    required: false,
+                    searchable: false,
+                    filterable: false,
+                    sortable: false,
+                    writable: false,
+                ),
+                'name' => new FieldSchema(
+                    name: 'name',
+                    type: 'text',
+                    label: 'Name',
+                    widget: 'input',
+                    column: false,
+                    required: true,
+                    searchable: true,
+                    filterable: false,
+                    sortable: true,
+                    writable: false,
+                ),
+            ],
+        );
+
+        $export = PhiiExportSchema::fromModelSchema($schema, User::class);
+
+        $this->assertSame([], $export->getFormFieldNames(), 'non-writable fields must be excluded from editable form fields');
+    }
 }

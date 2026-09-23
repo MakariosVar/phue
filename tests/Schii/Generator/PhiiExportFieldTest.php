@@ -159,4 +159,32 @@ final class PhiiExportFieldTest extends TestCase
 
         @PhiiExportField::fromArray(['label' => 'Bare']);
     }
+
+    public function testExportFieldCarriesWritableFlagsThroughRoundTrip(): void
+    {
+        $export = new PhiiExportField(
+            name: 'password_hash',
+            type: 'text',
+            label: 'Password Hash',
+            widget: 'input',
+            column: true,
+            required: true,
+            searchable: false,
+            filterable: false,
+            sortable: false,
+            options: [],
+            rules: [],
+            extra: [],
+            writable: false,
+            readonly: true,
+            primaryKey: false,
+        );
+
+        $rebuilt = PhiiExportField::fromArray($export->toArray());
+
+        $this->assertFalse($rebuilt->writable);
+        $this->assertTrue($rebuilt->readonly);
+        $this->assertFalse($rebuilt->primaryKey);
+        $this->assertSame($export->toArray(), $rebuilt->toArray());
+    }
 }
