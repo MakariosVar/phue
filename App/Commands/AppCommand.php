@@ -72,7 +72,7 @@ final class AppCommand extends BaseCommand
             'username' => 'admin',
             'password_hash' => password_hash('password', PASSWORD_BCRYPT),
             'auth_key' => bin2hex(random_bytes(16)),
-            'roles' => '["admin"]',
+            'roles' => ['admin'],
         ]);
         $user->save();
         fwrite($out, "Admin user created/updated successfully! ID: " . $user->getId() . PHP_EOL);

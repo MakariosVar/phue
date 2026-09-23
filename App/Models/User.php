@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Phue\Modules\Auth\BaseUser;
 use Phue\Modules\Schii\Attribute\Field;
+use Phue\Modules\Schii\Attribute\UI;
 
 /**
  * Class User
@@ -14,20 +15,58 @@ use Phue\Modules\Schii\Attribute\Field;
  *
  * @package App\Models
  */
+#[UI(
+    label: 'Users',
+    icon: 'people',
+    layout: 'grid',
+    description: 'Manage application users and their roles.'
+)]
 class User extends BaseUser
 {
-    #[Field(type: 'integer')]
+    #[Field(
+        type: 'integer',
+        primaryKey: true,
+        readonly: true,
+        sortable: true,
+    )]
     public int $id;
 
-    #[Field(type: 'text')]
+    #[Field(
+        type: 'text',
+        label: 'Username',
+        required: true,
+        searchable: true,
+        filterable: true,
+        sortable: true,
+        rules: ['required', 'min:3', 'max:50'],
+    )]
     public string $username;
 
-    #[Field(type: 'text')]
+    #[Field(
+        type: 'text',
+        label: 'Password Hash',
+        writable: false,
+        readonly: true,
+        column: false,
+    )]
     public string $password_hash;
 
-    #[Field(type: 'text')]
+    #[Field(
+        type: 'text',
+        label: 'Auth Key',
+        writable: false,
+        readonly: true,
+        column: false,
+    )]
     public ?string $auth_key = null;
 
-    #[Field(type: 'text')]
-    public mixed $roles = '[]';
+    #[Field(
+        type: 'json',
+        label: 'Roles',
+        writable: true,
+        searchable: false,
+        filterable: false,
+        sortable: false,
+    )]
+    public array $roles = [];
 }

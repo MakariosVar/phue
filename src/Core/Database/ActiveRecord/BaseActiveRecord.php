@@ -39,6 +39,13 @@ abstract class BaseActiveRecord implements JsonSerializable
     protected static array $reflectionPropertyCache = [];
 
     /**
+     * Auto-casts cache from Field attributes.
+     *
+     * @var array<string, array<string, string>>
+     */
+    protected static array $autoCastsCache = [];
+
+    /**
      * Database table associated with the model.
      *
      * @var string
@@ -51,6 +58,13 @@ abstract class BaseActiveRecord implements JsonSerializable
      * @var string
      */
     protected string $primaryKey = 'id';
+
+    /**
+     * Attribute casting map: column => cast type (array, json, bool, int, float, string, datetime).
+     *
+     * @var array<string, string>
+     */
+    protected array $casts = [];
 
     /**
      * Current attributes array representing database columns.
@@ -188,6 +202,30 @@ abstract class BaseActiveRecord implements JsonSerializable
         $this->hydrateDeclaredProperty($key, $value);
 
         return $this;
+    }
+
+    /**
+     * Get attributes in database-ready format (reverse cast).
+     *
+     * @return array<string, mixed>
+     */
+    protected function getDatabaseAttributes(): array
+    {
+        $attributes = $this->attributes;
+
+        // Use reflection to get auto-casts
+        $autoCasts = static::getAutoCasts();
+
+        foreach ($attributes as $key => $value) {
+            if (!isset($autoCasts[$key]) || $value === null) {
+                continue;
+            }
+
+            $cast = $autoCasts[$key];
+            $attributes[$key] = $this->reverseCast($value, $cast);
+        }
+
+        return $attributes;
     }
 
     /**
@@ -508,6 +546,8 @@ abstract class BaseActiveRecord implements JsonSerializable
                 continue;
             }
 
+            $value = $this->applyCast($key, $value);
+
             $property->setValue($this, $value);
         }
     }
@@ -533,7 +573,114 @@ abstract class BaseActiveRecord implements JsonSerializable
             return;
         }
 
+        $value = $this->applyCast($key, $value);
+
         $property->setValue($this, $value);
+    }
+
+    /**
+     * Apply attribute casting for a given key.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return mixed
+     */
+    protected function applyCast(string $key, mixed $value): mixed
+    {
+        $cast = $this->getAutoCast($key);
+
+        if ($value === null) {
+            return $value;
+        }
+
+        return match ($cast) {
+            'array', 'json' => is_string($value) ? json_decode($value, true) ?? [] : (is_array($value) ? $value : []),
+            'bool', 'boolean' => (bool) $value,
+            'int', 'integer' => (int) $value,
+            'float', 'double', 'real' => (float) $value,
+            'string' => (string) $value,
+            'datetime', 'timestamp' => $value instanceof \DateTimeInterface ? $value : new \DateTimeImmutable($value),
+            default => $value,
+        };
+    }
+
+    /**
+     * Reverse a given cast
+     * 
+     * @param mixed $value
+     * @param string $cast
+     * @return mixed
+     */
+    protected function reverseCast(mixed $value, string $cast): mixed
+    {
+        return  match ($cast) {
+            'json', 'array' => is_array($value) ? json_encode($value) : $value,
+            'bool', 'boolean' => (bool) $value ? 1 : 0,
+            'int', 'integer' => (int) $value,
+            'float', 'double', 'real' => (float) $value,
+            'datetime', 'timestamp' => $value instanceof \DateTimeInterface ? $value->format('Y-m-d H:i:s') : $value,
+            default => $value,
+        };
+    }
+
+    /**
+     * Get auto-cast type from Field attribute.
+     *
+     * @param string $key
+     * @return string|null
+     */
+    protected function getAutoCast(string $key): ?string
+    {
+        if (isset($this->casts[$key])) {
+            return $this->casts[$key];
+        }
+
+        $autoCasts = static::getAutoCasts();
+        return $autoCasts[$key] ?? null;
+    }
+
+    /**
+     * Build auto-casts map from Field attributes.
+     *
+     * @return array<string, string>
+     */
+    protected static function getAutoCasts(): array
+    {
+        $class = static::class;
+
+        if (isset(self::$autoCastsCache[$class])) {
+            return self::$autoCastsCache[$class];
+        }
+
+        $autoCasts = [];
+        $refClass = new ReflectionClass($class);
+
+        foreach ($refClass->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
+            $fieldAttrs = $property->getAttributes(\Phue\Modules\Schii\Attribute\Field::class);
+            if (empty($fieldAttrs)) {
+                continue;
+            }
+
+            /** @var \Phue\Modules\Schii\Attribute\Field $field */
+            $field = $fieldAttrs[0]->newInstance();
+            $propertyName = $property->getName();
+            $type = strtolower($field->type);
+
+            $cast = match ($type) {
+                'json' => 'json',
+                'boolean', 'bool' => 'bool',
+                'integer', 'int' => 'int',
+                'float', 'number', 'decimal', 'numeric' => 'float',
+                'datetime', 'timestamp' => 'datetime',
+                default => null,
+            };
+
+            if ($cast !== null) {
+                $autoCasts[$propertyName] = $cast;
+            }
+        }
+
+        return self::$autoCastsCache[$class] = $autoCasts;
     }
 
     /**
@@ -597,9 +744,23 @@ abstract class BaseActiveRecord implements JsonSerializable
                 return true;
             }
 
+            // Convert dirty attributes to database format
+            $dbDirty = [];
+            foreach ($dirty as $key => $value) {
+                $dbDirty[$key] = $value;
+            }
+            // Apply reverse cast to dirty attributes
+            $autoCasts = static::getAutoCasts();
+            foreach ($dbDirty as $key => $value) {
+                if (isset($autoCasts[$key]) && $value !== null) {
+                    $cast = $autoCasts[$key];
+                    $dbDirty[$key] = $this->reverseCast($value, $cast);
+                }
+            }
+
             $affected = $builder
                 ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
-                ->update($dirty);
+                ->update($dbDirty);
 
             if ($affected > 0) {
                 $this->original = $this->attributes;
@@ -609,7 +770,8 @@ abstract class BaseActiveRecord implements JsonSerializable
             return false;
         }
 
-        $inserted = $builder->insert($this->attributes);
+        $dbAttributes = $this->getDatabaseAttributes();
+        $inserted = $builder->insert($dbAttributes);
 
         if ($inserted) {
             $id = static::getConnection()->lastInsertId();
