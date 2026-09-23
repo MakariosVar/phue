@@ -9,6 +9,7 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Schii\Stubs\User;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -193,10 +194,148 @@ final class ModelAdvancedOperationsTest extends TestCase
         $this->assertSame('text/csv', $response->getHeader('Content-Type'));
     }
 
-    public function testExportUnknownEntityReturns404(): void
+public function testExportRejectsUnknownEntityReturns404(): void
     {
-        $request = new Request('GET', '/api/schii/nope/export', ['format' => 'csv']);
+        $request = new Request('GET', '/api/schii/nope/export', []);
         $this->assertSame(404, $this->endpoint->export($request, ['entity' => 'nope'])->getStatusCode());
+    }
+
+    // ─────────────────────── A4: hidden/readonly fields & parity ───────────────────────
+
+    private function userEndpoint(): ModelEndpoint
+    {
+        $this->db->execute('CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            password_hash TEXT,
+            auth_key TEXT,
+            roles TEXT DEFAULT \'[]\'
+        )');
+        $this->db->execute(
+            "INSERT INTO users (username, password_hash, auth_key, roles) VALUES ('alice', 'hash-a', 'ak-a', '[]')"
+        );
+
+        return new ModelEndpoint(
+            new SchemaRegistry(),
+            entityNamespace: 'Phue\\Tests\\Schii\\Stubs'
+        );
+    }
+
+    public function testExportOmitsHiddenColumns(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('GET', '/api/schii/users/export', ['format' => 'json']);
+        $rows = json_decode($endpoint->export($request, ['entity' => 'users'])->getContent(), true);
+
+        $this->assertCount(1, $rows);
+        $this->assertArrayHasKey('username', $rows[0]);
+        $this->assertArrayNotHasKey('auth_key', $rows[0], 'column:false fields must never reach export output');
+    }
+
+    public function testExportIncludesReadOnlyButColumnVisibleFields(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('GET', '/api/schii/users/export', ['format' => 'json']);
+        $rows = json_decode($endpoint->export($request, ['entity' => 'users'])->getContent(), true);
+
+        $this->assertArrayHasKey('password_hash', $rows[0], 'column:true + writable:false field must still be exported');
+        $this->assertSame('hash-a', $rows[0]['password_hash']);
+    }
+
+    public function testStoreSilentlyDropsNonWritableFields(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('POST', '/api/schii/users', [], [
+            'username' => 'bob',
+            'password_hash' => 'attacker-hash',
+            'roles' => '["user"]',
+        ]);
+
+        $response = $endpoint->store($request, ['entity' => 'users']);
+        $this->assertSame(201, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true);
+        $this->assertSame('bob', $data['data']['username']);
+        $this->assertNotSame('attacker-hash', $data['data']['password_hash'] ?? null);
+
+        $row = $this->db->query("SELECT password_hash FROM users WHERE username = 'bob'");
+        $stored = is_object($row) && method_exists($row, 'fetch') ? $row->fetch() : (array) $row;
+        $this->assertNotSame('attacker-hash', array_values($stored)[0] ?? null, 'password_hash must not be persisted from payload');
+    }
+
+    public function testUpdateSilentlyDropsNonWritableFields(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('PUT', '/api/schii/users/1', [], [
+            'username' => 'alice2',
+            'password_hash' => 'hash-replacement',
+        ]);
+
+        $response = $endpoint->update($request, ['entity' => 'users', 'id' => '1']);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $row = $this->db->query("SELECT password_hash FROM users WHERE id = 1");
+        $stored = is_object($row) && method_exists($row, 'fetch') ? $row->fetch() : (array) $row;
+        $this->assertSame('hash-a', array_values($stored)[0], 'password_hash must remain unchanged on update');
+    }
+
+    public function testBulkUpdateDropsNonWritableFields(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('POST', '/api/schii/users/bulk', [], [
+            'action' => 'update',
+            'ids' => [1],
+            'data' => ['username' => 'alice9', 'password_hash' => 'bulk-hash'],
+        ]);
+
+        $data = json_decode($endpoint->bulk($request, ['entity' => 'users'])->getContent(), true);
+        $this->assertSame(1, $data['summary']['updated']);
+
+        $row = $this->db->query("SELECT password_hash FROM users WHERE id = 1");
+        $stored = is_object($row) && method_exists($row, 'fetch') ? $row->fetch() : (array) $row;
+        $this->assertSame('hash-a', array_values($stored)[0], 'bulk update must not persist non-writable password_hash');
+    }
+
+    public function testImportDropsNonWritableFields(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $request = new Request('POST', '/api/schii/users/import', [], [
+            'format' => 'json',
+            'data' => [
+                ['username' => 'carol', 'password_hash' => 'import-hash'],
+            ],
+        ]);
+
+        $data = json_decode($endpoint->import($request, ['entity' => 'users'])->getContent(), true);
+        $this->assertSame(1, $data['imported']);
+
+        $row = $this->db->query("SELECT password_hash FROM users WHERE username = 'carol'");
+        $stored = is_object($row) && method_exists($row, 'fetch') ? $row->fetch() : (array) $row;
+        $this->assertNotSame('import-hash', array_values($stored)[0] ?? null, 'import must not persist non-writable password_hash');
+    }
+
+    public function testServerMinMaxValidation(): void
+    {
+        $endpoint = $this->userEndpoint();
+
+        $tooShort = new Request('POST', '/api/schii/users', [], ['username' => 'ab']);
+        $response = $endpoint->store($tooShort, ['entity' => 'users']);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertArrayHasKey('username', json_decode($response->getContent(), true)['errors']);
+
+        $tooLong = new Request('POST', '/api/schii/users', [], ['username' => str_repeat('x', 41)]);
+        $response = $endpoint->store($tooLong, ['entity' => 'users']);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertArrayHasKey('username', json_decode($response->getContent(), true)['errors']);
+
+        $ok = new Request('POST', '/api/schii/users', [], ['username' => 'validname']);
+        $this->assertSame(201, $endpoint->store($ok, ['entity' => 'users'])->getStatusCode());
     }
 
     // ─────────────────────────────── Import ───────────────────────────────

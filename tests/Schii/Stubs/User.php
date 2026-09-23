@@ -13,13 +13,13 @@ class User extends BaseActiveRecord
 {
     protected string $table = 'users';
 
-    #[Field(type: 'text')]
+    #[Field(type: 'text', rules: ['min:3', 'max:40'])]
     public string $username;
 
-    #[Field(type: 'text')]
+    #[Field(type: 'text', writable: false, readonly: true)]
     public string $password_hash;
 
-    #[Field(type: 'text')]
+    #[Field(type: 'text', column: false)]
     public ?string $auth_key = null;
 
     #[Field(type: 'text')]
