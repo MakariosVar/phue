@@ -256,4 +256,47 @@ final class SchiiPhueContractsTest extends TestCase
         $this->assertStringContainsString("params.set('sort', sort.value)", $script);
         $this->assertStringContainsString('params.set(`filter[${k}]`, String(v))', $script);
     }
+
+    // ─────────────────────── Phase D: widget polish ───────────────────────
+
+    public function testSchiiRendersRadioWidgetFromOptions(): void
+    {
+        $template = $this->template('Schii.phue');
+
+        $this->assertStringContainsString("field.widget === 'radio'", $template);
+        $this->assertStringContainsString('<ph-radio', $template);
+        $this->assertStringContainsString('v-for="opt in selectOptions(field)"', $template);
+        $this->assertStringContainsString(":name=\"'schii-' + field.name\"", $template);
+    }
+
+    public function testSchiiRadioIsExcludedFromTextWidget(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString("f.widget === 'radio'", $script);
+        $this->assertStringContainsString("const isTextWidget = (f) => !(", $script);
+    }
+
+    public function testSchiiRadioDefaultsToFirstOptionOnReset(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString("f.type === 'select' || f.widget === 'select' || f.widget === 'radio'", $script);
+    }
+
+    public function testSchiiPasswordWidgetMapsToPasswordInputType(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString("f.widget === 'password'", $script);
+        $this->assertStringContainsString("? 'password'", $script);
+    }
+
+    public function testSchiiJsonTypeRendersAsTextarea(): void
+    {
+        $template = $this->template('Schii.phue');
+
+        $this->assertStringContainsString("field.widget === 'textarea' || field.type === 'json'", $template);
+        $this->assertStringContainsString(":rows=\"field.type === 'json' ? 5 : 3\"", $template);
+    }
 }

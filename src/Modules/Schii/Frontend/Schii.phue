@@ -151,6 +151,22 @@ return [
                         :disabled="isEditing && field.name === 'id'"
                         @blur="touchField(field.name)"
                     />
+                    <ph-form-field
+                        v-else-if="field.widget === 'radio'"
+                        :label="field.label || field.name"
+                        :error="fieldErrors[field.name]"
+                    >
+                        <div class="d-flex flex-wrap gap-3 pt-1">
+                            <ph-radio
+                                v-for="opt in selectOptions(field)"
+                                :key="opt.value"
+                                v-model="form[field.name]"
+                                :name="'schii-' + field.name"
+                                :value="opt.value"
+                                :label="opt.label"
+                            />
+                        </div>
+                    </ph-form-field>
                     <ph-select
                         v-else-if="field.type === 'select' || field.widget === 'select'"
                         v-model="form[field.name]"
@@ -160,12 +176,13 @@ return [
                         :error="fieldErrors[field.name]"
                     />
                     <ph-textarea
-                        v-else-if="field.widget === 'textarea'"
+                        v-else-if="field.widget === 'textarea' || field.type === 'json'"
                         v-model="form[field.name]"
                         :label="field.label || field.name"
-                        :rows="3"
+                        :rows="field.type === 'json' ? 5 : 3"
                         :required="field.required"
                         :error="fieldErrors[field.name]"
+                        :helper-text="field.type === 'json' ? 'JSON object' : undefined"
                     />
                     <ph-checkbox
                         v-else-if="field.type === 'boolean' || field.type === 'bool' || field.widget === 'checkbox'"
@@ -564,7 +581,7 @@ export default function mountApp() {
                 writableFields.value.forEach(f => {
                     if (f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox') {
                         form[f.name] = false;
-                    } else if (f.type === 'select' || f.widget === 'select') {
+                    } else if (f.type === 'select' || f.widget === 'select' || f.widget === 'radio') {
                         const first = Array.isArray(f.options) ? f.options[0] : null;
                         form[f.name] = first
                             ? (typeof first === 'object' ? (first.value ?? first.label) : first)
@@ -900,12 +917,14 @@ export default function mountApp() {
                 loadAudit();
             };
 
-            const isTextWidget = (f) => !(f.type === 'select' || f.widget === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea');
+            const isTextWidget = (f) => !(f.type === 'select' || f.widget === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea' || f.widget === 'radio' || f.type === 'json');
 
             const inputType = (f) =>
-                f.type === 'int' || f.type === 'float' || f.type === 'integer' || f.type === 'number' || f.type === 'numeric'
-                    ? 'number'
-                    : (f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text'));
+                f.widget === 'password'
+                    ? 'password'
+                    : (f.type === 'int' || f.type === 'float' || f.type === 'integer' || f.type === 'number' || f.type === 'numeric'
+                        ? 'number'
+                        : (f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text')));
 
             const inputStep = (f) => (f.type === 'float' ? 'any' : undefined);
 
