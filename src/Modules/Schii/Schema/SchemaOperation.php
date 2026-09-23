@@ -15,4 +15,6 @@ enum SchemaOperation: string
     case AddColumn    = 'add-column';
     case AlterColumn  = 'alter-column';
     case DropColumn   = 'drop-column';
+    case CreateIndex  = 'create-index';
+    case DropIndex    = 'drop-index';
 }

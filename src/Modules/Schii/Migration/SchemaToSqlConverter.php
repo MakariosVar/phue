@@ -21,7 +21,8 @@ final class SchemaToSqlConverter
     }
 
     /**
-     * Generate CREATE TABLE SQL query tailored to the configured database dialect.
+     * Generate CREATE TABLE SQL query tailored to the configured database dialect,
+     * including CREATE INDEX statements for indexed fields.
      */
     public function buildCreateTableSql(ModelSchema $schema, string $tableName): string
     {
@@ -32,17 +33,30 @@ final class SchemaToSqlConverter
             $pkDefinition,
         ];
 
+        $indexedFields = [];
+
         foreach ($schema->fields as $field) {
             // Skip 'id' field as primary key is already defined above
             if ($field->name === 'id') {
                 continue;
             }
+
             $columns[] = $this->buildColumnSql($field);
+
+            if ($field->indexed && !$field->primaryKey) {
+                $indexedFields[] = $field;
+            }
         }
 
         $columnsSql = implode(",\n    ", $columns);
+        $sqls = ["CREATE TABLE IF NOT EXISTS {$quotedTableName} (\n    {$columnsSql}\n);"];
 
-        return "CREATE TABLE IF NOT EXISTS {$quotedTableName} (\n    {$columnsSql}\n);";
+        // Add CREATE INDEX statements for all indexed fields
+        foreach ($indexedFields as $field) {
+            $sqls[] = $this->buildCreateIndexSql($tableName, $field);
+        }
+
+        return implode("\n\n", $sqls);
     }
 
     /**
@@ -55,6 +69,23 @@ final class SchemaToSqlConverter
         $nullability = $field->required ? 'NOT NULL' : 'NULL';
 
         return "{$quotedFieldName} {$type} {$nullability}";
+    }
+
+    /**
+     * Generate CREATE INDEX SQL query based on the active driver dialect.
+     */
+    public function buildCreateIndexSql(string $tableName, FieldSchema $field): string
+    {
+        $indexName = "idx_{$tableName}_{$field->name}";
+        $quotedIndexName = SqlIdentifier::quote($indexName, $this->driverName);
+        $quotedTableName = SqlIdentifier::quote($tableName, $this->driverName);
+        $quotedColumnName = SqlIdentifier::quote($field->name, $this->driverName);
+
+        return match ($this->driverName) {
+            'mysql' => sprintf('CREATE INDEX %s ON %s (%s);', $quotedIndexName, $quotedTableName, $quotedColumnName),
+            'pgsql', 'postgres', 'postgresql' => sprintf('CREATE INDEX IF NOT EXISTS %s ON %s (%s);', $quotedIndexName, $quotedTableName, $quotedColumnName),
+            default => sprintf('CREATE INDEX IF NOT EXISTS %s ON %s (%s);', $quotedIndexName, $quotedTableName, $quotedColumnName), // SQLite
+        };
     }
 
     /**

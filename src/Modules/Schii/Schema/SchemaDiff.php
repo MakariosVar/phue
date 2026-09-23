@@ -95,27 +95,58 @@ final readonly class SchemaDiff
      */
     public function toSqls(string $driver): array
     {
-        $driver = strtolower($driver);
-        $sqls = [];
+        $driver = strtolower($driver);$sqls = [];
 
-        if ($driver === 'sqlite' && $this->requiresTableRebuild()) {
+        if ($driver === 'sqlite' &&$this->requiresTableRebuild()) {
             return $this->buildSqliteRebuildSql();
         }
 
-        foreach ($this->operations as $opData) {
-            $op = $opData['op'];
-            $col = $opData['column'] ?? null;
-            $newCol = $opData['new'] ?? null;
+        foreach ($this->operations as$opData) {
+            $op =$opData['op'];
+            $col =$opData['column'] ?? null;
+            $newCol =$opData['new'] ?? null;
 
             match ($op) {
-                SchemaOperation::CreateTable => $sqls[] = $this->buildCreateTableSql($driver, $col),
-                SchemaOperation::AddColumn => $sqls[] = $this->buildAddColumnSql($driver, $col),
-                SchemaOperation::AlterColumn => $sqls[] = $this->buildAlterColumnSql($driver, $col, $newCol),
-                SchemaOperation::DropColumn => $sqls[] = $this->buildDropColumnSql($driver, $col),
+                SchemaOperation::CreateTable => $sqls[] =$this->buildCreateTableSql($driver,$col),
+                SchemaOperation::AddColumn => $sqls[] =$this->buildAddColumnSql($driver,$col),
+                SchemaOperation::AlterColumn => $sqls[] = $this->buildAlterColumnSql($driver, $col,$newCol),
+                SchemaOperation::DropColumn => $sqls[] =$this->buildDropColumnSql($driver,$col),
+                SchemaOperation::CreateIndex => $sqls[] =$this->buildCreateIndexSql($driver,$col),
+                SchemaOperation::DropIndex => $sqls[] =$this->buildDropIndexSql($driver,$col),
             };
         }
 
         return array_values(array_filter($sqls));
+    }
+
+    /**
+     * Generates CREATE INDEX statement based on driver rules.
+     */
+    private function buildCreateIndexSql(string $driver, ColumnDefinition $column): string
+    {
+        $indexName = "idx_{$this->table}_{$column->name}";
+
+        return match ($driver) {
+            'sqlite' => sprintf('CREATE INDEX IF NOT EXISTS "%s" ON "%s" ("%s")', $indexName, $this->table,$column->name),
+            'mysql' => sprintf('CREATE INDEX `%s` ON `%s` (`%s`)', $indexName, $this->table,$column->name),
+            'pgsql' => sprintf('CREATE INDEX IF NOT EXISTS "%s" ON "%s" ("%s")', $indexName, $this->table,$column->name),
+            default => '',
+        };
+    }
+
+    /**
+     * Generates DROP INDEX statement based on driver rules.
+     */
+    private function buildDropIndexSql(string $driver, ColumnDefinition $column): string
+    {
+        $indexName = "idx_{$this->table}_{$column->name}";
+
+        return match ($driver) {
+            'sqlite' => sprintf('DROP INDEX "%s"', $indexName),
+            'mysql' => sprintf('DROP INDEX `%s` ON `%s`', $indexName,$this->table),
+            'pgsql' => sprintf('DROP INDEX IF EXISTS "%s"', $indexName),
+            default => '',
+        };
     }
 
     /**
@@ -146,12 +177,35 @@ final readonly class SchemaDiff
 
         foreach ($this->operations as $opData) {
             $op = $opData['op'];
+
             if ($op === SchemaOperation::DropColumn && isset($opData['column'])) {
                 unset($columns[$opData['column']->name]);
             } elseif ($op === SchemaOperation::AlterColumn && isset($opData['new'])) {
                 $columns[$opData['new']->name] = $opData['new'];
             } elseif ($op === SchemaOperation::AddColumn && isset($opData['column'])) {
                 $columns[$opData['column']->name] = $opData['column'];
+            } elseif ($op === SchemaOperation::DropIndex && isset($opData['column'])) {
+                $column = $opData['column'];
+
+                $columns[$column->name] = new ColumnDefinition(
+                    name: $column->name,
+                    type: $column->type,
+                    nullable: $column->nullable,
+                    primaryKey: $column->primaryKey,
+                    autoIncrement: $column->autoIncrement,
+                    indexed: false,
+                );
+            } elseif ($op === SchemaOperation::CreateIndex && isset($opData['column'])) {
+                $column = $opData['column'];
+
+                $columns[$column->name] = new ColumnDefinition(
+                    name: $column->name,
+                    type: $column->type,
+                    nullable: $column->nullable,
+                    primaryKey: $column->primaryKey,
+                    autoIncrement: $column->autoIncrement,
+                    indexed: true,
+                );
             }
         }
 
@@ -164,7 +218,7 @@ final readonly class SchemaDiff
         $escapedColNames = array_map(fn($n) => $this->escapeIdentifier('sqlite', $n), $colNames);
         $colList = implode(', ', $escapedColNames);
 
-        return [
+        $sqls = [
             sprintf('CREATE TABLE %s (%s)', $this->escapeIdentifier('sqlite', $tempTable), implode(', ', $columnDefs)),
             sprintf(
                 'INSERT INTO %s (%s) SELECT %s FROM %s',
@@ -176,6 +230,15 @@ final readonly class SchemaDiff
             sprintf('DROP TABLE %s', $this->escapeIdentifier('sqlite', $this->table)),
             sprintf('ALTER TABLE %s RENAME TO %s', $this->escapeIdentifier('sqlite', $tempTable), $this->escapeIdentifier('sqlite', $this->table)),
         ];
+
+        // Re-create indexes for all columns marked as indexed
+        foreach ($columns as $colDef) {
+            if ($colDef->indexed && !$colDef->primaryKey) {
+                $sqls[] = $this->buildCreateIndexSql('sqlite', $colDef);
+            }
+        }
+
+        return $sqls;
     }
 
     /**
@@ -341,6 +404,7 @@ final readonly class SchemaDiff
                 'datetime' => 'DATETIME',
                 'text' => 'LONGTEXT',
                 'float' => 'DOUBLE',
+                'bool' => 'BOOLEAN',
                 default => 'VARCHAR',
             },
             'pgsql' => match ($type) {
@@ -350,6 +414,7 @@ final readonly class SchemaDiff
                 'datetime' => 'TIMESTAMP',
                 'text' => 'TEXT',
                 'float' => 'DOUBLE PRECISION',
+                'bool' => 'BOOLEAN',
                 default => 'VARCHAR',
             },
             'sqlite' => match ($type) {
@@ -359,6 +424,7 @@ final readonly class SchemaDiff
                 'datetime' => 'TEXT',
                 'text' => 'TEXT',
                 'float' => 'REAL',
+                'bool' => 'INTEGER',
                 default => 'TEXT',
             },
             default => 'VARCHAR',

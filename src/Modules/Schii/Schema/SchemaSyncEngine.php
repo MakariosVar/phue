@@ -43,7 +43,11 @@ final class SchemaSyncEngine
     {
         if (!is_subclass_of($modelClass, BaseActiveRecord::class)) {
             throw new InvalidArgumentException(
-                sprintf('Model class "%s" must be a subclass of "%s".', $modelClass, BaseActiveRecord::class)
+                sprintf(
+                    'Model class "%s" must be a subclass of "%s".',
+                    $modelClass,
+                    BaseActiveRecord::class
+                )
             );
         }
 
@@ -52,29 +56,41 @@ final class SchemaSyncEngine
         $table = $instance->getTable();
 
         $pdo = $this->connection->getPdo();
-        $driverName = strtolower($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? 'sqlite');
+        $driverName = strtolower(
+            $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? 'sqlite'
+        );
+
         SqlIdentifier::quote($table, $driverName);
 
         $modelSchema = $this->schemaRegistry->get($modelClass);
+
         foreach (array_keys($modelSchema->fields) as $fieldName) {
             SqlIdentifier::quote((string) $fieldName, $driverName);
         }
 
         $operations = [];
 
-        // If the table does not exist, plan table creation and initial columns
+        /*
+         * Table does not exist.
+         *
+         * Create the table/columns first and then create indexes as
+         * separate operations.
+         */
         if (!$this->inspector->tableExists($table)) {
             $firstField = null;
             $fieldItems = array_values($modelSchema->fields);
 
             if (!empty($fieldItems)) {
                 $firstFieldSchema = $fieldItems[0];
+
                 $firstField = new ColumnDefinition(
                     name: $firstFieldSchema->name,
                     type: $firstFieldSchema->type,
                     nullable: !$firstFieldSchema->required,
                     primaryKey: $firstFieldSchema->name === 'id',
-                    autoIncrement: $firstFieldSchema->name === 'id' && $firstFieldSchema->type === 'int',
+                    autoIncrement:
+                        $firstFieldSchema->name === 'id'
+                        && $firstFieldSchema->type === 'int',
                     indexed: (bool) ($firstFieldSchema->indexed ?? false),
                 );
             }
@@ -88,36 +104,75 @@ final class SchemaSyncEngine
 
             foreach ($fieldItems as $index => $fieldSchema) {
                 if ($index === 0 && $firstField !== null) {
-                    continue; // First column was handled in CreateTable
+                    continue;
                 }
+
+                $column = new ColumnDefinition(
+                    name: $fieldSchema->name,
+                    type: $fieldSchema->type,
+                    nullable: !$fieldSchema->required,
+                    primaryKey: $fieldSchema->name === 'id',
+                    autoIncrement:
+                        $fieldSchema->name === 'id'
+                        && $fieldSchema->type === 'int',
+                    indexed: (bool) ($fieldSchema->indexed ?? false),
+                );
 
                 $operations[] = [
                     'op' => SchemaOperation::AddColumn,
-                    'column' => new ColumnDefinition(
-                        name: $fieldSchema->name,
-                        type: $fieldSchema->type,
-                        nullable: !$fieldSchema->required,
-                        primaryKey: $fieldSchema->name === 'id',
-                        autoIncrement: $fieldSchema->name === 'id' && $fieldSchema->type === 'int',
-                        indexed: (bool) ($fieldSchema->indexed ?? false),
-                    ),
+                    'column' => $column,
                 ];
             }
 
-            return new SchemaDiff(table: $table, operations: $operations, baseColumns: []);
+            /*
+             * Indexes must be separate operations.
+             *
+             * The id column is excluded because the PRIMARY KEY already
+             * provides its index.
+             */
+            foreach ($fieldItems as $fieldSchema) {
+                if (
+                    $fieldSchema->name !== 'id'
+                    && (bool) ($fieldSchema->indexed ?? false)
+                ) {
+                    $operations[] = [
+                        'op' => SchemaOperation::CreateIndex,
+                        'column' => new ColumnDefinition(
+                            name: $fieldSchema->name,
+                            type: $fieldSchema->type,
+                            nullable: !$fieldSchema->required,
+                            primaryKey: false,
+                            autoIncrement: false,
+                            indexed: true,
+                        ),
+                    ];
+                }
+            }
+
+            return new SchemaDiff(
+                table: $table,
+                operations: $operations,
+                baseColumns: [],
+            );
         }
 
-        // Table exists: inspect existing columns
+        /*
+         * Table exists: inspect existing columns.
+         */
         $existingColumns = $this->inspector->inspect($table);
 
-        // Check for new columns or altered columns
+        /*
+         * Check for new columns or altered columns.
+         */
         foreach ($modelSchema->fields as $fieldName => $fieldSchema) {
             $targetCol = new ColumnDefinition(
                 name: $fieldSchema->name,
                 type: $fieldSchema->type,
                 nullable: !$fieldSchema->required,
                 primaryKey: $fieldSchema->name === 'id',
-                autoIncrement: $fieldSchema->name === 'id' && $fieldSchema->type === 'int',
+                autoIncrement:
+                    $fieldSchema->name === 'id'
+                    && $fieldSchema->type === 'int',
                 indexed: (bool) ($fieldSchema->indexed ?? false),
             );
 
@@ -126,20 +181,77 @@ final class SchemaSyncEngine
                     'op' => SchemaOperation::AddColumn,
                     'column' => $targetCol,
                 ];
-            } else {
-                $existingCol = $existingColumns[$fieldName];
-                if ($this->isColumnChanged($existingCol, $targetCol)) {
+
+                /*
+                 * Index creation is separate from AddColumn.
+                 */
+                if (
+                    $targetCol->indexed
+                    && $targetCol->name !== 'id'
+                ) {
                     $operations[] = [
-                        'op' => SchemaOperation::AlterColumn,
-                        'column' => $existingCol,
-                        'new' => $targetCol,
+                        'op' => SchemaOperation::CreateIndex,
+                        'column' => $targetCol,
                     ];
                 }
+
+                continue;
+            }
+
+            $existingCol = $existingColumns[$fieldName];
+
+            /*
+             * indexed is deliberately NOT considered a column change.
+             *
+             * Index changes are represented by CreateIndex / DropIndex
+             * operations below.
+             */
+            if ($this->isColumnChanged($existingCol, $targetCol)) {
+                $operations[] = [
+                    'op' => SchemaOperation::AlterColumn,
+                    'column' => $existingCol,
+                    'new' => $targetCol,
+                ];
+            }
+
+            /*
+             * Index was added.
+             *
+             * Never create a separate index for the primary-key id.
+             */
+            if (
+                $targetCol->name !== 'id'
+                && $targetCol->indexed
+                && !$existingCol->indexed
+            ) {
+                $operations[] = [
+                    'op' => SchemaOperation::CreateIndex,
+                    'column' => $targetCol,
+                ];
+            }
+
+            /*
+             * Index was removed.
+             *
+             * Never drop the PK index for id.
+             */
+            if (
+                $targetCol->name !== 'id'
+                && !$targetCol->indexed
+                && $existingCol->indexed
+            ) {
+                $operations[] = [
+                    'op' => SchemaOperation::DropIndex,
+                    'column' => $existingCol,
+                ];
             }
         }
 
-        // Check for dropped columns
+        /*
+         * Check for dropped columns.
+         */
         $modelFieldNames = array_keys($modelSchema->fields);
+
         foreach ($existingColumns as $colName => $existingCol) {
             if (!in_array($colName, $modelFieldNames, true)) {
                 $operations[] = [
@@ -149,20 +261,27 @@ final class SchemaSyncEngine
             }
         }
 
-        return new SchemaDiff(table: $table, operations: $operations, baseColumns: $existingColumns);
+        return new SchemaDiff(
+            table: $table,
+            operations: $operations,
+            baseColumns: $existingColumns,
+        );
     }
 
     /**
      * Apply schema diff in a database transaction.
      *
      * @param class-string $modelClass
-     * @param bool         $dryRun     If true, returns planned SQL statements without executing.
-     * @param bool         $allowDrops Allow dropping columns only with explicit flag (default false due to potential data loss).
+     * @param bool $dryRun
+     * @param bool $allowDrops
      *
-     * @return array<int, string> Executed or planned SQL statements.
+     * @return array<int, string>
      */
-    public function apply(string $modelClass, bool $dryRun = true, bool $allowDrops = false): array
-    {
+    public function apply(
+        string $modelClass,
+        bool $dryRun = true,
+        bool $allowDrops = false
+    ): array {
         $diff = $this->diff($modelClass);
 
         if ($diff->isEmpty()) {
@@ -179,7 +298,11 @@ final class SchemaSyncEngine
         }
 
         $pdo = $this->connection->getPdo();
-        $driver = strtolower($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? '');
+
+        $driver = strtolower(
+            $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) ?? ''
+        );
+
         $sqlStatements = $diff->toSqls($driver);
 
         if ($dryRun) {
@@ -192,13 +315,19 @@ final class SchemaSyncEngine
             foreach ($sqlStatements as $sql) {
                 $pdo->exec($sql);
             }
+
             $pdo->commit();
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+
             throw new RuntimeException(
-                sprintf('Failed to apply schema diff for model "%s": %s', $modelClass, $e->getMessage()),
+                sprintf(
+                    'Failed to apply schema diff for model "%s": %s',
+                    $modelClass,
+                    $e->getMessage()
+                ),
                 0,
                 $e
             );
@@ -208,15 +337,15 @@ final class SchemaSyncEngine
     }
 
     /**
-     * Compare an existing column definition with a target column definition to detect modifications.
+     * Compare an existing column definition with a target column definition.
      *
-     * @param ColumnDefinition $existing
-     * @param ColumnDefinition $target
-     *
-     * @return bool
+     * Index state is intentionally excluded. Indexes are handled separately
+     * through CreateIndex / DropIndex operations.
      */
-    private function isColumnChanged(ColumnDefinition $existing, ColumnDefinition $target): bool
-    {
+    private function isColumnChanged(
+        ColumnDefinition $existing,
+        ColumnDefinition $target
+    ): bool {
         return $existing->type !== $target->type
             || $existing->nullable !== $target->nullable
             || $existing->primaryKey !== $target->primaryKey

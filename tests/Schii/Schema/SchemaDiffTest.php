@@ -160,4 +160,137 @@ final class SchemaDiffTest extends TestCase
         $sql = $diff->toSqls('mysql');
         $this->assertCount(2, $sql);
     }
+
+    public function testCreateIndexEmitsMysqlSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::CreateIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('mysql');
+        $this->assertCount(1, $sql);
+        $this->assertSame('CREATE INDEX `idx_users_email` ON `users` (`email`)', $sql[0]);
+    }
+
+    public function testCreateIndexEmitsSqliteSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::CreateIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('sqlite');
+        $this->assertCount(1, $sql);
+        $this->assertSame('CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email")', $sql[0]);
+    }
+
+    public function testCreateIndexEmitsPgsqlSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::CreateIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('pgsql');
+        $this->assertCount(1, $sql);
+        $this->assertSame('CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email")', $sql[0]);
+    }
+
+    public function testDropIndexEmitsMysqlSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::DropIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('mysql');
+        $this->assertCount(1, $sql);
+        $this->assertSame('DROP INDEX `idx_users_email` ON `users`', $sql[0]);
+    }
+
+    public function testDropIndexEmitsSqliteSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::DropIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('sqlite');
+        $this->assertCount(1, $sql);
+        $this->assertSame('DROP INDEX "idx_users_email"', $sql[0]);
+    }
+
+    public function testDropIndexEmitsPgsqlSql(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::DropIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('pgsql');
+        $this->assertCount(1, $sql);
+        $this->assertSame('DROP INDEX IF EXISTS "idx_users_email"', $sql[0]);
+    }
+
+    public function testIndexOnlyDiffDoesNotTriggerSqliteRebuild(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::CreateIndex, 'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('sqlite');
+        $this->assertCount(1, $sql);
+        $this->assertStringContainsString('CREATE INDEX', $sql[0]);
+        $this->assertStringNotContainsString('RENAME TO', $sql[0]);
+    }
+
+    public function testIndexNameIsDerDeterministicFromTableAndColumn(): void
+    {
+        $diff = new SchemaDiff('order_items', [
+            ['op' => SchemaOperation::CreateIndex, 'column' => new ColumnDefinition(name: 'parent_id', type: 'int', indexed: true)],
+        ]);
+
+        $sql = $diff->toSqls('pgsql');
+        $this->assertSame('CREATE INDEX IF NOT EXISTS "idx_order_items_parent_id" ON "order_items" ("parent_id")', $sql[0]);
+    }
+
+    public function testSqliteRebuildRecreatesIndexesForIndexedColumns(): void
+    {
+        $diff = new SchemaDiff('users', [
+            [
+                'op' => SchemaOperation::AlterColumn,
+                'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true),
+                'new' => new ColumnDefinition(name: 'email', type: 'text', nullable: false, indexed: true),
+            ],
+        ], baseColumns: ['email' => new ColumnDefinition(name: 'email', type: 'text', indexed: true)]);
+
+        $sql = $diff->toSqls('sqlite');
+        $this->assertCount(5, $sql);
+
+        $script = implode("\n", $sql);
+        $this->assertStringContainsString('CREATE TABLE', $script);
+        $this->assertStringContainsString('CREATE INDEX IF NOT EXISTS "idx_users_email" ON "users" ("email")', $script);
+    }
+
+    public function testSqliteRebuildHonorsDropIndexOnUnchangedColumn(): void
+    {
+        $diff = new SchemaDiff('users', [
+            [
+                'op' => SchemaOperation::DropIndex,
+                'column' => new ColumnDefinition(name: 'email', type: 'text', indexed: true),
+            ],
+            [
+                'op' => SchemaOperation::AlterColumn,
+                'column' => new ColumnDefinition(name: 'name', type: 'text'),
+                'new' => new ColumnDefinition(name: 'name', type: 'text', nullable: false),
+            ],
+        ], baseColumns: [
+            'email' => new ColumnDefinition(name: 'email', type: 'text', indexed: true),
+            'name' => new ColumnDefinition(name: 'name', type: 'text'),
+        ]);
+
+        $sql = $diff->toSqls('sqlite');
+
+        $script = implode("\n", $sql);
+        $this->assertStringNotContainsString(
+            'CREATE INDEX IF NOT EXISTS "idx_users_email"',
+            $script,
+            'A dropped index must not be re-created by a table rebuild triggered by an unrelated column.'
+        );
+    }
 }

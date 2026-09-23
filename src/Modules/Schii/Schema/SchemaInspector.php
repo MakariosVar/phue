@@ -81,6 +81,26 @@ final class SchemaInspector
      */
     private function inspectSqlite(PDO $pdo, string $table): array
     {
+        // 1. Fetch indexed columns via PRAGMA index_list & PRAGMA index_info
+        $indexedColumns = [];
+        $indexListStmt = $pdo->prepare(sprintf('PRAGMA index_list(%s)', $pdo->quote($table)));
+        $indexListStmt->execute();
+        $indexes = $indexListStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($indexes as $index) {
+            $indexName = (string) $index['name'];
+            $indexInfoStmt = $pdo->prepare(sprintf('PRAGMA index_info(%s)', $pdo->quote($indexName)));
+            $indexInfoStmt->execute();
+            $indexColumns = $indexInfoStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($indexColumns as $col) {
+                if (isset($col['name'])) {
+                    $indexedColumns[(string) $col['name']] = true;
+                }
+            }
+        }
+
+        // 2. Fetch table columns information
         $stmt = $pdo->prepare(sprintf('PRAGMA table_info(%s)', $pdo->quote($table)));
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -98,7 +118,7 @@ final class SchemaInspector
                 default: $row['dflt_value'],
                 primaryKey: (int) $row['pk'] > 0,
                 autoIncrement: str_contains($rawType, 'INT') && (int) $row['pk'] > 0,
-                indexed: false,
+                indexed: isset($indexedColumns[$name]),
                 length: $this->extractLength($rawType),
             );
         }
@@ -142,7 +162,7 @@ final class SchemaInspector
     }
 
     /**
-     * Inspects table structure using PostgreSQL information_schema.columns.
+     * Inspects table structure using PostgreSQL information_schema and pg_indexes.
      *
      * @param PDO    $pdo   Active PDO instance.
      * @param string $table Target table name.
@@ -151,6 +171,43 @@ final class SchemaInspector
      */
     private function inspectPgsql(PDO $pdo, string $table): array
     {
+        // 1. Fetch primary key columns
+        $pkSql = "
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+             AND tc.table_schema = kcu.table_schema
+            WHERE tc.constraint_type = 'PRIMARY KEY'
+              AND tc.table_name = :table
+        ";
+        $pkStmt = $pdo->prepare($pkSql);
+        $pkStmt->execute(['table' => $table]);
+        $primaryKeys = array_flip($pkStmt->fetchAll(PDO::FETCH_COLUMN));
+
+        // 2. Fetch indexed columns from pg_indexes
+        $indexSql = "
+            SELECT indexdef 
+            FROM pg_indexes 
+            WHERE tablename = :table
+        ";
+        $indexStmt = $pdo->prepare($indexSql);
+        $indexStmt->execute(['table' => $table]);
+        $indexDefs = $indexStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $indexedColumns = [];
+        foreach ($indexDefs as $def) {
+            // Extract column names inside index definition parenthesis (e.g., CREATE INDEX ... ON table (col1, col2))
+            if (preg_match('/\(([^)]+)\)/', $def, $matches)) {
+                $cols = explode(',', $matches[1]);
+                foreach ($cols as $col) {
+                    $colName = trim($col, ' "\'');
+                    $indexedColumns[$colName] = true;
+                }
+            }
+        }
+
+        // 3. Fetch column definitions
         $sql = "
             SELECT 
                 column_name, 
@@ -177,9 +234,9 @@ final class SchemaInspector
                 type: $type,
                 nullable: strtoupper((string) $row['is_nullable']) === 'YES',
                 default: $row['column_default'],
-                primaryKey: false,
+                primaryKey: isset($primaryKeys[$name]),
                 autoIncrement: str_starts_with((string) $row['column_default'], 'nextval'),
-                indexed: false,
+                indexed: isset($indexedColumns[$name]) || isset($primaryKeys[$name]),
                 length: (int) ($row['character_maximum_length'] ?? 255),
             );
         }

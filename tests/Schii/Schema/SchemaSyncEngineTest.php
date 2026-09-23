@@ -59,6 +59,36 @@ class SyncWidgetV3 extends BaseActiveRecord
     public string $sku = '';
 }
 
+#[UI(label: 'Sync Indexed')]
+class SyncIndexed extends BaseActiveRecord
+{
+    protected string $table = 'sync_indexed';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'text', required: true)]
+    public string $sku = '';
+
+    #[Field(type: 'text', indexed: true)]
+    public string $email = '';
+}
+
+#[UI(label: 'Sync Indexed V2 (email un-indexed)')]
+class SyncIndexedV2 extends BaseActiveRecord
+{
+    protected string $table = 'sync_indexed';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'text', required: true)]
+    public string $sku = '';
+
+    #[Field(type: 'text', indexed: false)]
+    public string $email = '';
+}
+
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchemaSyncEngineTest extends TestCase
 {
@@ -173,5 +203,72 @@ final class SchemaSyncEngineTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         $this->engine->diff(\stdClass::class);
+    }
+
+    public function testCreateIndexScheduledForIndexedFieldOnFreshTable(): void
+    {
+        $diff = $this->engine->diff(SyncIndexed::class);
+
+        $ops = array_map(static fn (array $op) => $op['op'], $diff->operations);
+        $this->assertContains(SchemaOperation::CreateTable, $ops);
+        $this->assertContains(SchemaOperation::CreateIndex, $ops);
+        $this->assertNotContains(SchemaOperation::DropIndex, $ops);
+    }
+
+    public function testFreshApplyEmitsCreateIndexSql(): void
+    {
+        $sql = $this->engine->apply(SyncIndexed::class, dryRun: true);
+
+        $this->assertNotEmpty($sql);
+        $this->assertStringContainsString(
+            'CREATE INDEX IF NOT EXISTS "idx_sync_indexed_email" ON "sync_indexed" ("email")',
+            implode(' ; ', $sql)
+        );
+    }
+
+    public function testApplyCreatesRealIndexAndDiffGoesEmpty(): void
+    {
+        $this->engine->apply(SyncIndexed::class, dryRun: false);
+
+        $inspector = new SchemaInspector($this->db);
+        $columns = $inspector->inspect('sync_indexed');
+
+        $this->assertTrue($columns['email']->indexed, 'email must be actually indexed in sqlite');
+        $this->assertFalse($columns['id']->indexed ?? false, 'the PK column must not carry a separate user index');
+
+        $this->assertTrue($this->engine->diff(SyncIndexed::class)->isEmpty());
+    }
+
+    public function testRemovingIndexFlagSchedulesDropIndex(): void
+    {
+        $this->engine->apply(SyncIndexed::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncIndexedV2::class);
+
+        $ops = array_map(static fn (array $op) => $op['op'], $diff->operations);
+        $this->assertContains(SchemaOperation::DropIndex, $ops);
+        $this->assertNotContains(SchemaOperation::CreateIndex, $ops);
+    }
+
+    public function testDropIndexIsApplied(): void
+    {
+        $this->engine->apply(SyncIndexed::class, dryRun: false);
+
+        $this->engine->apply(SyncIndexedV2::class, dryRun: false);
+
+        $columns = (new SchemaInspector($this->db))->inspect('sync_indexed');
+        $this->assertFalse($columns['email']->indexed, 'email index must be dropped after sync');
+        $this->assertTrue($this->engine->diff(SyncIndexedV2::class)->isEmpty());
+    }
+
+    public function testIndexOnlyChangeDoesNotTriggerColumnAlter(): void
+    {
+        $this->engine->apply(SyncIndexed::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncIndexedV2::class);
+
+        foreach ($diff->operations as $opData) {
+            $this->assertNotSame(SchemaOperation::AlterColumn, $opData['op']);
+        }
     }
 }
