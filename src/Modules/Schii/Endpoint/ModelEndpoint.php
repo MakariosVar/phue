@@ -524,12 +524,25 @@ final class ModelEndpoint
             return Response::json(["error" => "Resource not found"], 404);
         }
 
+        $schema = $this->schemaRegistry->get($modelClass);
+
+        // Build whitelist based on fields where column === true
+        $exportableFields = array_keys(
+            array_filter($schema->fields, static fn($field) => $field->column === true)
+        );
+        $allowedKeys = array_flip($exportableFields);
+
         $format = strtolower((string) ($request->input("format") ?? $request->getQuery("format") ?? "csv"));
         $query = $this->buildQuery($request, $modelClass);
         $items = $query->get();
 
+        // Transform and filter each record against the allowed column names
+        $rows = array_map(
+            static fn(BaseActiveRecord $item) => array_intersect_key($item->toArray(), $allowedKeys),
+            $items
+        );
+
         if ($format === "json") {
-            $rows = array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items);
             return Response::json($rows);
         }
 
@@ -539,8 +552,8 @@ final class ModelEndpoint
             return Response::json(["error" => "Failed to open temporary stream"], 500);
         }
 
-        $rows = array_map(static fn(BaseActiveRecord $item) => $item->toArray(), $items);
         if (!empty($rows)) {
+            // Extract headers directly from the first filtered row
             fputcsv($stream, array_keys(reset($rows)), ',', '"', '\\');
             foreach ($rows as $row) {
                 fputcsv($stream, array_values($row), ',', '"', '\\');
@@ -763,7 +776,8 @@ final class ModelEndpoint
     }
 
     /**
-     * Extracts allowed input data, whitelisting schema fields and protecting primary keys.
+     * Extracts allowed input data, whitelisting schema fields, respecting
+     * writable/readonly flags, and protecting primary keys.
      *
      * @param array<string, mixed>            $data       Raw incoming request data.
      * @param class-string<BaseActiveRecord> $modelClass Fully qualified model class name.
@@ -773,7 +787,16 @@ final class ModelEndpoint
     private function extractInputData(array $data, string $modelClass): array
     {
         $schema = $this->schemaRegistry->get($modelClass);
-        $allowedFields = array_keys($schema->fields);
+
+        // Filter out fields that are explicitly not writable or marked as readonly
+        $allowedFields = array_filter(
+            array_keys($schema->fields),
+            function (string $fieldName) use ($schema): bool {
+                $field = $schema->fields[$fieldName];
+
+                return $field->writable && !$field->readonly;
+            }
+        );
 
         $filteredData = array_intersect_key($data, array_flip($allowedFields));
 
@@ -785,7 +808,7 @@ final class ModelEndpoint
 
         return $filteredData;
     }
-
+    
     /**
      * Validates input data against Schema Field attributes, rules and unknown fields.
      *
@@ -866,6 +889,34 @@ final class ModelEndpoint
                     $errors[
                         $fieldName
                     ] = "Field '{$fieldName}' must be a valid email";
+                }
+
+                // Parse min:N rule
+                if (str_starts_with($rule, "min:")) {
+                    $min = (float) substr($rule, 4);
+                    if (is_numeric($value)) {
+                        if ((float) $value < $min) {
+                            $errors[$fieldName] = "Field '{$fieldName}' must be at least {$min}";
+                        }
+                    } else {
+                        if (mb_strlen((string) $value) < $min) {
+                            $errors[$fieldName] = "Field '{$fieldName}' must be at least {$min} characters";
+                        }
+                    }
+                }
+
+                // Parse max:N rule
+                if (str_starts_with($rule, "max:")) {
+                    $max = (float) substr($rule, 4);
+                    if (is_numeric($value)) {
+                        if ((float) $value > $max) {
+                            $errors[$fieldName] = "Field '{$fieldName}' may not be greater than {$max}";
+                        }
+                    } else {
+                        if (mb_strlen((string) $value) > $max) {
+                            $errors[$fieldName] = "Field '{$fieldName}' may not be greater than {$max} characters";
+                        }
+                    }
                 }
             }
         }
