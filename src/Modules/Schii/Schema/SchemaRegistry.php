@@ -322,6 +322,8 @@ final class SchemaRegistry
                 writable: $field->writable,
                 readonly: $field->readonly,
                 primaryKey: $field->primaryKey,
+                indexed: $field->indexed,
+                length: $field->length ?? 0
             );
         }
 
@@ -351,6 +353,7 @@ final class SchemaRegistry
     private function normalizeType(string $type): string
     {
         return match (strtolower($type)) {
+            'bool' => 'boolean',
             'integer', 'int' => 'int',
             'number', 'float', 'decimal', 'numeric' => 'float',
             default => strtolower($type),

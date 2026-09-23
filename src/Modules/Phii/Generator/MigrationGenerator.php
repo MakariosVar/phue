@@ -129,7 +129,12 @@ final class MigrationGenerator
                     filterable: $field->filterable ?? false,
                     sortable: $field->sortable ?? false,
                     options: $field->options ?? [],
-                    rules: $field->rules ?? []
+                    rules: $field->rules ?? [],
+                    writable: $field->writable ?? true,
+                    readonly: $field->readonly ?? false,
+                    primaryKey: $field->primaryKey ?? false,
+                    indexed: $field->indexed ?? false,
+                    length: $field->length ?? 0,
                 );
         }
 

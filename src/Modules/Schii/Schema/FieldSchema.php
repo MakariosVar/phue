@@ -28,6 +28,8 @@ final readonly class FieldSchema
      * @param bool                 $writable   Whether the field is writable.
      * @param bool                 $readonly   Whether the field is readonly.
      * @param bool                 $primaryKey Whether the field is a primary key.
+     * @param bool                 $indexed    Whether the field is indexed.
+     * @param int                  $length     The maximum length of the field.
      */
     public function __construct(
         public string $name,
@@ -44,6 +46,8 @@ final readonly class FieldSchema
         public bool $writable = true,
         public bool $readonly = false,
         public bool $primaryKey = false,
+        public bool $indexed = false,
+        public int $length = 0
     ) {}
 
     /**
@@ -70,6 +74,8 @@ final readonly class FieldSchema
             writable: (bool) ($data['writable'] ?? true),
             readonly: (bool) ($data['readonly'] ?? false),
             primaryKey: (bool) ($data['primaryKey'] ?? false),
+            indexed: (bool) ($data['indexed'] ?? false),
+            length: (int) ($data['length'] ?? 0)
         );
     }
 
@@ -95,6 +101,8 @@ final readonly class FieldSchema
             'writable' => $this->writable,
             'readonly' => $this->readonly,
             'primaryKey' => $this->primaryKey,
+            'indexed' => $this->indexed,
+            'length' => $this->length,
         ];
     }
 }

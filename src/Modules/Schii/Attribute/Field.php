@@ -21,6 +21,7 @@ final readonly class Field
      * @param bool $writable
      * @param bool $readonly
      * @param bool $primaryKey
+     * @param bool $indexed
      * @param array<string, mixed> $options Options for select, radio, etc.
      * @param array<string> $rules Validation rules (e.g., ['required', 'email', 'min:3'])
      */
@@ -38,5 +39,6 @@ final readonly class Field
         public bool $writable = true,
         public bool $readonly = false,
         public bool $primaryKey = false,
+        public bool $indexed = false,
     ) {}
 }
