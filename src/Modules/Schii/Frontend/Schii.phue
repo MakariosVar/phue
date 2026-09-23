@@ -116,6 +116,7 @@ return [
                             :last-page="lastPage"
                             :visible-fields="visibleFields"
                             :sort="sort"
+                            :layout="layout"
                             v-model:selected="selected"
                             selectable
                             @page-change="onPageChange"
@@ -312,6 +313,7 @@ export default function mountApp() {
             const entitySearch = ref('');
             const currentEntity = ref(queryParams.entity || null);
             const fields = ref([]);
+            const layout = ref('grid');
             const rows = ref([]);
             const loading = ref(false);
             const rowsError = ref(null);
@@ -473,6 +475,7 @@ export default function mountApp() {
                     if (res.ok) {
                         const data = await res.json();
                         fields.value = data.fields || [];
+                        layout.value = data.layout === 'list' ? 'list' : 'grid';
                         visibleFields.value = (data.fields || [])
                             .filter(f => f.column !== false && f.column !== 0)
                             .map(f => f.name);
@@ -959,6 +962,7 @@ export default function mountApp() {
                 currentEntity,
                 currentLabel,
                 fields,
+                layout,
                 writableFields,
                 rows,
                 loading,

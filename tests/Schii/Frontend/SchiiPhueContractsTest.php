@@ -82,7 +82,7 @@ final class SchiiPhueContractsTest extends TestCase
     {
         $script = $this->script('SchiiRecordTable.phue');
 
-        foreach (['fields', 'rows', 'loading', 'page', 'lastPage', 'selected', 'selectable', 'visibleFields', 'sort'] as $prop) {
+        foreach (['fields', 'rows', 'loading', 'page', 'lastPage', 'selected', 'selectable', 'visibleFields', 'sort', 'layout'] as $prop) {
             $this->assertMatchesRegularExpression(
                 "/\n\s*{$prop}:\s*\{/m",
                 $script,
@@ -298,5 +298,26 @@ final class SchiiPhueContractsTest extends TestCase
 
         $this->assertStringContainsString("field.widget === 'textarea' || field.type === 'json'", $template);
         $this->assertStringContainsString(":rows=\"field.type === 'json' ? 5 : 3\"", $template);
+    }
+
+    public function testSchiiPassesLayoutToRecordTable(): void
+    {
+        $template = $this->template('Schii.phue');
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString(':layout="layout"', $template);
+        $this->assertStringContainsString("const layout = ref('grid')", $script);
+        $this->assertStringContainsString("layout.value = data.layout === 'list' ? 'list' : 'grid'", $script);
+    }
+
+    public function testRecordTableRendersCompactListWhenLayoutIsList(): void
+    {
+        $template = $this->template('SchiiRecordTable.phue');
+
+        $this->assertStringContainsString("v-if=\"layout !== 'list'\"", $template);
+        $this->assertStringContainsString("v-else-if=\"layout === 'list'\"", $template);
+        $this->assertStringContainsString('list-group', $template);
+        $this->assertStringContainsString('listTitle(row)', $template);
+        $this->assertStringContainsString('listDetail(row)', $template);
     }
 }
