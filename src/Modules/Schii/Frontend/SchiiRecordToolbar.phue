@@ -236,7 +236,7 @@ export default {
       return this.fields.filter(f => f.sortable);
     },
     toggleableFields() {
-      return this.fields.filter(f => f.name !== 'id' && !f.primaryKey);
+      return this.fields.filter(f => (f.column !== false && f.column !== 0) && f.name !== 'id' && !f.primaryKey);
     },
     visibleFieldSet() {
       const vf = this.visibleFields;

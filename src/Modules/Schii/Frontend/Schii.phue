@@ -456,7 +456,8 @@ export default function mountApp() {
                     if (res.ok) {
                         const data = await res.json();
                         fields.value = data.fields || [];
-                        visibleFields.value = data.fields
+                        visibleFields.value = (data.fields || [])
+                            .filter(f => f.column !== false && f.column !== 0)
                             .map(f => f.name);
                         if (data.label !== currentLabel.value) {
                             entityMeta.value[currentEntity.value] = {

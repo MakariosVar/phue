@@ -139,6 +139,7 @@ export default {
   computed: {
     columns() {
       const cols = this.fields
+        .filter(f => f.column !== false && f.column !== 0)
         .filter(f => this.isVisible(f))
         .map(f => ({ key: f.name, label: f.label || f.name, field: f }));
       cols.push({ key: '__actions', label: 'Actions', field: null });
