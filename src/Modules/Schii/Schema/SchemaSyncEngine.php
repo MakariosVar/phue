@@ -206,7 +206,7 @@ final class SchemaSyncEngine
              * Index changes are represented by CreateIndex / DropIndex
              * operations below.
              */
-            if ($this->isColumnChanged($existingCol, $targetCol)) {
+            if ($this->isColumnChanged($existingCol, $targetCol, $driverName)) {
                 $operations[] = [
                     'op' => SchemaOperation::AlterColumn,
                     'column' => $existingCol,
@@ -337,16 +337,74 @@ final class SchemaSyncEngine
     }
 
     /**
+     * Check whether two column types are compatible or logically equivalent.
+     *
+     * Compares types against predefined per-driver compatibility groups to prevent
+     * unnecessary alter queries while respecting database-specific type representations.
+     *
+     * @param string $existingType Current column type in the existing schema
+     * @param string $targetType Expected column type from target definition
+     * @param string $driverName Database driver name (e.g. 'sqlite', 'mysql', 'pgsql')
+     * @return bool True if the types belong to the same compatibility group or match
+     */
+    private function areTypesCompatible(
+        string $existingType,
+        string $targetType,
+        string $driverName
+    ): bool {
+        $existingType = strtolower($existingType);
+        $targetType = strtolower($targetType);
+        $driver = strtolower($driverName);
+
+        if ($existingType === $targetType) {
+            return true;
+        }
+
+        // Text-like types are equivalent across all drivers
+        $textGroup = ['text', 'json', 'varchar', 'longtext', 'mediumtext'];
+
+        // Build driver-specific compatibility groups
+        if (in_array($driver, ['sqlite', 'mysql'], true)) {
+            // SQLite & MySQL physically store booleans as integers (INTEGER / TINYINT(1))
+            $compatibleGroups = [
+                $textGroup,
+                ['boolean', 'bool', 'int', 'integer'],
+            ];
+        } else {
+            // PostgreSQL treats BOOLEAN as a distinct type from INT
+            $compatibleGroups = [
+                $textGroup,
+                ['boolean', 'bool'],
+                ['int', 'integer'],
+            ];
+        }
+
+        foreach ($compatibleGroups as $group) {
+            if (in_array($existingType, $group, true) && in_array($targetType, $group, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Compare an existing column definition with a target column definition.
      *
      * Index state is intentionally excluded. Indexes are handled separately
      * through CreateIndex / DropIndex operations.
+     *
+     * @param ColumnDefinition $existing
+     * @param ColumnDefinition $target
+     * @param string $driverName
+     * @return bool
      */
     private function isColumnChanged(
         ColumnDefinition $existing,
-        ColumnDefinition $target
+        ColumnDefinition $target,
+        string $driverName
     ): bool {
-        return $existing->type !== $target->type
+        return !$this->areTypesCompatible($existing->type, $target->type, $driverName)
             || $existing->nullable !== $target->nullable
             || $existing->primaryKey !== $target->primaryKey
             || $existing->autoIncrement !== $target->autoIncrement;
