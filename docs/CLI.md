@@ -6,7 +6,7 @@ The command-line tooling: the `phue` console, the `phue-create` project installe
 
 ## 1. `phue` — the framework console
 
-`./phue` is a shebang script (`#!/usr/bin/env php`) that boots the autoloader, creates a `Phue\Core\Console\Application`, registers the built-in commands, then lets every configured module contribute its own commands, and runs.
+`./phue` is a shebang script (`#!/usr/bin/env php`) that loads the `.env` file (`Env::load()`) **before** reading `config/`, creates a `Phue\Core\Console\Application`, registers the built-in commands, then lets every configured module contribute its own commands, and runs. Loading the environment first mirrors the web runtime, so `env()`-driven settings (e.g. `DB_CONNECTION`, `DB_HOST`) apply to CLI commands such as `migrate` and `schii:migrate`.
 
 ```bash
 ./phue list      # or --help / -h

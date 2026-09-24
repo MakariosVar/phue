@@ -33,9 +33,32 @@ You annotate models; the module discovers them from the configured
 
 Attributes live in `Phue\Modules\Schii\Attribute`:
 
-- **`#[UI]`** — class attribute: entity `label`, `icon`, `layout`, `description`.
-- **`#[Field]`** — property attribute: widget `type`, `label`, `searchable`,
-  `filterable`, `sortable`, column visibility, `options`, validation `rules`.
+- **`#[UI]`** — class attribute: entity `label`, `icon`, `layout`
+  (`grid` | `list`), `description`.
+- **`#[Field]`** — property attribute:
+  - `type` — data type (`text`, `string`, `integer`, `number`, `boolean`,
+    `json`, `date`, `email`, `select`, …).
+  - `widget` — form-control override (`input`, `textarea`, `select`, `radio`,
+    `checkbox`, `password`, `date`, …). It defaults to `input`, whose HTML input
+    type is derived from `type` (`email`, `number`, `date`, …).
+  - `label`, `options`, `rules` — display text, `select`/`radio` choices, and
+    validation rules.
+  - `searchable`, `filterable`, `sortable` — the `index()` query features.
+  - `column` — show/hide the field in the list/grid and the column toggle
+    (`column: false` removes it from the table entirely).
+  - `required` — must be present on create.
+  - `writable`, `readonly` — write-path enforcement (see below).
+  - `primaryKey`, `indexed` — schema-sync hints: a real primary key and a real
+    database index.
+
+### Write-path flags
+
+On `store()` / `update()` / `bulk()` / `import()`, a field is accepted only when
+`writable === true` **and** `readonly === false`; anything else is silently
+stripped from the payload before persistence. This is how
+`#[Field(type: 'string', writable: false, readonly: true)] public string $password_hash;`
+stays visible in exports but can never be mass-assigned by a client. The primary
+key is always stripped from inbound payloads.
 
 ```php
 namespace App\Models;
@@ -88,6 +111,7 @@ Components (in `src/Modules/Schii/Schema/`):
 | `FieldSchema`, `ModelSchema` | Immutable value objects exposing `toArray()` for standard JSON schema rendering |
 | `SchemaInspector` | Inspects the live database schema (per-connection) |
 | `SchemaSyncEngine` | Diffs model schemas against the live database |
+| `SchemaDiff`, `SchemaOperation` | Ordered operation list rendered into dialect-aware DDL |
 
 ### Entity discovery
 
@@ -227,7 +251,7 @@ declarations.
 use Phue\Modules\Schii\Migration\AutoMigrator;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 
-$migrator = new AutoMigrator(new SchemaRegistry(), $dbConnection);
+$migrator = new AutoMigrator($dbConnection, new SchemaRegistry());
 
 // Creates the table or ALTERs columns based on the Product model attributes
 $actions = $migrator->migrate(App\Models\Product::class);
@@ -239,17 +263,31 @@ foreach ($actions as $action) {
 
 Engine internals:
 
-- **`AutoMigrator`** inspects active database tables (`tableExists`,
-  `getExistingColumns`) and auto-migrates missing tables (`CREATE TABLE`) or
-  missing columns (`ALTER TABLE ADD COLUMN`) based on the model's `ModelSchema`.
-  All steps run inside a database transaction (`beginTransaction()` / `commit()`)
-  with automatic `rollBack()` on error. Driver detection is multi-tiered:
-  `getName()` contract, `instanceof` class checks, or string fallback.
-- **`SchemaToSqlConverter`** generates dialect-aware SQL DDL tailored for
-  SQLite, MySQL, or PostgreSQL (`AUTOINCREMENT` vs `AUTO_INCREMENT` vs `SERIAL`,
+- **`AutoMigrator`** delegates to **`SchemaSyncEngine`**, which diffs the model's
+  `ModelSchema` against the live database and emits operations: `CreateTable`,
+  `AddColumn`, `AlterColumn`, `DropColumn` (gated behind `allowDrops`),
+  `CreateIndex`, and `DropIndex`. **`SchemaDiff`** renders those operations into
+  dialect-aware SQL (`AUTOINCREMENT` vs `AUTO_INCREMENT` vs `SERIAL`,
   `TINYINT(1)` vs `BOOLEAN`).
+- **`SchemaInspector`** reads the live schema per driver: SQLite `PRAGMA`,
+  MySQL `SHOW FULL COLUMNS`, PostgreSQL `information_schema`. Table existence is
+  checked through `information_schema` on MySQL, which is **MariaDB-safe**
+  (placeholders are not allowed inside `SHOW ...` under native prepared
+  statements).
+- **Type comparison is driver-aware.** Text-like types (`text`, `json`,
+  `varchar`, `longtext`, `mediumtext`) are equivalent on every driver; on SQLite
+  and MySQL `boolean` and `int` are the same physical type, while PostgreSQL
+  keeps them distinct. Primary-key columns are treated as implicitly `NOT NULL`.
+  `SchemaRegistry` canonicalises aliases (`integer` → `int`, `bool` → `boolean`,
+  `string` → `varchar`, `number`/`decimal` → `float`) so the model and the
+  inspector speak the same language.
+- **Indexes are real.** `indexed: true` emits a `CREATE INDEX`; on MySQL text
+  columns it is created with a key prefix (e.g. `username(768)`).
 - **`SqlIdentifier`** (in `Phue\Core\Database`) sanitizes identifiers with
   regex whitelist validation and dialect-aware quoting.
+
+> **Transactions:** SQLite DDL is transactional, but MySQL/MariaDB DDL is not —
+> a statement that fails mid-way can leave the table partially applied.
 
 ### CLI
 
@@ -275,6 +313,9 @@ app**:
   discovery**: the page carries no hardcoded entity list.
 - The sidebar is populated from whatever entities the configured namespace
   yields; clicking an entity fetches its JSON schema + rows and renders them.
+- The record table honors `#[UI(layout: 'grid'|'list')]` and the `column` flag;
+  the record form renders `select`, `radio`, `checkbox`, `password`, and `json`
+  (textarea) controls from each field's `widget` / `type` / `options`.
 
 Module frontend components (read-only, framework territory): `Schii.phue`,
 `SchiiRecordTable`, `SchiiRecordToolbar`, `SchiiAuditPanel`,

@@ -165,7 +165,7 @@ After adding new classes outside these roots (or changing the map), run `compose
 
 ## 4. Environment (`.env`)
 
-The installer creates `.env` from `.env.example`. `Application` loads it at boot (`Env::load()`) **before** reading config files, so every config value driven by the `env()` helper picks it up:
+The installer creates `.env` from `.env.example`. `Application` loads it at boot (`Env::load()`) **before** reading config files, so every config value driven by the `env()` helper picks it up. The `./phue` CLI loads it the same way before building the console application, so commands like `migrate` and `schii:migrate` honour the configured connection:
 
 ```ini
 APP_NAME="Phue App"
@@ -283,6 +283,11 @@ Optimize (clear + warm) for production-ready performance:
 ```
 
 See [CLI](CLI.md) for the full command list and `phue-docker start -h` for cache/optimize flags.
+
+> The dev image installs `pdo_mysql` alongside the bundled SQLite driver. The
+> `app` service runs with **host networking**, so it can reach a MySQL server
+> listening on the host loopback at `127.0.0.1:3306` — set `DB_CONNECTION=mysql`
+> and `DB_HOST=127.0.0.1` in `.env` to use it.
 
 ---
 
