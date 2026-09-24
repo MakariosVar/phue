@@ -32,18 +32,19 @@ class User extends BaseUser
     public int $id;
 
     #[Field(
-        type: 'text',
+        type: 'string',
         label: 'Username',
         required: true,
         searchable: true,
         filterable: true,
         sortable: true,
+        indexed: true,
         rules: ['required', 'min:3', 'max:50'],
     )]
     public string $username;
 
     #[Field(
-        type: 'text',
+        type: 'string',
         label: 'Password Hash',
         writable: false,
         readonly: true,
@@ -52,7 +53,7 @@ class User extends BaseUser
     public string $password_hash;
 
     #[Field(
-        type: 'text',
+        type: 'string',
         label: 'Auth Key',
         writable: false,
         readonly: true,
