@@ -1,0 +1,74 @@
+<template>
+  <span
+    data-phui="spinner"
+    :class="spinnerClasses"
+    :style="spinnerStyle"
+    role="status"
+  >
+    <span v-if="label" class="visually-hidden">{{ label }}</span>
+  </span>
+</template>
+
+<script>
+export default {
+  name: 'PhSpinner',
+  props: {
+    size: {
+      type: [String, Number],
+      default: 'md'
+    },
+    variant: {
+      type: String,
+      default: 'border',
+      validator: (val) => ['border', 'grow'].includes(val)
+    },
+    color: {
+      type: String,
+      default: ''
+    },
+    label: {
+      type: String,
+      default: 'Loading…'
+    }
+  },
+  computed: {
+    spinnerClasses() {
+      const base = this.variant === 'grow' ? 'spinner-grow' : 'spinner-border';
+      const classes = [base];
+      if (this.size === 'sm') {
+        classes.push(`${base}-sm`);
+      }
+      const colorClass = this.colorClass;
+      if (colorClass) {
+        classes.push(colorClass);
+      }
+      return classes;
+    },
+    colorClass() {
+      const map = {
+        primary: 'text-primary',
+        secondary: 'text-secondary',
+        success: 'text-success',
+        warning: 'text-warning',
+        danger: 'text-danger',
+        error: 'text-danger',
+        info: 'text-info',
+        light: 'text-light',
+        dark: 'text-dark'
+      };
+      return map[this.color] || '';
+    },
+    spinnerStyle() {
+      const style = {};
+      if (this.size === 'lg') {
+        style.width = '2rem';
+        style.height = '2rem';
+      } else if (typeof this.size === 'number') {
+        style.width = `${this.size}px`;
+        style.height = `${this.size}px`;
+      }
+      return style;
+    }
+  }
+};
+</script>

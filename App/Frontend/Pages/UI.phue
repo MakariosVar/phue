@@ -241,6 +241,98 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 ?>
 <div v-html="navHtml"></div>
 SNP,
+    'PhIcon' => <<<'SNP'
+<ph-icon name="check-circle" variant="success" size="lg" />
+<ph-icon name="trash" variant="danger" label="Delete" />
+SNP,
+    'PhSpinner' => <<<'SNP'
+<ph-spinner size="sm" color="primary" />
+<ph-spinner variant="grow" color="success" />
+<ph-spinner size="lg" color="danger" label="Loading data…" />
+SNP,
+    'PhSwitch' => <<<'SNP'
+<ph-switch v-model="switchOn" label="Enable notifications" />
+<ph-switch v-model="switchNotif" size="lg" label="Larger switch" />
+SNP,
+    'PhDropdown' => <<<'SNP'
+<ph-dropdown
+  label="Actions"
+  variant="primary"
+  :items="[
+    { header: 'Manage' },
+    { label: 'Edit', icon: 'pencil' },
+    { label: 'Duplicate', icon: 'copy' },
+    { divider: true },
+    { label: 'Delete', icon: 'trash', disabled: true }
+  ]"
+  @select="dropdownLast = $event.label"
+/>
+SNP,
+    'PhTooltip' => <<<'SNP'
+<ph-tooltip content="Saves your changes" placement="top">
+  <ph-button variant="outline" size="sm">Hover me</ph-button>
+</ph-tooltip>
+SNP,
+    'PhDrawer' => <<<'SNP'
+<ph-button variant="primary" @click="drawerOpen = true">Open drawer</ph-button>
+
+<ph-drawer v-model="drawerOpen" title="Filters" position="end">
+  <p>Drawer body content…</p>
+  <template #footer>
+    <ph-button variant="ghost" @click="drawerOpen = false">Cancel</ph-button>
+    <ph-button variant="primary" @click="drawerOpen = false">Apply</ph-button>
+  </template>
+</ph-drawer>
+SNP,
+    'PhConfirmDialog' => <<<'SNP'
+<!-- mount the host once with a template ref: -->
+<ph-confirm-dialog ref="confirm" />
+
+const ok = await confirm.value.confirm({
+  title: 'Delete product?',
+  message: 'This action cannot be undone.',
+  variant: 'danger',
+  icon: 'exclamation-triangle',
+  confirmText: 'Delete',
+});
+SNP,
+    'PhSelect3' => <<<'SNP'
+<ph-select3
+  v-model="select3Multi"
+  multiple
+  clearable
+  label="Stack"
+  :options="selectOptions"
+  helper-text="Search, multi-select and remove as chips."
+/>
+SNP,
+    'PhFileInput' => <<<'SNP'
+<ph-file-input
+  v-model="fileList"
+  multiple
+  accept="image/*"
+  :max-size="2097152"
+  label="Attachments"
+  helper-text="PNG or JPG up to 2 MB."
+/>
+SNP,
+    'PhDatePicker' => <<<'SNP'
+<ph-date-picker
+  v-model="dateValue"
+  label="Start date"
+  min="2024-01-01"
+  helper-text="Pick any date from 2024 onwards."
+/>
+SNP,
+    'PhToastService' => <<<'SNP'
+// <ph-toast> registers window.__phueToast on mount
+window.__phueToast.push({
+  variant: 'success',
+  title: 'Saved',
+  message: 'Changes persisted.',
+  duration: 3000,
+});
+SNP,
 ];
 
 return [
@@ -306,6 +398,23 @@ return [
             ['id' => 8, 'name' => 'Phue Explorer', 'price' => 15, 'status' => 'Active'],
             ['id' => 9, 'name' => 'Phue SPA', 'price' => 35, 'status' => 'Beta'],
         ],
+        'switchOn'        => $switchOn ?? true,
+        'switchNotif'     => $switchNotif ?? false,
+        'select3Single'   => $select3Single ?? 'vue',
+        'select3Multi'    => $select3Multi ?? ['vue', 'php'],
+        'dropdownLast'    => '',
+        'dropdownItems'   => [
+            ['header' => 'Manage'],
+            ['label' => 'Edit', 'icon' => 'pencil'],
+            ['label' => 'Duplicate', 'icon' => 'copy'],
+            ['divider' => true],
+            ['label' => 'Delete', 'icon' => 'trash', 'disabled' => true],
+        ],
+        'drawerOpen'      => false,
+        'fileList'        => [],
+        'dateValue'       => $dateValue ?? '2026-01-15',
+        'dateTimeValue'   => $dateTimeValue ?? '',
+        'confirmResult'   => '',
     ],
 ];
 </php>
@@ -314,6 +423,7 @@ return [
 <div class="d-flex" style="min-height: 100vh;" v-cloak>
 
     <ph-toast ref="toast" :position="toastPosition" />
+    <ph-confirm-dialog ref="confirm" />
 
     <!-- Sidebar -->
     <aside class="phue-sidebar" style="
@@ -456,6 +566,67 @@ return [
                     </div>
                 </div>
 
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-switch&gt;</code></h5>
+                        <p class="small text-body-secondary">Boolean toggle with sizes, label or default slot.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-switch v-model="switchOn" label="Enable notifications" />
+                            <ph-switch v-model="switchNotif" size="lg" label="Larger switch" />
+                            <ph-switch v-model="switchOn" disabled label="Disabled" />
+                            <p class="small text-body-secondary mt-2 mb-0">Notifications: <code>{{ switchOn }}</code></p>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhSwitch }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-select3&gt;</code></h5>
+                        <p class="small text-body-secondary">Searchable single/multiple select with removable chips.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-select3 v-model="select3Single" label="Framework (single)"
+                                        :options="selectOptions" clearable />
+                            <ph-select3 v-model="select3Multi" multiple clearable label="Stack (multiple)"
+                                        :options="selectOptions" class="mt-3"
+                                        helper-text="Search, select several, remove chips." />
+                            <p class="small text-body-secondary mt-2 mb-0">
+                                Single: <code>{{ select3Single }}</code> · Multiple: <code>{{ select3Multi.join(', ') }}</code>
+                            </p>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhSelect3 }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-file-input&gt;</code></h5>
+                        <p class="small text-body-secondary">Drag &amp; drop, <code>accept</code>/<code>max-size</code> validation and image previews.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-file-input v-model="fileList" multiple accept="image/*" :max-size="2097152"
+                                           label="Attachments" helper-text="PNG or JPG up to 2 MB." />
+                            <p class="small text-body-secondary mt-2 mb-0">Files: <code>{{ fileList.length }}</code></p>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhFileInput }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-date-picker&gt;</code></h5>
+                        <p class="small text-body-secondary">Calendar popover, <code>min</code>/<code>max</code> bounds and optional native input.</p>
+                        <div class="phue-demo border rounded p-3 mb-3">
+                            <ph-date-picker v-model="dateValue" label="Start date" min="2024-01-01"
+                                            helper-text="Pick any date from 2024 onwards." />
+                            <ph-date-picker v-model="dateTimeValue" mode="datetime" label="Scheduled at" class="mt-3" />
+                            <p class="small text-body-secondary mt-2 mb-0">
+                                Date: <code>{{ dateValue || '—' }}</code> · Datetime: <code>{{ dateTimeValue || '—' }}</code>
+                            </p>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhDatePicker }}</code></pre>
+                    </div>
+                </div>
+
                 <div class="col-12">
                     <div class="card p-3">
                         <h5 class="mb-1"><code>&lt;ph-form-field&gt;</code></h5>
@@ -561,6 +732,22 @@ return [
                         <pre class="phue-code-block mb-0"><code>{{ code.PhChip }}</code></pre>
                     </div>
                 </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-icon&gt;</code></h5>
+                        <p class="small text-body-secondary">Bootstrap Icons wrapper with size, color, spin and accessible labels.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+                            <ph-icon name="check-circle" variant="success" size="lg" />
+                            <ph-icon name="exclamation-triangle" variant="warning" size="lg" />
+                            <ph-icon name="trash" variant="danger" size="lg" />
+                            <ph-icon name="arrow-clockwise" spin size="lg" />
+                            <ph-icon name="star-fill" color="gold" size="xl" />
+                            <ph-icon name="info-circle" label="Information" size="lg" />
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhIcon }}</code></pre>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -643,6 +830,43 @@ return [
 
                 <div class="col-12 col-xl-6">
                     <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-spinner&gt;</code></h5>
+                        <p class="small text-body-secondary">Border/grow spinners in multiple sizes and colors.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+                            <ph-spinner size="sm" color="primary" />
+                            <ph-spinner color="secondary" />
+                            <ph-spinner size="lg" color="success" />
+                            <ph-spinner variant="grow" color="danger" />
+                            <ph-spinner variant="grow" color="warning" />
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhSpinner }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-tooltip&gt;</code></h5>
+                        <p class="small text-body-secondary">CSS-positioned tooltip on hover, focus or click.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+                            <ph-tooltip content="Tooltip on top" placement="top">
+                                <ph-button variant="outline" size="sm">Top</ph-button>
+                            </ph-tooltip>
+                            <ph-tooltip content="Tooltip on the right" placement="end">
+                                <ph-button variant="outline" size="sm">End</ph-button>
+                            </ph-tooltip>
+                            <ph-tooltip content="Tooltip on the left" placement="start">
+                                <ph-button variant="outline" size="sm">Start</ph-button>
+                            </ph-tooltip>
+                            <ph-tooltip content="Click-triggered tooltip" trigger="click" placement="bottom">
+                                <ph-button variant="outline" size="sm">Click</ph-button>
+                            </ph-tooltip>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhTooltip }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
                         <h5 class="mb-1"><code>&lt;ph-toast&gt;</code></h5>
                         <p class="small text-body-secondary">Programmatic notifications. Hovering pauses a toast; picking a position re-renders the stack.</p>
                         <div class="phue-demo border rounded p-3 mb-3">
@@ -664,9 +888,43 @@ return [
                                  <ph-button size="sm" :style="{ color: 'var(--bs-warning)', borderColor: 'var(--bs-warning)', backgroundColor: 'transparent' }" @click="toastPush('warning')">Warning</ph-button>
                                  <ph-button size="sm" :style="{ color: 'var(--bs-danger)', borderColor: 'var(--bs-danger)', backgroundColor: 'transparent' }" @click="toastPush('error')">Error</ph-button>
                                 <ph-button variant="ghost" size="sm" @click="toast.clear()">Clear all</ph-button>
+                                <ph-button variant="outline" size="sm" @click="toastServicePush">via service</ph-button>
                             </div>
                         </div>
                         <pre class="phue-code-block mb-0"><code>{{ code.PhToast }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-drawer&gt;</code></h5>
+                        <p class="small text-body-secondary">Teleported side panel with focus trap, <code>Esc</code> and footer slot.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-2">
+                            <ph-button variant="primary" size="sm" @click="drawerOpen = true">Open drawer</ph-button>
+                            <ph-button variant="outline" size="sm" @click="drawerOpen = true">Same panel</ph-button>
+                            <ph-drawer v-model="drawerOpen" title="Filters" position="end">
+                                <p>Drawer body content. Focus is trapped here while open.</p>
+                                <template #footer>
+                                    <ph-button variant="ghost" @click="drawerOpen = false">Cancel</ph-button>
+                                    <ph-button variant="primary" @click="drawerOpen = false">Apply</ph-button>
+                                </template>
+                            </ph-drawer>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhDrawer }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-confirm-dialog&gt;</code></h5>
+                        <p class="small text-body-secondary">Promise-based confirmation via template ref (<code>confirm.value.confirm()</code>).</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-2">
+                            <ph-button variant="danger" size="sm" @click="confirmDemo">Delete…</ph-button>
+                            <span v-if="confirmResult" class="small text-body-secondary">
+                                Result: <code>{{ confirmResult }}</code>
+                            </span>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhConfirmDialog }}</code></pre>
                     </div>
                 </div>
             </div>
@@ -740,6 +998,22 @@ return [
                             <ph-link href="#overview" disabled>Disabled</ph-link>
                         </div>
                         <pre class="phue-code-block mb-0"><code>{{ code.PhLink }}</code></pre>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card p-3 h-100">
+                        <h5 class="mb-1"><code>&lt;ph-dropdown&gt;</code></h5>
+                        <p class="small text-body-secondary">Action menu with headers, dividers, icons and disabled items.</p>
+                        <div class="phue-demo border rounded p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+                            <ph-dropdown label="Actions" variant="primary" :items="dropdownItems"
+                                         @select="dropdownLast = $event.label" />
+                            <ph-dropdown label="Right aligned" align="end" :items="dropdownItems" />
+                            <span v-if="dropdownLast" class="small text-body-secondary">
+                                Selected: <code>{{ dropdownLast }}</code>
+                            </span>
+                        </div>
+                        <pre class="phue-code-block mb-0"><code>{{ code.PhDropdown }}</code></pre>
                     </div>
                 </div>
             </div>
@@ -976,6 +1250,7 @@ export default async function mountApp() {
             }
 
             const toast = ref(null);
+            const confirm = ref(null);
 
             function toastPush(variant) {
                 const messages = {
@@ -992,9 +1267,20 @@ export default async function mountApp() {
                 });
             }
 
+async function confirmDemo() {
+                if (!confirm.value) return;
+                const ok = await confirm.value.confirm({
+                    title: 'Delete product?',
+                    message: 'This action cannot be undone.',
+                    variant: 'danger',
+                    icon: 'exclamation-triangle',
+                    confirmText: 'Delete'
+                });
+                state.confirmResult = ok ? 'confirmed' : 'cancelled';
+            }
 
 
-            return { ...toRefs(state), toast, onSave, toggleInputError, scrollTo, toastPush };
+            return { ...toRefs(state), toast, confirm, onSave, toggleInputError, scrollTo, toastPush, confirmDemo };
         }
     });
 

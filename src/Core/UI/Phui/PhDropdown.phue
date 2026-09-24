@@ -1,0 +1,190 @@
+<template>
+  <div
+    ref="root"
+    data-phui="dropdown"
+    class="dropdown d-inline-block position-relative"
+  >
+    <slot name="trigger" :open="open" :toggle="toggle">
+      <button
+        type="button"
+        class="btn d-inline-flex align-items-center"
+        :class="[variantClass, sizeClass]"
+        :disabled="disabled"
+        aria-haspopup="menu"
+        :aria-expanded="open ? 'true' : 'false'"
+        @click="toggle"
+      >
+        <span>{{ label }}</span>
+        <ph-icon
+          name="chevron-down"
+          size="sm"
+          class="ms-1"
+          :style="chevronStyle"
+        />
+      </button>
+    </slot>
+
+    <div
+      v-if="open"
+      class="dropdown-menu show"
+      :class="{ 'dropdown-menu-end': align === 'end' }"
+      role="menu"
+      :style="menuStyle"
+    >
+      <template v-for="(item, index) in items" :key="index">
+        <h6 v-if="item.header" class="dropdown-header">{{ item.header }}</h6>
+        <hr v-else-if="item.divider" class="dropdown-divider" />
+        <span
+          v-else-if="item.disabled"
+          class="dropdown-item disabled d-flex align-items-center"
+          aria-disabled="true"
+        >
+          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
+          {{ item.label }}
+        </span>
+        <a
+          v-else
+          class="dropdown-item d-flex align-items-center"
+          href="#"
+          role="menuitem"
+          @click.prevent="select(item)"
+        >
+          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
+          {{ item.label }}
+        </a>
+      </template>
+
+      <slot :close="close" />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhDropdown',
+  props: {
+    label: {
+      type: String,
+      default: 'Menu'
+    },
+    items: {
+      type: Array,
+      default: () => []
+    },
+    variant: {
+      type: String,
+      default: 'secondary',
+      validator: (val) => ['primary', 'secondary', 'outline', 'ghost', 'danger', 'light'].includes(val)
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
+    align: {
+      type: String,
+      default: 'start',
+      validator: (val) => ['start', 'end'].includes(val)
+    },
+    closeOnSelect: {
+      type: Boolean,
+      default: true
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['select', 'open', 'close'],
+  data() {
+    return {
+      open: false
+    };
+  },
+  computed: {
+    variantClass() {
+      const map = {
+        primary: 'btn-primary',
+        secondary: 'btn-secondary',
+        outline: 'btn-outline-secondary',
+        ghost: 'btn-link',
+        danger: 'btn-danger',
+        light: 'btn-light'
+      };
+      return map[this.variant] || 'btn-secondary';
+    },
+    sizeClass() {
+      if (this.size === 'sm') return 'btn-sm';
+      if (this.size === 'lg') return 'btn-lg';
+      return '';
+    },
+    chevronStyle() {
+      return {
+        transition: 'transform 0.15s ease',
+        transform: this.open ? 'rotate(180deg)' : 'none'
+      };
+    },
+    menuStyle() {
+      const style = {
+        position: 'absolute',
+        top: '100%',
+        marginTop: '0.125rem',
+        zIndex: 1000
+      };
+      if (this.align === 'end') {
+        style.right = '0';
+        style.left = 'auto';
+      } else {
+        style.left = '0';
+        style.right = 'auto';
+      }
+      return style;
+    }
+  },
+  watch: {
+    open(value) {
+      this.$emit(value ? 'open' : 'close');
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.onDocumentClick);
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.onDocumentClick);
+    document.removeEventListener('keydown', this.onKeydown);
+  },
+  methods: {
+    toggle() {
+      if (this.disabled) return;
+      this.open = !this.open;
+    },
+    close() {
+      if (this.open) {
+        this.open = false;
+      }
+    },
+    select(item) {
+      if (!item || item.disabled) return;
+      this.$emit('select', item);
+      if (item.href) {
+        window.location.href = item.href;
+      }
+      if (this.closeOnSelect) {
+        this.close();
+      }
+    },
+    onDocumentClick(event) {
+      if (!this.open) return;
+      if (this.$refs.root && !this.$refs.root.contains(event.target)) {
+        this.close();
+      }
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape' && this.open) {
+        this.close();
+      }
+    }
+  }
+};
+</script>

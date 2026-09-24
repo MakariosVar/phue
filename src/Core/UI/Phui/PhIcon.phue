@@ -1,0 +1,101 @@
+<template>
+  <i
+    data-phui="icon"
+    :class="iconClasses"
+    :style="iconStyle"
+    :role="label ? 'img' : null"
+    :aria-label="label || null"
+    :aria-hidden="label ? null : 'true'"
+  ></i>
+</template>
+
+<script>
+export default {
+  name: 'PhIcon',
+  props: {
+    name: {
+      type: String,
+      required: true
+    },
+    size: {
+      type: [String, Number],
+      default: 'md'
+    },
+    variant: {
+      type: String,
+      default: ''
+    },
+    color: {
+      type: String,
+      default: ''
+    },
+    spin: {
+      type: Boolean,
+      default: false
+    },
+    label: {
+      type: String,
+      default: ''
+    }
+  },
+  computed: {
+    iconClasses() {
+      const classes = ['bi', `bi-${this.name}`];
+      const variantClass = this.variantClass;
+      if (variantClass) {
+        classes.push(variantClass);
+      }
+      return classes;
+    },
+    variantClass() {
+      const map = {
+        primary: 'text-primary',
+        secondary: 'text-secondary',
+        success: 'text-success',
+        warning: 'text-warning',
+        danger: 'text-danger',
+        error: 'text-danger',
+        info: 'text-info',
+        muted: 'text-body-secondary',
+        neutral: 'text-body-secondary',
+        light: 'text-light',
+        dark: 'text-dark'
+      };
+      return map[this.variant] || '';
+    },
+    iconStyle() {
+      const style = {};
+      const resolved = this.resolveSize(this.size);
+      if (resolved) {
+        style.fontSize = resolved;
+      }
+      if (this.color) {
+        style.color = this.color;
+      }
+      if (this.spin) {
+        style.animation = 'spinner-border 0.75s linear infinite';
+      }
+      return style;
+    }
+  },
+  methods: {
+    resolveSize(value) {
+      if (typeof value === 'number') {
+        return `${value}px`;
+      }
+      const map = {
+        xs: '0.75rem',
+        sm: '0.875rem',
+        md: '1rem',
+        lg: '1.25rem',
+        xl: '1.5rem',
+        '2xl': '2rem'
+      };
+      if (value in map) {
+        return map[value];
+      }
+      return value || null;
+    }
+  }
+};
+</script>

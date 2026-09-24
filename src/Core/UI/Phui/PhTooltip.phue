@@ -1,0 +1,181 @@
+<template>
+  <span
+    ref="root"
+    data-phui="tooltip"
+    class="ph-tooltip position-relative d-inline-block"
+    :aria-describedby="visible ? tipId : null"
+    @mouseenter="onEnter"
+    @mouseleave="onLeave"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+    @click="onClick"
+  >
+    <slot />
+
+    <span
+      v-if="rendered"
+      v-show="visible"
+      :id="tipId"
+      role="tooltip"
+      :class="tipClasses"
+      :style="tipStyle"
+    >
+      <slot name="content">{{ content }}</slot>
+    </span>
+  </span>
+</template>
+
+<script>
+import { useId } from "vue";
+
+export default {
+  name: 'PhTooltip',
+  props: {
+    content: {
+      type: String,
+      default: ''
+    },
+    placement: {
+      type: String,
+      default: 'top',
+      validator: (val) => ['top', 'bottom', 'start', 'end'].includes(val)
+    },
+    trigger: {
+      type: String,
+      default: 'hover',
+      validator: (val) => ['hover', 'focus', 'click'].includes(val)
+    },
+    delay: {
+      type: Number,
+      default: 120
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    variant: {
+      type: String,
+      default: 'dark',
+      validator: (val) => ['dark', 'light'].includes(val)
+    },
+    maxWidth: {
+      type: String,
+      default: '260px'
+    }
+  },
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  data() {
+    return {
+      visible: false,
+      rendered: false,
+      timer: null
+    };
+  },
+  computed: {
+    tipId() {
+      return `ph-tooltip-${this.HashID}`;
+    },
+    tipClasses() {
+      const classes = ['small', 'rounded', 'px-2', 'py-1', 'shadow-sm'];
+      if (this.variant === 'light') {
+        classes.push('bg-light', 'text-dark', 'border');
+      } else {
+        classes.push('bg-dark', 'text-white');
+      }
+      return classes;
+    },
+    tipStyle() {
+      const style = {
+        position: 'absolute',
+        zIndex: 1080,
+        whiteSpace: 'normal',
+        width: 'max-content',
+        maxWidth: this.maxWidth,
+        pointerEvents: 'none'
+      };
+      if (this.placement === 'bottom') {
+        style.top = '100%';
+        style.left = '50%';
+        style.transform = 'translateX(-50%)';
+        style.marginTop = '0.375rem';
+      } else if (this.placement === 'start') {
+        style.right = '100%';
+        style.top = '50%';
+        style.transform = 'translateY(-50%)';
+        style.marginRight = '0.375rem';
+      } else if (this.placement === 'end') {
+        style.left = '100%';
+        style.top = '50%';
+        style.transform = 'translateY(-50%)';
+        style.marginLeft = '0.375rem';
+      } else {
+        style.bottom = '100%';
+        style.left = '50%';
+        style.transform = 'translateX(-50%)';
+        style.marginBottom = '0.375rem';
+      }
+      return style;
+    }
+  },
+  mounted() {
+    this.rendered = true;
+  },
+  beforeUnmount() {
+    this.clearTimer();
+  },
+  methods: {
+    clearTimer() {
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+    },
+    show() {
+      if (this.disabled) return;
+      this.visible = true;
+    },
+    hide() {
+      this.clearTimer();
+      this.visible = false;
+    },
+    scheduleShow() {
+      if (this.disabled) return;
+      this.clearTimer();
+      if (this.delay > 0) {
+        this.timer = setTimeout(() => {
+          this.visible = true;
+        }, this.delay);
+      } else {
+        this.visible = true;
+      }
+    },
+    onEnter() {
+      if (this.trigger === 'click') return;
+      this.scheduleShow();
+    },
+    onLeave() {
+      if (this.trigger === 'click') return;
+      this.hide();
+    },
+    onFocusIn() {
+      if (this.trigger === 'click') return;
+      this.show();
+    },
+    onFocusOut() {
+      if (this.trigger === 'click') return;
+      this.hide();
+    },
+    onClick() {
+      if (this.trigger !== 'click') return;
+      if (this.visible) {
+        this.hide();
+      } else {
+        this.show();
+      }
+    }
+  }
+};
+</script>

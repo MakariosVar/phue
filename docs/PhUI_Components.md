@@ -439,8 +439,8 @@ No emits.
 ### `<ph-toast>`
 
 Programmatic notification stack, teleported to `body` under a fixed container.
-Toasts are pushed from a template ref — there is no global/JS singleton, so the
-component keeps zero state beyond what your page explicitly owns.
+Toasts are pushed from a **template ref** — there is no global/JS singleton,
+so the component keeps zero state beyond what your page explicitly owns.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
@@ -469,6 +469,12 @@ Bootstrap CSS variables — dark-mode safe). Hovering a toast pauses its countdo
     variant: 'success', title: 'Saved',
     message: 'Changes persisted.', duration: 3000
   })">Mention success</ph-button>
+```
+
+```
+const toast = ref(null);
+
+toast.value?.push({ variant: 'success', title: 'Saved', message: 'Done!' });
 ```
 
 ---
@@ -830,7 +836,201 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 
 ---
 
-## 8. Component index
+## 8. Icons, Overlays & Advanced Inputs
+
+### `<ph-icon>`
+
+Bootstrap Icons renderer. `name` maps to the `bi-<name>` class.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `name` | `String` | **required** | Icon name, e.g. `check`, `trash` |
+| `size` | `String \| Number` | `'md'` | Token (`xs`..`2xl`) or pixels |
+| `variant` | `String` | `''` | Bootstrap text-color variant |
+| `color` | `String` | `''` | Raw CSS color override |
+| `spin` | `Boolean` | `false` | Animated rotation |
+| `label` | `String` | `''` | When set → `role="img"` + `aria-label`; otherwise `aria-hidden` |
+
+No emits or slots.
+
+### `<ph-spinner>`
+
+Standalone loading spinner (`spinner-border` / `spinner-grow`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `size` | `String \| Number` | `'md'` | `sm` \| `md` \| `lg` or pixels |
+| `variant` | `String` | `'border'` | `border` \| `grow` |
+| `color` | `String` | `''` | Bootstrap text-color variant |
+| `label` | `String` | `'Loading…'` | Visually-hidden text for screen readers |
+
+No emits or slots.
+
+### `<ph-switch>`
+
+Boolean toggle (`.form-switch`). Same contract as `<ph-checkbox>`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | |
+| `id` | `String` | `null` | Falls back to `ph-switch-<id>` |
+| `label` | `String` | `''` | Or default slot |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+
+Emits: `update:modelValue` (on `change`), `blur`, `focus`.
+
+### `<ph-dropdown>`
+
+Action menu with self-managed open state (no Bootstrap JS/Popper).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `'Menu'` | Default trigger label |
+| `items` | `Array` | `[]` | `{label,href,icon,disabled,divider,header}` |
+| `variant` | `String` | `'secondary'` | Trigger button variant |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `align` | `String` | `'start'` | `start` \| `end` |
+| `closeOnSelect` | `Boolean` | `true` | |
+| `disabled` | `Boolean` | `false` | |
+
+Emits: `select(item)`, `open`, `close`. Slots: `trigger` (scoped `{ open, toggle }`),
+default (menu content).
+
+### `<ph-tooltip>`
+
+CSS-positioned tooltip (no Popper).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `content` | `String` | `''` | Or `content` slot |
+| `placement` | `String` | `'top'` | `top` \| `bottom` \| `start` \| `end` |
+| `trigger` | `String` | `'hover'` | `hover` \| `focus` \| `click` |
+| `delay` | `Number` | `120` | Show delay in ms |
+| `disabled` | `Boolean` | `false` | |
+| `variant` | `String` | `'dark'` | `dark` \| `light` |
+| `maxWidth` | `String` | `'260px'` | |
+
+No emits. Slots: default (trigger), `content`.
+
+### `<ph-drawer>`
+
+Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | |
+| `position` | `String` | `'end'` | `start` \| `end` \| `top` \| `bottom` |
+| `size` | `String` | `null` | CSS length (default `25rem` / `20rem`) |
+| `title` | `String` | `''` | |
+| `closable` | `Boolean` | `true` | |
+| `closeOnBackdrop` | `Boolean` | `true` | |
+| `scrollable` | `Boolean` | `true` | |
+
+Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
+
+### `<ph-confirm-dialog>`
+
+Promise-based confirmation dialog host. Mount **once** with a **template ref** (e.g. in a base page). Call `confirm.value.confirm(options)` returning `Promise<boolean>`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `title` | `String` | `''` | Dialog title |
+| `message` | `String` | `''` | Dialog body text |
+| `confirmText` | `String` | `'Confirm'` | Confirm button label |
+| `cancelText` | `String` | `'Cancel'` | Cancel button label |
+| `variant` | `String` | `'primary'` | `'primary'` \| `'danger'` (affects confirm button + icon color) |
+| `icon` | `String` | `''` | Bootstrap icon name for header |
+| `loading` | `Boolean` | `false` | Disables buttons, shows spinner on confirm |
+| `closeOnBackdrop` | `Boolean` | `false` | Allow backdrop click to cancel |
+
+Emits: `confirm`, `cancel`. Methods: `confirm(options)`, `setLoading(bool)`, `close(result)`.
+
+```
+<ph-confirm-dialog ref="confirm" />
+
+const confirm = ref(null);
+
+const ok = await confirm.value.confirm({
+  title: 'Delete product?',
+  message: 'This cannot be undone.',
+  variant: 'danger',
+  icon: 'exclamation-triangle',
+  confirmText: 'Delete',
+});
+```
+
+### `<ph-select3>`
+
+Searchable single/multiple select with chips (replaces the limits of the native
+`<ph-select>`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
+| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
+| `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `'Select…'` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `multiple` | `Boolean` | `false` | |
+| `searchable` | `Boolean` | `true` | |
+| `clearable` | `Boolean` | `false` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
+Slots: `footer` (scoped `{ close }`).
+
+### `<ph-file-input>`
+
+File picker with drag & drop, `accept`/`maxSize` validation and image previews.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Array` | `[]` | `File[]` |
+| `multiple` | `Boolean` | `false` | |
+| `accept` | `String` | `''` | Comma list of mime types / extensions |
+| `maxSize` | `Number` | `0` | Max bytes (`0` = unlimited) |
+| `dragDrop` | `Boolean` | `true` | |
+| `preview` | `Boolean` | `true` | Image thumbnails |
+| `label` | `String` | `''` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `change(files)`, `remove(file)`, `error(reason)`.
+
+### `<ph-date-picker>`
+
+Date / datetime picker with a self-contained calendar popover, or a native input
+via `native`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | ISO `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm` |
+| `mode` | `String` | `'date'` | `date` \| `datetime` |
+| `min` | `String` | `''` | ISO lower bound |
+| `max` | `String` | `''` | ISO upper bound |
+| `native` | `Boolean` | `false` | Use native `<input type=date>` |
+| `weekStart` | `Number` | `1` | `0` = Sunday |
+| `id` | `String` | `null` | Falls back to `ph-date-picker-<id>` |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `'Select date…'` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+| `clearable` | `Boolean` | `true` | |
+
+Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
+
+---
+
+## 9. Component index
 
 | Component | Tag | Kind |
 |---|---|---|
@@ -844,10 +1044,16 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhCheckbox | `<ph-checkbox>` | Form control |
 | PhChip | `<ph-chip>` | Data display |
 | PhCol | `<ph-col>` | Layout |
+| PhConfirmDialog | `<ph-confirm-dialog>` | Feedback |
 | PhDataTable | `<ph-data-table>` | Data display |
+| PhDatePicker | `<ph-date-picker>` | Form control |
+| PhDrawer | `<ph-drawer>` | Feedback |
+| PhDropdown | `<ph-dropdown>` | Navigation |
 | PhFlex | `<ph-flex>` | Layout |
+| PhFileInput | `<ph-file-input>` | Form control |
 | PhFormField | `<ph-form-field>` | Form control |
 | PhHeading | `<ph-heading>` | Typography |
+| PhIcon | `<ph-icon>` | Data display |
 | PhInput | `<ph-input>` | Form control |
 | PhLink | `<ph-link>` | Navigation |
 | PhModal | `<ph-modal>` | Feedback |
@@ -859,12 +1065,16 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhRadio | `<ph-radio>` | Form control |
 | PhRow | `<ph-row>` | Layout |
 | PhSelect | `<ph-select>` | Form control |
+| PhSelect3 | `<ph-select3>` | Form control |
 | PhSkeleton | `<ph-skeleton>` | Feedback |
+| PhSpinner | `<ph-spinner>` | Feedback |
 | PhStack | `<ph-stack>` | Layout |
+| PhSwitch | `<ph-switch>` | Form control |
 | PhTabs | `<ph-tabs>` | Navigation |
 | PhText | `<ph-text>` | Typography |
 | PhTextarea | `<ph-textarea>` | Form control |
 | PhToast | `<ph-toast>` | Feedback |
+| PhTooltip | `<ph-tooltip>` | Feedback |
 | Spacer | `<spacer>` | Layout |
 
 Live demonstrations of every component live on the built-in `/ui` showcase page

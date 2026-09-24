@@ -1,0 +1,348 @@
+<template>
+  <div ref="root" data-phui="select3" class="position-relative">
+    <label v-if="label" :for="controlId" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+
+    <div
+      :id="controlId"
+      class="form-control d-flex flex-wrap align-items-center gap-1"
+      :class="{ 'is-invalid': !!error, 'bg-body-secondary opacity-75': disabled }"
+      role="combobox"
+      aria-haspopup="listbox"
+      :aria-expanded="open ? 'true' : 'false'"
+      :aria-controls="listId"
+      :tabindex="disabled ? -1 : 0"
+      @click="onControlClick"
+      @keydown="onControlKeydown"
+    >
+      <template v-if="multiple">
+        <span
+          v-for="opt in selectedOptions"
+          :key="opt.value"
+          class="badge text-bg-secondary d-inline-flex align-items-center"
+        >
+          {{ opt.label }}
+          <button
+            v-if="!disabled"
+            type="button"
+            class="btn-close btn-close-white ms-1"
+            style="font-size: 0.5rem;"
+            aria-label="Remove"
+            @click.stop="deselect(opt)"
+          ></button>
+        </span>
+        <span v-if="selectedOptions.length === 0" class="text-body-secondary">
+          {{ placeholder }}
+        </span>
+      </template>
+
+      <template v-else>
+        <span :class="{ 'text-body-secondary': !selectedLabel }">
+          {{ selectedLabel || placeholder }}
+        </span>
+      </template>
+
+      <span class="ms-auto d-flex align-items-center">
+        <button
+          v-if="clearable && hasValue && !disabled"
+          type="button"
+          class="btn-close me-1"
+          aria-label="Clear"
+          @click.stop="clear"
+        ></button>
+        <ph-icon
+          name="chevron-down"
+          size="sm"
+          :style="{ transition: 'transform 0.15s ease', transform: open ? 'rotate(180deg)' : 'none' }"
+        />
+      </span>
+    </div>
+
+    <div
+      v-if="open"
+      :id="listId"
+      class="dropdown-menu show w-100"
+      role="listbox"
+      :style="listStyle"
+    >
+      <div v-if="searchable" class="px-2 pb-2">
+        <input
+          ref="search"
+          type="text"
+          class="form-control form-control-sm"
+          :value="query"
+          placeholder="Search…"
+          @input="onSearchInput"
+        />
+      </div>
+
+      <button
+        v-for="(opt, index) in filteredOptions"
+        :key="opt.value"
+        type="button"
+        class="dropdown-item d-flex align-items-center"
+        :class="{ active: index === activeIndex, disabled: opt.disabled }"
+        role="option"
+        :aria-selected="isSelected(opt.value) ? 'true' : 'false'"
+        :disabled="opt.disabled"
+        @click="select(opt)"
+        @mouseenter="activeIndex = index"
+      >
+        <span class="me-2 d-inline-block" style="width: 1rem;">
+          <ph-icon v-if="isSelected(opt.value)" name="check" size="sm" />
+        </span>
+        {{ opt.label }}
+      </button>
+
+      <div v-if="filteredOptions.length === 0" class="dropdown-item-text text-body-secondary">
+        No results
+      </div>
+
+      <slot name="footer" :close="close" />
+    </div>
+
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+
+export default {
+  name: 'PhSelect3',
+  props: {
+    modelValue: {
+      type: [String, Number, Array, null],
+      default: ''
+    },
+    options: {
+      type: Array,
+      default: () => []
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: 'Select…'
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    multiple: {
+      type: Boolean,
+      default: false
+    },
+    searchable: {
+      type: Boolean,
+      default: true
+    },
+    clearable: {
+      type: Boolean,
+      default: false
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'search', 'open', 'close', 'clear'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  data() {
+    return {
+      open: false,
+      query: '',
+      activeIndex: 0
+    };
+  },
+  computed: {
+    controlId() {
+      return this.id || `ph-select3-${this.HashID}`;
+    },
+    listId() {
+      return `${this.controlId}-list`;
+    },
+    normalizedOptions() {
+      return this.options.map((opt) => {
+        if (typeof opt === 'object' && opt !== null) {
+          return {
+            label: opt.label !== undefined ? opt.label : opt.value,
+            value: opt.value,
+            disabled: !!opt.disabled
+          };
+        }
+        return { label: String(opt), value: opt, disabled: false };
+      });
+    },
+    filteredOptions() {
+      if (!this.searchable || !this.query) {
+        return this.normalizedOptions;
+      }
+      const needle = this.query.toLowerCase();
+      return this.normalizedOptions.filter((opt) =>
+        String(opt.label).toLowerCase().includes(needle)
+      );
+    },
+    selectedValues() {
+      if (this.multiple) {
+        return Array.isArray(this.modelValue) ? this.modelValue : [];
+      }
+      return this.modelValue === '' || this.modelValue === null || this.modelValue === undefined
+        ? []
+        : [this.modelValue];
+    },
+    selectedOptions() {
+      return this.selectedValues.map((value) => {
+        const match = this.normalizedOptions.find((opt) => opt.value === value);
+        return match || { label: String(value), value };
+      });
+    },
+    selectedLabel() {
+      if (this.selectedOptions.length === 0) {
+        return '';
+      }
+      return this.selectedOptions[0].label;
+    },
+    hasValue() {
+      return this.selectedValues.length > 0;
+    },
+    listStyle() {
+      return {
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        right: '0',
+        zIndex: 1000,
+        display: 'block',
+        maxHeight: '16rem',
+        overflowY: 'auto'
+      };
+    }
+  },
+  watch: {
+    open(value) {
+      this.$emit(value ? 'open' : 'close');
+      if (value) {
+        this.activeIndex = 0;
+        this.$nextTick(() => {
+          if (this.searchable && this.$refs.search) {
+            this.$refs.search.focus();
+          }
+        });
+      } else {
+        this.query = '';
+      }
+    },
+    query() {
+      this.activeIndex = 0;
+      this.$emit('search', this.query);
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.onDocumentClick);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.onDocumentClick);
+  },
+  methods: {
+    isSelected(value) {
+      return this.selectedValues.includes(value);
+    },
+    toggleOpen() {
+      if (this.disabled) return;
+      this.open = !this.open;
+    },
+    close() {
+      this.open = false;
+    },
+    onControlClick() {
+      this.toggleOpen();
+    },
+    onSearchInput(event) {
+      this.query = event.target.value;
+    },
+    select(option) {
+      if (!option || option.disabled) return;
+      if (this.multiple) {
+        const current = this.selectedValues.slice();
+        const index = current.indexOf(option.value);
+        if (index >= 0) {
+          current.splice(index, 1);
+        } else {
+          current.push(option.value);
+        }
+        this.$emit('update:modelValue', current);
+        this.query = '';
+      } else {
+        this.$emit('update:modelValue', option.value);
+        this.open = false;
+      }
+    },
+    deselect(option) {
+      if (!this.multiple) return;
+      const current = this.selectedValues.filter((value) => value !== option.value);
+      this.$emit('update:modelValue', current);
+    },
+    clear() {
+      this.$emit('update:modelValue', this.multiple ? [] : '');
+      this.$emit('clear');
+    },
+    onControlKeydown(event) {
+      if (this.disabled) return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!this.open) {
+          this.open = true;
+        } else {
+          this.activeIndex = Math.min(this.activeIndex + 1, this.filteredOptions.length - 1);
+        }
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.activeIndex = Math.max(this.activeIndex - 1, 0);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (this.open && this.filteredOptions[this.activeIndex]) {
+          this.select(this.filteredOptions[this.activeIndex]);
+        } else {
+          this.open = true;
+        }
+      } else if (event.key === 'Escape') {
+        if (this.open) {
+          event.stopPropagation();
+          this.open = false;
+        }
+      } else if (event.key === 'Backspace' && this.multiple && !this.query && this.selectedValues.length) {
+        const last = this.selectedValues[this.selectedValues.length - 1];
+        const match = this.normalizedOptions.find((opt) => opt.value === last);
+        this.deselect(match || { value: last });
+      }
+    },
+    onDocumentClick(event) {
+      if (!this.open) return;
+      if (this.$refs.root && !this.$refs.root.contains(event.target)) {
+        this.close();
+      }
+    }
+  }
+};
+</script>

@@ -1,0 +1,292 @@
+<template>
+  <div data-phui="file-input">
+    <label v-if="label" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+
+    <div
+      class="border rounded p-4 text-center"
+      :class="dropzoneClass"
+      :style="{ cursor: disabled ? 'not-allowed' : 'pointer' }"
+      @click="openPicker"
+      @dragover.prevent="onDragOver"
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <ph-icon name="cloud-upload" size="xl" class="text-body-secondary" />
+      <p class="mb-1 mt-2">
+        <strong>Click to upload</strong> or drag and drop
+      </p>
+      <p class="text-body-secondary small mb-0">{{ hint }}</p>
+    </div>
+
+    <input
+      ref="input"
+      type="file"
+      class="d-none"
+      :multiple="multiple"
+      :accept="accept || null"
+      :disabled="disabled"
+      @change="onChange"
+    />
+
+    <ul v-if="files.length" class="list-group mt-2">
+      <li
+        v-for="(file, index) in files"
+        :key="index"
+        class="list-group-item d-flex align-items-center"
+      >
+        <img
+          v-if="previews[index]"
+          :src="previews[index]"
+          alt=""
+          class="me-2 rounded"
+          style="width: 2rem; height: 2rem; object-fit: cover;"
+        />
+        <ph-icon v-else :name="iconFor(file)" class="me-2" />
+        <span class="me-auto text-truncate">{{ file.name }}</span>
+        <span class="text-body-secondary small me-2">{{ formatSize(file.size) }}</span>
+        <button
+          v-if="!disabled"
+          type="button"
+          class="btn-close"
+          aria-label="Remove"
+          @click.stop="remove(index)"
+        ></button>
+      </li>
+    </ul>
+
+    <p v-if="error || localError" class="form-text text-danger mb-0">
+      {{ error || localError }}
+    </p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhFileInput',
+  props: {
+    modelValue: {
+      type: Array,
+      default: () => []
+    },
+    multiple: {
+      type: Boolean,
+      default: false
+    },
+    accept: {
+      type: String,
+      default: ''
+    },
+    maxSize: {
+      type: Number,
+      default: 0
+    },
+    dragDrop: {
+      type: Boolean,
+      default: true
+    },
+    preview: {
+      type: Boolean,
+      default: true
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'change', 'remove', 'error'],
+  data() {
+    return {
+      dragging: false,
+      localError: '',
+      previews: [],
+      previewToken: 0
+    };
+  },
+  computed: {
+    files() {
+      return Array.isArray(this.modelValue) ? this.modelValue : [];
+    },
+    dropzoneClass() {
+      const classes = [];
+      if (this.dragging && this.dragDrop && !this.disabled) {
+        classes.push('border-primary', 'bg-body-tertiary');
+      }
+      if (this.disabled) {
+        classes.push('opacity-75');
+      }
+      if (this.error || this.localError) {
+        classes.push('border-danger');
+      }
+      return classes;
+    },
+    hint() {
+      const parts = [];
+      if (this.accept) {
+        parts.push(`Accepted: ${this.accept}`);
+      }
+      if (this.maxSize > 0) {
+        parts.push(`Max ${this.formatSize(this.maxSize)}`);
+      }
+      return parts.join(' · ');
+    }
+  },
+  watch: {
+    modelValue: {
+      immediate: true,
+      handler() {
+        this.rebuildPreviews();
+      }
+    }
+  },
+  beforeUnmount() {
+    this.previewToken += 1;
+  },
+  methods: {
+    openPicker() {
+      if (this.disabled || !this.$refs.input) return;
+      this.$refs.input.click();
+    },
+    onDragOver() {
+      if (!this.dragDrop || this.disabled) return;
+      this.dragging = true;
+    },
+    onDragLeave() {
+      this.dragging = false;
+    },
+    onDrop(event) {
+      if (!this.dragDrop || this.disabled) return;
+      this.dragging = false;
+      if (event.dataTransfer && event.dataTransfer.files) {
+        this.processFiles(event.dataTransfer.files);
+      }
+    },
+    onChange(event) {
+      this.processFiles(event.target.files);
+      event.target.value = '';
+    },
+    processFiles(fileList) {
+      let list = Array.prototype.slice.call(fileList || []);
+      if (!this.multiple && list.length > 1) {
+        list = list.slice(0, 1);
+      }
+      const accepted = [];
+      let error = '';
+      list.forEach((file) => {
+        if (this.accept && !this.matchesAccept(file)) {
+          error = `File type not allowed: ${file.name}`;
+          return;
+        }
+        if (this.maxSize > 0 && file.size > this.maxSize) {
+          error = `File too large: ${file.name}`;
+          return;
+        }
+        accepted.push(file);
+      });
+      this.localError = error;
+      if (error) {
+        this.$emit('error', error);
+      }
+      const next = this.multiple ? accepted : accepted.slice(0, 1);
+      this.$emit('update:modelValue', next);
+      this.$emit('change', next);
+    },
+    matchesAccept(file) {
+      const parts = String(this.accept)
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (parts.length === 0) return true;
+      return parts.some((part) => {
+        if (part.startsWith('.')) {
+          return file.name.toLowerCase().endsWith(part.toLowerCase());
+        }
+        if (part.endsWith('/*')) {
+          return file.type.startsWith(part.slice(0, -1));
+        }
+        return file.type === part;
+      });
+    },
+    remove(index) {
+      const next = this.files.slice();
+      const removed = next.splice(index, 1)[0];
+      this.localError = '';
+      this.$emit('update:modelValue', next);
+      this.$emit('change', next);
+      if (removed) {
+        this.$emit('remove', removed);
+      }
+    },
+    formatSize(bytes) {
+      if (!bytes || bytes < 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let value = bytes;
+      let unit = 0;
+      while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit += 1;
+      }
+      const rounded = unit === 0 ? value : Math.round(value * 10) / 10;
+      return `${rounded} ${units[unit]}`;
+    },
+    rebuildPreviews() {
+      const files = this.files;
+      const token = (this.previewToken += 1);
+      this.previews = files.map(() => null);
+      if (!this.preview || typeof FileReader === 'undefined') {
+        return;
+      }
+      files.forEach((file, index) => {
+        if (!this.isImage(file)) {
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (token !== this.previewToken) {
+            return;
+          }
+          const next = this.previews.slice();
+          next[index] = typeof reader.result === 'string' ? reader.result : null;
+          this.previews = next;
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+    isImage(file) {
+      return !!file && typeof file.type === 'string' && file.type.indexOf('image/') === 0;
+    },
+    iconFor(file) {
+      const type = file && typeof file.type === 'string' ? file.type : '';
+      const name = file && file.name ? String(file.name).toLowerCase() : '';
+      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : '';
+      if (type === 'application/pdf' || ext === 'pdf') return 'file-earmark-pdf';
+      if (['zip', 'rar', '7z', 'gz', 'tar'].includes(ext)) return 'file-earmark-zip';
+      if (['doc', 'docx'].includes(ext)) return 'file-earmark-word';
+      if (['xls', 'xlsx', 'csv'].includes(ext)) return 'file-earmark-spreadsheet';
+      if (['ppt', 'pptx'].includes(ext)) return 'file-earmark-ppt';
+      if (type.indexOf('text/') === 0 || ['txt', 'md', 'log'].includes(ext)) return 'file-earmark-text';
+      if (this.isImage(file)) return 'file-earmark-image';
+      return 'file-earmark';
+    }
+  }
+};
+</script>

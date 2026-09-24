@@ -1,0 +1,387 @@
+<template>
+  <div ref="root" data-phui="date-picker" class="position-relative">
+    <label v-if="label" :for="inputId" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+
+    <input
+      v-if="native"
+      :id="inputId"
+      :type="nativeType"
+      class="form-control"
+      :class="{ 'is-invalid': !!error }"
+      :value="modelValue"
+      :min="min || null"
+      :max="max || null"
+      :disabled="disabled"
+      :required="required"
+      @input="onNativeInput"
+    />
+
+    <div v-else class="d-flex align-items-center">
+      <input
+        :id="inputId"
+        type="text"
+        class="form-control"
+        :class="{ 'is-invalid': !!error }"
+        :value="modelValue"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :required="required"
+        readonly
+        @click="toggleOpen"
+        @keydown="onInputKeydown"
+      />
+      <button
+        v-if="clearable && modelValue && !disabled"
+        type="button"
+        class="btn btn-link px-2 text-body-secondary"
+        aria-label="Clear"
+        @click="clear"
+      >
+        <ph-icon name="x-circle" size="sm" />
+      </button>
+      <button
+        type="button"
+        class="btn btn-link px-2 text-body-secondary"
+        :disabled="disabled"
+        aria-label="Toggle calendar"
+        @click="toggleOpen"
+      >
+        <ph-icon name="calendar3" size="sm" />
+      </button>
+    </div>
+
+    <div
+      v-if="!native && open"
+      class="dropdown-menu show p-2"
+      role="dialog"
+      :style="popoverStyle"
+    >
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <button
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :disabled="!canGoPrev"
+          aria-label="Previous month"
+          @click="prevMonth"
+        >
+          <ph-icon name="chevron-left" size="sm" />
+        </button>
+        <strong class="small">{{ monthLabel }}</strong>
+        <button
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :disabled="!canGoNext"
+          aria-label="Next month"
+          @click="nextMonth"
+        >
+          <ph-icon name="chevron-right" size="sm" />
+        </button>
+      </div>
+
+      <div class="d-grid" style="grid-template-columns: repeat(7, 1fr); gap: 2px;">
+        <span
+          v-for="label in weekDays"
+          :key="label"
+          class="text-body-secondary text-center small"
+        >
+          {{ label }}
+        </span>
+        <button
+          v-for="day in days"
+          :key="day.iso"
+          type="button"
+          class="btn btn-sm p-1"
+          :class="dayClass(day)"
+          :disabled="day.disabled"
+          @click="selectDay(day)"
+        >
+          {{ day.day }}
+        </button>
+      </div>
+
+      <div v-if="mode === 'datetime'" class="d-flex align-items-center mt-2">
+        <label class="small me-2 mb-0">Time</label>
+        <input
+          type="time"
+          class="form-control form-control-sm"
+          :value="timeValue"
+          @input="onTimeInput"
+        />
+      </div>
+    </div>
+
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+
+export default {
+  name: 'PhDatePicker',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    mode: {
+      type: String,
+      default: 'date',
+      validator: (val) => ['date', 'datetime'].includes(val)
+    },
+    min: {
+      type: String,
+      default: ''
+    },
+    max: {
+      type: String,
+      default: ''
+    },
+    native: {
+      type: Boolean,
+      default: false
+    },
+    weekStart: {
+      type: Number,
+      default: 1
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: 'Select date…'
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    },
+    clearable: {
+      type: Boolean,
+      default: true
+    }
+  },
+  emits: ['update:modelValue', 'change', 'open', 'close', 'clear'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  data() {
+    return {
+      open: false,
+      viewYear: new Date().getFullYear(),
+      viewMonth: new Date().getMonth()
+    };
+  },
+  computed: {
+    inputId() {
+      return this.id || `ph-date-picker-${this.HashID}`;
+    },
+    nativeType() {
+      return this.mode === 'datetime' ? 'datetime-local' : 'date';
+    },
+    selectedDate() {
+      if (!this.modelValue) return null;
+      const date = this.mode === 'datetime'
+        ? new Date(this.modelValue)
+        : new Date(`${this.modelValue}T00:00:00`);
+      return isNaN(date.getTime()) ? null : date;
+    },
+    timeValue() {
+      if (this.mode !== 'datetime' || !this.modelValue || this.modelValue.indexOf('T') < 0) {
+        return '00:00';
+      }
+      const parts = this.modelValue.split('T');
+      return (parts[1] || '00:00').slice(0, 5);
+    },
+    days() {
+      const first = new Date(this.viewYear, this.viewMonth, 1);
+      const offset = (first.getDay() - this.weekStart + 7) % 7;
+      const start = new Date(this.viewYear, this.viewMonth, 1 - offset);
+      const todayIso = this.toIso(new Date());
+      const selectedIso = this.selectedDate ? this.toIso(this.selectedDate) : '';
+      const result = [];
+      for (let i = 0; i < 42; i += 1) {
+        const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+        const iso = this.toIso(date);
+        result.push({
+          date,
+          iso,
+          day: date.getDate(),
+          inMonth: date.getMonth() === this.viewMonth,
+          isToday: iso === todayIso,
+          isSelected: iso === selectedIso,
+          disabled: this.isDisabledDate(iso)
+        });
+      }
+      return result;
+    },
+    weekDays() {
+      const base = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const rotated = base.slice(this.weekStart).concat(base.slice(0, this.weekStart));
+      return rotated;
+    },
+    monthLabel() {
+      return new Date(this.viewYear, this.viewMonth, 1)
+        .toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    },
+    canGoPrev() {
+      if (!this.min) return true;
+      return this.viewYear > Number(this.min.slice(0, 4)) ||
+        (this.viewYear === Number(this.min.slice(0, 4)) && this.viewMonth > Number(this.min.slice(5, 7)) - 1);
+    },
+    canGoNext() {
+      if (!this.max) return true;
+      return this.viewYear < Number(this.max.slice(0, 4)) ||
+        (this.viewYear === Number(this.max.slice(0, 4)) && this.viewMonth < Number(this.max.slice(5, 7)) - 1);
+    },
+    popoverStyle() {
+      return {
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        zIndex: 1000,
+        display: 'block',
+        minWidth: '17rem'
+      };
+    }
+  },
+  watch: {
+    modelValue() {
+      const date = this.selectedDate;
+      if (date) {
+        this.viewYear = date.getFullYear();
+        this.viewMonth = date.getMonth();
+      }
+    },
+    open(value) {
+      this.$emit(value ? 'open' : 'close');
+    }
+  },
+  created() {
+    const date = this.selectedDate;
+    if (date) {
+      this.viewYear = date.getFullYear();
+      this.viewMonth = date.getMonth();
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.onDocumentClick);
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.onDocumentClick);
+    document.removeEventListener('keydown', this.onKeydown);
+  },
+  methods: {
+    toIso(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    },
+    isDisabledDate(iso) {
+      if (this.min && iso < this.min.slice(0, 10)) return true;
+      if (this.max && iso > this.max.slice(0, 10)) return true;
+      return false;
+    },
+    dayClass(day) {
+      const classes = [];
+      if (!day.inMonth) classes.push('text-body-secondary');
+      if (day.isToday && !day.isSelected) classes.push('border');
+      if (day.isSelected) classes.push('btn-primary');
+      else classes.push('btn-link', 'text-body');
+      return classes;
+    },
+    toggleOpen() {
+      if (this.disabled) return;
+      this.open = !this.open;
+    },
+    close() {
+      this.open = false;
+    },
+    selectDay(day) {
+      if (day.disabled) return;
+      const value = this.mode === 'datetime'
+        ? `${day.iso}T${this.timeValue}`
+        : day.iso;
+      this.$emit('update:modelValue', value);
+      this.$emit('change', value);
+      if (this.mode === 'date') {
+        this.open = false;
+      }
+    },
+    prevMonth() {
+      if (this.viewMonth === 0) {
+        this.viewMonth = 11;
+        this.viewYear -= 1;
+      } else {
+        this.viewMonth -= 1;
+      }
+    },
+    nextMonth() {
+      if (this.viewMonth === 11) {
+        this.viewMonth = 0;
+        this.viewYear += 1;
+      } else {
+        this.viewMonth += 1;
+      }
+    },
+    onNativeInput(event) {
+      this.$emit('update:modelValue', event.target.value);
+      this.$emit('change', event.target.value);
+    },
+    onTimeInput(event) {
+      const datePart = this.modelValue ? this.modelValue.slice(0, 10) : this.toIso(new Date());
+      const value = `${datePart}T${event.target.value || '00:00'}`;
+      this.$emit('update:modelValue', value);
+      this.$emit('change', value);
+    },
+    onInputKeydown(event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.open = true;
+      } else if (event.key === 'Escape') {
+        this.open = false;
+      }
+    },
+    clear() {
+      this.$emit('update:modelValue', '');
+      this.$emit('change', '');
+      this.$emit('clear');
+    },
+    onDocumentClick(event) {
+      if (!this.open) return;
+      if (this.$refs.root && !this.$refs.root.contains(event.target)) {
+        this.close();
+      }
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape' && this.open) {
+        this.close();
+      }
+    }
+  }
+};
+</script>

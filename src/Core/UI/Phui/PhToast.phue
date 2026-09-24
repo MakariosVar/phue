@@ -67,6 +67,14 @@ export default {
     },
   mounted() {
     this.mounted = true;
+    if (typeof window !== 'undefined') {
+      window.__phueToast = this;
+    }
+  },
+  beforeUnmount() {
+    if (typeof window !== 'undefined' && window.__phueToast === this) {
+      window.__phueToast = null;
+    }
   },
   computed: {
     regionStyle() {

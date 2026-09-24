@@ -1,0 +1,210 @@
+<template>
+  <teleport to="body" v-if="mounted && modelValue">
+    <div
+      data-phui="drawer"
+      class="ph-drawer"
+      :style="backdropStyle"
+      @click="onBackdropClick"
+    >
+      <div
+        ref="panel"
+        class="ph-drawer__panel d-flex flex-column"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="title || null"
+        :style="panelStyle"
+        tabindex="-1"
+        @click.stop
+      >
+        <div class="ph-drawer__header d-flex align-items-center border-bottom px-3 py-2">
+          <slot name="header">
+            <h5 class="mb-0 me-auto">{{ title }}</h5>
+          </slot>
+          <button
+            v-if="closable"
+            type="button"
+            class="btn-close ms-2"
+            aria-label="Close"
+            @click="close"
+          ></button>
+        </div>
+
+        <div
+          class="ph-drawer__body flex-grow-1 px-3 py-3"
+          :style="{ overflowY: scrollable ? 'auto' : 'visible' }"
+        >
+          <slot />
+        </div>
+
+        <div v-if="$slots.footer" class="ph-drawer__footer border-top px-3 py-2">
+          <slot name="footer" />
+        </div>
+      </div>
+    </div>
+  </teleport>
+</template>
+
+<script>
+export default {
+  name: 'PhDrawer',
+  ssr: false,
+  props: {
+    modelValue: {
+      type: Boolean,
+      default: false
+    },
+    position: {
+      type: String,
+      default: 'end',
+      validator: (val) => ['start', 'end', 'top', 'bottom'].includes(val)
+    },
+    size: {
+      type: String,
+      default: null
+    },
+    title: {
+      type: String,
+      default: ''
+    },
+    closable: {
+      type: Boolean,
+      default: true
+    },
+    closeOnBackdrop: {
+      type: Boolean,
+      default: true
+    },
+    scrollable: {
+      type: Boolean,
+      default: true
+    }
+  },
+  emits: ['update:modelValue', 'close', 'open'],
+  data() {
+    return {
+      mounted: false,
+      previousActive: null
+    };
+  },
+  computed: {
+    backdropStyle() {
+      return {
+        position: 'fixed',
+        inset: '0',
+        zIndex: 1045,
+        background: 'rgba(0, 0, 0, 0.5)'
+      };
+    },
+    panelStyle() {
+      const isHorizontal = this.position === 'start' || this.position === 'end';
+      const dimension = this.size || (isHorizontal ? '25rem' : '20rem');
+      const style = {
+        position: 'fixed',
+        zIndex: 1046,
+        background: 'var(--bs-body-bg)',
+        boxShadow: '0 0.5rem 1.5rem rgba(0, 0, 0, 0.25)',
+        transition: 'transform 0.2s ease',
+        maxWidth: '100vw',
+        maxHeight: '100vh'
+      };
+      if (this.position === 'start') {
+        style.top = '0';
+        style.bottom = '0';
+        style.left = '0';
+        style.width = dimension;
+      } else if (this.position === 'end') {
+        style.top = '0';
+        style.bottom = '0';
+        style.right = '0';
+        style.width = dimension;
+      } else if (this.position === 'top') {
+        style.left = '0';
+        style.right = '0';
+        style.top = '0';
+        style.height = dimension;
+      } else {
+        style.left = '0';
+        style.right = '0';
+        style.bottom = '0';
+        style.height = dimension;
+      }
+      return style;
+    }
+  },
+  watch: {
+    modelValue(value) {
+      if (value) {
+        this.activate();
+      } else {
+        this.deactivate();
+      }
+    }
+  },
+  mounted() {
+    this.mounted = true;
+    document.addEventListener('keydown', this.onKeydown);
+    if (this.modelValue) {
+      this.activate();
+    }
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.onKeydown);
+    this.deactivate();
+  },
+  methods: {
+    close() {
+      this.$emit('update:modelValue', false);
+      this.$emit('close');
+    },
+    onBackdropClick() {
+      if (this.closeOnBackdrop && this.closable) {
+        this.close();
+      }
+    },
+    activate() {
+      this.$nextTick(() => {
+        const panel = this.$refs.panel;
+        if (!panel) return;
+        this.previousActive = document.activeElement;
+        const focusable = this.focusableElements();
+        (focusable[0] || panel).focus();
+        this.$emit('open');
+      });
+    },
+    deactivate() {
+      if (this.previousActive && typeof this.previousActive.focus === 'function') {
+        this.previousActive.focus();
+      }
+      this.previousActive = null;
+    },
+    focusableElements() {
+      const panel = this.$refs.panel;
+      if (!panel) return [];
+      const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      return Array.prototype.slice.call(panel.querySelectorAll(selector));
+    },
+    onKeydown(event) {
+      if (!this.modelValue) return;
+      if (event.key === 'Escape') {
+        if (this.closable) {
+          this.close();
+        }
+        return;
+      }
+      if (event.key === 'Tab') {
+        const focusable = this.focusableElements();
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+};
+</script>

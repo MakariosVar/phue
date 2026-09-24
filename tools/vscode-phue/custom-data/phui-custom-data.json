@@ -241,6 +241,52 @@
             ]
         },
         {
+            "name": "ph-confirm-dialog",
+            "description": "Promise-based confirmation dialog host. Mount **once** with a **template ref** (e.g. in a base page). Call confirm.value.confirm(options) returning Promise<boolean>.",
+            "attributes": [
+                {
+                    "name": "cancel-text",
+                    "description": "Cancel button label"
+                },
+                {
+                    "name": "close-on-backdrop",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Allow backdrop click to cancel"
+                },
+                {
+                    "name": "confirm-text",
+                    "description": "Confirm button label"
+                },
+                {
+                    "name": "icon",
+                    "description": "Bootstrap icon name for header"
+                },
+                {
+                    "name": "loading",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Disables buttons, shows spinner on confirm"
+                },
+                {
+                    "name": "message",
+                    "description": "Dialog body text"
+                },
+                {
+                    "name": "title",
+                    "description": "Dialog title"
+                },
+                {
+                    "name": "variant",
+                    "description": "'primary' | 'danger' (affects confirm button + icon color)"
+                }
+            ]
+        },
+        {
             "name": "ph-data-table",
             "description": "Client-side sortable, paginatable table. Sorting toggles asc/desc on the",
             "attributes": [
@@ -263,6 +309,225 @@
                         "false"
                     ],
                     "description": "Toggles the pager row"
+                }
+            ]
+        },
+        {
+            "name": "ph-date-picker",
+            "description": "Date / datetime picker with a self-contained calendar popover, or a native input",
+            "attributes": [
+                {
+                    "name": "clearable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-date-picker-<id>"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max",
+                    "description": "ISO upper bound"
+                },
+                {
+                    "name": "min",
+                    "description": "ISO lower bound"
+                },
+                {
+                    "name": "mode",
+                    "description": "date | datetime"
+                },
+                {
+                    "name": "model-value",
+                    "description": "ISO YYYY-MM-DD or YYYY-MM-DDTHH:mm"
+                },
+                {
+                    "name": "native",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Use native <input type=date>"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "week-start",
+                    "description": "0 = Sunday"
+                }
+            ]
+        },
+        {
+            "name": "ph-drawer",
+            "description": "Off-canvas side panel (teleported, focus-trapped, Esc-closable).",
+            "attributes": [
+                {
+                    "name": "closable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "close-on-backdrop",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "position",
+                    "description": "start | end | top | bottom"
+                },
+                {
+                    "name": "scrollable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "size",
+                    "description": "CSS length (default 25rem / 20rem)"
+                },
+                {
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "ph-dropdown",
+            "description": "Action menu with self-managed open state (no Bootstrap JS/Popper).",
+            "attributes": [
+                {
+                    "name": "align",
+                    "description": "start | end"
+                },
+                {
+                    "name": "close-on-select",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "items",
+                    "description": "{label,href,icon,disabled,divider,header}"
+                },
+                {
+                    "name": "label",
+                    "description": "Default trigger label"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "variant",
+                    "description": "Trigger button variant"
+                }
+            ]
+        },
+        {
+            "name": "ph-file-input",
+            "description": "File picker with drag & drop, accept/maxSize validation and image previews.",
+            "attributes": [
+                {
+                    "name": "accept",
+                    "description": "Comma list of mime types / extensions"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "drag-drop",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max-size",
+                    "description": "Max bytes (0 = unlimited)"
+                },
+                {
+                    "name": "model-value",
+                    "description": "File[]"
+                },
+                {
+                    "name": "multiple",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "preview",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Image thumbnails"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
                 }
             ]
         },
@@ -325,6 +590,40 @@
                 {
                     "name": "level",
                     "description": "1–6"
+                }
+            ]
+        },
+        {
+            "name": "ph-icon",
+            "description": "Bootstrap Icons renderer. name maps to the bi-<name> class.",
+            "attributes": [
+                {
+                    "name": "color",
+                    "description": "Raw CSS color override"
+                },
+                {
+                    "name": "label",
+                    "description": "When set → role=\"img\" + aria-label; otherwise aria-hidden"
+                },
+                {
+                    "name": "name",
+                    "description": "Icon name, e.g. check, trash"
+                },
+                {
+                    "name": "size",
+                    "description": "Token (xs..2xl) or pixels"
+                },
+                {
+                    "name": "spin",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Animated rotation"
+                },
+                {
+                    "name": "variant",
+                    "description": "Bootstrap text-color variant"
                 }
             ]
         },
@@ -425,6 +724,20 @@
             ]
         },
         {
+            "name": "ph-markdown",
+            "description": "SSR markdown renderer. The <php> block receives either raw markdown",
+            "attributes": [
+                {
+                    "name": "markdown",
+                    "description": "Raw markdown string to parse"
+                },
+                {
+                    "name": "src",
+                    "description": "Base-relative file path (e.g. docs/Core.md); used when markdown is absent"
+                }
+            ]
+        },
+        {
             "name": "ph-modal",
             "description": "Teleported to body, shown when modelValue is truthy. Closable via the ✕,",
             "attributes": [
@@ -464,8 +777,12 @@
         },
         {
             "name": "ph-navigation",
-            "description": "Unlike the rest of PhUI, **PhNavigation has no client template**. It renders in",
+            "description": "PhNavigation is the **hybrid** navigation component: a full Vue 3 client",
             "attributes": [
+                {
+                    "name": "actions",
+                    "description": "Right-slot topbar links (horizontal mode)"
+                },
                 {
                     "name": "active-route",
                     "description": "Current request URI"
@@ -477,6 +794,10 @@
                 {
                     "name": "orientation",
                     "description": "horizontal | sidebar | vertical"
+                },
+                {
+                    "name": "theme-config",
+                    "description": "{ position: 'actions_prefix' | 'actions_suffix' } controls whether <ph-theme> precedes or follows actions"
                 }
             ]
         },
@@ -652,6 +973,71 @@
             ]
         },
         {
+            "name": "ph-select3",
+            "description": "Searchable single/multiple select with chips (replaces the limits of the native",
+            "attributes": [
+                {
+                    "name": "clearable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-select3-<id>"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Array when multiple"
+                },
+                {
+                    "name": "multiple",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "options",
+                    "description": "{label,value,disabled?} or primitives"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "searchable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                }
+            ]
+        },
+        {
             "name": "ph-skeleton",
             "description": "Loading placeholder. Width/height accept scale tokens, %, px numbers, or any",
             "attributes": [
@@ -678,6 +1064,28 @@
             ]
         },
         {
+            "name": "ph-spinner",
+            "description": "Standalone loading spinner (spinner-border / spinner-grow).",
+            "attributes": [
+                {
+                    "name": "color",
+                    "description": "Bootstrap text-color variant"
+                },
+                {
+                    "name": "label",
+                    "description": "Visually-hidden text for screen readers"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg or pixels"
+                },
+                {
+                    "name": "variant",
+                    "description": "border | grow"
+                }
+            ]
+        },
+        {
             "name": "ph-stack",
             "description": "Vertical flex flow.",
             "attributes": [
@@ -688,6 +1096,45 @@
                 {
                     "name": "gap",
                     "description": "Scale / px / raw CSS"
+                }
+            ]
+        },
+        {
+            "name": "ph-switch",
+            "description": "Boolean toggle (.form-switch). Same contract as <ph-checkbox>.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-switch-<id>"
+                },
+                {
+                    "name": "label",
+                    "description": "Or default slot"
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
                 }
             ]
         },
@@ -810,6 +1257,77 @@
                 {
                     "name": "theme-config",
                     "description": "Optional config fallback dictionary"
+                }
+            ]
+        },
+        {
+            "name": "ph-toast",
+            "description": "Programmatic notification stack, teleported to body under a fixed container.",
+            "attributes": [
+                {
+                    "name": "clear"
+                },
+                {
+                    "name": "dismissible",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Shows the btn-close"
+                },
+                {
+                    "name": "duration",
+                    "description": "Auto-dismiss ms (per-item override wins)"
+                },
+                {
+                    "name": "max",
+                    "description": "Excess toasts are dropped from the front"
+                },
+                {
+                    "name": "position",
+                    "description": "top-right | top-left | top-center | bottom-right | bottom-left | bottom-center"
+                },
+                {
+                    "name": "push"
+                },
+                {
+                    "name": "remove"
+                }
+            ]
+        },
+        {
+            "name": "ph-tooltip",
+            "description": "CSS-positioned tooltip (no Popper).",
+            "attributes": [
+                {
+                    "name": "content",
+                    "description": "Or content slot"
+                },
+                {
+                    "name": "delay",
+                    "description": "Show delay in ms"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "max-width"
+                },
+                {
+                    "name": "placement",
+                    "description": "top | bottom | start | end"
+                },
+                {
+                    "name": "trigger",
+                    "description": "hover | focus | click"
+                },
+                {
+                    "name": "variant",
+                    "description": "dark | light"
                 }
             ]
         },
