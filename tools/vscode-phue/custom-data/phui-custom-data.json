@@ -242,7 +242,7 @@
         },
         {
             "name": "ph-confirm-dialog",
-            "description": "Promise-based confirmation dialog host. Mount **once** with a **template ref** (e.g. in a base page). Call confirm.value.confirm(options) returning Promise<boolean>.",
+            "description": "Promise-based confirmation dialog host. Mount **once** (e.g. in a base page). Auto-registers on window.confirm. Call window.confirm.confirm(options) returning Promise<boolean>.",
             "attributes": [
                 {
                     "name": "cancel-text",

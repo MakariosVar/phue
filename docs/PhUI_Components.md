@@ -439,8 +439,7 @@ No emits.
 ### `<ph-toast>`
 
 Programmatic notification stack, teleported to `body` under a fixed container.
-Toasts are pushed from a **template ref** — there is no global/JS singleton,
-so the component keeps zero state beyond what your page explicitly owns.
+Auto-registers on `window.toast`. Push toasts from anywhere without holding a `ref`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
@@ -451,7 +450,7 @@ so the component keeps zero state beyond what your page explicitly owns.
 
 Emits: `dismiss` (toast id).
 
-Methods (on the template ref):
+Methods (on `window.toast`):
 
 | Method | Signature | Notes |
 |---|---|---|
@@ -463,18 +462,16 @@ Methods (on the template ref):
 Bootstrap CSS variables — dark-mode safe). Hovering a toast pauses its countdown.
 
 ```
-<ph-toast ref="toast" position="top-right" @dismiss="onToastDismiss" />
+<ph-toast position="top-right" @dismiss="onToastDismiss" />
 
-<ph-button variant="primary" @click="toast.push({
+<ph-button variant="primary" @click="window.toast.push({
     variant: 'success', title: 'Saved',
     message: 'Changes persisted.', duration: 3000
   })">Mention success</ph-button>
 ```
 
 ```
-const toast = ref(null);
-
-toast.value?.push({ variant: 'success', title: 'Saved', message: 'Done!' });
+window.toast.push({ variant: 'success', title: 'Saved', message: 'Done!' });
 ```
 
 ---
@@ -932,7 +929,7 @@ Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
 
 ### `<ph-confirm-dialog>`
 
-Promise-based confirmation dialog host. Mount **once** with a **template ref** (e.g. in a base page). Call `confirm.value.confirm(options)` returning `Promise<boolean>`.
+Promise-based confirmation dialog host. Mount **once** (e.g. in a base page). Auto-registers on `window.confirm`. Call `window.confirm.confirm(options)` returning `Promise<boolean>`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
@@ -948,11 +945,9 @@ Promise-based confirmation dialog host. Mount **once** with a **template ref** (
 Emits: `confirm`, `cancel`. Methods: `confirm(options)`, `setLoading(bool)`, `close(result)`.
 
 ```
-<ph-confirm-dialog ref="confirm" />
+<ph-confirm-dialog />
 
-const confirm = ref(null);
-
-const ok = await confirm.value.confirm({
+const ok = await window.confirm.confirm({
   title: 'Delete product?',
   message: 'This cannot be undone.',
   variant: 'danger',

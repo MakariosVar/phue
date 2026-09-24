@@ -68,12 +68,12 @@ export default {
   mounted() {
     this.mounted = true;
     if (typeof window !== 'undefined') {
-      window.__phueToast = this;
+      window.toast = this;
     }
   },
   beforeUnmount() {
-    if (typeof window !== 'undefined' && window.__phueToast === this) {
-      window.__phueToast = null;
+    if (typeof window !== 'undefined' && window.toast === this) {
+      window.toast = null;
     }
   },
   computed: {

@@ -148,13 +148,13 @@ SNP,
 <ph-skeleton variant="rectangular" width="200" height="120" />
 SNP,
     'PhToast' => <<<'SNP'
-<ph-toast ref="toast" :position="toastPosition" />
+<ph-toast :position="toastPosition" />
 
-<ph-button variant="primary" size="sm" @click="toast.push({
+<ph-button variant="primary" size="sm" @click="window.toast.push({
     variant: 'success', title: 'Saved',
     message: 'Changes persisted.', duration: 3000
   })">Success</ph-button>
-<ph-button variant="danger" size="sm" @click="toast.push({
+<ph-button variant="danger" size="sm" @click="window.toast.push({
     variant: 'error', title: 'Failed',
     message: 'The request could not be completed.'
   })">Error</ph-button>
@@ -285,10 +285,10 @@ SNP,
 </ph-drawer>
 SNP,
     'PhConfirmDialog' => <<<'SNP'
-<!-- mount the host once with a template ref: -->
-<ph-confirm-dialog ref="confirm" />
+<!-- mount the host once: -->
+<ph-confirm-dialog />
 
-const ok = await confirm.value.confirm({
+const ok = await window.confirm.confirm({
   title: 'Delete product?',
   message: 'This action cannot be undone.',
   variant: 'danger',
@@ -325,8 +325,8 @@ SNP,
 />
 SNP,
     'PhToastService' => <<<'SNP'
-// <ph-toast> registers window.__phueToast on mount
-window.__phueToast.push({
+// <ph-toast> registers window.toast on mount
+window.toast.push({
   variant: 'success',
   title: 'Saved',
   message: 'Changes persisted.',
@@ -422,8 +422,8 @@ return [
 <template>
 <div class="d-flex" style="min-height: 100vh;" v-cloak>
 
-    <ph-toast ref="toast" :position="toastPosition" />
-    <ph-confirm-dialog ref="confirm" />
+    <ph-toast :position="toastPosition" />
+    <ph-confirm-dialog />
 
     <!-- Sidebar -->
     <aside class="phue-sidebar" style="
@@ -1249,9 +1249,6 @@ export default async function mountApp() {
                     : 'Please enter a valid email address.';
             }
 
-            const toast = ref(null);
-            const confirm = ref(null);
-
             function toastPush(variant) {
                 const messages = {
                     info: 'An informational notification.',
@@ -1259,7 +1256,7 @@ export default async function mountApp() {
                     warning: 'Disk usage is above 80%.',
                     error: 'The request could not be completed.'
                 };
-                toast.value?.push({
+                window.toast?.push({
                     variant,
                     title: variant[0].toUpperCase() + variant.slice(1),
                     message: messages[variant],
@@ -1267,9 +1264,9 @@ export default async function mountApp() {
                 });
             }
 
-async function confirmDemo() {
-                if (!confirm.value) return;
-                const ok = await confirm.value.confirm({
+            async function confirmDemo() {
+                if (!window.confirm) return;
+                const ok = await window.confirm.confirm({
                     title: 'Delete product?',
                     message: 'This action cannot be undone.',
                     variant: 'danger',
@@ -1280,7 +1277,7 @@ async function confirmDemo() {
             }
 
 
-            return { ...toRefs(state), toast, confirm, onSave, toggleInputError, scrollTo, toastPush, confirmDemo };
+            return { ...toRefs(state), onSave, toggleInputError, scrollTo, toastPush, confirmDemo };
         }
     });
 
