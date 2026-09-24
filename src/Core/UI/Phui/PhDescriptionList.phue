@@ -1,0 +1,31 @@
+<template>
+  <dl
+    data-phui="description-list"
+    class="ph-description-list row"
+    :class="{ 'row-cols-1': !columns, 'row-cols-2': columns === 2, 'row-cols-3': columns === 3 }"
+  >
+    <template v-for="(item, index) in items" :key="item.key || index">
+      <dt class="col-sm-3 text-body-secondary small">{{ item.label }}</dt>
+      <dd class="col-sm-9 mb-2">
+        <slot :name="`item-${item.key || index}`" :item="item">{{ item.value }}</slot>
+      </dd>
+    </template>
+  </dl>
+</template>
+
+<script>
+export default {
+  name: 'PhDescriptionList',
+  props: {
+    items: {
+      type: Array,
+      default: () => []
+    },
+    columns: {
+      type: Number,
+      default: 2,
+      validator: (v) => [1, 2, 3].includes(v)
+    }
+  }
+};
+</script>

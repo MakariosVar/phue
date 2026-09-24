@@ -1,0 +1,93 @@
+<template>
+  <div
+    data-phui="stat"
+    class="ph-stat d-flex align-items-start gap-3 p-3"
+    :class="[
+      bordered ? 'border rounded' : '',
+      variant ? `border-${variant}-subtle bg-${variant}-subtle` : ''
+    ]"
+  >
+    <div class="ph-stat-icon" v-if="icon || $slots.icon">
+      <ph-icon v-if="icon" :name="icon" :size="iconSize" :variant="iconVariant" />
+      <slot name="icon" />
+    </div>
+    <div class="ph-stat-content flex-grow-1 min-w-0">
+      <div class="ph-stat-label text-body-secondary small" v-if="label">{{ label }}</div>
+      <div class="ph-stat-value fw-bold" :class="valueClass">
+        <slot name="default">{{ value }}</slot>
+      </div>
+      <div class="ph-stat-delta d-flex align-items-center gap-1 mt-1" v-if="delta != null">
+        <ph-icon
+          v-if="trend !== 'neutral'"
+          :name="trendIcon"
+          :size="xs"
+          :variant="trendVariant"
+        />
+        <span class="small" :class="deltaClass">{{ delta }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhStat',
+  props: {
+    label: {
+      type: String,
+      default: ''
+    },
+    value: {
+      type: [String, Number],
+      default: ''
+    },
+    delta: {
+      type: [String, Number],
+      default: null
+    },
+    trend: {
+      type: String,
+      default: 'neutral',
+      validator: (v) => ['up', 'down', 'neutral'].includes(v)
+    },
+    icon: {
+      type: String,
+      default: ''
+    },
+    iconSize: {
+      type: [String, Number],
+      default: 'lg'
+    },
+    iconVariant: {
+      type: String,
+      default: ''
+    },
+    variant: {
+      type: String,
+      default: '',
+      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'].includes(v)
+    },
+    bordered: {
+      type: Boolean,
+      default: true
+    }
+  },
+  computed: {
+    trendIcon() {
+      return this.trend === 'up' ? 'arrow-up' : 'arrow-down';
+    },
+    trendVariant() {
+      return this.trend === 'up' ? 'success' : this.trend === 'down' ? 'danger' : '';
+    },
+    valueClass() {
+      if (this.variant) return `text-${this.variant}-emphasis`;
+      return '';
+    },
+    deltaClass() {
+      if (this.trend === 'up') return 'text-success';
+      if (this.trend === 'down') return 'text-danger';
+      return 'text-body-secondary';
+    }
+  }
+};
+</script>

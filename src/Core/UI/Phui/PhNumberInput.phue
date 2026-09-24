@@ -1,0 +1,174 @@
+<template>
+  <div
+    data-phui="number-input"
+    class="ph-number-input"
+  >
+    <label v-if="label" :for="inputId" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+    <div class="input-group">
+      <button
+        v-if="controls"
+        type="button"
+        class="btn btn-outline-secondary"
+        @click="decrement"
+        :disabled="disabled || modelValue <= min"
+        aria-label="Decrement"
+      >
+        <ph-icon name="dash" size="sm" />
+      </button>
+      <input
+        :id="inputId"
+        type="number"
+        class="form-control text-center"
+        :class="{ 'is-invalid': !!error, 'border-0 rounded-0': controls }"
+        :value="formattedValue"
+        :min="min"
+        :max="max"
+        :step="step"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :readonly="readonly"
+        :aria-describedby="error ? `${inputId}-error` : helperText ? `${inputId}-help` : undefined"
+        @input="onInput"
+        @blur="onBlur"
+        @focus="$emit('focus', $event)"
+        @keydown.up.prevent="increment"
+        @keydown.down.prevent="decrement"
+        ref="input"
+      />
+      <button
+        v-if="controls"
+        type="button"
+        class="btn btn-outline-secondary"
+        @click="increment"
+        :disabled="disabled || modelValue >= max"
+        aria-label="Increment"
+      >
+        <ph-icon name="plus" size="sm" />
+      </button>
+    </div>
+    <p v-if="error" :id="`${inputId}-error`" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" :id="`${inputId}-help`" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+export default {
+  name: 'PhNumberInput',
+  props: {
+    modelValue: {
+      type: [String, Number],
+      default: ''
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    min: {
+      type: Number,
+      default: 0
+    },
+    max: {
+      type: Number,
+      default: 100
+    },
+    step: {
+      type: Number,
+      default: 1
+    },
+    precision: {
+      type: Number,
+      default: 0
+    },
+    controls: {
+      type: Boolean,
+      default: true
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue', 'blur', 'focus'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  computed: {
+    inputId() {
+      return this.id || `ph-number-${this.HashID}`;
+    },
+    formattedValue() {
+      if (this.modelValue === '' || this.modelValue === null) return '';
+      const num = Number(this.modelValue);
+      if (isNaN(num)) return this.modelValue;
+      return this.precision > 0 ? num.toFixed(this.precision) : String(num);
+    }
+  },
+  methods: {
+    onInput(event) {
+      const val = event.target.value;
+      if (val === '' || val === '-' || val === '.') {
+        this.$emit('update:modelValue', val);
+        return;
+      }
+      const num = Number(val);
+      if (isNaN(num)) return;
+      const clamped = Math.max(this.min, Math.min(this.max, num));
+      const stepped = this.step > 0 ? Math.round(clamped / this.step) * this.step : clamped;
+      this.$emit('update:modelValue', stepped);
+    },
+    onBlur(event) {
+      let val = this.modelValue;
+      if (val === '' || val === '-' || val === '.') {
+        this.$emit('update:modelValue', this.min);
+      } else {
+        const num = Number(val);
+        if (!isNaN(num)) {
+          this.$emit('update:modelValue', Math.max(this.min, Math.min(this.max, num)));
+        }
+      }
+      this.$emit('blur', event);
+    },
+    increment() {
+      if (this.disabled || this.modelValue >= this.max) return;
+      const current = Number(this.modelValue) || this.min;
+      const next = Math.min(this.max, current + this.step);
+      this.$emit('update:modelValue', next);
+    },
+    decrement() {
+      if (this.disabled || this.modelValue <= this.min) return;
+      const current = Number(this.modelValue) || this.min;
+      const next = Math.max(this.min, current - this.step);
+      this.$emit('update:modelValue', next);
+    }
+  }
+};
+</script>

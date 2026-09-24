@@ -1,0 +1,82 @@
+<template>
+  <div
+    data-phui="list-group"
+    class="ph-list-group"
+    :class="[
+      flush ? 'list-group-flush' : '',
+      horizontal ? `list-group-horizontal${horizontal !== true ? `-${horizontal}` : ''}` : ''
+    ]"
+  >
+    <template v-for="(item, index) in items" :key="item.key || index">
+      <template v-if="item.header">
+        <div
+          class="list-group-item list-group-item-header px-0"
+          :class="{ active: item.active }"
+        >
+          {{ item.label }}
+        </div>
+      </template>
+      <template v-else-if="item.divider">
+        <hr class="dropdown-divider my-0" />
+      </template>
+      <template v-else>
+        <component
+          :is="item.href || item.to ? 'a' : item.action ? 'button' : 'div'"
+          :href="item.href"
+          :to="item.to"
+          :class="[
+            'list-group-item',
+            'd-flex',
+            'align-items-center',
+            'gap-2',
+            { 'list-group-item-action': item.href || item.to || item.action },
+            { active: item.active },
+            { disabled: item.disabled },
+            item.class
+          ]"
+          @click="onItemClick(item, $event)"
+          v-bind="item.attrs"
+        >
+          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-1" />
+          <span class="flex-grow-1">{{ item.label }}</span>
+          <span v-if="item.badge != null" class="badge bg-primary rounded-pill">{{ item.badge }}</span>
+          <slot :name="`item-${item.key || index}`" :item="item" />
+        </component>
+      </template>
+    </template>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhListGroup',
+  props: {
+    items: {
+      type: Array,
+      default: () => []
+    },
+    flush: {
+      type: Boolean,
+      default: false
+    },
+    numbered: {
+      type: Boolean,
+      default: false
+    },
+    horizontal: {
+      type: [Boolean, String],
+      default: false
+    }
+  },
+  emits: ['select'],
+  methods: {
+    onItemClick(item, event) {
+      if (item.disabled) {
+        event.preventDefault();
+        return;
+      }
+      this.$emit('select', item);
+    }
+  }
+};
+</script>

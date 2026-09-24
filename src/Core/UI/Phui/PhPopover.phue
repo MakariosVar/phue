@@ -1,0 +1,156 @@
+<template>
+  <div
+    data-phui="popover"
+    class="ph-popover position-relative d-inline-block"
+  >
+    <div class="ph-popover-trigger" @click="toggle" @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle" tabindex="0" :aria-expanded="open">
+      <slot name="trigger">
+        <ph-button variant="outline" size="sm">{{ triggerLabel }}</ph-button>
+      </slot>
+    </div>
+    <teleport to="body" v-if="open">
+      <div
+        class="ph-popover-content popover"
+        :class="[
+          'show',
+          placementClass,
+          variant ? `border-${variant}` : ''
+        ]"
+        :style="popoverStyle"
+        role="dialog"
+        :aria-describedby="contentId"
+      >
+        <div class="popover-arrow" data-popper-arrow></div>
+        <h3 v-if="title" class="popover-header" :id="titleId">{{ title }}</h3>
+        <div class="popover-body" :id="contentId">
+          <slot name="content">{{ content }}</slot>
+        </div>
+      </div>
+      <div class="ph-popover-backdrop" @click="close"></div>
+    </teleport>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhPopover',
+  props: {
+    title: {
+      type: String,
+      default: ''
+    },
+    content: {
+      type: String,
+      default: ''
+    },
+    triggerLabel: {
+      type: String,
+      default: 'Popover'
+    },
+    placement: {
+      type: String,
+      default: 'top',
+      validator: (v) => ['top', 'bottom', 'start', 'end', 'top-start', 'top-end', 'bottom-start', 'bottom-end', 'start-top', 'start-bottom', 'end-top', 'end-bottom'].includes(v)
+    },
+    trigger: {
+      type: String,
+      default: 'click',
+      validator: (v) => ['click', 'hover', 'focus'].includes(v)
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    variant: {
+      type: String,
+      default: '',
+      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info'].includes(v)
+    }
+  },
+  emits: ['show', 'hide'],
+  data() {
+    return {
+      open: false,
+      triggerRect: null
+    };
+  },
+  computed: {
+    placementClass() {
+      const base = this.placement.split('-')[0];
+      return `bs-popover-${base}`;
+    },
+    popoverStyle() {
+      if (!this.triggerRect) return {};
+      const offset = 8;
+      const styles = { position: 'fixed', zIndex: 1070 };
+      if (this.placement.startsWith('top')) {
+        styles.bottom = `calc(100vh - ${this.triggerRect.top} + ${offset}px)`;
+        styles.left = `${this.triggerRect.left + this.triggerRect.width / 2}px`;
+        styles.transform = 'translateX(-50%)';
+      } else if (this.placement.startsWith('bottom')) {
+        styles.top = `${this.triggerRect.bottom + offset}px`;
+        styles.left = `${this.triggerRect.left + this.triggerRect.width / 2}px`;
+        styles.transform = 'translateX(-50%)';
+      } else if (this.placement.startsWith('start')) {
+        styles.right = `calc(100vw - ${this.triggerRect.left} + ${offset}px)`;
+        styles.top = `${this.triggerRect.top + this.triggerRect.height / 2}px`;
+        styles.transform = 'translateY(-50%)';
+      } else {
+        styles.left = `${this.triggerRect.right + offset}px`;
+        styles.top = `${this.triggerRect.top + this.triggerRect.height / 2}px`;
+        styles.transform = 'translateY(-50%)';
+      }
+      return styles;
+    },
+    contentId() {
+      return `ph-popover-content-${this._uid}`;
+    },
+    titleId() {
+      return `ph-popover-title-${this._uid}`;
+    }
+  },
+  watch: {
+    open(val) {
+      if (val) {
+        this.$nextTick(() => {
+          this.updateTriggerRect();
+          this.$emit('show');
+        });
+      } else {
+        this.$emit('hide');
+      }
+    }
+  },
+  mounted() {
+    if (this.trigger === 'hover') {
+      this.$el.addEventListener('mouseenter', this.openPopover);
+      this.$el.addEventListener('mouseleave', this.close);
+    } else if (this.trigger === 'focus') {
+      this.$el.addEventListener('focusin', this.openPopover);
+      this.$el.addEventListener('focusout', this.close);
+    }
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.onKeydown);
+  },
+  methods: {
+    openPopover() {
+      if (!this.disabled) this.open = true;
+    },
+    close() {
+      this.open = false;
+    },
+    toggle() {
+      if (!this.disabled) this.open = !this.open;
+    },
+    updateTriggerRect() {
+      const trigger = this.$el.querySelector('.ph-popover-trigger');
+      if (trigger) this.triggerRect = trigger.getBoundingClientRect();
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape') this.close();
+    }
+  }
+};
+</script>

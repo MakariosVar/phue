@@ -1,6 +1,36 @@
 {
     "tags": [
         {
+            "name": "ph-accordion",
+            "description": "Collapsible panels with single/multiple open, flush style, v-model array.",
+            "attributes": [
+                {
+                    "name": "flush",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Remove borders"
+                },
+                {
+                    "name": "items",
+                    "description": "{label, content, icon?, active?, disabled?, key?}"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Open panel keys/indices"
+                },
+                {
+                    "name": "multiple",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Allow multiple open"
+                }
+            ]
+        },
+        {
             "name": "ph-alert",
             "description": "Dismissible alert with optional title. Internal visible state — dismiss hides",
             "attributes": [
@@ -211,6 +241,90 @@
             ]
         },
         {
+            "name": "ph-code",
+            "description": "Code block with syntax highlighting, line numbers, copy button.",
+            "attributes": [
+                {
+                    "name": "code",
+                    "description": "Source code"
+                },
+                {
+                    "name": "copyable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show copy button"
+                },
+                {
+                    "name": "language",
+                    "description": "Prism language id"
+                },
+                {
+                    "name": "line-numbers",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "(planned)"
+                },
+                {
+                    "name": "max-height",
+                    "description": "Max height"
+                },
+                {
+                    "name": "wrap",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Wrap long lines"
+                }
+            ]
+        },
+        {
+            "name": "ph-code",
+            "description": "Code block with syntax highlighting, line numbers, copy button.",
+            "attributes": [
+                {
+                    "name": "code",
+                    "description": "Source code"
+                },
+                {
+                    "name": "copyable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show copy button"
+                },
+                {
+                    "name": "language",
+                    "description": "Prism language id"
+                },
+                {
+                    "name": "line-numbers",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "(planned)"
+                },
+                {
+                    "name": "max-height",
+                    "description": "Max height"
+                },
+                {
+                    "name": "wrap",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Wrap long lines"
+                }
+            ]
+        },
+        {
             "name": "ph-col",
             "description": "Bootstrap 12-column grid column. span is **cumulative** with breakpoint props —",
             "attributes": [
@@ -384,6 +498,78 @@
             ]
         },
         {
+            "name": "ph-description-list",
+            "description": "Description list (<dl>) with responsive columns.",
+            "attributes": [
+                {
+                    "name": "columns",
+                    "description": "1 | 2 | 3"
+                },
+                {
+                    "name": "items",
+                    "description": "{label, value, key?}"
+                }
+            ]
+        },
+        {
+            "name": "ph-description-list",
+            "description": "Description list (<dl>) with responsive columns.",
+            "attributes": [
+                {
+                    "name": "columns",
+                    "description": "1 | 2 | 3"
+                },
+                {
+                    "name": "items",
+                    "description": "{label, value, key?}"
+                }
+            ]
+        },
+        {
+            "name": "ph-divider",
+            "description": "Horizontal or vertical divider with optional label and variant.",
+            "attributes": [
+                {
+                    "name": "label",
+                    "description": "Centered label"
+                },
+                {
+                    "name": "orientation",
+                    "description": "horizontal | vertical"
+                },
+                {
+                    "name": "spacing",
+                    "description": "Margin around"
+                },
+                {
+                    "name": "variant",
+                    "description": "Color variant"
+                }
+            ]
+        },
+        {
+            "name": "ph-divider",
+            "description": "Horizontal or vertical divider with optional label and variant.",
+            "attributes": [
+                {
+                    "name": "label",
+                    "description": "Centered label"
+                },
+                {
+                    "name": "orientation",
+                    "description": "horizontal | vertical"
+                },
+                {
+                    "name": "spacing",
+                    "description": "Margin around"
+                },
+                {
+                    "name": "variant",
+                    "description": "Color variant"
+                }
+            ]
+        },
+        {
             "name": "ph-drawer",
             "description": "Off-canvas side panel (teleported, focus-trapped, Esc-closable).",
             "attributes": [
@@ -465,6 +651,92 @@
                 {
                     "name": "variant",
                     "description": "Trigger button variant"
+                }
+            ]
+        },
+        {
+            "name": "ph-empty-state",
+            "description": "Empty state placeholder with icon, title, message and optional action.",
+            "attributes": [
+                {
+                    "name": "action-label",
+                    "description": "Button label"
+                },
+                {
+                    "name": "action-size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "action-variant",
+                    "description": "Button variant"
+                },
+                {
+                    "name": "flush",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Remove border/radius"
+                },
+                {
+                    "name": "icon",
+                    "description": "Bootstrap icon name"
+                },
+                {
+                    "name": "icon-size"
+                },
+                {
+                    "name": "message"
+                },
+                {
+                    "name": "title"
+                },
+                {
+                    "name": "variant",
+                    "description": "Color variant for background/border"
+                }
+            ]
+        },
+        {
+            "name": "ph-empty-state",
+            "description": "Empty state placeholder with icon, title, message and optional action.",
+            "attributes": [
+                {
+                    "name": "action-label",
+                    "description": "Button label"
+                },
+                {
+                    "name": "action-size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "action-variant",
+                    "description": "Button variant"
+                },
+                {
+                    "name": "flush",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Remove border/radius"
+                },
+                {
+                    "name": "icon",
+                    "description": "Bootstrap icon name"
+                },
+                {
+                    "name": "icon-size"
+                },
+                {
+                    "name": "message"
+                },
+                {
+                    "name": "title"
+                },
+                {
+                    "name": "variant",
+                    "description": "Color variant for background/border"
                 }
             ]
         },
@@ -554,6 +826,62 @@
                 {
                     "name": "wrap",
                     "description": "nowrap | wrap | wrap-reverse"
+                }
+            ]
+        },
+        {
+            "name": "ph-form",
+            "description": "Form wrapper with native validation, error collection, submit/reset handling.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "errors",
+                    "description": "External errors by field name"
+                },
+                {
+                    "name": "loading",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "validate-on",
+                    "description": "submit | blur | change"
+                }
+            ]
+        },
+        {
+            "name": "ph-form",
+            "description": "Form wrapper with native validation, error collection, submit/reset handling.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "errors",
+                    "description": "External errors by field name"
+                },
+                {
+                    "name": "loading",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "validate-on",
+                    "description": "submit | blur | change"
                 }
             ]
         },
@@ -724,6 +1052,74 @@
             ]
         },
         {
+            "name": "ph-list-group",
+            "description": "Flexible list group with headers, dividers, badges, actions and slots.",
+            "attributes": [
+                {
+                    "name": "flush",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Remove borders"
+                },
+                {
+                    "name": "horizontal",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "true or breakpoint (sm..xxl)"
+                },
+                {
+                    "name": "items",
+                    "description": "{label, href?, to?, icon?, badge?, disabled?, active?, header?, divider?, action?}"
+                },
+                {
+                    "name": "numbered",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "(reserved)"
+                }
+            ]
+        },
+        {
+            "name": "ph-list-group",
+            "description": "Flexible list group with headers, dividers, badges, actions and slots.",
+            "attributes": [
+                {
+                    "name": "flush",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Remove borders"
+                },
+                {
+                    "name": "horizontal",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "true or breakpoint (sm..xxl)"
+                },
+                {
+                    "name": "items",
+                    "description": "{label, href?, to?, icon?, badge?, disabled?, active?, header?, divider?, action?}"
+                },
+                {
+                    "name": "numbered",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "(reserved)"
+                }
+            ]
+        },
+        {
             "name": "ph-markdown",
             "description": "SSR markdown renderer. The <php> block receives either raw markdown",
             "attributes": [
@@ -802,6 +1198,138 @@
             ]
         },
         {
+            "name": "ph-number-input",
+            "description": "Numeric input with increment/decrement controls, min/max, step, precision.",
+            "attributes": [
+                {
+                    "name": "controls",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show ± buttons"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max"
+                },
+                {
+                    "name": "min"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "precision",
+                    "description": "Decimal places"
+                },
+                {
+                    "name": "readonly",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "step"
+                }
+            ]
+        },
+        {
+            "name": "ph-number-input",
+            "description": "Numeric input with increment/decrement controls, min/max, step, precision.",
+            "attributes": [
+                {
+                    "name": "controls",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show ± buttons"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max"
+                },
+                {
+                    "name": "min"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "precision",
+                    "description": "Decimal places"
+                },
+                {
+                    "name": "readonly",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "step"
+                }
+            ]
+        },
+        {
             "name": "ph-pagination",
             "description": "Ellipsised pager (…) when totalPages > maxVisible.",
             "attributes": [
@@ -814,6 +1342,80 @@
                 },
                 {
                     "name": "total-pages"
+                }
+            ]
+        },
+        {
+            "name": "ph-popover",
+            "description": "Popover with title, content, multiple placements, click/hover/focus triggers.",
+            "attributes": [
+                {
+                    "name": "content",
+                    "description": "Body content"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "placement",
+                    "description": "12 positions"
+                },
+                {
+                    "name": "title",
+                    "description": "Header title"
+                },
+                {
+                    "name": "trigger",
+                    "description": "click | hover | focus"
+                },
+                {
+                    "name": "trigger-label",
+                    "description": "Default trigger button label"
+                },
+                {
+                    "name": "variant",
+                    "description": "Border color variant"
+                }
+            ]
+        },
+        {
+            "name": "ph-popover",
+            "description": "Popover with title, content, multiple placements, click/hover/focus triggers.",
+            "attributes": [
+                {
+                    "name": "content",
+                    "description": "Body content"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "placement",
+                    "description": "12 positions"
+                },
+                {
+                    "name": "title",
+                    "description": "Header title"
+                },
+                {
+                    "name": "trigger",
+                    "description": "click | hover | focus"
+                },
+                {
+                    "name": "trigger-label",
+                    "description": "Default trigger button label"
+                },
+                {
+                    "name": "variant",
+                    "description": "Border color variant"
                 }
             ]
         },
@@ -892,6 +1494,102 @@
             ]
         },
         {
+            "name": "ph-range",
+            "description": "Range slider (single or dual) with optional value display.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "dual",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Dual thumb"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max"
+                },
+                {
+                    "name": "min"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Array [min, max] when dual"
+                },
+                {
+                    "name": "show-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Display value"
+                },
+                {
+                    "name": "step"
+                }
+            ]
+        },
+        {
+            "name": "ph-range",
+            "description": "Range slider (single or dual) with optional value display.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "dual",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Dual thumb"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "max"
+                },
+                {
+                    "name": "min"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Array [min, max] when dual"
+                },
+                {
+                    "name": "show-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Display value"
+                },
+                {
+                    "name": "step"
+                }
+            ]
+        },
+        {
             "name": "ph-row",
             "description": "Bootstrap 12-column grid row: the container for <ph-col> grid cells. Serves as",
             "attributes": [
@@ -922,6 +1620,206 @@
                 {
                     "name": "tag",
                     "description": "Host element"
+                }
+            ]
+        },
+        {
+            "name": "ph-search-input",
+            "description": "Search input with debounce, clear button, and search icon.",
+            "attributes": [
+                {
+                    "name": "clearable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "debounce",
+                    "description": "Ms"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                }
+            ]
+        },
+        {
+            "name": "ph-search-input",
+            "description": "Search input with debounce, clear button, and search icon.",
+            "attributes": [
+                {
+                    "name": "clearable",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "debounce",
+                    "description": "Ms"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "error"
+                },
+                {
+                    "name": "helper-text"
+                },
+                {
+                    "name": "id"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "model-value"
+                },
+                {
+                    "name": "placeholder"
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                }
+            ]
+        },
+        {
+            "name": "ph-segmented-control",
+            "description": "Segmented button group (radio-based) with icons and variants.",
+            "attributes": [
+                {
+                    "name": "aria-label"
+                },
+                {
+                    "name": "block",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Full width"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "name",
+                    "description": "Radio group name"
+                },
+                {
+                    "name": "options",
+                    "description": "{label, value, icon?, disabled?, key?}"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "variant",
+                    "description": "Bootstrap variant"
+                }
+            ]
+        },
+        {
+            "name": "ph-segmented-control",
+            "description": "Segmented button group (radio-based) with icons and variants.",
+            "attributes": [
+                {
+                    "name": "aria-label"
+                },
+                {
+                    "name": "block",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Full width"
+                },
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "name",
+                    "description": "Radio group name"
+                },
+                {
+                    "name": "options",
+                    "description": "{label, value, icon?, disabled?, key?}"
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                },
+                {
+                    "name": "variant",
+                    "description": "Bootstrap variant"
                 }
             ]
         },
@@ -1100,6 +1998,197 @@
             ]
         },
         {
+            "name": "ph-stat",
+            "description": "Stat card with label, value, optional delta trend and icon.",
+            "attributes": [
+                {
+                    "name": "bordered",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "delta",
+                    "description": "Change amount"
+                },
+                {
+                    "name": "icon",
+                    "description": "Bootstrap icon name"
+                },
+                {
+                    "name": "icon-size"
+                },
+                {
+                    "name": "icon-variant",
+                    "description": "Icon color variant"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "trend",
+                    "description": "up | down | neutral"
+                },
+                {
+                    "name": "value"
+                },
+                {
+                    "name": "variant",
+                    "description": "Affects value color and border"
+                }
+            ]
+        },
+        {
+            "name": "ph-stat",
+            "description": "Stat card with label, value, optional delta trend and icon.",
+            "attributes": [
+                {
+                    "name": "bordered",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "delta",
+                    "description": "Change amount"
+                },
+                {
+                    "name": "icon",
+                    "description": "Bootstrap icon name"
+                },
+                {
+                    "name": "icon-size"
+                },
+                {
+                    "name": "icon-variant",
+                    "description": "Icon color variant"
+                },
+                {
+                    "name": "label"
+                },
+                {
+                    "name": "trend",
+                    "description": "up | down | neutral"
+                },
+                {
+                    "name": "value"
+                },
+                {
+                    "name": "variant",
+                    "description": "Affects value color and border"
+                }
+            ]
+        },
+        {
+            "name": "ph-stepper",
+            "description": "Step wizard with horizontal/vertical layout, linear/non-linear, clickable steps.",
+            "attributes": [
+                {
+                    "name": "clickable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Click steps to navigate"
+                },
+                {
+                    "name": "linear",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Enforce order"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Active step index"
+                },
+                {
+                    "name": "orientation",
+                    "description": "horizontal | vertical"
+                },
+                {
+                    "name": "steps",
+                    "description": "{label, description?, disabled?, key?}"
+                }
+            ]
+        },
+        {
+            "name": "ph-stepper",
+            "description": "Step wizard with horizontal/vertical layout, linear/non-linear, clickable steps.",
+            "attributes": [
+                {
+                    "name": "clickable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Click steps to navigate"
+                },
+                {
+                    "name": "linear",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Enforce order"
+                },
+                {
+                    "name": "model-value",
+                    "description": "Active step index"
+                },
+                {
+                    "name": "orientation",
+                    "description": "horizontal | vertical"
+                },
+                {
+                    "name": "steps",
+                    "description": "{label, description?, disabled?, key?}"
+                }
+            ]
+        },
+        {
+            "name": "ph-switch",
+            "description": "Boolean toggle (.form-switch). Same contract as <ph-checkbox>.",
+            "attributes": [
+                {
+                    "name": "disabled",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "id",
+                    "description": "Falls back to ph-switch-<id>"
+                },
+                {
+                    "name": "label",
+                    "description": "Or default slot"
+                },
+                {
+                    "name": "model-value",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "required",
+                    "values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "name": "size",
+                    "description": "sm | md | lg"
+                }
+            ]
+        },
+        {
             "name": "ph-switch",
             "description": "Boolean toggle (.form-switch). Same contract as <ph-checkbox>.",
             "attributes": [
@@ -1261,6 +2350,34 @@
             ]
         },
         {
+            "name": "ph-timeline",
+            "description": "Vertical timeline with markers, time, title, body and variant colors.",
+            "attributes": [
+                {
+                    "name": "items",
+                    "description": "{time, title, body, icon?, variant?}"
+                },
+                {
+                    "name": "variant",
+                    "description": "Global variant for line/markers"
+                }
+            ]
+        },
+        {
+            "name": "ph-timeline",
+            "description": "Vertical timeline with markers, time, title, body and variant colors.",
+            "attributes": [
+                {
+                    "name": "items",
+                    "description": "{time, title, body, icon?, variant?}"
+                },
+                {
+                    "name": "variant",
+                    "description": "Global variant for line/markers"
+                }
+            ]
+        },
+        {
             "name": "ph-toast",
             "description": "Programmatic notification stack, teleported to body under a fixed container.",
             "attributes": [
@@ -1328,6 +2445,62 @@
                 {
                     "name": "variant",
                     "description": "dark | light"
+                }
+            ]
+        },
+        {
+            "name": "ph-tree-node",
+            "description": "Shipped in src/Core/UI/Phui/ but not documented in docs/PhUI_Components.md yet."
+        },
+        {
+            "name": "ph-tree-view",
+            "description": "Hierarchical tree with selection, expansion, checkboxes and slots.",
+            "attributes": [
+                {
+                    "name": "checkable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show checkboxes"
+                },
+                {
+                    "name": "expanded",
+                    "description": "Expanded node keys"
+                },
+                {
+                    "name": "nodes",
+                    "description": "{label, children?, icon?, checked?, key?}"
+                },
+                {
+                    "name": "selected",
+                    "description": "Selected node keys"
+                }
+            ]
+        },
+        {
+            "name": "ph-tree-view",
+            "description": "Hierarchical tree with selection, expansion, checkboxes and slots.",
+            "attributes": [
+                {
+                    "name": "checkable",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Show checkboxes"
+                },
+                {
+                    "name": "expanded",
+                    "description": "Expanded node keys"
+                },
+                {
+                    "name": "nodes",
+                    "description": "{label, children?, icon?, checked?, key?}"
+                },
+                {
+                    "name": "selected",
+                    "description": "Selected node keys"
                 }
             ]
         },

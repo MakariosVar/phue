@@ -1,0 +1,60 @@
+<template>
+  <div
+    data-phui="tree-view"
+    class="ph-tree-view"
+  >
+    <ul class="ph-tree-node-list" role="tree">
+      <ph-tree-node
+        v-for="(node, index) in nodes"
+        :key="node.key || index"
+        :node="node"
+        :selected="selected"
+        :expanded="expanded"
+        :checkable="checkable"
+        :level="0"
+        @select="onSelect"
+        @toggle="onToggle"
+        @check="onCheck"
+      />
+    </ul>
+  </div>
+</template>
+
+<script>
+import PhTreeNode from './PhTreeNode.phue';
+
+export default {
+  name: 'PhTreeView',
+  components: { PhTreeNode },
+  props: {
+    nodes: {
+      type: Array,
+      default: () => []
+    },
+    selected: {
+      type: Array,
+      default: () => []
+    },
+    expanded: {
+      type: Array,
+      default: () => []
+    },
+    checkable: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['select', 'toggle', 'check'],
+  methods: {
+    onSelect(node) {
+      this.$emit('select', node);
+    },
+    onToggle(node) {
+      this.$emit('toggle', node);
+    },
+    onCheck(node) {
+      this.$emit('check', node);
+    }
+  }
+};
+</script>

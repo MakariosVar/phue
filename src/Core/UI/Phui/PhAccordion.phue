@@ -1,0 +1,105 @@
+<template>
+  <div
+    data-phui="accordion"
+    class="ph-accordion"
+  >
+    <div
+      v-for="(item, index) in items"
+      :key="item.key || index"
+      class="accordion-item"
+      :class="{ 'border-0': flush }"
+    >
+      <h2 class="accordion-header" :id="`ph-accordion-heading-${index}`">
+        <button
+          class="accordion-button collapsed"
+          :class="{
+            'bg-body-secondary': flush,
+            'border-0': flush,
+            'shadow-none': flush,
+            'fw-semibold': item.active !== false
+          }"
+          type="button"
+          data-bs-toggle="collapse"
+          :data-bs-target="`#ph-accordion-collapse-${index}`"
+          :aria-expanded="item.active !== false"
+          :aria-controls="`ph-accordion-collapse-${index}`"
+        >
+          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
+          {{ item.label }}
+        </button>
+      </h2>
+      <div
+        :id="`ph-accordion-collapse-${index}`"
+        class="accordion-collapse collapse"
+        :class="{ show: item.active !== false }"
+        :data-bs-parent="multiple ? null : $el"
+        :aria-labelledby="`ph-accordion-heading-${index}`"
+      >
+        <div class="accordion-body">
+          <slot :name="`item-${item.key || index}`" :item="item">
+            {{ item.content }}
+          </slot>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhAccordion',
+  props: {
+    items: {
+      type: Array,
+      default: () => []
+    },
+    multiple: {
+      type: Boolean,
+      default: false
+    },
+    flush: {
+      type: Boolean,
+      default: false
+    },
+    modelValue: {
+      type: Array,
+      default: () => []
+    }
+  },
+  emits: ['update:modelValue'],
+  watch: {
+    modelValue(val) {
+      this.syncFromModel(val);
+    },
+    items: {
+      immediate: true,
+      handler() {
+        this.syncFromModel(this.modelValue);
+      }
+    }
+  },
+  methods: {
+    syncFromModel(value) {
+      this.items.forEach((item, index) => {
+        if (value.includes(index) || value.includes(item.key || index)) {
+          item.active = true;
+        } else if (this.multiple) {
+          item.active = false;
+        }
+      });
+    },
+    onToggle(index) {
+      const key = this.items[index]?.key || index;
+      let next = [...this.modelValue];
+      if (next.includes(key)) {
+        next = next.filter(k => k !== key);
+      } else if (this.multiple) {
+        next.push(key);
+      } else {
+        next = [key];
+      }
+      this.$emit('update:modelValue', next);
+    }
+  }
+};
+</script>

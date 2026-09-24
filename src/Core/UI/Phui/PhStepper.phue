@@ -1,0 +1,82 @@
+<template>
+  <div
+    data-phui="stepper"
+    class="ph-stepper"
+    :class="{ 'ph-stepper-vertical': orientation === 'vertical' }"
+  >
+    <div class="ph-stepper-steps">
+      <div
+        v-for="(step, index) in steps"
+        :key="step.key || index"
+        class="ph-stepper-step"
+        :class="{
+          active: index === currentStep,
+          completed: index < currentStep,
+          disabled: step.disabled,
+          clickable: clickable && !step.disabled && !linear
+        }"
+        @click="clickable && !step.disabled && (linear ? (index === currentStep + 1 ? goToStep(index) : false) : goToStep(index))"
+      >
+        <div class="ph-stepper-indicator d-flex align-items-center justify-content-center">
+          <span v-if="index < currentStep" class="ph-stepper-check">
+            <ph-icon name="check" size="sm" variant="light" />
+          </span>
+          <span v-else-if="index === currentStep" class="ph-stepper-number">{{ index + 1 }}</span>
+          <span v-else class="ph-stepper-number">{{ index + 1 }}</span>
+        </div>
+        <div class="ph-stepper-content">
+          <div class="ph-stepper-label fw-medium">{{ step.label }}</div>
+          <div v-if="step.description" class="ph-stepper-description text-body-secondary small">{{ step.description }}</div>
+        </div>
+        <div v-if="index < steps.length - 1" class="ph-stepper-line flex-grow-1" :class="{ completed: index < currentStep }"></div>
+      </div>
+    </div>
+    <div class="ph-stepper-panels mt-4">
+      <slot :activeStep="currentStep" :steps="steps" :goToStep="goToStep" />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhStepper',
+  props: {
+    steps: {
+      type: Array,
+      default: () => []
+    },
+    modelValue: {
+      type: Number,
+      default: 0
+    },
+    orientation: {
+      type: String,
+      default: 'horizontal',
+      validator: (v) => ['horizontal', 'vertical'].includes(v)
+    },
+    clickable: {
+      type: Boolean,
+      default: false
+    },
+    linear: {
+      type: Boolean,
+      default: true
+    }
+  },
+  emits: ['update:modelValue', 'change'],
+  computed: {
+    currentStep() {
+      return Math.max(0, Math.min(this.modelValue, this.steps.length - 1));
+    }
+  },
+  methods: {
+    goToStep(index) {
+      if (index < 0 || index >= this.steps.length) return;
+      if (this.linear && index > this.currentStep + 1) return;
+      if (this.steps[index]?.disabled) return;
+      this.$emit('update:modelValue', index);
+      this.$emit('change', index);
+    }
+  }
+};
+</script>

@@ -1,0 +1,39 @@
+<template>
+  <div
+    data-phui="divider"
+    class="ph-divider"
+    :class="[
+      orientation === 'vertical' ? 'ph-divider-vertical' : 'ph-divider-horizontal',
+      variant ? `ph-divider-${variant}` : '',
+      label ? 'ph-divider-with-label' : ''
+    ]"
+  >
+    <span v-if="label" class="ph-divider-label">{{ label }}</span>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhDivider',
+  props: {
+    orientation: {
+      type: String,
+      default: 'horizontal',
+      validator: (v) => ['horizontal', 'vertical'].includes(v)
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    variant: {
+      type: String,
+      default: '',
+      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'].includes(v)
+    },
+    spacing: {
+      type: [String, Number],
+      default: 'md'
+    }
+  }
+};
+</script>

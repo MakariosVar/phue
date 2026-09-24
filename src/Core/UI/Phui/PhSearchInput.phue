@@ -1,0 +1,140 @@
+<template>
+  <div
+    data-phui="search-input"
+    class="ph-search-input position-relative"
+  >
+    <label v-if="label" :for="inputId" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+    <div class="input-group">
+      <span class="input-group-text bg-transparent border-end-0" @click="focus">
+        <ph-icon name="search" size="sm" variant="muted" />
+      </span>
+      <input
+        :id="inputId"
+        type="search"
+        class="form-control border-start-0"
+        :class="{ 'is-invalid': !!error }"
+        :placeholder="placeholder"
+        :value="modelValue"
+        :disabled="disabled"
+        :aria-describedby="error ? `${inputId}-error` : helperText ? `${inputId}-help` : undefined"
+        @input="onInput"
+        @focus="$emit('focus', $event)"
+        @blur="onBlur"
+        @keydown.escape="clear"
+      />
+      <button
+        v-if="clearable && modelValue"
+        type="button"
+        class="btn btn-outline-secondary border-start-0"
+        @click="clear"
+        aria-label="Clear search"
+      >
+        <ph-icon name="x" size="sm" />
+      </button>
+    </div>
+    <p v-if="error" :id="`${inputId}-error`" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" :id="`${inputId}-help`" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+export default {
+  name: 'PhSearchInput',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    placeholder: {
+      type: String,
+      default: 'Search…'
+    },
+    debounce: {
+      type: Number,
+      default: 300
+    },
+    clearable: {
+      type: Boolean,
+      default: true
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (v) => ['sm', 'md', 'lg'].includes(v)
+    }
+  },
+  emits: ['update:modelValue', 'search', 'clear', 'focus', 'blur'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  computed: {
+    inputId() {
+      return this.id || `ph-search-${this.HashID}`;
+    }
+  },
+  watch: {
+    modelValue(val) {
+      this.debouncedSearch(val);
+    }
+  },
+  data() {
+    return {
+      searchTimer: null
+    };
+  },
+  beforeUnmount() {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+  },
+  methods: {
+    onInput(event) {
+      this.$emit('update:modelValue', event.target.value);
+    },
+    onBlur(event) {
+      this.$emit('blur', event);
+    },
+    debouncedSearch(val) {
+      if (this.searchTimer) clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => {
+        this.$emit('search', val);
+      }, this.debounce);
+    },
+    clear() {
+      this.$emit('update:modelValue', '');
+      this.$emit('clear');
+      this.$refs.input?.focus();
+    },
+    focus() {
+      this.$refs.input?.focus();
+    }
+  }
+};
+</script>

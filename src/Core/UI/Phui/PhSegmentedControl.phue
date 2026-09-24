@@ -1,0 +1,78 @@
+<template>
+  <div
+    data-phui="segmented-control"
+    class="ph-segmented-control"
+    role="radiogroup"
+    :aria-label="ariaLabel"
+  >
+    <template v-for="(option, index) in options" :key="option.key || option.value || index">
+      <input
+        type="radio"
+        class="btn-check"
+        :id="`ph-segmented-${index}`"
+        :name="name"
+        :value="option.value"
+        :checked="modelValue == option.value"
+        :disabled="option.disabled || disabled"
+        @change="$emit('update:modelValue', option.value)"
+      />
+      <label
+        :for="`ph-segmented-${index}`"
+        class="btn"
+        :class="[
+          modelValue == option.value ? 'active' : '',
+          variant ? `btn-${variant}-outline` : 'btn-outline-primary',
+          size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : '',
+          block ? 'w-100' : ''
+        ]"
+        :aria-pressed="modelValue == option.value"
+      >
+        <ph-icon v-if="option.icon" :name="option.icon" size="sm" class="me-1" />
+        {{ option.label }}
+      </label>
+    </template>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhSegmentedControl',
+  props: {
+    modelValue: {
+      type: [String, Number, Boolean],
+      default: null
+    },
+    options: {
+      type: Array,
+      required: true
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (v) => ['sm', 'md', 'lg'].includes(v)
+    },
+    block: {
+      type: Boolean,
+      default: false
+    },
+    variant: {
+      type: String,
+      default: 'primary',
+      validator: (v) => ['primary', 'secondary', 'success', 'danger', 'warning', 'info'].includes(v)
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    name: {
+      type: String,
+      default: 'ph-segmented'
+    },
+    ariaLabel: {
+      type: String,
+      default: 'Segmented control'
+    }
+  },
+  emits: ['update:modelValue', 'change']
+};
+</script>

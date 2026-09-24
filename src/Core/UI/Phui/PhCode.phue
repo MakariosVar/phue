@@ -1,0 +1,91 @@
+<template>
+  <div
+    data-phui="code"
+    class="ph-code"
+  >
+    <div class="ph-code-header d-flex justify-content-between align-items-center p-2 border-bottom" v-if="language || copyable">
+      <span class="ph-code-language text-body-secondary small text-uppercase">{{ language }}</span>
+      <ph-button
+        v-if="copyable"
+        size="sm"
+        variant="ghost"
+        @click="copy"
+        :loading="copying"
+      >
+        <ph-icon v-if="!copied" name="clipboard" size="sm" />
+        <ph-icon v-else name="check" size="sm" variant="success" />
+      </ph-button>
+    </div>
+    <pre class="ph-code-pre m-0 p-3 overflow-auto" :style="{ maxHeight: maxHeight }">
+      <code
+        :class="`language-${language}`"
+        v-html="highlightedCode"
+      ></code>
+    </pre>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhCode',
+  props: {
+    code: {
+      type: String,
+      required: true
+    },
+    language: {
+      type: String,
+      default: 'text'
+    },
+    lineNumbers: {
+      type: Boolean,
+      default: false
+    },
+    copyable: {
+      type: Boolean,
+      default: true
+    },
+    wrap: {
+      type: Boolean,
+      default: false
+    },
+    maxHeight: {
+      type: [String, Number],
+      default: '400px'
+    }
+  },
+  emits: ['copy'],
+  data() {
+    return {
+      copied: false,
+      copying: false
+    };
+  },
+  computed: {
+    highlightedCode() {
+      return this.escapeHtml(this.code);
+    }
+  },
+  methods: {
+    escapeHtml(str) {
+      return str
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/"/g, '"')
+        .replace(/'/g, '&#039;');
+    },
+    async copy() {
+      this.copying = true;
+      try {
+        await navigator.clipboard.writeText(this.code);
+        this.copied = true;
+        this.$emit('copy', this.code);
+        setTimeout(() => { this.copied = false; }, 2000);
+      } finally {
+        this.copying = false;
+      }
+    }
+  }
+};
+</script>

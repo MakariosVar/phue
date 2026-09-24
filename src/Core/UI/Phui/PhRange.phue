@@ -1,0 +1,112 @@
+<template>
+  <div
+    data-phui="range"
+    class="ph-range"
+  >
+    <label v-if="label" :for="inputId" class="form-label">
+      {{ label }}
+    </label>
+    <div class="d-flex align-items-center gap-2">
+      <input
+        v-if="dual"
+        type="range"
+        :id="`${inputId}-min`"
+        class="form-range flex-grow-1"
+        :min="min"
+        :max="max"
+        :step="step"
+        :value="modelValue[0]"
+        :disabled="disabled"
+        @input="onInputMin"
+      />
+      <input
+        :id="inputId"
+        type="range"
+        class="form-range flex-grow-1"
+        :min="min"
+        :max="max"
+        :step="step"
+        :value="dual ? modelValue[1] : modelValue"
+        :disabled="disabled"
+        @input="onInput"
+      />
+      <span v-if="showValue" class="ph-range-value text-body-secondary small fw-monospace" style="min-width: 4rem;">
+        {{ dual ? `${modelValue[0]} — ${modelValue[1]}` : modelValue }}
+      </span>
+    </div>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+export default {
+  name: 'PhRange',
+  props: {
+    modelValue: {
+      type: [Number, Array],
+      default: 0
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    min: {
+      type: Number,
+      default: 0
+    },
+    max: {
+      type: Number,
+      default: 100
+    },
+    step: {
+      type: Number,
+      default: 1
+    },
+    dual: {
+      type: Boolean,
+      default: false
+    },
+    showValue: {
+      type: Boolean,
+      default: false
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['update:modelValue'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  computed: {
+    inputId() {
+      return this.id || `ph-range-${this.HashID}`;
+    }
+  },
+  methods: {
+    onInput(event) {
+      const val = Number(event.target.value);
+      if (this.dual) {
+        const next = [...this.modelValue];
+        next[1] = val;
+        this.$emit('update:modelValue', next);
+      } else {
+        this.$emit('update:modelValue', val);
+      }
+    },
+    onInputMin(event) {
+      if (!this.dual) return;
+      const val = Number(event.target.value);
+      const next = [...this.modelValue];
+      next[0] = Math.min(val, next[1]);
+      this.$emit('update:modelValue', next);
+    }
+  }
+};
+</script>

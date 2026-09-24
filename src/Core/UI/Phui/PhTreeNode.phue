@@ -1,0 +1,106 @@
+<template>
+  <li class="ph-tree-node" role="treeitem" :aria-selected="isSelected" :aria-expanded="isExpanded">
+    <div class="ph-tree-node-content d-flex align-items-center gap-1 py-1 px-2" :style="{ paddingLeft: `${(level + 1) * 1.5}rem` }">
+      <button
+        v-if="hasChildren"
+        class="ph-tree-toggle btn p-0"
+        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
+        @click.stop="toggle"
+      >
+        <ph-icon :name="isExpanded ? 'chevron-down' : 'chevron-right'" size="xs" />
+      </button>
+      <button
+        v-else
+        class="ph-tree-spacer btn p-0"
+        aria-hidden="true"
+      >
+        <ph-icon name="chevron-right" size="xs" style="visibility: hidden;" />
+      </button>
+      <label v-if="checkable" class="ph-tree-checkbox d-flex align-items-center gap-1 mb-0">
+        <input
+          type="checkbox"
+          :checked="isChecked"
+          :indeterminate="isIndeterminate"
+          @change.stop="onCheck"
+        />
+      </label>
+      <ph-icon v-if="node.icon" :name="node.icon" size="sm" />
+      <span class="ph-tree-label flex-grow-1" @click.stop="select">{{ node.label }}</span>
+      <slot :name="`node-${node.key}`" :node="node" />
+    </div>
+    <ul v-if="hasChildren && isExpanded" class="ph-tree-children" role="group">
+      <ph-tree-node
+        v-for="(child, index) in node.children"
+        :key="child.key || index"
+        :node="child"
+        :selected="selected"
+        :expanded="expanded"
+        :checkable="checkable"
+        :level="level + 1"
+        @select="onSelect"
+        @toggle="onToggle"
+        @check="onCheck"
+      />
+    </ul>
+  </li>
+</template>
+
+<script>
+export default {
+  name: 'PhTreeNode',
+  props: {
+    node: {
+      type: Object,
+      required: true
+    },
+    selected: {
+      type: Array,
+      default: () => []
+    },
+    expanded: {
+      type: Array,
+      default: () => []
+    },
+    checkable: {
+      type: Boolean,
+      default: false
+    },
+    level: {
+      type: Number,
+      default: 0
+    }
+  },
+  emits: ['select', 'toggle', 'check'],
+  computed: {
+    key() {
+      return this.node.key || this.node.label;
+    },
+    hasChildren() {
+      return Array.isArray(this.node.children) && this.node.children.length > 0;
+    },
+    isSelected() {
+      return this.selected.includes(this.key);
+    },
+    isExpanded() {
+      return this.expanded.includes(this.key);
+    },
+    isChecked() {
+      return this.node.checked === true;
+    },
+    isIndeterminate() {
+      return this.node.checked === 'indeterminate';
+    }
+  },
+  methods: {
+    select() {
+      this.$emit('select', { ...this.node, key: this.key });
+    },
+    toggle() {
+      this.$emit('toggle', { ...this.node, key: this.key });
+    },
+    onCheck() {
+      this.$emit('check', { ...this.node, key: this.key, checked: !this.isChecked });
+    }
+  }
+};
+</script>

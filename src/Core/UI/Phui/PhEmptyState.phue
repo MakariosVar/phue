@@ -1,0 +1,84 @@
+<template>
+  <div
+    data-phui="empty-state"
+    class="ph-empty-state text-center py-5"
+    :class="[
+      variant ? `text-${variant}-emphasis` : '',
+      flush ? 'border-0 rounded-0' : 'border rounded'
+    ]"
+    :style="{
+      backgroundColor: variant ? `var(--bs-${variant}-bg-subtle)` : 'var(--bs-body-bg)',
+      borderColor: variant ? `var(--bs-${variant}-border-subtle)` : 'var(--bs-border-color)'
+    }"
+  >
+    <div class="ph-empty-state-icon mb-3" v-if="icon || $slots.icon">
+      <ph-icon v-if="icon" :name="icon" :size="iconSize" :variant="variant" />
+      <slot name="icon" />
+    </div>
+    <h4 class="ph-empty-state-title mb-2" v-if="title || $slots.default">
+      <slot name="default">{{ title }}</slot>
+    </h4>
+    <p class="ph-empty-state-message text-body-secondary mb-3" v-if="message">
+      {{ message }}
+    </p>
+    <div class="ph-empty-state-action" v-if="actionLabel || $slots.action">
+      <ph-button
+        v-if="actionLabel"
+        :variant="actionVariant"
+        :size="actionSize"
+        @click="$emit('action')"
+      >
+        {{ actionLabel }}
+      </ph-button>
+      <slot name="action" />
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhEmptyState',
+  props: {
+    title: {
+      type: String,
+      default: ''
+    },
+    message: {
+      type: String,
+      default: ''
+    },
+    icon: {
+      type: String,
+      default: ''
+    },
+    iconSize: {
+      type: [String, Number],
+      default: 'xl'
+    },
+    actionLabel: {
+      type: String,
+      default: ''
+    },
+    actionVariant: {
+      type: String,
+      default: 'primary',
+      validator: (v) => ['primary', 'secondary', 'outline', 'ghost', 'danger', 'success', 'warning', 'info'].includes(v)
+    },
+    actionSize: {
+      type: String,
+      default: 'md',
+      validator: (v) => ['sm', 'md', 'lg'].includes(v)
+    },
+    variant: {
+      type: String,
+      default: '',
+      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'].includes(v)
+    },
+    flush: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['action']
+};
+</script>

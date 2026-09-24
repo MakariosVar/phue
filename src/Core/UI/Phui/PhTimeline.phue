@@ -1,0 +1,64 @@
+<template>
+  <div
+    data-phui="timeline"
+    class="ph-timeline"
+  >
+    <div
+      v-for="(item, index) in items"
+      :key="item.key || index"
+      class="ph-timeline-item position-relative ps-4 pb-4"
+      :class="{ 'ph-timeline-item-last': index === items.length - 1 }"
+    >
+      <div class="ph-timeline-marker position-absolute start-0 top-0" :style="{ width: '2rem' }">
+        <div
+          class="ph-timeline-dot rounded-circle border"
+          :class="[
+            variant ? `bg-${variant} border-${variant}` : 'bg-primary border-primary',
+            { 'bg-body': !item.variant && !variant }
+          ]"
+          :style="{
+            width: '1rem',
+            height: '1rem',
+            marginLeft: '-0.5rem',
+            borderWidth: '2px'
+          }"
+        >
+          <ph-icon
+            v-if="item.icon"
+            :name="item.icon"
+            :size="xs"
+            variant="light"
+          />
+        </div>
+        <div
+          v-if="index < items.length - 1"
+          class="ph-timeline-line"
+          :style="{ height: 'calc(100% + 1rem)', borderLeft: `2px dashed ${variant ? `var(--bs-${variant}-border-subtile)` : 'var(--bs-border-color)'}` }"
+        ></div>
+      </div>
+      <div class="ph-timeline-content ms-3">
+        <div class="ph-timeline-time text-body-secondary small mb-1" v-if="item.time">{{ item.time }}</div>
+        <div class="ph-timeline-title fw-semibold" v-if="item.title">{{ item.title }}</div>
+        <div class="ph-timeline-body text-body-secondary small" v-if="item.body">{{ item.body }}</div>
+        <slot :name="`item-${item.key || index}`" :item="item" />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhTimeline',
+  props: {
+    items: {
+      type: Array,
+      default: () => []
+    },
+    variant: {
+      type: String,
+      default: '',
+      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info'].includes(v)
+    }
+  }
+};
+</script>

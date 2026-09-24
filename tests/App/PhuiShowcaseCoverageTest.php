@@ -106,7 +106,7 @@ final class PhuiShowcaseCoverageTest extends TestCase
         $response = $this->app->handle(new Request('GET', '/ui'));
         $this->assertSame(200, $response->getStatusCode(), '/ui must render.');
 
-        preg_match('#/assets/phue/Pages/UI\.[a-f0-9]{8}\.phue\.js#', $response->getContent(), $matches);
+        preg_match('#/assets/phue/Pages/PhUI\.[a-f0-9]{8}\.phue\.js#', $response->getContent(), $matches);
 
         $this->assertNotEmpty($matches, 'UI page must reference its minted client module.');
 

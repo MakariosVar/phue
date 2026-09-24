@@ -1,0 +1,80 @@
+<template>
+  <form
+    data-phui="form"
+    class="ph-form"
+    @submit.prevent="onSubmit"
+    @reset="onReset"
+  >
+    <slot
+      :errors="errors"
+      :validate="validate"
+      :reset="reset"
+      :submit="submit"
+      :disabled="disabled"
+      :loading="loading"
+    />
+    <div v-if="$slots.actions" class="ph-form-actions mt-3 d-flex gap-2">
+      <slot name="actions" />
+    </div>
+  </form>
+</template>
+
+<script>
+export default {
+  name: 'PhForm',
+  props: {
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    loading: {
+      type: Boolean,
+      default: false
+    },
+    errors: {
+      type: Object,
+      default: () => ({})
+    },
+    validateOn: {
+      type: String,
+      default: 'submit',
+      validator: (v) => ['submit', 'blur', 'change'].includes(v)
+    }
+  },
+  emits: ['submit', 'reset', 'invalid'],
+  methods: {
+    validate() {
+      const inputs = this.$el.querySelectorAll('[name]');
+      const newErrors = {};
+      let isValid = true;
+      inputs.forEach(input => {
+        if (input.checkValidity && !input.checkValidity()) {
+          newErrors[input.name] = input.validationMessage;
+          isValid = false;
+        }
+      });
+      this.$emit('invalid', newErrors);
+      return isValid;
+    },
+    reset() {
+      this.$el.reset();
+      this.$emit('reset');
+    },
+    submit() {
+      if (this.validate()) {
+        const formData = new FormData(this.$el);
+        const data = Object.fromEntries(formData.entries());
+        this.$emit('submit', data);
+      }
+    },
+    onSubmit(event) {
+      event.preventDefault();
+      this.submit();
+    },
+    onReset(event) {
+      event.preventDefault();
+      this.reset();
+    }
+  }
+};
+</script>
