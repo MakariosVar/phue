@@ -60,7 +60,7 @@ final class SchemaInspector
 
         $sql = match ($driver) {
             'sqlite' => "SELECT name FROM sqlite_master WHERE type='table' AND name = :table",
-            'mysql' => "SHOW TABLES LIKE :table",
+            'mysql' => "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table",
             'pgsql' => "SELECT table_name FROM information_schema.tables WHERE table_name = :table",
             default => "SELECT 1 WHERE 1 = 0",
         };

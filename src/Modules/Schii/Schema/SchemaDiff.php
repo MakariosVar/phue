@@ -353,7 +353,7 @@ final readonly class SchemaDiff
     private function formatColumnDefinition(string $driver, ColumnDefinition $col): string
     {
         $sqlType = $this->mapTypeToSql($driver, $col->type);
-        if ($col->type === 'varchar' && $col->length > 0) {
+        if ($sqlType === 'VARCHAR' && $col->length > 0) {
             $sqlType .= sprintf('(%d)', $col->length);
         }
 
@@ -379,7 +379,8 @@ final readonly class SchemaDiff
         $parts[] = $col->nullable ? 'NULL' : 'NOT NULL';
 
         if ($col->default !== null) {
-            $defaultVal = is_string($col->default) ? $col->default : var_export($col->default, true);
+            // Use var_export for all default values to ensure strings are safely quoted (e.g., 'pending')
+            $defaultVal = var_export($col->default, true);
             $parts[] = sprintf('DEFAULT %s', $defaultVal);
         }
 
@@ -405,6 +406,7 @@ final readonly class SchemaDiff
                 'text' => 'LONGTEXT',
                 'float' => 'DOUBLE',
                 'bool' => 'BOOLEAN',
+                'json' => 'JSON',
                 default => 'VARCHAR',
             },
             'pgsql' => match ($type) {

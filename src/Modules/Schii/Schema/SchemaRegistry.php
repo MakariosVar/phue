@@ -354,6 +354,7 @@ final class SchemaRegistry
     {
         return match (strtolower($type)) {
             'bool' => 'boolean',
+            'string' => 'varchar',
             'integer', 'int' => 'int',
             'number', 'float', 'decimal', 'numeric' => 'float',
             default => strtolower($type),

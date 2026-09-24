@@ -404,9 +404,13 @@ final class SchemaSyncEngine
         ColumnDefinition $target,
         string $driverName
     ): bool {
+        // Calculate effective nullability: Primary Key columns are implicitly non-nullable
+        $existingNullable = $existing->primaryKey ? false : $existing->nullable;
+        $targetNullable = $target->primaryKey ? false : $target->nullable;
+
         return !$this->areTypesCompatible($existing->type, $target->type, $driverName)
-            || $existing->nullable !== $target->nullable
             || $existing->primaryKey !== $target->primaryKey
+            || $existingNullable !== $targetNullable
             || $existing->autoIncrement !== $target->autoIncrement;
     }
 }
