@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libcurl4-openssl-dev \
     curl \
-    && docker-php-ext-install zip curl sockets \
+    && docker-php-ext-install zip curl sockets pdo_mysql \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
