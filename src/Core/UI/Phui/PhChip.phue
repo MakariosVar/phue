@@ -1,5 +1,5 @@
 <template>
-  <span :class="['badge rounded-pill', variantClass, { 'opacity-50 pe-none': disabled }]">
+  <span :class="['badge rounded-pill d-flex align-items-center', variantClass, { 'opacity-50 pe-none': disabled }]">
     <span class="chip__content">
       <slot>{{ label }}</slot>
     </span>
