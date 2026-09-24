@@ -156,6 +156,135 @@ test('full SFC round-trip has no unstyled tag leaks', async () => {
   expect(phpContentVerified).toBe(true);
 });
 
+test('nested template tags are highlighted correctly (slot templates)', async () => {
+  const g = await loadGrammar();
+
+const source = [
+    '<template>',
+    '  <example-factory>',
+    '    <template #demo>',
+    '      <div>',
+    '        <ph-input label="Name" placeholder="Enter your name" :value="name" @update:model-value="name = $event" />',
+    '      </div>',
+    '    </template>',
+    '  </example-factory>',
+    '</template>',
+  ];
+
+  let stack = INITIAL;
+  let inOuterTemplate = false;
+  let inInnerTemplate = false;
+  let outerTemplateClosed = false;
+  let innerTemplateClosed = false;
+
+  for (const line of source) {
+    const r = g.tokenizeLine(line, stack);
+    const scopes = r.tokens.flatMap((t) => t.scopes);
+    stack = r.ruleStack;
+
+    // Track outer template
+    if (line.includes('<template>') && !line.includes('#demo')) {
+      inOuterTemplate = true;
+      expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
+      expect(scopes.some((s) => s === 'punctuation.definition.tag.begin.phue')).toBe(true);
+    }
+
+    // Track inner template (slot)
+    if (line.includes('<template #demo>')) {
+      inInnerTemplate = true;
+      // Inner template should be handled by HTML grammar, not as a Phue block
+      expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+    }
+
+    // Content inside outer template should have Vue/HTML scope
+    if (inOuterTemplate && !inInnerTemplate && line.includes('<example-factory>')) {
+      expect(scopes.some((s) => s === 'text.html.vue')).toBe(true);
+      expect(scopes.some((s) => s === 'meta.embedded.block.template.phue')).toBe(true);
+    }
+
+    // Content inside inner template should also have Vue/HTML scope (via HTML grammar)
+    if (inInnerTemplate && line.includes('<div>')) {
+      expect(scopes.some((s) => s === 'text.html.vue')).toBe(true);
+    }
+
+    // Track closing of inner template
+    if (inInnerTemplate && line.includes('</template>') && !outerTemplateClosed) {
+      innerTemplateClosed = true;
+      inInnerTemplate = false;
+      // Inner closing tag should be HTML grammar
+      expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+    }
+
+    // Track closing of outer template
+    if (inOuterTemplate && !inInnerTemplate && line === '</template>' && innerTemplateClosed) {
+      outerTemplateClosed = true;
+      inOuterTemplate = false;
+      expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
+      expect(scopes.some((s) => s === 'punctuation.definition.tag.end.phue')).toBe(true);
+    }
+  }
+
+  expect(innerTemplateClosed).toBe(true);
+  expect(outerTemplateClosed).toBe(true);
+});
+
+test('template with multiple nested slot templates', async () => {
+  const g = await loadGrammar();
+
+  const source = [
+    '<template>',
+    '  <ph-card>',
+    '    <template #header>',
+    '      <ph-heading :level="3">Card Title</ph-heading>',
+    '    </template>',
+    '    <template #footer>',
+    '      <ph-button variant="primary">Action</ph-button>',
+    '    </template>',
+    '  </ph-card>',
+    '</template>',
+  ];
+
+  let stack = INITIAL;
+  let inOuterTemplate = false;
+  let slotCount = 0;
+
+  for (const line of source) {
+    const r = g.tokenizeLine(line, stack);
+    const scopes = r.tokens.flatMap((t) => t.scopes);
+    stack = r.ruleStack;
+
+    if (line === '<template>') {
+      inOuterTemplate = true;
+      expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
+    }
+
+    if (line.includes('<template #')) {
+      slotCount++;
+      // Slot templates should be handled by HTML grammar
+      expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+    }
+
+    if (inOuterTemplate && line.includes('<ph-card>')) {
+      expect(scopes.some((s) => s === 'text.html.vue')).toBe(true);
+      expect(scopes.some((s) => s === 'meta.embedded.block.template.phue')).toBe(true);
+    }
+
+    if (line.trim() === '</template>' && inOuterTemplate) {
+      if (slotCount > 0) {
+        slotCount--;
+        expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+      } else {
+        expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
+        expect(scopes.some((s) => s === 'punctuation.definition.tag.end.phue')).toBe(true);
+        inOuterTemplate = false;
+      }
+    }
+  }
+
+  expect(slotCount).toBe(0);
+  expect(inOuterTemplate).toBe(false);
+});
+
 test('custom data is valid v1.1 and covers every PhUI component file', () => {
   const data = JSON.parse(fs.readFileSync(customDataPath, 'utf8'));
   expect(data.version).toBe(1.1);

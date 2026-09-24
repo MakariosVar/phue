@@ -11,10 +11,63 @@
       "</script>",
       "",
       "<php>",
-      "  return ['state' => []];",
+      "  return [",
+      "      'state' => [",
+      "          $1",
+      "      ],",
+      "  ];",
       "</php>"
     ],
     "description": "Create a new .phue single-file component"
+  },
+  "phue-page": {
+    "prefix": "phue-page",
+    "body": [
+      "<php>",
+      "use App\\Config\\NavigationConfig;",
+      "use Phue\\Modules\\Auth\\IdentityInterface;",
+      "",
+      "/**",
+      " * ${1:PageName} Page",
+      " *",
+      " * @var string \$content",
+      " * @var IdentityInterface|null \$user",
+      " * @var string \$uri",
+      " * @return array{html: string}",
+      " */",
+      "",
+      "\$title = \$title ?? '${1:Page Title}';",
+      "\$content = \$content ?? '';",
+      "\$user = \$user ?? null;",
+      "\$uri = \$uri ?? '/';",
+      "",
+      "return [",
+      "    'title' => \$title,",
+      "    'state' => [",
+      "        'content' => \$content,",
+      "        'user' => \$user,",
+      "        'uri' => \$uri,",
+      "    ],",
+      "    'scripts' => [],",
+      "];",
+      "</php>",
+      "<template>",
+      "  <div class=\"container py-4\">",
+      "    <ph-heading :level=\"2\">{{ title }}</ph-heading>",
+      "    <div v-html=\"content\" />",
+      "  </div>",
+      "</template>",
+      "<script>",
+      "export default {",
+      "  name: '${1:PageName}',",
+      "  props: ['title', 'content', 'user', 'uri'],",
+      "  setup() {",
+      "    return {};",
+      "  }",
+      "};",
+      "</script>"
+    ],
+    "description": "Create a new Phue page component with layout"
   },
   "ph-template": {
     "prefix": "ph-template",
@@ -38,6 +91,28 @@
     ],
     "description": "Insert a <script> block with a Vue Options/Composition wrapper"
   },
+  "ph-script-composition": {
+    "prefix": "ph-script-comp",
+    "body": [
+      "<script>",
+      "import { ref, computed, onMounted } from 'vue';",
+      "export default {",
+      "  setup() {",
+      "    const $1 = ref($2);",
+      "    ",
+      "    onMounted(() => {",
+      "      $3",
+      "    });",
+      "    ",
+      "    return {",
+      "      $1",
+      "    };",
+      "  }",
+      "};",
+      "</script>"
+    ],
+    "description": "Insert a <script> block with Vue Composition API"
+  },
   "ph-php": {
     "prefix": "ph-php",
     "body": [
@@ -55,6 +130,11 @@
     "prefix": "phue-state",
     "body": ["      '$0' => $1,"],
     "description": "Add a key entry to the <php> state array"
+  },
+  "phue-styles-entry": {
+    "prefix": "phue-styles",
+    "body": ["      'styles' => ['$1'],"],
+    "description": "Add styles entry to the <php> block"
   },
   "ph-button": {
     "prefix": "ph-button",
@@ -74,5 +154,567 @@
       "</ph-card>"
     ],
     "description": "PhUI card component"
+  },
+  "ph-form": {
+    "prefix": "ph-form",
+    "body": [
+      "<ph-form @submit=\"onSubmit\" @invalid=\"errors = $event\">",
+      "  <template #default=\"{ validate, submit }\">",
+      "    <ph-input name=\"email\" label=\"Email\" required />",
+      "    <ph-button type=\"submit\" @click=\"validate()\">Save</ph-button>",
+      "  </template>",
+      "</ph-form>"
+    ],
+    "description": "PhUI form component with validation"
+  },
+  "ph-modal": {
+    "prefix": "ph-modal",
+    "body": [
+      "<ph-modal v-model=\"${1:open}\" title=\"$2\" size=\"md\">",
+      "  $3",
+      "  <template #footer>",
+      "    <ph-button variant=\"ghost\" @click=\"${1:open} = false\">Cancel</ph-button>",
+      "    <ph-button variant=\"primary\" @click=\"${1:open} = false\">Confirm</ph-button>",
+      "  </template>",
+      "</ph-modal>"
+    ],
+    "description": "PhUI modal component"
+  },
+  "ph-alert": {
+    "prefix": "ph-alert",
+    "body": [
+      "<ph-alert variant=\"${1:info}\" :dismissible=\"${2:true}\" @dismiss=\"$3\">",
+      "  $4",
+      "</ph-alert>"
+    ],
+    "description": "PhUI alert component"
+  },
+  "ph-badge": {
+    "prefix": "ph-badge",
+    "body": ["<ph-badge variant=\"${1:primary}\" :pill=\"${2:false}\">$3</ph-badge>"],
+    "description": "PhUI badge component"
+  },
+  "ph-avatar": {
+    "prefix": "ph-avatar",
+    "body": ["<ph-avatar name=\"${1:Name}\" size=\"${2:md}\" shape=\"${3:circle}\" />"],
+    "description": "PhUI avatar component"
+  },
+  "ph-table": {
+    "prefix": "ph-table",
+    "body": [
+      "<ph-data-table",
+      "  :columns=\"[",
+      "    { key: 'name', label: 'Name', sortable: true },",
+      "    { key: 'email', label: 'Email', sortable: true }",
+      "  ]\"",
+      "  :items=\"${1:rows}\"",
+      "  :paginated=\"${2:true}\"",
+      "  :page-size=\"${3:10}\"",
+      "  />"
+    ],
+    "description": "PhUI data table component"
+  },
+  "ph-select": {
+    "prefix": "ph-select",
+    "body": [
+      "<ph-select",
+      "  v-model=\"${1:value}\"",
+      "  label=\"${2:Label}\"",
+      "  :options=\"${3:options}\"",
+      "  />"
+    ],
+    "description": "PhUI select component"
+  },
+  "ph-checkbox": {
+    "prefix": "ph-checkbox",
+    "body": ["<ph-checkbox v-model=\"${1:checked}\" label=\"${2:Label}\" />"],
+    "description": "PhUI checkbox component"
+  },
+  "ph-switch": {
+    "prefix": "ph-switch",
+    "body": ["<ph-switch v-model=\"${1:enabled}\" label=\"${2:Label}\" size=\"${3:md}\" />"],
+    "description": "PhUI switch component"
+  },
+  "ph-tabs": {
+    "prefix": "ph-tabs",
+    "body": [
+      "<ph-tabs v-model=\"${1:active}\" :items=\"${2:items}\">",
+      "  <template #default=\"{ activeTab }\">",
+      "    <div v-if=\"activeTab === '${3:tab1}'\">$4</div>",
+      "    <div v-else-if=\"activeTab === '${5:tab2}'\">$6</div>",
+      "  </template>",
+      "</ph-tabs>"
+    ],
+    "description": "PhUI tabs component"
+  },
+  "ph-accordion": {
+    "prefix": "ph-accordion",
+    "body": [
+      "<ph-accordion",
+      "  v-model=\"${1:openPanels}\"",
+      "  :items=\"${2:items}\"",
+      "  :multiple=\"${3:false}\"",
+      "  />"
+    ],
+    "description": "PhUI accordion component"
+  },
+  "ph-toast": {
+    "prefix": "ph-toast",
+    "body": [
+      "<ph-toast position=\"top-right\" @dismiss=\"onToastDismiss\" />",
+      "",
+      "<ph-button variant=\"primary\" @click=\"window.toast.push({",
+      "    variant: 'success',",
+      "    title: 'Saved',",
+      "    message: 'Changes persisted.',",
+      "    duration: 3000",
+      "  })\">Show Toast</ph-button>"
+    ],
+    "description": "PhUI toast component with trigger example"
+  },
+  "ph-confirm": {
+    "prefix": "ph-confirm",
+    "body": [
+      "<ph-confirm-dialog />",
+      "",
+      "const ok = await window.confirm.confirm({",
+      "  title: '${1:Confirm Action}',",
+      "  message: '${2:Are you sure?}',",
+      "  variant: '${3:danger}',",
+      "  icon: '${4:exclamation-triangle}',",
+      "  confirmText: '${5:Confirm}',",
+      "});"
+    ],
+    "description": "PhUI confirm dialog component with usage"
+  },
+  "ph-dropdown": {
+    "prefix": "ph-dropdown",
+    "body": [
+      "<ph-dropdown",
+      "  label=\"${1:Menu}\"",
+      "  :items=\"${2:items}\"",
+      "  variant=\"${3:secondary}\"",
+      "  size=\"${4:md}\"",
+      "  @select=\"onSelect\"",
+      "  />"
+    ],
+    "description": "PhUI dropdown component"
+  },
+  "ph-breadcrumb": {
+    "prefix": "ph-breadcrumb",
+    "body": [
+      "<ph-breadcrumb :items=\"[",
+      "  { label: 'Home', href: '/' },",
+      "  { label: '${1:Parent}', href: '/${2:parent}' },",
+      "  { label: '${3:Current}' }",
+      "]\" />"
+    ],
+    "description": "PhUI breadcrumb component"
+  },
+  "ph-pagination": {
+    "prefix": "ph-pagination",
+    "body": [
+      "<ph-pagination",
+      "  v-model:current-page=\"${1:page}\"",
+      "  :total-pages=\"${2:totalPages}\"",
+      "  :max-visible=\"${3:5}\"",
+      "  />"
+    ],
+    "description": "PhUI pagination component"
+  },
+  "ph-stat": {
+    "prefix": "ph-stat",
+    "body": [
+      "<ph-stat",
+      "  label=\"${1:Label}\"",
+      "  value=\"${2:Value}\"",
+      "  delta=\"${3:+12%}\"",
+      "  trend=\"${4:up}\"",
+      "  icon=\"${5:graph-up}\"",
+      "  variant=\"${6:success}\"",
+      "  />"
+    ],
+    "description": "PhUI stat component"
+  },
+  "ph-progress": {
+    "prefix": "ph-progress",
+    "body": [
+      "<ph-progress-bar",
+      "  :value=\"${1:value}\"",
+      "  label=\"${2:Label}\"",
+      "  variant=\"${3:primary}\"",
+      "  :show-value=\"${4:true}\"",
+      "  :animated=\"${5:false}\"",
+      "  />"
+    ],
+    "description": "PhUI progress bar component"
+  },
+  "ph-spinner": {
+    "prefix": "ph-spinner",
+    "body": ["<ph-spinner size=\"${1:md}\" variant=\"${2:border}\" label=\"${3:Loading...}\" />"],
+    "description": "PhUI spinner component"
+  },
+  "ph-skeleton": {
+    "prefix": "ph-skeleton",
+    "body": [
+      "<ph-skeleton variant=\"${1:text}\" width=\"${2:240}\" height=\"${3:12}\" />"
+    ],
+    "description": "PhUI skeleton loading placeholder"
+  },
+  "ph-empty-state": {
+    "prefix": "ph-empty",
+    "body": [
+      "<ph-empty-state",
+      "  icon=\"${1:inbox}\"",
+      "  title=\"${2:No data}\"",
+      "  message=\"${3:Nothing to show here}\"",
+      "  action-label=\"${4:Action}\"",
+      "  @action=\"${5:onAction}\"",
+      "  />"
+    ],
+    "description": "PhUI empty state component"
+  },
+  "ph-tooltip": {
+    "prefix": "ph-tooltip",
+    "body": [
+      "<ph-tooltip content=\"${1:Tooltip text}\" placement=\"${2:top}\">",
+      "  <ph-button size=\"sm\" variant=\"ghost\">Hover me</ph-button>",
+      "</ph-tooltip>"
+    ],
+    "description": "PhUI tooltip component"
+  },
+  "ph-popover": {
+    "prefix": "ph-popover",
+    "body": [
+      "<ph-popover",
+      "  title=\"${1:Title}\"",
+      "  content=\"${2:Content}\"",
+      "  placement=\"${3:top}\"",
+      "  trigger=\"${4:hover}\"",
+      ">",
+      "  <template #trigger><ph-button size=\"sm\">Trigger</ph-button></template>",
+      "</ph-popover>"
+    ],
+    "description": "PhUI popover component"
+  },
+  "ph-drawer": {
+    "prefix": "ph-drawer",
+    "body": [
+      "<ph-drawer",
+      "  v-model=\"${1:open}\"",
+      "  position=\"${2:end}\"",
+      "  size=\"${3:25rem}\"",
+      "  title=\"${4:Drawer Title}\"",
+      "  :closable=\"${5:true}\"",
+      "  :close-on-backdrop=\"${6:true}\"",
+      ">",
+      "  $7",
+      "</ph-drawer>"
+    ],
+    "description": "PhUI drawer component"
+  },
+  "ph-file-input": {
+    "prefix": "ph-file-input",
+    "body": [
+      "<ph-file-input",
+      "  v-model=\"${1:files}\"",
+      "  label=\"${2:Label}\"",
+      "  accept=\"${3:image/*,application/pdf}\"",
+      "  :multiple=\"${4:false}\"",
+      "  :preview=\"${5:true}\"",
+      "  :max-size=\"${6:5242880}\"",
+      "  />"
+    ],
+    "description": "PhUI file input component"
+  },
+  "ph-date-picker": {
+    "prefix": "ph-date-picker",
+    "body": [
+      "<ph-date-picker",
+      "  v-model=\"${1:date}\"",
+      "  label=\"${2:Label}\"",
+      "  mode=\"${3:date}\"",
+      "  :clearable=\"${4:true}\"",
+      "  />"
+    ],
+    "description": "PhUI date picker component"
+  },
+  "ph-number-input": {
+    "prefix": "ph-number-input",
+    "body": [
+      "<ph-number-input",
+      "  v-model=\"${1:value}\"",
+      "  label=\"${2:Label}\"",
+      "  :min=\"${3:0}\"",
+      "  :max=\"${4:100}\"",
+      "  :step=\"${5:1}\"",
+      "  :precision=\"${6:0}\"",
+      "  :controls=\"${7:true}\"",
+      "  />"
+    ],
+    "description": "PhUI number input component"
+  },
+  "ph-range": {
+    "prefix": "ph-range",
+    "body": [
+      "<ph-range",
+      "  v-model=\"${1:value}\"",
+      "  label=\"${2:Label}\"",
+      "  :min=\"${3:0}\"",
+      "  :max=\"${4:100}\"",
+      "  :step=\"${5:1}\"",
+      "  :dual=\"${6:false}\"",
+      "  :show-value=\"${7:true}\"",
+      "  />"
+    ],
+    "description": "PhUI range slider component"
+  },
+  "ph-search-input": {
+    "prefix": "ph-search",
+    "body": [
+      "<ph-search-input",
+      "  v-model=\"${1:query}\"",
+      "  placeholder=\"${2:Search...}\"",
+      "  :debounce=\"${3:300}\"",
+      "  @search=\"onSearch\"",
+      "  />"
+    ],
+    "description": "PhUI search input component"
+  },
+  "ph-select3": {
+    "prefix": "ph-select3",
+    "body": [
+      "<ph-select3",
+      "  v-model=\"${1:value}\"",
+      "  label=\"${2:Label}\"",
+      "  :options=\"${3:options}\"",
+      "  :multiple=\"${4:false}\"",
+      "  :searchable=\"${5:true}\"",
+      "  :clearable=\"${6:false}\"",
+      "  />"
+    ],
+    "description": "PhUI searchable select component"
+  },
+  "ph-tree-view": {
+    "prefix": "ph-tree",
+    "body": [
+      "<ph-tree-view",
+      "  :nodes=\"${1:treeData}\"",
+      "  :selected=\"${2:selected}\"",
+      "  :expanded=\"${3:expanded}\"",
+      "  :checkable=\"${4:false}\"",
+      "  @select=\"onSelect\"",
+      "  />"
+    ],
+    "description": "PhUI tree view component"
+  },
+  "ph-navigation": {
+    "prefix": "ph-navigation",
+    "body": [
+      "<ph-navigation",
+      "  :items=\"${1:items}\"",
+      "  :active-route=\"${2:uri}\"",
+      "  orientation=\"${3:horizontal}\"",
+      "  :actions=\"${4:actions}\"",
+      "  :theme-config=\"${5:themeConfig}\"",
+      "  />"
+    ],
+    "description": "PhUI navigation component"
+  },
+  "ph-markdown": {
+    "prefix": "ph-markdown",
+    "body": [
+      "<ph-markdown",
+      "  :src=\"${1:docs/page.md}\"",
+      "  />"
+    ],
+    "description": "PhUI markdown component"
+  },
+  "ph-icon": {
+    "prefix": "ph-icon",
+    "body": ["<ph-icon name=\"${1:icon-name}\" size=\"${2:md}\" variant=\"${3:text-primary}\" />"],
+    "description": "PhUI icon component"
+  },
+  "ph-link": {
+    "prefix": "ph-link",
+    "body": ["<ph-link href=\"${1:#}\" variant=\"${2:primary}\">${3:Link Text}</ph-link>"],
+    "description": "PhUI link component"
+  },
+  "ph-text": {
+    "prefix": "ph-text",
+    "body": ["<ph-text :as=\"${1:p}\" size=\"${2:md}\" weight=\"${3:normal}\" color=\"${4:default}\">$5</ph-text>"],
+    "description": "PhUI text component"
+  },
+  "ph-heading": {
+    "prefix": "ph-heading",
+    "body": ["<ph-heading :level=\"${1:2}\" color=\"${2:primary}\">$3</ph-heading>"],
+    "description": "PhUI heading component"
+  },
+  "ph-box": {
+    "prefix": "ph-box",
+    "body": [
+      "<ph-box",
+      "  padding=\"${1:md}\"",
+      "  margin=\"${2:0}\"",
+      "  :border=\"${3:false}\"",
+      "  radius=\"${4:md}\"",
+      "  bg=\"${5:surface}\"",
+      ">",
+      "  $6",
+      "</ph-box>"
+    ],
+    "description": "PhUI box component"
+  },
+  "ph-flex": {
+    "prefix": "ph-flex",
+    "body": [
+      "<ph-flex",
+      "  direction=\"${1:row}\"",
+      "  wrap=\"${2:nowrap}\"",
+      "  align=\"${3:stretch}\"",
+      "  justify=\"${4:flex-start}\"",
+      "  gap=\"${5:0}\"",
+      ">",
+      "  $6",
+      "</ph-flex>"
+    ],
+    "description": "PhUI flex component"
+  },
+  "ph-stack": {
+    "prefix": "ph-stack",
+    "body": [
+      "<ph-stack gap=\"${1:md}\" align=\"${2:stretch}\">",
+      "  $3",
+      "</ph-stack>"
+    ],
+    "description": "PhUI stack component"
+  },
+  "ph-row": {
+    "prefix": "ph-row",
+    "body": [
+      "<ph-row gutter=\"${1:3}\" align=\"${2:center}\">",
+      "  <ph-col span=\"${3:12}\" md=\"${4:6}\" lg=\"${5:4}\">$6</ph-col>",
+      "  <ph-col span=\"${3:12}\" md=\"${4:6}\" lg=\"${5:4}\">$7</ph-col>",
+      "  <ph-col span=\"${3:12}\" lg=\"${5:4}\">$8</ph-col>",
+      "</ph-row>"
+    ],
+    "description": "PhUI row component with columns"
+  },
+  "ph-col": {
+    "prefix": "ph-col",
+    "body": ["<ph-col span=\"${1:12}\" md=\"${2:6}\" lg=\"${3:4}\">$4</ph-col>"],
+    "description": "PhUI column component"
+  },
+  "ph-divider": {
+    "prefix": "ph-divider",
+    "body": ["<ph-divider label=\"${1:Section}\" variant=\"${2:primary}\" orientation=\"${3:horizontal}\" />"],
+    "description": "PhUI divider component"
+  },
+  "ph-chip": {
+    "prefix": "ph-chip",
+    "body": ["<ph-chip label=\"${1:Label}\" variant=\"${2:primary}\" :removable=\"${3:false}\" @remove=\"onRemove\" />"],
+    "description": "PhUI chip component"
+  },
+  "ph-list-group": {
+    "prefix": "ph-list-group",
+    "body": [
+      "<ph-list-group",
+      "  :items=\"${1:items}\"",
+      "  :flush=\"${2:false}\"",
+      "  @select=\"onSelect\"",
+      "  />"
+    ],
+    "description": "PhUI list group component"
+  },
+  "ph-description-list": {
+    "prefix": "ph-dl",
+    "body": [
+      "<ph-description-list",
+      "  :items=\"${1:items}\"",
+      "  :columns=\"${2:2}\"",
+      "  />"
+    ],
+    "description": "PhUI description list component"
+  },
+  "ph-timeline": {
+    "prefix": "ph-timeline",
+    "body": [
+      "<ph-timeline",
+      "  variant=\"${1:primary}\"",
+      "  :items=\"${2:items}\"",
+      "  />"
+    ],
+    "description": "PhUI timeline component"
+  },
+  "ph-stepper": {
+    "prefix": "ph-stepper",
+    "body": [
+      "<ph-stepper",
+      "  v-model=\"${1:step}\"",
+      "  :steps=\"${2:steps}\"",
+      "  orientation=\"${3:horizontal}\"",
+      "  :clickable=\"${4:false}\"",
+      "  :linear=\"${5:true}\"",
+      "  />"
+    ],
+    "description": "PhUI stepper component"
+  },
+  "ph-segmented-control": {
+    "prefix": "ph-segmented",
+    "body": [
+      "<ph-segmented-control",
+      "  v-model=\"${1:value}\"",
+      "  :options=\"${2:options}\"",
+      "  size=\"${3:md}\"",
+      "  variant=\"${4:primary}\"",
+      "  />"
+    ],
+    "description": "PhUI segmented control component"
+  },
+  "ph-radio": {
+    "prefix": "ph-radio",
+    "body": [
+      "<ph-radio v-model=\"${1:value}\" name=\"${2:group}\" value=\"${3:option1}\" label=\"${4:Option 1}\" />",
+      "<ph-radio v-model=\"${1:value}\" name=\"${2:group}\" value=\"${5:option2}\" label=\"${6:Option 2}\" />"
+    ],
+    "description": "PhUI radio group component"
+  },
+  "ph-form-field": {
+    "prefix": "ph-form-field",
+    "body": [
+      "<ph-form-field",
+      "  label=\"${1:Label}\"",
+      "  :error=\"${2:error}\"",
+      "  helper-text=\"${3:Helper text}\"",
+      ">",
+      "  <ph-input v-model=\"${4:value}\" placeholder=\"${5:Placeholder}\" />",
+      "</ph-form-field>"
+    ],
+    "description": "PhUI form field wrapper"
+  },
+  "ph-theme": {
+    "prefix": "ph-theme",
+    "body": ["<ph-theme aria-label=\"${1:Toggle theme}\" storage-key=\"${2:phue-theme}\" />"],
+    "description": "PhUI theme toggle component"
+  },
+  "v-for": {
+    "prefix": "v-for",
+    "body": ["<template v-for=\"${1:item} in ${2:items}\" :key=\"${3:item.id}\">", "  $4", "</template>"],
+    "description": "Vue v-for loop with template"
+  },
+  "v-if": {
+    "prefix": "v-if",
+    "body": ["<template v-if=\"${1:condition}\">", "  $2", "</template>"],
+    "description": "Vue v-if conditional"
+  },
+  "v-slot": {
+    "prefix": "v-slot",
+    "body": ["<template #${1:slotName}>", "  $2", "</template>"],
+    "description": "Vue named slot template"
+  },
+  "v-slot-scoped": {
+    "prefix": "v-slot-s",
+    "body": ["<template #${1:slotName}=\"{ ${2:props} }\">", "  $3", "</template>"],
+    "description": "Vue scoped slot template"
   }
 }

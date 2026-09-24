@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Phue",
   "scopeName": "source.phue",
-  "fileTypes": [],
+  "fileTypes": ["phue"],
   "patterns": [
     { "include": "#blocks" },
     { "include": "#generic-markup" }
@@ -20,13 +20,14 @@
       "name": "meta.tag.phue"
     },
     "block-template": {
-      "begin": "(<)(template)(\\b[^>]*)>",
+      "begin": "^(\\s*)(<)(template)(\\b[^>]*)>",
       "beginCaptures": {
-        "1": { "name": "punctuation.definition.tag.begin.phue" },
-        "2": { "name": "entity.name.tag.phue" },
-        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+        "1": { "name": "punctuation.whitespace.phue" },
+        "2": { "name": "punctuation.definition.tag.begin.phue" },
+        "3": { "name": "entity.name.tag.phue" },
+        "4": { "name": "punctuation.definition.tag.attributes.phue" }
       },
-      "end": "(</)(template)(>)",
+      "end": "^\\1(</)(template)(>)",
       "endCaptures": {
         "1": { "name": "punctuation.definition.tag.end.phue" },
         "2": { "name": "entity.name.tag.phue" },
@@ -40,13 +41,14 @@
       ]
     },
     "block-script": {
-      "begin": "(<)(script)(\\b[^>]*)>",
+      "begin": "^(\\s*)(<)(script)(\\b[^>]*)>",
       "beginCaptures": {
-        "1": { "name": "punctuation.definition.tag.begin.phue" },
-        "2": { "name": "entity.name.tag.phue" },
-        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+        "1": { "name": "punctuation.whitespace.phue" },
+        "2": { "name": "punctuation.definition.tag.begin.phue" },
+        "3": { "name": "entity.name.tag.phue" },
+        "4": { "name": "punctuation.definition.tag.attributes.phue" }
       },
-      "end": "(</)(script)(>)",
+      "end": "^\\1(</)(script)(>)",
       "endCaptures": {
         "1": { "name": "punctuation.definition.tag.end.phue" },
         "2": { "name": "entity.name.tag.phue" },
@@ -58,13 +60,14 @@
       ]
     },
     "block-php": {
-      "begin": "(<)(php)(>)",
+      "begin": "^(\\s*)(<)(php)(>)",
       "beginCaptures": {
-        "1": { "name": "punctuation.definition.tag.begin.phue" },
-        "2": { "name": "entity.name.tag.phue" },
-        "3": { "name": "punctuation.definition.tag.attributes.phue" }
+        "1": { "name": "punctuation.whitespace.phue" },
+        "2": { "name": "punctuation.definition.tag.begin.phue" },
+        "3": { "name": "entity.name.tag.phue" },
+        "4": { "name": "punctuation.definition.tag.attributes.phue" }
       },
-      "end": "(</)(php)(>)",
+      "end": "^\\1(</)(php)(>)",
       "endCaptures": {
         "1": { "name": "punctuation.definition.tag.end.phue" },
         "2": { "name": "entity.name.tag.phue" },
@@ -76,8 +79,8 @@
       ]
     },
     "vue-attribute": {
-      "comment": "Vue bindings/events: :prop, @event (with optional value)",
-      "match": "((?:@|:)[\\w-]+(?:\\.[\\w-]+)*)\\s*(?:=(?:\"([^\"]*)\"|'([^']*)'))?",
+      "comment": "Vue bindings/events: :prop, @event, v-directive (with optional value)",
+      "match": "((?:@|:|v-)[\\w-]+(?:\\.[\\w-]+)*)\\s*(?:=(?:\"([^\"]*)\"|'([^']*)'))?",
       "captures": {
         "1": { "name": "entity.other.attribute-name.html.vue" },
         "2": { "name": "string.quoted.double.html.vue" },
