@@ -186,7 +186,13 @@ class ApplicationTest extends TestCase
         $this->assertTrue($config->has('app.name'));
         $this->assertEquals('Phue App', $config->get('app.name'));
         $this->assertTrue($config->get('app.debug'));
-        $this->assertEquals('sqlite', $config->get('database.default'));
+
+        // The default connection is environment-driven (.env), so assert it
+        // resolves to a declared connection rather than a hardcoded driver.
+        $defaultConnection = $config->get('database.default');
+        $this->assertIsString($defaultConnection);
+        $this->assertNotSame('', $defaultConnection);
+        $this->assertIsArray($config->get("database.connections.{$defaultConnection}"));
 
         // Test fallback default value
         $this->assertEquals('fallback_val', $config->get('non.existent.key', 'fallback_val'));

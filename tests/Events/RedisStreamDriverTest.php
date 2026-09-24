@@ -34,18 +34,34 @@ final class RedisStreamDriverTest extends TestCase
             $this->markTestSkipped('phpredis extension not installed.');
         }
 
-        $host = getenv('PHUE_REDIS_HOST') ?: 'phue_redis';
         $port = (int) (getenv('PHUE_REDIS_PORT') ?: 6379);
 
-        $this->redis = new \Redis();
-        try {
-            $connected = @$this->redis->connect($host, $port, 1.0);
-        } catch (\Throwable) {
-            $connected = false;
+        // Probe candidate hosts so the suite works both on the compose network
+        // (service name "phue_redis") and with host networking (127.0.0.1).
+        $candidates = array_values(array_unique(array_filter([
+            getenv('PHUE_REDIS_HOST') ?: null,
+            'phue_redis',
+            '127.0.0.1',
+        ])));
+
+        $host = '';
+        $connected = false;
+        foreach ($candidates as $candidate) {
+            $this->redis = new \Redis();
+            try {
+                $connected = @$this->redis->connect($candidate, $port, 1.0);
+            } catch (\Throwable) {
+                $connected = false;
+            }
+
+            if ($connected) {
+                $host = $candidate;
+                break;
+            }
         }
 
         if (!$connected) {
-            $this->markTestSkipped("Redis server not reachable at {$host}:{$port}.");
+            $this->markTestSkipped(sprintf('Redis server not reachable on port %d (tried: %s).', $port, implode(', ', $candidates)));
         }
 
         $this->streamName = self::STREAM_PREFIX . uniqid();

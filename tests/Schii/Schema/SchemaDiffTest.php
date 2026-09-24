@@ -125,14 +125,51 @@ final class SchemaDiffTest extends TestCase
         $this->assertCount(4, $sql);
     }
 
-    public function testUnknownDriverFallsBackToVarcharAndBareIdentifier(): void
+    public function testUnknownDriverFallsBackToVarcharWithLengthAndBareIdentifier(): void
     {
         $diff = new SchemaDiff('users', [
             ['op' => SchemaOperation::AddColumn, 'column' => $this->column('email')],
         ]);
 
         $sql = $diff->toSqls('weird');
-        $this->assertSame('ALTER TABLE users ADD COLUMN email VARCHAR NULL', $sql[0]);
+        $this->assertSame('ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL', $sql[0]);
+    }
+
+    public function testMysqlJsonColumnMapsToNativeJsonType(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::AddColumn, 'column' => new ColumnDefinition(name: 'roles', type: 'json')],
+        ]);
+
+        $sql = $diff->toSqls('mysql');
+
+        $this->assertStringContainsString('`roles` JSON', $sql[0]);
+        $this->assertStringNotContainsString('VARCHAR', $sql[0]);
+    }
+
+    public function testMysqlFallbackVarcharAlwaysCarriesLength(): void
+    {
+        $diff = new SchemaDiff('users', [
+            ['op' => SchemaOperation::AddColumn, 'column' => new ColumnDefinition(name: 'weird', type: 'mystery')],
+        ]);
+
+        $sql = $diff->toSqls('mysql');
+
+        $this->assertStringContainsString('`weird` VARCHAR(255)', $sql[0]);
+    }
+
+    public function testStringDefaultValueIsQuoted(): void
+    {
+        $diff = new SchemaDiff('users', [
+            [
+                'op' => SchemaOperation::AddColumn,
+                'column' => new ColumnDefinition(name: 'status', type: 'varchar', default: 'pending'),
+            ],
+        ]);
+
+        $sql = $diff->toSqls('mysql');
+
+        $this->assertStringContainsString("DEFAULT 'pending'", $sql[0]);
     }
 
     public function testCreateTableWithPrimaryKeyAndAutoIncrement(): void

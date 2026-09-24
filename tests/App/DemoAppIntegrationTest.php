@@ -79,7 +79,11 @@ class DemoAppIntegrationTest extends TestCase
         $this->assertTrue($container->has(\Phue\Core\Database\Connection::class));
 
         $config = $container->get(\Phue\Core\Config::class);
-        $this->assertEquals('sqlite', $config->get('database.default'));
+
+        $defaultConnection = $config->get('database.default');
+        $this->assertIsString($defaultConnection);
+        $this->assertNotSame('', $defaultConnection);
+        $this->assertIsArray($config->get("database.connections.{$defaultConnection}"));
     }
 }
 
