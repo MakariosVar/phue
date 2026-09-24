@@ -319,6 +319,7 @@ class Application
 
             // Register global default assets directly onto AssetRegistry
             $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
+            $registry->addStyle('/assets/vendor/bootstrap-icons/bootstrap-icons.min.css');
 
             // Register Bootstrap JS bundle globally for interactive elements (Dropdowns, Modals, Tooltips)
             $registry->addGlobalScript('/assets/vendor/bootstrap/bootstrap.bundle.min.js');

@@ -27,3 +27,4 @@ tests/Fixtures/RestApp/storage/logs
 /storage/assets/vendor/*
 !/storage/assets/vendor/vue3/
 !/storage/assets/vendor/bootstrap/
+!/storage/assets/vendor/bootstrap-icons/
