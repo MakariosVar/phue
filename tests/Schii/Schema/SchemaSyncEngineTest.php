@@ -89,6 +89,21 @@ class SyncIndexedV2 extends BaseActiveRecord
     public string $email = '';
 }
 
+#[UI(label: 'Sync Typed (json + boolean)')]
+class SyncTyped extends BaseActiveRecord
+{
+    protected string $table = 'sync_typed';
+
+    #[Field(type: 'integer', label: 'ID')]
+    public ?int $id = null;
+
+    #[Field(type: 'json')]
+    public array $meta = [];
+
+    #[Field(type: 'boolean')]
+    public bool $active = false;
+}
+
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchemaSyncEngineTest extends TestCase
 {
@@ -270,5 +285,57 @@ final class SchemaSyncEngineTest extends TestCase
         foreach ($diff->operations as $opData) {
             $this->assertNotSame(SchemaOperation::AlterColumn, $opData['op']);
         }
+    }
+
+    // ─────────────────────── type-compatibility round-trips ───────────────────────
+
+    public function testJsonColumnRoundTripIsIdempotentOnSqlite(): void
+    {
+        $this->engine->apply(SyncTyped::class, dryRun: false);
+
+        $diff = $this->engine->diff(SyncTyped::class);
+
+        $this->assertTrue(
+            $diff->isEmpty(),
+            'A json column stored as TEXT on sqlite must not diff against the target json type.'
+        );
+    }
+
+    public function testBooleanColumnRoundTripIsIdempotentOnSqlite(): void
+    {
+        $this->engine->apply(SyncTyped::class, dryRun: false);
+
+        $columns = (new SchemaInspector($this->db))->inspect('sync_typed');
+        $this->assertSame('int', $columns['active']->type, 'sqlite stores boolean as INTEGER, inspector reads int');
+
+        $diff = $this->engine->diff(SyncTyped::class);
+
+        $this->assertTrue(
+            $diff->isEmpty(),
+            'A boolean column stored as INTEGER on sqlite must be type-compatible with the target boolean type.'
+        );
+    }
+
+    public function testPgsqlBoolAndIntAreNotTypeCompatible(): void
+    {
+        $method = new \ReflectionMethod(SchemaSyncEngine::class, 'areTypesCompatible');
+
+        $engine = $method->invoke(
+            $this->engine,
+            'int',
+            'boolean',
+            'pgsql'
+        );
+
+        $this->assertFalse($engine, 'On pgsql BOOLEAN is a distinct physical type from INT');
+    }
+
+    public function testSqliteBoolAndIntAreTypeCompatible(): void
+    {
+        $method = new \ReflectionMethod(SchemaSyncEngine::class, 'areTypesCompatible');
+
+        $compatible = $method->invoke($this->engine, 'int', 'boolean', 'sqlite');
+
+        $this->assertTrue($compatible, 'On sqlite BOOLEAN is stored as INTEGER, so int and boolean are the same physical type');
     }
 }
