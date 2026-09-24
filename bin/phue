@@ -11,6 +11,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Phue\Core\Console\Application;
 use Phue\Core\Config;
+use Phue\Core\Env;
 use Phue\Core\Module;
 use Phue\Core\Console\Commands\NewProjectCommand;
 use Phue\Core\Console\Commands\DeployCommand;
@@ -30,6 +31,7 @@ use Phue\Core\Console\Commands\OptimizeCommand;
 use Phue\Core\Console\CommandInterface;
 
 $basePath = dirname(__DIR__);
+Env::load($basePath);
 $config = new Config($basePath . '/config');
 $modules = (array) $config->get('app.modules', []);
 
