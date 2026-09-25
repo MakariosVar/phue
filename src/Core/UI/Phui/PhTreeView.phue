@@ -21,11 +21,9 @@
 </template>
 
 <script>
-import PhTreeNode from './PhTreeNode.phue';
 
 export default {
   name: 'PhTreeView',
-  components: { PhTreeNode },
   props: {
     nodes: {
       type: Array,
