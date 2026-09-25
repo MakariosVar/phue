@@ -5,7 +5,9 @@
   "fileTypes": ["phue"],
   "patterns": [
     { "include": "#blocks" },
-    { "include": "#generic-markup" }
+    { "include": "#phui-tags" },
+    { "include": "#template-tag" },
+    { "include": "#template-close" }
   ],
   "repository": {
     "blocks": {
@@ -15,9 +17,53 @@
         { "include": "#block-php" }
       ]
     },
-    "generic-markup": {
-      "match": "<[^>]+>",
-      "name": "meta.tag.phue"
+    "template-tag": {
+      "begin": "(<)(template)\\b",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" }
+      },
+      "end": "(/?)>",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "patterns": [
+        { "include": "#vue-attribute" }
+      ]
+    },
+    "template-close": {
+      "match": "(</)(template)(>)",
+      "captures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      }
+    },
+    "phui-tags": {
+      "patterns": [
+        {
+          "begin": "(<)(ph-[\\w-]+)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.begin.phue" },
+            "2": { "name": "entity.name.tag.phue" }
+          },
+          "end": "(/?)>",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.tag.end.phue" }
+          },
+          "patterns": [
+            { "include": "#vue-attribute" }
+          ]
+        },
+        {
+          "match": "(</)(ph-[\\w-]+)(>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.tag.begin.phue" },
+            "2": { "name": "entity.name.tag.phue" },
+            "3": { "name": "punctuation.definition.tag.end.phue" }
+          }
+        }
+      ]
     },
     "block-template": {
       "begin": "^(\\s*)(<)(template)(\\b[^>]*)>",
