@@ -3,13 +3,17 @@ export type PhueBlock = 'template' | 'script' | 'php' | 'none';
 const BLOCK_RE = /<(template|script|php)(?=[\s/>])|<\/(template|script|php)>/g;
 
 export function detectBlock(textBefore: string): PhueBlock {
-  let block: PhueBlock = 'none';
+  const stack: PhueBlock[] = [];
   let m: RegExpExecArray | null;
   BLOCK_RE.lastIndex = 0;
   while ((m = BLOCK_RE.exec(textBefore)) !== null) {
-    block = m[0][1] === '/' ? 'none' : (m[1] as PhueBlock);
+    if (m[0][1] === '/') {
+      stack.pop();
+    } else {
+      stack.push(m[1] as PhueBlock);
+    }
   }
-  return block;
+  return stack.length > 0 ? stack[stack.length - 1] : 'none';
 }
 
 export function inNamePosition(lineBefore: string): boolean {

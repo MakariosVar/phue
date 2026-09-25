@@ -65,6 +65,25 @@
         }
       ]
     },
+    "vue-template": {
+      "begin": "(<)(template)\\b",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" }
+      },
+      "end": "(</)(template)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "patterns": [
+        { "include": "#vue-attribute" },
+        { "include": "#vue-interpolation" },
+        { "include": "#vue-template" },
+        { "include": "text.html.basic" }
+      ]
+    },
     "block-template": {
       "begin": "^(\\s*)(<)(template)(\\b[^>]*)>",
       "beginCaptures": {
@@ -83,6 +102,7 @@
       "patterns": [
         { "include": "#vue-attribute" },
         { "include": "#vue-interpolation" },
+        { "include": "#vue-template" },
         { "include": "text.html.basic" }
       ]
     },

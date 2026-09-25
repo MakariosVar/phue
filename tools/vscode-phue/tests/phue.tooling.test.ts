@@ -185,15 +185,14 @@ test('nested template tags at same indentation are highlighted correctly', async
 
     if (line.includes('<template #demo>')) {
       inInnerTemplate = true;
-      // Inner template should be handled by HTML grammar, not as a Phue block
-      expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+      // Inner template is handled by the Phue vue-template rule, not HTML grammar
+      expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
     }
 
     // Track closing of inner template
     if (inInnerTemplate && line.includes('</template>') && !outerTemplateClosed) {
       innerTemplateClosed = true;
       inInnerTemplate = false;
-      // Inner closing tag should have Phue scope (fallback when HTML grammar can't match)
       expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
     }
 
@@ -252,8 +251,8 @@ test('template with multiple nested slot templates', async () => {
 
     if (line.includes('<template #')) {
       slotCount++;
-      // Slot templates should be handled by HTML grammar
-      expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+      // Slot templates are handled by the Phue vue-template rule
+      expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
     }
 
     if (inOuterTemplate && line.includes('<ph-card>')) {
@@ -264,7 +263,7 @@ test('template with multiple nested slot templates', async () => {
     if (line.trim() === '</template>' && inOuterTemplate) {
       if (slotCount > 0) {
         slotCount--;
-        expect(scopes.some((s) => s === 'entity.name.tag.html')).toBe(true);
+        expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
       } else {
         expect(scopes.some((s) => s === 'entity.name.tag.phue')).toBe(true);
         expect(scopes.some((s) => s === 'punctuation.definition.tag.end.phue')).toBe(true);

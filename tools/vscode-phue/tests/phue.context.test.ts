@@ -20,6 +20,13 @@ test('detectBlock tracks the innermost open block', () => {
   expect(detectBlock('before text <script> import x from "y"; ')).toBe('script');
 });
 
+test('detectBlock handles nested template tags', () => {
+  // Nested <template> (Vue fragments) should not close the outer block
+  expect(detectBlock('<template>\n  <template v-for="x in xs">\n    <div></div>\n  </template>')).toBe('template');
+  expect(detectBlock('<template>\n  <template v-if="cond">\n    <span></span>\n  </template>\n</template>')).toBe('none');
+  expect(detectBlock('<template>\n  <template #header>\n    <ph-heading />\n  </template>\n</template>')).toBe('none');
+});
+
 test('inNamePosition flags only start-tag name slots', () => {
   expect(inNamePosition('<')).toBe(true);
   expect(inNamePosition('< ')).toBe(true);
