@@ -594,22 +594,22 @@ Code block with syntax highlighting (Prism.js), line numbers, copy button, and a
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `code` | `String` | **required** | Source code |
-| `language` | `String` | `'text'` | Prism language id |
+| `language` | `String` | `'text'` | Prism language id; aliases resolved internally (e.g. `js`→`javascript`, `html`→`markup`, `sh`→`bash`) |
 | `lineNumbers` | `Boolean` | `false` | Show line numbers (plugin) |
 | `copyable` | `Boolean` | `true` | Show copy button |
 | `wrap` | `Boolean` | `false` | Wrap long lines |
 | `maxHeight` | `String \| Number` | `'400px'` | Max height |
-| `theme` | `String` | `'tomorrow'` | Active theme (read-only; the picker writes local state) |
+| `theme` | `String` | `'twilight'` | Active theme (read-only; the picker writes local `activeTheme` state and emits `theme-change`) |
 | `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
-| `themes` | `Array` | built-in list | Available theme names |
-| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root |
+| `themes` | `Array` | `['coy','dark','funky','okaidia','solarizedlight','tomorrow','twilight']` | Available theme names |
+| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root (trailing slash normalized) |
 
 Emits: `copy(code)`, `theme-change(themeName)`. No slots.
 
-The header shows the language label, a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets.
+The header shows the language label (human-readable alias, e.g. `PHP` not `php`), a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets. The `data-ph-highlighted="1"` attribute on `<code>` signals a successful highlight pass. Copy uses the Clipboard API with an `execCommand` fallback; failures do not stick the button in a copied state.
 
 ```
-<ph-code language="php" :code="$code" copyable theme="tomorrow" />
+<ph-code language="php" :code="$code" copyable theme="twilight" />
 <ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
 ```
 
@@ -1518,22 +1518,22 @@ Code block with syntax highlighting (Prism.js), line numbers, copy button, and a
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `code` | `String` | **required** | Source code |
-| `language` | `String` | `'text'` | Prism language id |
+| `language` | `String` | `'text'` | Prism language id; aliases resolved internally (e.g. `js`→`javascript`, `html`→`markup`, `sh`→`bash`) |
 | `lineNumbers` | `Boolean` | `false` | Show line numbers (plugin) |
 | `copyable` | `Boolean` | `true` | Show copy button |
 | `wrap` | `Boolean` | `false` | Wrap long lines |
 | `maxHeight` | `String \| Number` | `'400px'` | Max height |
-| `theme` | `String` | `'tomorrow'` | Active theme (read-only; the picker writes local state) |
+| `theme` | `String` | `'twilight'` | Active theme (read-only; the picker writes local `activeTheme` state and emits `theme-change`) |
 | `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
-| `themes` | `Array` | built-in list | Available theme names |
-| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root |
+| `themes` | `Array` | `['coy','dark','funky','okaidia','solarizedlight','tomorrow','twilight']` | Available theme names |
+| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root (trailing slash normalized) |
 
 Emits: `copy(code)`, `theme-change(themeName)`. No slots.
 
-The header shows the language label, a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets.
+The header shows the language label (human-readable alias, e.g. `PHP` not `php`), a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets. The `data-ph-highlighted="1"` attribute on `<code>` signals a successful highlight pass. Copy uses the Clipboard API with an `execCommand` fallback; failures do not stick the button in a copied state.
 
 ```
-<ph-code language="php" :code="$code" copyable theme="tomorrow" />
+<ph-code language="php" :code="$code" copyable theme="twilight" />
 <ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
 ```
 
