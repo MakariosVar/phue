@@ -95,24 +95,66 @@ slot wins when present.
 
 ### `<ph-button>`
 
-Button with variant, size, block, loading and disabled states.
+Button with variant, size, block, loading and disabled states. **All Bootstrap 5 button variants are supported.**
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `type` | `String` | `'button'` | Native button type |
-| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `outline` \| `ghost` \| `danger` |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `type` | `String` | `'button'` | Native button type (`button`, `submit`, `reset`) |
+| `variant` | `String` | `'primary'` | Any Bootstrap 5 button variant (see table below) |
+| `size` | `String` | `'md'` | `sm` (btn-sm) \| `md` (default) \| `lg` (btn-lg) |
 | `block` | `Boolean` | `false` | Full width (`w-100`) |
 | `disabled` | `Boolean` | `false` | |
 | `loading` | `Boolean` | `false` | Shows spinner, disables button |
 
 Emits: `click`.
 
+**Solid variants:**
+
+| Variant | Bootstrap Class | Use Case |
+|---|---|---|
+| `primary` | `btn-primary` | Primary actions |
+| `secondary` | `btn-secondary` | Secondary actions |
+| `success` | `btn-success` | Success/confirm actions |
+| `danger` | `btn-danger` | Destructive actions |
+| `warning` | `btn-warning` | Warning/caution actions |
+| `info` | `btn-info` | Informational actions |
+| `light` | `btn-light` | Light background |
+| `dark` | `btn-dark` | Dark background |
+| `link` / `ghost` | `btn-link` | Minimal/ghost button |
+
+**Outline variants:**
+
+| Variant | Bootstrap Class | Use Case |
+|---|---|---|
+| `outline-primary` | `btn-outline-primary` | Outlined primary |
+| `outline-secondary` | `btn-outline-secondary` | Outlined secondary |
+| `outline-success` | `btn-outline-success` | Outlined success |
+| `outline-danger` | `btn-outline-danger` | Outlined danger |
+| `outline-warning` | `btn-outline-warning` | Outlined warning |
+| `outline-info` | `btn-outline-info` | Outlined info |
+| `outline-light` | `btn-outline-light` | Outlined light |
+| `outline-dark` | `btn-outline-dark` | Outlined dark |
+
 ```
 <ph-button variant="primary" @click="save">Save</ph-button>
-<ph-button variant="outline" size="sm">Cancel</ph-button>
+<ph-button variant="secondary">Secondary</ph-button>
+<ph-button variant="success">Success</ph-button>
 <ph-button variant="danger" loading>Deleting…</ph-button>
-<ph-button variant="ghost" block>Full width ghost</ph-button>
+<ph-button variant="warning">Warning</ph-button>
+<ph-button variant="info">Info</ph-button>
+<ph-button variant="outline-primary">Outline Primary</ph-button>
+<ph-button variant="outline-secondary">Outline Secondary</ph-button>
+<ph-button variant="outline-danger">Outline Danger</ph-button>
+<ph-button variant="outline-warning">Outline Warning</ph-button>
+<ph-button variant="link">Link / Ghost</ph-button>
+<ph-button variant="primary" block>Full width</ph-button>
+<ph-button variant="outline-danger" disabled>Disabled</ph-button>
+
+<!-- With icons -->
+<ph-button variant="primary">
+  <ph-icon name="download" size="sm" class="me-1" />
+  Download
+</ph-button>
 ```
 
 ### `<ph-input>`
