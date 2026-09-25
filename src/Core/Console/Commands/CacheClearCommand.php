@@ -17,6 +17,7 @@ use Phue\Core\Console\PathResolver;
  *   - views:   Compiled PHP views (storage/cache/views/*.php)
  *   - schemas: Generated database schemas (storage/generated/schemas/*)
  *   - logs:    Application logs (storage/logs/*)
+ *   - ssr:     SSR compiled modules (ssr/.cache/*.mjs)
  *
  * Usage:
  *   cache:clear                    # clears all (default)
@@ -35,11 +36,12 @@ final class CacheClearCommand implements CommandInterface
      * @var array<string, list<string>>
      */
     private const TYPES = [
-        'all'     => ['general', 'views', 'schemas', 'logs'],
+        'all'     => ['general', 'views', 'schemas', 'logs', 'ssr'],
         'general' => ['general'],
         'views'   => ['views'],
         'schemas' => ['schemas'],
         'logs'    => ['logs'],
+        'ssr'     => ['ssr'],
     ];
 
     /**
@@ -76,7 +78,7 @@ final class CacheClearCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Clears application cache. Usage: cache:clear [--type=all|general|views|schemas|logs] (default: all)';
+        return 'Clears application cache. Usage: cache:clear [--type=all|general|views|schemas|logs|ssr] (default: all)';
     }
 
     /**
@@ -157,6 +159,20 @@ final class CacheClearCommand implements CommandInterface
                         }
                     }
                     fwrite($outputStream, "  ✓ Logs cleared ({$count} files)\n");
+                    break;
+
+                case 'ssr':
+                    $ssrCacheDir = $basePath . '/ssr/.cache';
+                    $files = glob($ssrCacheDir . '/*');
+                    $count = 0;
+                    if ($files !== false) {
+                        foreach ($files as $file) {
+                            if (is_file($file) && unlink($file)) {
+                                $count++;
+                            }
+                        }
+                    }
+                    fwrite($outputStream, "  ✓ SSR cache cleared ({$count} files)\n");
                     break;
             }
         }
