@@ -274,7 +274,7 @@ export default {
         html: 'HTML', css: 'CSS', js: 'JavaScript', ts: 'TypeScript', php: 'PHP',
         python: 'Python', bash: 'Bash', sh: 'Shell', json: 'JSON', yaml: 'YAML',
         sql: 'SQL', markdown: 'Markdown', dockerfile: 'Dockerfile', nginx: 'Nginx',
-        vue: 'Vue', jsx: 'JSX', tsx: 'TSX',
+        vue: 'Vue', jsx: 'JSX', tsx: 'TSX', phue: 'phue'
       };
       return aliases[this.language] || String(this.language || 'text').toUpperCase();
     },
@@ -284,7 +284,7 @@ export default {
         js: 'javascript', mjs: 'javascript', ts: 'typescript',
         sh: 'bash', shell: 'bash', zsh: 'bash', py: 'python', rb: 'ruby',
         cs: 'csharp', 'c#': 'csharp', 'c++': 'cpp', golang: 'go', kt: 'kotlin',
-        yml: 'yaml', md: 'markdown', dockerfile: 'docker', txt: 'text',
+        yml: 'yaml', md: 'markdown', dockerfile: 'docker', txt: 'text', phue: 'markup',
       };
       const normalized = String(this.language || 'text').trim().toLowerCase();
       return aliases[normalized] || normalized;
