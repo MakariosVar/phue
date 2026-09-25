@@ -74,10 +74,22 @@
     });
   });
 
+  // Module/outer-scope variable to hold the active AbortController
+  let currentNavigationController = null;
+
   async function navigate(url, pushState = true) {
+    // 0. Cancel any in-flight navigation request before starting a new one
+    if (currentNavigationController) {
+      currentNavigationController.abort();
+    }
+    
+    const controller = new AbortController();
+    currentNavigationController = controller;
+
     try {
-      // 1. Fetch payload
+      // 1. Fetch payload with signal attached
       const response = await fetch(url, {
+        signal: controller.signal,
         headers: {
           'X-Phue-SPA': 'true'
         }
@@ -103,19 +115,22 @@
 
       // 5. Update #app DOM content & State
       const appContainer = document.getElementById('app');
-      if (appContainer && payload.html) {
-        if (window.__phueApp && typeof window.__phueApp.unmount === 'function') {
-          window.__phueApp.unmount();
-          window.__phueApp = null;
-        }
-
-        appContainer.innerHTML = payload.html;
-        window.__INITIAL_STATE__ = payload.state || {};
+      const mounted = appContainer.__vue_app__;
+      window.__phueApp = null;
+      if (mounted && typeof mounted.unmount === 'function') mounted.unmount();
+      
+      // Clear children properly before innerHTML assignment
+      while (appContainer.firstChild) {
+        appContainer.removeChild(appContainer.firstChild);
       }
+      appContainer.innerHTML = payload.html || '';
+      window.__INITIAL_STATE__ = payload.state || {};
 
       // 6. Execute newly loaded page script modules
       if (Array.isArray(payload.scripts)) {
         for (const scriptUrl of payload.scripts) {
+          // Stop execution if navigation was aborted mid-script loading
+          if (controller.signal.aborted) return;
           await loadAndMountModule(scriptUrl);
         }
       }
@@ -141,9 +156,19 @@
       }));
 
     } catch (err) {
+      // Ignore explicit cancellation errors
+      if (err.name === 'AbortError') {
+        return;
+      }
+
       console.error('SPA Navigation error:', err);
       // Hard fallback on error (resets state cleanly if pushState occurred before mount failure)
       window.location.href = url;
+    } finally {
+      // Clear controller reference if this invocation was the active one
+      if (currentNavigationController === controller) {
+        currentNavigationController = null;
+      }
     }
   }
 
