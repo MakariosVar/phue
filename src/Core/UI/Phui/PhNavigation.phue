@@ -107,7 +107,7 @@
 </template>
 
 <script>
-import { createSSRApp, computed } from 'vue';
+import { createSSRApp, createApp, computed } from 'vue';
 
 const options = {
   props: {
@@ -169,17 +169,22 @@ if (typeof window !== 'undefined') {
     const el = document.getElementById('nav');
     if (!el) return;
 
-    // Clean up existing instance if present
-    if (window.__phueNavApp && typeof window.__phueNavApp.unmount === 'function') {
-      window.__phueNavApp.unmount();
-      window.__phueNavApp = null;
+    // Unmount the previous app FIRST — Vue clears #nav AND deletes
+    // __vue_app__, so the next mount starts from a clean container.
+    const previous = window.__phueNavApp;
+    window.__phueNavApp = null;
+    if (previous && typeof previous.unmount === 'function') {
+      previous.unmount();
     }
 
-    el.innerHTML = ''; // Clear stale markup to avoid hydration mismatch
-
     const initialState = navState || window.__NAV_STATE__ || {};
-    const app = createSSRApp(options, initialState);
-    window.__phueNavApp = app.mount(el);
+    // First mount hydrates the server-rendered nav; re-mounts (SPA
+    // navigations) do a full client render so they never hydrate an
+    // empty container.
+    const AppCtor = previous ? createApp : createSSRApp;
+    const app = AppCtor(options, initialState);
+    app.mount(el);
+    window.__phueNavApp = app;
   };
 
   document.addEventListener('DOMContentLoaded', () => {
