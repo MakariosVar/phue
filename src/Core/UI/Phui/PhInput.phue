@@ -1,5 +1,5 @@
 <template>
-  <div class="mb-3">
+  <div :class="class">
     <label v-if="label" :for="inputId" class="form-label">
       {{ label }}
       <span v-if="required" class="text-danger">*</span>
@@ -67,6 +67,10 @@ export default {
     required: {
       type: Boolean,
       default: false
+    },
+    class: {
+      type: String,
+      default: 'mb-3'
     }
   },
   setup () {
