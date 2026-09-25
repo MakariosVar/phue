@@ -1,91 +1,445 @@
 <template>
-  <div
-    data-phui="code"
-    class="ph-code"
-  >
-    <div class="ph-code-header d-flex justify-content-between align-items-center p-2 border-bottom" v-if="language || copyable">
-      <span class="ph-code-language text-body-secondary small text-uppercase">{{ language }}</span>
-      <ph-button
-        v-if="copyable"
-        size="sm"
-        variant="ghost"
-        @click="copy"
-        :loading="copying"
-      >
-        <ph-icon v-if="!copied" name="clipboard" size="sm" />
-        <ph-icon v-else name="check" size="sm" variant="success" />
-      </ph-button>
+  <div class="ph-code border rounded position-relative bg-body-secondary" data-phui="code">
+    <div
+      v-if="language || copyable || themeSwitcher"
+      class="ph-code-header d-flex justify-content-between align-items-center px-3 py-2 border-bottom rounded-top bg-body-tertiary"
+    >
+      <span class="ph-code-language text-body-secondary small text-uppercase fw-semibold">{{ languageLabel }}</span>
+      <div class="d-flex align-items-center gap-2">
+        <ph-dropdown
+          v-if="themeSwitcher"
+          variant="ghost"
+          size="sm"
+          align="end"
+          :items="themeItems"
+          @select="selectTheme"
+        >
+          <template #trigger="{ open, toggle }">
+            <button
+              type="button"
+              class="btn btn-link btn-sm d-inline-flex align-items-center text-body-secondary theme-picker"
+              :aria-expanded="open ? 'true' : 'false'"
+              title="Code theme"
+              @click="toggle"
+            >
+              <ph-icon name="paint-bucket" size="sm" class="me-1" />
+              <span class="small">{{ activeThemeLabel }}</span>
+              <ph-icon
+                name="chevron-down"
+                size="sm"
+                class="ms-1"
+                :style="{ transition: 'transform 0.15s ease', transform: open ? 'rotate(180deg)' : 'none' }"
+              />
+            </button>
+          </template>
+        </ph-dropdown>
+        <button
+          v-if="copyable"
+          type="button"
+          class="btn btn-link btn-sm ph-code-copy"
+          @click="copy"
+          :disabled="copying"
+          :aria-label="copied ? 'Copied' : 'Copy to clipboard'"
+        >
+          <i v-if="!copied" class="bi bi-clipboard"></i>
+          <i v-else class="bi bi-check" style="color:var(--bs-success,green);"></i>
+        </button>
+      </div>
     </div>
-    <pre class="ph-code-pre m-0 p-3 overflow-auto" :style="{ maxHeight: maxHeight }">
-      <code
-        :class="`language-${language}`"
-        v-html="highlightedCode"
-      ></code>
-    </pre>
+    <pre
+      class="ph-code-pre m-0 p-3 overflow-auto rounded-bottom font-monospace small mb-0"
+      :class="[codeClasses, { 'line-numbers': lineNumbers }]"
+      :style="preStyles"
+    ><code
+      ref="codeEl"
+      :class="[codeClasses, { 'line-numbers': lineNumbers }]"
+      :data-ph-highlighted="highlighted ? '1' : '0'"
+      v-text="code"
+    ></code></pre>
   </div>
 </template>
 
 <script>
+// Prism is served same-origin by the framework's npm vendor pipeline
+// (`bin/phue npm:install prismjs` -> /assets/vendor/prismjs). It has to be
+// same-origin: SecurityMiddleware ships `script-src 'self'; style-src 'self'`,
+// so any third-party origin is blocked and the block stays plain text forever.
+const DEFAULT_ASSET_BASE = '/assets/vendor/prismjs';
+const LOAD_TIMEOUT = 10000;
+const PLAIN_LANGUAGES = ['', 'none', 'plain', 'text', 'txt'];
+
+// Mirrors storage/assets/vendor/prismjs/themes/ as shipped by `npm:install
+// prismjs`. The browser cannot list a directory, so the picker is a static
+// list; a theme dropped in by hand is reachable via the `themes` prop.
+const THEMES = ['coy', 'dark', 'funky', 'okaidia', 'solarizedlight', 'tomorrow', 'twilight'];
+
+const THEME_LABELS = {
+  coy: 'Coy',
+  dark: 'Dark',
+  funky: 'Funky',
+  okaidia: 'Okaidia',
+  solarizedlight: 'Solarized Light',
+  tomorrow: 'Tomorrow',
+  twilight: 'Twilight',
+};
+
+// url -> promise, so N PhCode blocks on a page share one request per asset.
+const inflight = new Map();
+
+let corePromise = null;
+let lineNumbersPromise = null;
+let hasWarned = false;
+
+function warnOnce(message) {
+  if (!hasWarned) {
+    hasWarned = true;
+    console.warn('[PhCode] ' + message);
+  }
+}
+
+function withTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(false), LOAD_TIMEOUT)),
+  ]);
+}
+
+function loadScript(base, path) {
+  const url = base + path;
+  let pending = inflight.get(url);
+
+  if (!pending) {
+    pending = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.addEventListener('load', () => resolve(true), { once: true });
+      script.addEventListener('error', () => reject(new Error('Cannot load ' + url)), { once: true });
+      document.head.appendChild(script);
+    }).catch((error) => {
+      // Drop the rejection so a later block (or a retry) can try again.
+      inflight.delete(url);
+      throw error;
+    });
+
+    inflight.set(url, pending);
+  }
+
+  return pending;
+}
+
+function loadStyle(base, path, marker) {
+  if (document.querySelector('link[data-prism-css="' + marker + '"]')) {
+    return;
+  }
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = base + path;
+  link.setAttribute('data-prism-css', marker);
+  document.head.appendChild(link);
+}
+
+/**
+ * Injects the theme stylesheet, dropping any previously injected one.
+ *
+ * Both sheets target the same `.token` selectors with equal specificity, so the
+ * later <link> wins: keeping the old one would make a theme switch a silent
+ * no-op the second time round (A -> B -> A leaves [A, B] in the head).
+ */
+function setTheme(base, theme) {
+  // The theme name reaches a URL, so it is validated before interpolation.
+  if (!/^[a-z0-9-]+$/i.test(theme || '')) {
+    return;
+  }
+
+  const href = base + '/themes/prism-' + theme + '.min.css';
+  const current = document.querySelector('link[data-prism-css^="theme-"]');
+
+  // Already applied: leave the link alone. highlight() runs again on every code
+  // or language change, and removing a live <link> would re-fetch the sheet and
+  // flash the block unstyled.
+  if (current && current.getAttribute('href') === href) {
+    return;
+  }
+
+  document.querySelectorAll('link[data-prism-css^="theme-"]').forEach((link) => link.remove());
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.setAttribute('data-prism-css', 'theme-' + theme);
+  document.head.appendChild(link);
+}
+
+function ensureCore(base) {
+  if (window.Prism) {
+    return Promise.resolve(true);
+  }
+
+  if (!corePromise) {
+    corePromise = (async () => {
+      try {
+        await loadScript(base, '/components/prism-core.min.js');
+        await loadScript(base, '/plugins/autoloader/prism-autoloader.min.js');
+
+        const autoloader = window.Prism.plugins.autoloader;
+        autoloader.languages_path = base + '/components/';
+        autoloader.use_minified = true;
+        return true;
+      } catch (error) {
+        corePromise = null;
+        warnOnce('Prism assets are missing — run `bin/phue npm:install prismjs`, showing plain code.');
+        return false;
+      }
+    })();
+  }
+
+  return corePromise;
+}
+
+function ensureLineNumbers(base) {
+  if (!lineNumbersPromise) {
+    lineNumbersPromise = (async () => {
+      loadStyle(base, '/plugins/line-numbers/prism-line-numbers.min.css', 'line-numbers');
+      try {
+        await loadScript(base, '/plugins/line-numbers/prism-line-numbers.min.js');
+        return true;
+      } catch (error) {
+        return false;
+      }
+    })();
+  }
+
+  return lineNumbersPromise;
+}
+
+/**
+ * Resolves once the grammar is registered in Prism.languages.
+ *
+ * Must be awaited BEFORE highlightElement: the autoloader only reacts to
+ * Prism's "complete" hook, i.e. after a pass, so highlighting first would
+ * render raw text and nothing would re-run it.
+ */
+function ensureGrammar(language) {
+  if (!window.Prism || PLAIN_LANGUAGES.indexOf(language) !== -1 || window.Prism.languages[language]) {
+    return Promise.resolve(true);
+  }
+
+  const autoloader = window.Prism.plugins.autoloader;
+  if (!autoloader || typeof autoloader.loadLanguages !== 'function') {
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (!settled) {
+        settled = true;
+        resolve(!!window.Prism.languages[language]);
+      }
+    };
+    autoloader.loadLanguages([language], done, done);
+  });
+}
+
 export default {
   name: 'PhCode',
   props: {
-    code: {
-      type: String,
-      required: true
-    },
-    language: {
-      type: String,
-      default: 'text'
-    },
-    lineNumbers: {
-      type: Boolean,
-      default: false
-    },
-    copyable: {
-      type: Boolean,
-      default: true
-    },
-    wrap: {
-      type: Boolean,
-      default: false
-    },
-    maxHeight: {
-      type: [String, Number],
-      default: '400px'
-    }
+    code: { type: String, required: true },
+    language: { type: String, default: 'text' },
+    lineNumbers: { type: Boolean, default: false },
+    copyable: { type: Boolean, default: true },
+    wrap: { type: Boolean, default: false },
+    maxHeight: { type: [String, Number], default: '400px' },
+    theme: { type: String, default: 'okaidia' },
+    themeSwitcher: { type: Boolean, default: true },
+    themes: { type: Array, default: () => THEMES },
+    assetBase: { type: String, default: DEFAULT_ASSET_BASE },
   },
-  emits: ['copy'],
+  emits: ['copy', 'theme-change'],
   data() {
     return {
       copied: false,
-      copying: false
+      copying: false,
+      highlighted: false,
+      // True until the first highlight pass settles, whatever its outcome.
+      pending: true,
+      // Local copy of `theme`: the picker writes here, the prop stays read-only.
+      activeTheme: this.theme,
+      unwatch: [],
     };
   },
   computed: {
-    highlightedCode() {
-      return this.escapeHtml(this.code);
-    }
+    languageLabel() {
+      const aliases = {
+        html: 'HTML', css: 'CSS', js: 'JavaScript', ts: 'TypeScript', php: 'PHP',
+        python: 'Python', bash: 'Bash', sh: 'Shell', json: 'JSON', yaml: 'YAML',
+        sql: 'SQL', markdown: 'Markdown', dockerfile: 'Dockerfile', nginx: 'Nginx',
+        vue: 'Vue', jsx: 'JSX', tsx: 'TSX',
+      };
+      return aliases[this.language] || String(this.language || 'text').toUpperCase();
+    },
+    prismLanguage() {
+      const aliases = {
+        vue: 'markup', html: 'markup', xml: 'markup', svg: 'markup',
+        js: 'javascript', mjs: 'javascript', ts: 'typescript',
+        sh: 'bash', shell: 'bash', zsh: 'bash', py: 'python', rb: 'ruby',
+        cs: 'csharp', 'c#': 'csharp', 'c++': 'cpp', golang: 'go', kt: 'kotlin',
+        yml: 'yaml', md: 'markdown', dockerfile: 'docker', txt: 'text',
+      };
+      const normalized = String(this.language || 'text').trim().toLowerCase();
+      return aliases[normalized] || normalized;
+    },
+    codeClasses() {
+      return 'language-' + this.prismLanguage.replace(/[^a-z0-9-]/g, '');
+    },
+    assetRoot() {
+      return this.assetBase.replace(/\/+$/, '');
+    },
+    preStyles() {
+      return {
+        maxHeight: typeof this.maxHeight === 'number' ? this.maxHeight + 'px' : this.maxHeight,
+        whiteSpace: this.wrap ? 'pre-wrap' : 'pre',
+        // Prism has to tokenize after 2-3 network round-trips, and the theme
+        // background only exists once its stylesheet lands. The block is server
+        // rendered and readable, so the honest fix is a soft pending state, not
+        // v-cloak (which would hide real content) and not a skeleton (which
+        // would replace readable code with a placeholder).
+        opacity: this.pending ? 0.55 : 1,
+        transition: 'opacity 0.15s ease',
+      };
+    },
+    activeThemeLabel() {
+      return THEME_LABELS[this.activeTheme] || this.activeTheme;
+    },
+    themeItems() {
+      return this.themes.map((name) => ({
+        value: name,
+        label: THEME_LABELS[name] || name,
+        icon: name === this.activeTheme ? 'check-lg' : null,
+      }));
+    },
   },
   methods: {
-    escapeHtml(str) {
-      return str
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
-        .replace(/"/g, '"')
-        .replace(/'/g, '&#039;');
+    selectTheme(item) {
+      if (!item || !item.value || item.value === this.activeTheme) {
+        return;
+      }
+
+      this.activeTheme = item.value;
+      this.$emit('theme-change', item.value);
+    },
+    async loadPrism() {
+      const base = this.assetRoot;
+
+      // Theme before the await: the stylesheet does not depend on the JS and the
+      // browser fetches it in parallel. Awaiting core + autoloader first kept the
+      // block on the page background (white) for two extra round-trips, which is
+      // exactly the "white block, then it jumps dark" flash on load.
+      // The theme name reaches a URL, so it is validated before interpolation.
+      setTheme(base, this.activeTheme);
+
+      if (!(await withTimeout(ensureCore(base)))) {
+        return false;
+      }
+
+      if (this.lineNumbers) {
+        await withTimeout(ensureLineNumbers(base));
+      }
+
+      return true;
+    },
+    async highlight() {
+      const el = this.$refs.codeEl;
+      if (!el) {
+        return;
+      }
+
+      try {
+        // Prism rewrote innerHTML on the previous pass: re-seed from the prop so a
+        // language switch cannot re-tokenize Prism's own markup, and re-apply the
+        // class the plugin stripped from <code> (Vue will not re-patch it).
+        el.textContent = this.code;
+        el.classList.toggle('line-numbers', this.lineNumbers);
+
+        if (!(await this.loadPrism())) {
+          this.highlighted = false;
+          return;
+        }
+
+        this.highlighted = await withTimeout(ensureGrammar(this.prismLanguage));
+
+        try {
+          window.Prism.highlightElement(el, false);
+        } catch (e) {
+          this.highlighted = false;
+          console.warn('[PhCode] Highlight failed:', e);
+        }
+      } finally {
+        // Always, in a finally: `pending` is a "first pass done" flag, not a
+        // "highlighted" flag. Clearing it only on success would leave every
+        // plain-text block and every missing-vendor block permanently dimmed.
+        this.pending = false;
+      }
     },
     async copy() {
       this.copying = true;
       try {
-        await navigator.clipboard.writeText(this.code);
+        const text = this.code;
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:1';
+          document.body.appendChild(textarea);
+          textarea.select();
+          const copied = document.execCommand('copy');
+          document.body.removeChild(textarea);
+          if (!copied) {
+            throw new Error('execCommand copy returned false');
+          }
+        }
         this.copied = true;
-        this.$emit('copy', this.code);
+        this.$emit('copy', text);
         setTimeout(() => { this.copied = false; }, 2000);
+      } catch (e) {
+        console.warn('[PhCode] Copy failed:', e);
+        this.copied = false;
       } finally {
         this.copying = false;
       }
+    },
+  },
+  async mounted() {
+    await this.highlight();
+
+    this.unwatch = [
+      this.$watch(
+        () => [this.code, this.language, this.lineNumbers, this.theme, this.assetBase, this.activeTheme],
+        () => { this.$nextTick(() => this.highlight()); },
+      ),
+      // The page owns the `theme` prop: an external change outranks the local
+      // pick. Watched separately so a picker click is not bounced straight back
+      // by the very prop it is overriding.
+      this.$watch(() => this.theme, (value) => { this.activeTheme = value; }),
+    ];
+  },
+  beforeUnmount() {
+    for (const stop of this.unwatch) {
+      stop();
     }
-  }
+  },
 };
 </script>
+<php>
+/**
+ * PhCode - Syntax highlighted code block with copy button and line numbers.
+ * Loads Prism.js core + autoloader + theme on demand from the framework's own
+ * npm vendor pipeline (same origin, `bin/phue npm:install prismjs`); the
+ * autoloader then fetches the grammar per language, cached per page.
+ */
+return [
+    'title' => 'Code Block',
+    'state' => [],
+];
+</php>

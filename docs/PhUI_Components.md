@@ -589,21 +589,28 @@ Slots: `item-<key>` (scoped). No emits.
 
 ### `<ph-code>`
 
-Code block with syntax highlighting, line numbers, copy button.
+Code block with syntax highlighting (Prism.js), line numbers, copy button, and an interactive theme picker. Prism is loaded same-origin from the framework's npm vendor pipeline (`/assets/vendor/prismjs`); third-party CDN mirrors are blocked by `SecurityMiddleware` (`script-src 'self'`), so a missing vendor pipeline shows plain text with a console warning — run `bin/phue npm:install prismjs`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `code` | `String` | **required** | Source code |
 | `language` | `String` | `'text'` | Prism language id |
-| `lineNumbers` | `Boolean` | `false` | (planned) |
+| `lineNumbers` | `Boolean` | `false` | Show line numbers (plugin) |
 | `copyable` | `Boolean` | `true` | Show copy button |
 | `wrap` | `Boolean` | `false` | Wrap long lines |
 | `maxHeight` | `String \| Number` | `'400px'` | Max height |
+| `theme` | `String` | `'tomorrow'` | Active theme (read-only; the picker writes local state) |
+| `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
+| `themes` | `Array` | built-in list | Available theme names |
+| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root |
 
-Emits: `copy(code)`. No slots.
+Emits: `copy(code)`, `theme-change(themeName)`. No slots.
+
+The header shows the language label, a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets.
 
 ```
-<ph-code language="php" :code="$code" copyable max-height="300px" />
+<ph-code language="php" :code="$code" copyable theme="tomorrow" />
+<ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
 ```
 
 ### `<ph-tree-view>`
@@ -1506,21 +1513,28 @@ Emits: `select(node)`, `toggle(node)`, `check(node)`. Slots: `node-<key>` (scope
 
 ### `<ph-code>`
 
-Code block with syntax highlighting, line numbers, copy button.
+Code block with syntax highlighting (Prism.js), line numbers, copy button, and an interactive theme picker. Prism is loaded same-origin from the framework's npm vendor pipeline (`/assets/vendor/prismjs`); third-party CDN mirrors are blocked by `SecurityMiddleware` (`script-src 'self'`), so a missing vendor pipeline shows plain text with a console warning — run `bin/phue npm:install prismjs`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `code` | `String` | **required** | Source code |
 | `language` | `String` | `'text'` | Prism language id |
-| `lineNumbers` | `Boolean` | `false` | (planned) |
+| `lineNumbers` | `Boolean` | `false` | Show line numbers (plugin) |
 | `copyable` | `Boolean` | `true` | Show copy button |
 | `wrap` | `Boolean` | `false` | Wrap long lines |
 | `maxHeight` | `String \| Number` | `'400px'` | Max height |
+| `theme` | `String` | `'tomorrow'` | Active theme (read-only; the picker writes local state) |
+| `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
+| `themes` | `Array` | built-in list | Available theme names |
+| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root |
 
-Emits: `copy(code)`. No slots.
+Emits: `copy(code)`, `theme-change(themeName)`. No slots.
+
+The header shows the language label, a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets.
 
 ```
-<ph-code language="php" :code="$code" copyable max-height="300px" />
+<ph-code language="php" :code="$code" copyable theme="tomorrow" />
+<ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
 ```
 
 ### `<ph-stepper>`
