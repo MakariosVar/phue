@@ -17,6 +17,8 @@ return [
 <script>
 import { createSSRApp, ref } from 'vue';
 export default function mountApp() {
+    window.__phueApp?.unmount?.();
+
     window.__phueApp = createSSRApp({
         setup() {
             const testValue = ref(window.__INITIAL_STATE__.testValue);
