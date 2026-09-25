@@ -250,7 +250,7 @@ export default {
     copyable: { type: Boolean, default: true },
     wrap: { type: Boolean, default: false },
     maxHeight: { type: [String, Number], default: '400px' },
-    theme: { type: String, default: 'okaidia' },
+    theme: { type: String, default: 'twilight' },
     themeSwitcher: { type: Boolean, default: true },
     themes: { type: Array, default: () => THEMES },
     assetBase: { type: String, default: DEFAULT_ASSET_BASE },
