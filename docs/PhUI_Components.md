@@ -93,6 +93,28 @@ slot wins when present.
 
 ## 2. Form Controls
 
+### `<ph-button>`
+
+Button with variant, size, block, loading and disabled states.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `type` | `String` | `'button'` | Native button type |
+| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `outline` \| `ghost` \| `danger` |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `block` | `Boolean` | `false` | Full width (`w-100`) |
+| `disabled` | `Boolean` | `false` | |
+| `loading` | `Boolean` | `false` | Shows spinner, disables button |
+
+Emits: `click`.
+
+```
+<ph-button variant="primary" @click="save">Save</ph-button>
+<ph-button variant="outline" size="sm">Cancel</ph-button>
+<ph-button variant="danger" loading>Deleting…</ph-button>
+<ph-button variant="ghost" block>Full width ghost</ph-button>
+```
+
 ### `<ph-input>`
 
 Single-line text input with label, helper/error text, disabled/readonly states.
@@ -167,7 +189,7 @@ Emits: `update:modelValue`, `blur`, `focus`.
 
 ```
 <ph-textarea v-model="message" label="Message" :rows="5" resize="vertical"
-             helper-text="Max 500 characters." />
+              helper-text="Max 500 characters." />
 ```
 
 ### `<ph-checkbox>`
@@ -365,6 +387,73 @@ Emits: `update:modelValue`, `change`. No slots.
   { label: 'List', value: 'list', icon: 'list' }
 ]" />
 ```
+
+### `<ph-select3>`
+
+Searchable single/multiple select with chips (replaces the limits of the native
+`<ph-select>`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
+| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
+| `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `'Select…'` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `multiple` | `Boolean` | `false` | |
+| `searchable` | `Boolean` | `true` | |
+| `clearable` | `Boolean` | `false` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
+Slots: `footer` (scoped `{ close }`).
+
+### `<ph-file-input>`
+
+File picker with drag & drop, `accept`/`maxSize` validation and image previews.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Array` | `[]` | `File[]` |
+| `multiple` | `Boolean` | `false` | |
+| `accept` | `String` | `''` | Comma list of mime types / extensions |
+| `maxSize` | `Number` | `0` | Max bytes (`0` = unlimited) |
+| `dragDrop` | `Boolean` | `true` | |
+| `preview` | `Boolean` | `true` | Image thumbnails |
+| `label` | `String` | `''` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `change(files)`, `remove(file)`, `error(reason)`.
+
+### `<ph-date-picker>`
+
+Date / datetime picker with a self-contained calendar popover, or a native input
+via `native`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | ISO `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm` |
+| `mode` | `String` | `'date'` | `date` \| `datetime` |
+| `min` | `String` | `''` | ISO lower bound |
+| `max` | `String` | `''` | ISO upper bound |
+| `native` | `Boolean` | `false` | Use native `<input type=date>` |
+| `weekStart` | `Number` | `1` | `0` = Sunday |
+| `id` | `String` | `null` | Falls back to `ph-date-picker-<id>` |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `'Select date…'` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+| `clearable` | `Boolean` | `true` | |
+
+Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
 
 ---
 
@@ -630,6 +719,25 @@ Emits: `select(node)`, `toggle(node)`, `check(node)`. Slots: `node-<key>` (scope
 <ph-tree-view :nodes="treeData" :selected="selected" :expanded="expanded" checkable @select="onSelect" />
 ```
 
+### `<ph-accordion>`
+
+Collapsible panels with single/multiple open, flush style, v-model array.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `items` | `Array` | `[]` | `{label, content, icon?, active?, disabled?, key?}` |
+| `multiple` | `Boolean` | `false` | Allow multiple open |
+| `flush` | `Boolean` | `false` | Remove borders |
+| `modelValue` | `Array` | `[]` | Open panel keys/indices |
+
+Emits: `update:modelValue`. Slots: `item-<key>` (scoped).
+
+```
+<ph-accordion v-model="openPanels" :items="[
+  { label: 'Section 1', content: 'Details…', icon: 'chevron-right' }
+]" @update:modelValue="openPanels = $event" />
+```
+
 ---
 
 ## 4. Feedback
@@ -784,6 +892,80 @@ Emits: `show`, `hide`. Slots: `trigger`, `content`.
 </ph-popover>
 ```
 
+### `<ph-tooltip>`
+
+CSS-positioned tooltip (no Popper).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `content` | `String` | `''` | Or `content` slot |
+| `placement` | `String` | `'top'` | `top` \| `bottom` \| `start` \| `end` |
+| `trigger` | `String` | `'hover'` | `hover` \| `focus` \| `click` |
+| `delay` | `Number` | `120` | Show delay in ms |
+| `disabled` | `Boolean` | `false` | |
+| `variant` | `String` | `'dark'` | `dark` \| `light` |
+| `maxWidth` | `String` | `'260px'` | |
+
+No emits. Slots: default (trigger), `content`.
+
+### `<ph-drawer>`
+
+Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | |
+| `position` | `String` | `'end'` | `start` \| `end` \| `top` \| `bottom` |
+| `size` | `String` | `null` | CSS length (default `25rem` / `20rem`) |
+| `title` | `String` | `''` | |
+| `closable` | `Boolean` | `true` | |
+| `closeOnBackdrop` | `Boolean` | `true` | |
+| `scrollable` | `Boolean` | `true` | |
+
+Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
+
+### `<ph-confirm-dialog>`
+
+Promise-based confirmation dialog host. Mount **once** (e.g. in a base page). Auto-registers on `window.confirm`. Call `window.confirm.confirm(options)` returning `Promise<boolean>`.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `title` | `String` | `''` | Dialog title |
+| `message` | `String` | `''` | Dialog body text |
+| `confirmText` | `String` | `'Confirm'` | Confirm button label |
+| `cancelText` | `String` | `'Cancel'` | Cancel button label |
+| `variant` | `String` | `'primary'` | `'primary'` \| `'danger'` (affects confirm button + icon color) |
+| `icon` | `String` | `''` | Bootstrap icon name for header |
+| `loading` | `Boolean` | `false` | Disables buttons, shows spinner on confirm |
+| `closeOnBackdrop` | `Boolean` | `false` | Allow backdrop click to cancel |
+
+Emits: `confirm`, `cancel`. Methods: `confirm(options)`, `setLoading(bool)`, `close(result)`.
+
+```
+<ph-confirm-dialog />
+
+const ok = await window.confirm.confirm({
+  title: 'Delete product?',
+  message: 'This cannot be undone.',
+  variant: 'danger',
+  icon: 'exclamation-triangle',
+  confirmText: 'Delete',
+});
+```
+
+### `<ph-spinner>`
+
+Standalone loading spinner (`spinner-border` / `spinner-grow`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `size` | `String \| Number` | `'md'` | `sm` \| `md` \| `lg` or pixels |
+| `variant` | `String` | `'border'` | `border` \| `grow` |
+| `color` | `String` | `''` | Bootstrap text-color variant |
+| `label` | `String` | `'Loading…'` | Visually-hidden text for screen readers |
+
+No emits or slots.
+
 ---
 
 ## 5. Navigation
@@ -905,6 +1087,23 @@ Emits: `update:modelValue`, `change`. Slot: default (scoped `{activeStep, steps,
 ```
 <ph-stepper v-model="step" :steps="[{label:'Step 1'},{label:'Step 2'}]" orientation="vertical" />
 ```
+
+### `<ph-dropdown>`
+
+Action menu with self-managed open state (no Bootstrap JS/Popper).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `'Menu'` | Default trigger label |
+| `items` | `Array` | `[]` | `{label,href,icon,disabled,divider,header}` |
+| `variant` | `String` | `'secondary'` | Trigger button variant |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `align` | `String` | `'start'` | `start` \| `end` |
+| `closeOnSelect` | `Boolean` | `true` | |
+| `disabled` | `Boolean` | `false` | |
+
+Emits: `select(item)`, `open`, `close`. Slots: `trigger` (scoped `{ open, toggle }`),
+default (menu content).
 
 ---
 
@@ -1194,525 +1393,6 @@ Bootstrap Icons renderer. `name` maps to the `bi-<name>` class.
 | `label` | `String` | `''` | When set → `role="img"` + `aria-label`; otherwise `aria-hidden` |
 
 No emits or slots.
-
-### `<ph-spinner>`
-
-Standalone loading spinner (`spinner-border` / `spinner-grow`).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `size` | `String \| Number` | `'md'` | `sm` \| `md` \| `lg` or pixels |
-| `variant` | `String` | `'border'` | `border` \| `grow` |
-| `color` | `String` | `''` | Bootstrap text-color variant |
-| `label` | `String` | `'Loading…'` | Visually-hidden text for screen readers |
-
-No emits or slots.
-
-### `<ph-switch>`
-
-Boolean toggle (`.form-switch`). Same contract as `<ph-checkbox>`.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `Boolean` | `false` | |
-| `id` | `String` | `null` | Falls back to `ph-switch-<id>` |
-| `label` | `String` | `''` | Or default slot |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-
-Emits: `update:modelValue` (on `change`), `blur`, `focus`.
-
-### `<ph-dropdown>`
-
-Action menu with self-managed open state (no Bootstrap JS/Popper).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `label` | `String` | `'Menu'` | Default trigger label |
-| `items` | `Array` | `[]` | `{label,href,icon,disabled,divider,header}` |
-| `variant` | `String` | `'secondary'` | Trigger button variant |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-| `align` | `String` | `'start'` | `start` \| `end` |
-| `closeOnSelect` | `Boolean` | `true` | |
-| `disabled` | `Boolean` | `false` | |
-
-Emits: `select(item)`, `open`, `close`. Slots: `trigger` (scoped `{ open, toggle }`),
-default (menu content).
-
-### `<ph-tooltip>`
-
-CSS-positioned tooltip (no Popper).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `content` | `String` | `''` | Or `content` slot |
-| `placement` | `String` | `'top'` | `top` \| `bottom` \| `start` \| `end` |
-| `trigger` | `String` | `'hover'` | `hover` \| `focus` \| `click` |
-| `delay` | `Number` | `120` | Show delay in ms |
-| `disabled` | `Boolean` | `false` | |
-| `variant` | `String` | `'dark'` | `dark` \| `light` |
-| `maxWidth` | `String` | `'260px'` | |
-
-No emits. Slots: default (trigger), `content`.
-
-### `<ph-drawer>`
-
-Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `Boolean` | `false` | |
-| `position` | `String` | `'end'` | `start` \| `end` \| `top` \| `bottom` |
-| `size` | `String` | `null` | CSS length (default `25rem` / `20rem`) |
-| `title` | `String` | `''` | |
-| `closable` | `Boolean` | `true` | |
-| `closeOnBackdrop` | `Boolean` | `true` | |
-| `scrollable` | `Boolean` | `true` | |
-
-Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
-
-### `<ph-confirm-dialog>`
-
-Promise-based confirmation dialog host. Mount **once** (e.g. in a base page). Auto-registers on `window.confirm`. Call `window.confirm.confirm(options)` returning `Promise<boolean>`.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `title` | `String` | `''` | Dialog title |
-| `message` | `String` | `''` | Dialog body text |
-| `confirmText` | `String` | `'Confirm'` | Confirm button label |
-| `cancelText` | `String` | `'Cancel'` | Cancel button label |
-| `variant` | `String` | `'primary'` | `'primary'` \| `'danger'` (affects confirm button + icon color) |
-| `icon` | `String` | `''` | Bootstrap icon name for header |
-| `loading` | `Boolean` | `false` | Disables buttons, shows spinner on confirm |
-| `closeOnBackdrop` | `Boolean` | `false` | Allow backdrop click to cancel |
-
-Emits: `confirm`, `cancel`. Methods: `confirm(options)`, `setLoading(bool)`, `close(result)`.
-
-```
-<ph-confirm-dialog />
-
-const ok = await window.confirm.confirm({
-  title: 'Delete product?',
-  message: 'This cannot be undone.',
-  variant: 'danger',
-  icon: 'exclamation-triangle',
-  confirmText: 'Delete',
-});
-```
-
-### `<ph-select3>`
-
-Searchable single/multiple select with chips (replaces the limits of the native
-`<ph-select>`).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
-| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
-| `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
-| `label` | `String` | `''` | |
-| `placeholder` | `String` | `'Select…'` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `multiple` | `Boolean` | `false` | |
-| `searchable` | `Boolean` | `true` | |
-| `clearable` | `Boolean` | `false` | |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
-Slots: `footer` (scoped `{ close }`).
-
-### `<ph-file-input>`
-
-File picker with drag & drop, `accept`/`maxSize` validation and image previews.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `Array` | `[]` | `File[]` |
-| `multiple` | `Boolean` | `false` | |
-| `accept` | `String` | `''` | Comma list of mime types / extensions |
-| `maxSize` | `Number` | `0` | Max bytes (`0` = unlimited) |
-| `dragDrop` | `Boolean` | `true` | |
-| `preview` | `Boolean` | `true` | Image thumbnails |
-| `label` | `String` | `''` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`, `change(files)`, `remove(file)`, `error(reason)`.
-
-### `<ph-date-picker>`
-
-Date / datetime picker with a self-contained calendar popover, or a native input
-via `native`.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String` | `''` | ISO `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm` |
-| `mode` | `String` | `'date'` | `date` \| `datetime` |
-| `min` | `String` | `''` | ISO lower bound |
-| `max` | `String` | `''` | ISO upper bound |
-| `native` | `Boolean` | `false` | Use native `<input type=date>` |
-| `weekStart` | `Number` | `1` | `0` = Sunday |
-| `id` | `String` | `null` | Falls back to `ph-date-picker-<id>` |
-| `label` | `String` | `''` | |
-| `placeholder` | `String` | `'Select date…'` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-| `clearable` | `Boolean` | `true` | |
-
-Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
-
-### `<ph-empty-state>`
-
-Empty state placeholder with icon, title, message and optional action.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `title` | `String` | `''` | |
-| `message` | `String` | `''` | |
-| `icon` | `String` | `''` | Bootstrap icon name |
-| `iconSize` | `String \| Number` | `'xl'` | |
-| `actionLabel` | `String` | `''` | Button label |
-| `actionVariant` | `String` | `'primary'` | Button variant |
-| `actionSize` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-| `variant` | `String` | `''` | Color variant for background/border |
-| `flush` | `Boolean` | `false` | Remove border/radius |
-
-Emits: `action`. Slots: `icon`, `default` (title), `action`.
-
-```
-<ph-empty-state
-  icon="inbox"
-  title="No messages"
-  message="You're all caught up!"
-  action-label="Compose"
-  @action="compose"
-/>
-```
-
-### `<ph-stat>`
-
-Stat card with label, value, optional delta trend and icon.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `label` | `String` | `''` | |
-| `value` | `String \| Number` | `''` | |
-| `delta` | `String \| Number` | `null` | Change amount |
-| `trend` | `String` | `'neutral'` | `up` \| `down` \| `neutral` |
-| `icon` | `String` | `''` | Bootstrap icon name |
-| `iconSize` | `String \| Number` | `'lg'` | |
-| `iconVariant` | `String` | `''` | Icon color variant |
-| `variant` | `String` | `''` | Affects value color and border |
-| `bordered` | `Boolean` | `true` | |
-
-Slots: `icon`, `default` (value). No emits.
-
-```
-<ph-stat label="Revenue" value="€12,345" delta="+12%" trend="up" icon="graph-up" variant="success" />
-```
-
-### `<ph-list-group>`
-
-Flexible list group with headers, dividers, badges, actions and slots.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `items` | `Array` | `[]` | `{label, href?, to?, icon?, badge?, disabled?, active?, header?, divider?, action?}` |
-| `flush` | `Boolean` | `false` | Remove borders |
-| `numbered` | `Boolean` | `false` | (reserved) |
-| `horizontal` | `Boolean \| String` | `false` | `true` or breakpoint (`sm`..`xxl`) |
-
-Emits: `select(item)`. Slots: `item-<key>` (scoped).
-
-```
-<ph-list-group :items="[
-  { label: 'Item 1', icon: 'star', badge: 3 },
-  { divider: true },
-  { label: 'Action', action: true, @select="doAction" }
-]" @select="onSelect" />
-```
-
-### `<ph-description-list>`
-
-Description list (`<dl>`) with responsive columns.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `items` | `Array` | `[]` | `{label, value, key?}` |
-| `columns` | `Number` | `2` | `1` \| `2` \| `3` |
-
-Slots: `item-<key>` (scoped). No emits.
-
-```
-<ph-description-list :items="[
-  { label: 'Status', value: 'Active' },
-  { label: 'Created', value: '2024-01-15' }
-]" :columns="2" />
-```
-
-### `<ph-timeline>`
-
-Vertical timeline with markers, time, title, body and variant colors.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `items` | `Array` | `[]` | `{time, title, body, icon?, variant?}` |
-| `variant` | `String` | `''` | Global variant for line/markers |
-
-Slots: `item-<key>` (scoped). No emits.
-
-```
-<ph-timeline variant="primary" :items="[
-  { time: '10:00', title: 'Deployed', body: 'v2.4.0 to production' },
-  { time: '09:30', title: 'Tests passed', body: 'All 1,234 tests green' }
-]" />
-```
-
-### `<ph-accordion>`
-
-Collapsible panels with single/multiple open, flush style, v-model array.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `items` | `Array` | `[]` | `{label, content, icon?, active?, disabled?, key?}` |
-| `multiple` | `Boolean` | `false` | Allow multiple open |
-| `flush` | `Boolean` | `false` | Remove borders |
-| `modelValue` | `Array` | `[]` | Open panel keys/indices |
-
-Emits: `update:modelValue`. Slots: `item-<key>` (scoped).
-
-```
-<ph-accordion v-model="openPanels" :items="[
-  { label: 'Section 1', content: 'Details…', icon: 'chevron-right' }
-]" @update:modelValue="openPanels = $event" />
-```
-
-### `<ph-tree-view>`
-
-Hierarchical tree with selection, expansion, checkboxes and slots.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `nodes` | `Array` | `[]` | `{label, children?, icon?, checked?, key?}` |
-| `selected` | `Array` | `[]` | Selected node keys |
-| `expanded` | `Array` | `[]` | Expanded node keys |
-| `checkable` | `Boolean` | `false` | Show checkboxes |
-
-Emits: `select(node)`, `toggle(node)`, `check(node)`. Slots: `node-<key>` (scoped).
-
-```
-<ph-tree-view :nodes="treeData" :selected="selected" :expanded="expanded" checkable @select="onSelect" />
-```
-
-### `<ph-code>`
-
-Code block with syntax highlighting (Prism.js), line numbers, copy button, and an interactive theme picker. Prism is loaded same-origin from the framework's npm vendor pipeline (`/assets/vendor/prismjs`); third-party CDN mirrors are blocked by `SecurityMiddleware` (`script-src 'self'`), so a missing vendor pipeline shows plain text with a console warning — run `bin/phue npm:install prismjs`.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `code` | `String` | **required** | Source code |
-| `language` | `String` | `'text'` | Prism language id; aliases resolved internally (e.g. `js`→`javascript`, `html`→`markup`, `sh`→`bash`) |
-| `lineNumbers` | `Boolean` | `false` | Show line numbers (plugin) |
-| `copyable` | `Boolean` | `true` | Show copy button |
-| `wrap` | `Boolean` | `false` | Wrap long lines |
-| `maxHeight` | `String \| Number` | `'400px'` | Max height |
-| `theme` | `String` | `'twilight'` | Active theme (read-only; the picker writes local `activeTheme` state and emits `theme-change`) |
-| `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
-| `themes` | `Array` | `['coy','dark','funky','okaidia','solarizedlight','tomorrow','twilight']` | Available theme names |
-| `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root (trailing slash normalized) |
-
-Emits: `copy(code)`, `theme-change(themeName)`. No slots.
-
-The header shows the language label (human-readable alias, e.g. `PHP` not `php`), a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets. The `data-ph-highlighted="1"` attribute on `<code>` signals a successful highlight pass. Copy uses the Clipboard API with an `execCommand` fallback; failures do not stick the button in a copied state.
-
-```
-<ph-code language="php" :code="$code" copyable theme="twilight" />
-<ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
-```
-
-### `<ph-stepper>`
-
-Step wizard with horizontal/vertical layout, linear/non-linear, clickable steps.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `steps` | `Array` | `[]` | `{label, description?, disabled?, key?}` |
-| `modelValue` | `Number` | `0` | Active step index |
-| `orientation` | `String` | `'horizontal'` | `horizontal` \| `vertical` |
-| `clickable` | `Boolean` | `false` | Click steps to navigate |
-| `linear` | `Boolean` | `true` | Enforce order |
-
-Emits: `update:modelValue`, `change`. Slot: default (scoped `{activeStep, steps, goToStep}`).
-
-```
-<ph-stepper v-model="step" :steps="[{label:'Step 1'},{label:'Step 2'}]" orientation="vertical" />
-```
-
-### `<ph-segmented-control>`
-
-Segmented button group (radio-based) with icons and variants.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number \| Boolean` | `null` | |
-| `options` | `Array` | **required** | `{label, value, icon?, disabled?, key?}` |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-| `block` | `Boolean` | `false` | Full width |
-| `variant` | `String` | `'primary'` | Bootstrap variant |
-| `disabled` | `Boolean` | `false` | |
-| `name` | `String` | `'ph-segmented'` | Radio group name |
-| `ariaLabel` | `String` | `'Segmented control'` | |
-
-Emits: `update:modelValue`, `change`. No slots.
-
-```
-<ph-segmented-control v-model="view" :options="[
-  { label: 'Grid', value: 'grid', icon: 'grid' },
-  { label: 'List', value: 'list', icon: 'list' }
-]" />
-```
-
-### `<ph-divider>`
-
-Horizontal or vertical divider with optional label and variant.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `orientation` | `String` | `'horizontal'` | `horizontal` \| `vertical` |
-| `label` | `String` | `''` | Centered label |
-| `variant` | `String` | `''` | Color variant |
-| `spacing` | `String \| Number` | `'md'` | Margin around |
-
-No emits or slots.
-
-```
-<ph-divider label="Section" variant="primary" />
-<ph-divider orientation="vertical" />
-```
-
-### `<ph-search-input>`
-
-Search input with debounce, clear button, and search icon.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String` | `''` | |
-| `id` | `String` | `null` | |
-| `placeholder` | `String` | `'Search…'` | |
-| `debounce` | `Number` | `300` | Ms |
-| `clearable` | `Boolean` | `true` | |
-| `label` | `String` | `''` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-
-Emits: `update:modelValue`, `search(query)`, `clear`, `focus`, `blur`.
-
-```
-<ph-search-input v-model="query" @search="onSearch" placeholder="Search users…" />
-```
-
-### `<ph-number-input>`
-
-Numeric input with increment/decrement controls, min/max, step, precision.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number` | `''` | |
-| `id` | `String` | `null` | |
-| `min` | `Number` | `0` | |
-| `max` | `Number` | `100` | |
-| `step` | `Number` | `1` | |
-| `precision` | `Number` | `0` | Decimal places |
-| `controls` | `Boolean` | `true` | Show ± buttons |
-| `label` | `String` | `''` | |
-| `placeholder` | `String` | `''` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-| `readonly` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`, `blur`, `focus`.
-
-```
-<ph-number-input v-model="quantity" :min="0" :max="100" :step="5" label="Quantity" />
-```
-
-### `<ph-range>`
-
-Range slider (single or dual) with optional value display.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `Number \| Array` | `0` | Array `[min, max]` when `dual` |
-| `id` | `String` | `null` | |
-| `min` | `Number` | `0` | |
-| `max` | `Number` | `100` | |
-| `step` | `Number` | `1` | |
-| `dual` | `Boolean` | `false` | Dual thumb |
-| `showValue` | `Boolean` | `false` | Display value |
-| `label` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`.
-
-```
-<ph-range v-model="priceRange" :min="0" :max="1000" dual show-value label="Price" />
-```
-
-### `<ph-form>`
-
-Form wrapper with native validation, error collection, submit/reset handling.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `disabled` | `Boolean` | `false` | |
-| `loading` | `Boolean` | `false` | |
-| `errors` | `Object` | `{}` | External errors by field name |
-| `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
-
-Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
-
-```
-<ph-form @submit="onSubmit" @invalid="errors = $event">
-  <template #default="{ validate, submit }">
-    <ph-input name="email" label="Email" required />
-    <ph-button type="submit" @click="validate()">Save</ph-button>
-  </template>
-</ph-form>
-```
-
-### `<ph-popover>`
-
-Popover with title, content, multiple placements, click/hover/focus triggers.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `title` | `String` | `''` | Header title |
-| `content` | `String` | `''` | Body content |
-| `triggerLabel` | `String` | `'Popover'` | Default trigger button label |
-| `placement` | `String` | `'top'` | 12 positions |
-| `trigger` | `String` | `'click'` | `click` \| `hover` \| `focus` |
-| `disabled` | `Boolean` | `false` | |
-| `variant` | `String` | `''` | Border color variant |
-
-Emits: `show`, `hide`. Slots: `trigger`, `content`.
-
-```
-<ph-popover title="Info" content="Details here" placement="top" trigger="hover">
-  <template #trigger><ph-button size="sm">Hover me</ph-button></template>
-</ph-popover>
-```
 
 ---
 
