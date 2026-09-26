@@ -24,6 +24,7 @@ return [
                     ['id' => 'checkbox', 'label' => 'Checkbox'],
                     ['id' => 'radio', 'label' => 'Radio'],
                     ['id' => 'switch', 'label' => 'Switch'],
+                    ['id' => 'search-input', 'label' => 'Search Input'],
                 ]
             ],
             [
@@ -208,6 +209,9 @@ return [
                             </span>
                             <span id="switch">
                                 <example-ph-switch />
+                            </span>
+                            <span id="search-input">
+                                <example-ph-search-input />
                             </span>
                             <!--
                             <ExamplePhFileInput />

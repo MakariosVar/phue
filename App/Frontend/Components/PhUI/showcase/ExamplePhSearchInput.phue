@@ -1,0 +1,207 @@
+<template>
+  <example-factory
+    tag="<ph-search-input />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Search input built on <code>{{'<ph-input-shell>'}}</code>, so the clear button renders inside the 
+        border box and the focus ring covers the magnifier, the field and the button as one unit.
+      </p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <div class="row">
+            <div class="col-md-6">
+              <ph-search-input
+                v-model="query"
+                @search="console.log($event)"
+                placeholder="Search users…"
+                size="md"
+                label="Users"
+              />
+            </div>
+            <div class="col-md-6">
+              <ph-search-input
+                v-model="queryDisabled"
+                disabled
+                placeholder="Search something…"
+                :error="queryError"
+                size="sm"
+                label="Users (disabled)"
+              />
+            </div>
+          </div>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+        <ul>
+          <li><code>update:modelValue</code> on <code>change</code></li>
+          <li><code>search(query)</code></li>
+          <li><code>clear</code></li>
+          <li><code>focus</code></li>
+          <li><code>blur</code></li>
+        </ul>
+        <strong>Behaviors:</strong>
+        <ul>
+          <li>
+            <p>
+              <code>search</code> <strong>fires from user input only</strong>. The debounce is driven by the input event,
+              not by a <code>modelValue</code> watcher, so a parent that pushes a new value programmatically
+              does <strong>not</strong> trigger a search.
+            </p>
+            <ph-data-table
+              :columns="[
+                {key: 'key', label: 'Key'},
+                {key: 'behavior', label: 'Behavior'}
+              ]"
+              :items="[
+                {key: 'Enter', behavior: 'Cancels the pending debounce and emits search immediately'},
+                {key: 'Escape', behavior: 'Clears the field, emits clear, and returns focus to the input'}
+              ]"
+            />
+          </li>
+          <li>Clicking the magnifier focuses the field, as does clicking anywhere on the shell's padding</li>
+          <li>The magnifier is aria-hidden and is not a tab stop — the input is the single keyboard stop, so no redundant tab target is added.</li>
+          <li>The pending debounce is cancelled on <code>clear</code> and on unmount, so a stale <code>search</code> can never land after the field was emptied.</li>
+          <li>The browser's native <code>::-webkit-search-cancel-button</code> is suppressed (<code>appearance: none</code>), so there is exactly one ✕.</li>
+          <li><code>autocomplete="off"</code>, <code>spellcheck="false"</code> and <code>enterkeyhint="search"</code> are set on the input.</li>
+
+        </ul>
+
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInput",
+  data() {
+    return {
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      query: "",
+      queryDisabled: "",
+      queryError: "Error on fetching",
+      snippet: `<div class="row">
+  <div class="col-md-6">
+    <ph-search-input
+      v-model="query"
+      @search="console.log($event)"
+      placeholder="Search users…"
+      size="md"
+      label="Users"
+    />
+  </div>
+  <div class="col-md-6">
+    <ph-search-input
+      v-model="queryDisabled"
+      disabled
+      placeholder="Search something…"
+      :error="queryError"
+      size="sm"
+      label="Users (disabled)"
+    />
+  </div>
+</div>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "id",
+          type: "String",
+          default: "null",
+          notes: "Falls back to ph-search-<id>",
+        },
+        {
+          name: "placeholder",
+          type: "String",
+          default: "'Search…'",
+          notes: "",
+        },
+        {
+          name: "debounce",
+          type: "Number",
+          default: "300",
+          notes: "Ms. 0 emits search <code>synchronously</code>",
+        },
+        {
+          name: "clearable",
+          type: "Boolean",
+          default: "true",
+          notes: "Shows the ✕ while <code>modelValue</code> is non-empty",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "ariaLabel",
+          type: "String",
+          default: "'Search'",
+          notes: "Accessible name, applied only when no visible <code>label</code> is rendered",
+        },
+        {
+          name: "helperText",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes: "Red shell border + red focus ring + <code>role='alert'</code> message",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "",
+        },
+        {
+          name: "required",
+          type: "Boolean",
+          default: "false",
+          notes: "Sets the real <code>required</code> / <code>aria-required</code> (unlike the other form controls, this one is not visual-only)",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg",
+        }
+      ]
+    };
+  },
+  methods: {
+    addOption(label) {
+      if (!this.ownerOptions.some((opt) => opt.label === label)) {
+        this.ownerOptions.push({ label, value: label });
+      }
+    }
+  }
+};
+</script>
