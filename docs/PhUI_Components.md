@@ -173,6 +173,7 @@ The id is auto-generated with Vue's `useId()` unless you pass your own.
 |---|---|---|---|
 | `modelValue` | `String \| Number` | `''` | Bound via `v-model` |
 | `id` | `String` | `null` | Falls back to `ph-input-<id>` |
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `type` | `String` | `'text'` | Any native input type |
 | `label` | `String` | `''` | Rendered with `form-label`; `*` marker when `required` |
 | `placeholder` | `String` | `''` | |
@@ -195,6 +196,7 @@ Numeric input with increment/decrement controls, min/max, step, precision.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `modelValue` | `String \| Number` | `''` | |
 | `id` | `String` | `null` | |
 | `min` | `Number` | `0` | |
@@ -227,6 +229,7 @@ Native select bound to `modelValue`. Options accept either objects
 | `modelValue` | `String \| Number` | `''` | |
 | `options` | `Array` | `[]` | `{label, value, disabled?}` or primitive values |
 | `id` | `String` | `null` | Falls back to `ph-select-<id>` |
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `label` | `String` | `''` | `*` marker when `required` |
 | `placeholder` | `String` | `''` | Rendered as a disabled, selected option |
 | `helperText` | `String` | `''` | |
@@ -310,6 +313,7 @@ Multi-line textarea. Emits on `input` as you type.
 |---|---|---|---|
 | `modelValue` | `String` | `''` | |
 | `id` | `String` | `null` | Falls back to `ph-textarea-<id>` |
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `rows` | `Number` | `4` | |
 | `resize` | `String` | `'vertical'` | `none` \| `both` \| `horizontal` \| `vertical` |
 | `label` | `String` | `''` | `*` marker when `required` |
@@ -333,6 +337,7 @@ Boolean checkbox with optional indeterminate visual state.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `modelValue` | `Boolean` | `false` | |
 | `label` | `String` | `''` | Falls back to default slot |
 | `indeterminate` | `Boolean` | `false` | Applied live via the DOM property |
@@ -372,6 +377,7 @@ Boolean toggle (`.form-switch`). Same contract as `<ph-checkbox>`.
 |---|---|---|---|
 | `modelValue` | `Boolean` | `false` | |
 | `id` | `String` | `null` | Falls back to `ph-switch-<id>` |
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `label` | `String` | `''` | Or default slot |
 | `disabled` | `Boolean` | `false` | |
 | `required` | `Boolean` | `false` | |
@@ -393,6 +399,7 @@ as one unit.
 |---|---|---|---|
 | `modelValue` | `String` | `''` | |
 | `id` | `String` | `null` | Falls back to `ph-search-<id>` |
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `placeholder` | `String` | `'Search…'` | |
 | `debounce` | `Number` | `300` | Ms. `0` emits `search` **synchronously** |
 | `clearable` | `Boolean` | `true` | Shows the ✕ while `modelValue` is non-empty |
@@ -439,6 +446,7 @@ Range slider (single or dual) with optional value display.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `modelValue` | `Number \| Array` | `0` | Array `[min, max]` when `dual` |
 | `id` | `String` | `null` | |
 | `min` | `Number` | `0` | |
@@ -461,6 +469,7 @@ File picker with drag & drop, `accept`/`maxSize` validation and image previews.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `modelValue` | `Array` | `[]` | `File[]` |
 | `multiple` | `Boolean` | `false` | |
 | `accept` | `String` | `''` | Comma list of mime types / extensions |
@@ -556,25 +565,106 @@ Emits: `update:modelValue`, `change`. No slots.
 
 ### `<ph-form>`
 
-Form wrapper with native validation, error collection, submit/reset handling.
+Form wrapper that owns the submit cycle: native validation, an error summary, server-side `errors` that block submit, and a native `reset`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `disabled` | `Boolean` | `false` | |
-| `loading` | `Boolean` | `false` | |
-| `errors` | `Object` | `{}` | External errors by field name |
+| `name` | `String` | `''` | The form's own name. Kept out of the submit payload, so `<form name="project">` does not appear as a `project` key |
+| `disabled` | `Boolean` | `false` | Sets `disabled` on every field the form manages. Fields that were **already** disabled stay disabled when it flips back to `false` |
+| `loading` | `Boolean` | `false` | Sets `aria-busy` and **blocks** `submit` — the double-submit guard |
+| `errors` | `Object` | `{}` | Server errors by field name. See below |
 | `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
+| `nativeValidation` | `Boolean` | `false` | `true` hands validation back to the browser (`novalidate` is removed, native bubbles appear). Default is `false`, which suppresses the native bubbles and uses the summary instead |
+| `showSummary` | `Boolean` | `true` | Render the error summary |
+| `summaryTitle` | `String` | `'Please fix the following:'` | Summary heading |
 
-Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
+**Emits**
+
+| Emit | Payload | When |
+|---|---|---|
+| `submit` | `data` | Only after validation passes |
+| `reset` | — | After the browser has cleared the fields |
+| `invalid` | `errors` | Only on a validation pass that failed |
+| `update:errors` | `errors` | On **every** validation pass, so a pass that clears errors reports them |
+
+**Slots**
+
+| Slot | Scoped props |
+|---|---|
+| `default` | `{ errors, errorList, validate, reset, submit, disabled, loading, busy }` |
+| `actions` | `{ validate, reset, submit, disabled, loading, busy }` |
+
+**Fields must be reachable.** The form enumerates its own `form.elements` and
+reads `name` off each control. Native controls work as-is. For PhUI controls that
+means the `name` prop has to reach the **inner** control — every form control in
+this kit takes `name` and forwards it (`<ph-input name="title">` puts
+`name="title"` on the real `<input>`, not on the wrapper `<div>`). A custom
+component that swallows `name` is invisible to the form: it will not validate and
+will not appear in the payload.
+
+**`errors` blocks submit.** The prop is pushed onto the real controls with
+`setCustomValidity`, so a server error fails `checkValidity()` exactly like a
+native one — `submit` does not fire, `:invalid` and Bootstrap feedback work, and
+the field lands in the summary. Clearing the prop clears the validity again. Only
+validity the form itself set is cleared, so a caller managing its own
+`setCustomValidity` keeps it.
+
+Accepted shapes, all flattened to one message:
+
+```js
+:errors="{ title: 'Already taken.' }"                       // string
+:errors="{ title: ['Too short.', 'Too narrow.'] }"          // array  -> joined
+:errors="{ title: { min: 'At least 3 characters.' } }"      // keyed  -> "min At least 3 characters."
+```
+
+**`validateOn`.** The three modes are real: `submit` validates on submit only,
+`blur` on field blur, `change` while typing. The listeners are capture-phase on
+the `<form>`, so a child that calls `stopPropagation` cannot opt out.
+
+**Error summary.** When `showSummary` and there is at least one error, an
+`alert alert-danger` with `role="alert"` is rendered at the top of the form, one
+line per field. Each field name is a link that focuses and scrolls to the control.
+
+**Messages are browser-localized.** `validationMessage` is whatever the user's
+browser reports (Greek locale → Greek text), so do not assert on its exact string
+in tests.
 
 ```
-<ph-form @submit="onSubmit" @invalid="errors = $event">
-  <template #default="{ validate, submit }">
-    <ph-input name="email" label="Email" required />
-    <ph-button type="submit" @click="validate()">Save</ph-button>
+<ph-form
+  :loading="isSaving"
+  :errors="serverErrors"
+  validate-on="blur"
+  @submit="onSubmit"
+>
+  <template #default="{ errorList }">
+    <ph-input name="title" label="Project title" required />
+    <ph-select name="category" label="Category" :options="categories" required />
+    <ph-textarea name="summary" label="Summary" :rows="3" />
+  </template>
+
+  <template #actions="{ busy }">
+    <ph-button type="submit" :loading="busy">Save</ph-button>
+    <ph-button type="button" @click="reset()">Reset</ph-button>
   </template>
 </ph-form>
 ```
+
+```js
+// A 422 from the API blocks the next submit until the prop is cleared.
+this.serverErrors = response.errors;   // { title: ['The title is already taken.'] }
+```
+
+> `reset()` deliberately does **not** cancel the native reset — the browser clears
+> the fields, and `reset` is emitted once afterwards. A `type="reset"` button and
+> the slot's `reset()` are therefore equivalent, and neither can recurse.
+
+> `required` on `<ph-input>`, `<ph-select>`, `<ph-textarea>` and friends is
+> **visual only** (the `*` marker); it does not set the native `required`
+> attribute. Within a `<ph-form>` you want the real attribute, so the fields must
+> be native controls (`<input required>`, `<select required>`) — which is why the
+> showcase above is the composition that actually validates. `<ph-search-input>`
+> is the one control that does set the real attribute.
+
 
 ### `<ph-form-field>`
 
