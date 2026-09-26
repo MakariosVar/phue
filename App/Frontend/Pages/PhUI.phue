@@ -19,6 +19,7 @@ return [
                     ['id' => 'input', 'label' => 'Input'],
                     ['id' => 'number-input', 'label' => 'Number Input'],
                     ['id' => 'select', 'label' => 'Select'],
+                    ['id' => 'select3', 'label' => 'Select3'],
                     ['id' => 'textarea', 'label' => 'Textarea'],
                     ['id' => 'checkbox', 'label' => 'Checkbox'],
                     ['id' => 'radio', 'label' => 'Radio'],
@@ -193,6 +194,9 @@ return [
                             <span id="select">
                                 <example-ph-select />
                             </span>
+                            <span id="select3">
+                                <example-ph-select3 />
+                            </span>
                             <span id="textarea">
                                 <example-ph-textarea />
                             </span>
@@ -206,7 +210,6 @@ return [
                                 <example-ph-switch />
                             </span>
                             <!--
-                            <ExamplePhSelect3 />
                             <ExamplePhFileInput />
                             <ExamplePhDatePicker />
                             <ExamplePhSearchInput />

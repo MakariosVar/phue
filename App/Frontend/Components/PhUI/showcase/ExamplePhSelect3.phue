@@ -1,0 +1,252 @@
+<template>
+  <example-factory
+    tag="<ph-select3 />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Searchable combobox with chips, replacing the limits of the native <code>{{'<ph-select>'}}</code>.
+        Renders a <code>role="combobox"</code> control; the list is a <code>dropdown-menu</code> anchored under it,
+        so it is not clipped by a scrolling parent.
+      </p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+            <div class="row">
+              <div class="col-4">
+                <!-- Single select -->
+                <ph-select3
+                  v-model="country"
+                  label="Country"
+                  placeholder="Pick a country…"
+                  class="mb-2"
+                  :options="[
+                    { label: 'Greece', value: 'gr' },
+                    { label: 'Sweden', value: 'se' },
+                    { label: 'USA', value: 'us', disabled: true }
+                  ]"
+                  @search="console.log($event)"
+                />
+              </div>
+              <div class="col-4">
+                <!-- Multiple select: modelValue is an array of values, rendered as chips -->
+                <ph-select3
+                  v-model="tags"
+                  multiple
+                  class="mb-2"
+
+                  clearable
+                  label="Tags"
+                  :options="[
+                    { label: 'Vue 3', value: 'vue' },
+                    { label: 'React', value: 'react' },
+                    { label: 'Svelte', value: 'svelte', disabled: true }
+                  ]"
+                />
+              </div>
+              <div class="col-4">
+                <!-- Footer slot that can be used to add events -->
+                <ph-select3
+                  v-model="owner"
+                  label="Owner"
+                  :options="ownerOptions"
+                  searchable
+                  @search="query = $event"
+                >
+                  <template #footer="{ close }">
+                    <button type="button" class="dropdown-item text-primary"
+                            @click="addOption(query)">
+                      + Create “{{ query }}”
+                    </button>
+                  </template>
+                </ph-select3>
+              </div>
+            </div>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+        <ul>
+          <li><code>update:modelValue</code> on <code>change</code></li>
+          <li><code>search(query)</code></li>
+          <li><code>open</code></li>
+          <li><code>close</code></li>
+          <li><code>clear</code></li>
+        </ul>
+        <strong>Slots:</strong>
+        <ul>
+          <li><code>footer</code> (scoped <code> { close }</code>)</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInput",
+  data() {
+    return {
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      country: "",
+      tags: "",
+      owner: "",
+      query: "",
+      ownerOptions: [],
+      snippet: `<div class="row">
+  <div class="col-4">
+    <!-- Single select -->
+    <ph-select3
+      v-model="country"
+      label="Country"
+      placeholder="Pick a country…"
+      class="mb-2"
+      :options="[
+        { label: 'Greece', value: 'gr' },
+        { label: 'Sweden', value: 'se' },
+        { label: 'USA', value: 'us', disabled: true }
+      ]"
+      @search="console.log($event)"
+    />
+  </div>
+  <div class="col-4">
+    <!-- Multiple select: modelValue is an array of values, rendered as chips -->
+    <ph-select3
+      v-model="tags"
+      multiple
+      class="mb-2"
+
+      clearable
+      label="Tags"
+      :options="[
+        { label: 'Vue 3', value: 'vue' },
+        { label: 'React', value: 'react' },
+        { label: 'Svelte', value: 'svelte', disabled: true }
+      ]"
+    />
+  </div>
+  <div class="col-4">
+    <!-- Footer slot that can be used to add events -->
+    <ph-select3
+      v-model="owner"
+      label="Owner"
+      :options="ownerOptions"
+      searchable
+      @search="query = $event"
+    >
+      <template #footer="{ close }">
+        <button type="button" class="dropdown-item text-primary"
+                @click="addOption(query)">
+          + Create “{{ query }}”
+        </button>
+      </template>
+    </ph-select3>
+  </div>
+</div>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "String | Number",
+          default: `''`,
+          notes: "Bound via <strong>v-model</strong>",
+        },
+        {
+            name: "options",
+            type: "Array",
+            default: '[]',
+            notes: "<code> { label, value, disabled? }</code> or plain primitives",
+        },
+        {
+          name: "id",
+          type: "String",
+          default: 'null',
+          notes: "Falls back to <strong>ph-select-<_id></strong>",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "<strong>*</strong> marker when required",
+        },
+        {
+          name: "placeholder",
+          type: "String",
+          default: "''",
+          notes:
+            'Rendered as a disabled, selected option',
+        },
+        {
+          name: "helperText",
+          type: "String",
+          default: "''",
+          notes:
+            'Shown as `form-text`',
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes:
+            'Non-empty -> is-invalid + red `form-text`',
+        },
+        {
+          name: 'multiple',
+          type: 'Boolean',
+          default: 'false',
+          notes: '',
+        },
+        {
+          name: 'searchable',
+          type: 'Boolean',
+          default: 'true',
+          notes: '',
+        },
+        {
+          name: 'clearable',
+          type: 'Boolean',
+          default: 'false',
+          notes: '',
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Whether the input field is disabled',
+        },
+        {
+          name: "required",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Visual only',
+        },
+
+
+      ],
+    };
+  },
+  methods: {
+    addOption(label) {
+      if (!this.ownerOptions.some((opt) => opt.label === label)) {
+        this.ownerOptions.push({ label, value: label });
+      }
+    }
+  }
+};
+</script>
