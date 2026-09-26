@@ -18,7 +18,9 @@ composer.lock
 /storage/generated
 
 tests/Production/_tmp_conftest/storage/logs
+tests/Production/_tmp_conftest/storage/cache
 tests/Fixtures/RestApp/storage/logs
+tests/Fixtures/SchiiApp/storage/cache
 
 .env
 !.env.example
