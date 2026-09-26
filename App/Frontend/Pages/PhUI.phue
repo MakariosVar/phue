@@ -20,6 +20,7 @@ return [
                     ['id' => 'select', 'label' => 'Select'],
                     ['id' => 'textarea', 'label' => 'Textarea'],
                     ['id' => 'checkbox', 'label' => 'Checkbox'],
+                    ['id' => 'radio', 'label' => 'Radio'],
                 ]
             ],
             [
@@ -193,9 +194,10 @@ return [
                             <span id="checkbox">
                                 <example-ph-checkbox />
                             </span>
+                            <span id="radio">
+                                <example-ph-radio />
+                            </span>
                             <!--
-                            <ExamplePhCheckbox />
-                            <ExamplePhRadio />
                             <ExamplePhSwitch />
                             <ExamplePhSelect3 />
                             <ExamplePhFileInput />
