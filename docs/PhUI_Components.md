@@ -246,26 +246,70 @@ Emits: `update:modelValue` (on `change`).
 
 ### `<ph-select3>`
 
-Searchable single/multiple select with chips (replaces the limits of the native
-`<ph-select>`).
+Searchable combobox with chips, replacing the limits of the native
+`<ph-select>`. Renders a `role="combobox"` control; the list is a
+`dropdown-menu` anchored under it, so it is not clipped by a scrolling parent.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
-| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
+| `modelValue` | `String \| Number \| Array` | `''` | Array of values when `multiple` |
+| `options` | `Array` | `[]` | `{label, value, disabled?}` or bare primitives (label = the value) |
 | `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
 | `label` | `String` | `''` | |
-| `placeholder` | `String` | `'Select…'` | |
+| `placeholder` | `String` | `'Select…'` | Shown while nothing is selected |
 | `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `multiple` | `Boolean` | `false` | |
-| `searchable` | `Boolean` | `true` | |
-| `clearable` | `Boolean` | `false` | |
+| `error` | `String` | `''` | `is-invalid` + red `form-text` |
+| `multiple` | `Boolean` | `false` | Chips + array `modelValue` |
+| `searchable` | `Boolean` | `true` | Renders the filter input; autofocuses it on open |
+| `clearable` | `Boolean` | `false` | ✕ appears only once a value is selected |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | Visual only (`*` marker) |
 
 Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
-Slots: `footer` (scoped `{ close }`).
+Slots: `footer` — scoped `{ close }`.
+
+```
+<!-- Single select -->
+<ph-select3 v-model="country" label="Country" placeholder="Pick a country…"
+            :options="countries" @search="onSearch" />
+
+<!-- Multiple select: modelValue is an array of values, rendered as chips -->
+<ph-select3 v-model="tags" multiple clearable label="Tags"
+            :options="[
+              { label: 'Vue 3', value: 'vue' },
+              { label: 'React', value: 'react' },
+              { label: 'Svelte', value: 'svelte', disabled: true }
+            ]" />
+
+<!-- A "create" row: the footer slot is rendered inside the list, and the scoped
+     `close` collapses it so the freshly created option is visible right away -->
+<ph-select3 v-model="owner" :options="users" searchable>
+  <template #footer="{ close }">
+    <button type="button" class="dropdown-item text-primary"
+            @click="createUser().then((u) => { users.push(u); close() })">
+      + Create “{{ query }}”
+    </button>
+  </template>
+</ph-select3>
+```
+
+**Server-side search.** `search` fires on every keystroke with the raw query, but
+the component always filters the `options` it was given on top of that. So a
+remote source must return a **superset** of the query (never a pre-filtered list
+that excludes the typed term), and you widen `options` from the `search` handler:
+
+```
+<ph-select3 v-model="user" :options="foundUsers" @search="q => foundUsers = loadUsers(q)" />
+```
+
+Keyboard (the control is focusable, `tabindex="0"`):
+
+| Key | Behaviour |
+|---|---|
+| `ArrowDown` / `ArrowUp` | Opens the list, then moves the active option |
+| `Enter` | Selects the active option, or opens the list |
+| `Escape` | Closes the list (`stopPropagation`, so a parent dialog does not also close) |
+| `Backspace` | Multiple mode with an empty query removes the last chip |
 
 
 ### `<ph-textarea>`
@@ -489,6 +533,20 @@ File picker with drag & drop, `accept`/`maxSize` validation and image previews.
 
 Emits: `update:modelValue`, `change(files)`, `remove(file)`, `error(reason)`.
 
+```
+<!-- Images only, 2 MB cap, with thumbnails -->
+<ph-file-input v-model="attachments" multiple accept="image/*" :max-size="2097152"
+               label="Screenshots" helper-text="PNG or JPG, up to 2 MB each."
+               @error="onUploadError" />
+
+<!-- Any file, drop zone off, no previews -->
+<ph-file-input v-model="contract" accept=".pdf,.docx" :drag-drop="false" :preview="false" />
+```
+
+`maxSize` is enforced client-side and reports through the `error` emit rather
+than silently dropping the file; the native `accept` attribute is passed through
+so the OS picker filters too, but that is a hint, not validation.
+
 ### `<ph-date-picker>`
 
 Date / datetime picker with a self-contained calendar popover, or a native input
@@ -512,6 +570,22 @@ via `native`.
 | `clearable` | `Boolean` | `true` | |
 
 Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
+
+```
+<!-- Date only, bounded -->
+<ph-date-picker v-model="dueOn" mode="date" min="2026-01-01" max="2026-12-31"
+                label="Due date" helper-text="Within the current year." />
+
+<!-- Date + time -->
+<ph-date-picker v-model="startsAt" mode="datetime" label="Starts at" />
+
+<!-- Native input, Monday-first week -->
+<ph-date-picker v-model="publishedOn" native :week-start="1" />
+```
+
+`modelValue` is always an ISO string (`YYYY-MM-DD`, or `YYYY-MM-DDTHH:mm` in
+`datetime` mode) — never a `Date` — so it round-trips through `v-model` into a
+form payload without a serialisation step.
 
 
 ### `<ph-form-field>`
@@ -1062,6 +1136,21 @@ CSS-positioned tooltip (no Popper).
 
 No emits. Slots: default (trigger), `content`.
 
+```
+<ph-tooltip content="Copied to clipboard" placement="top">
+  <ph-button size="sm">Copy</ph-button>
+</ph-tooltip>
+
+<!-- Rich body via the content slot, click-triggered on touch devices -->
+<ph-tooltip placement="end" trigger="click" variant="light" max-width="320px">
+  <template #default><span class="text-decoration-underline">Shipping</span></template>
+  <template #content>Ships in 2–4 business days.</template>
+</ph-tooltip>
+```
+
+`<ph-tooltip>` is CSS-positioned, not Popper-driven: it never measures collision
+against the viewport, so prefer `placement="top"`/`"bottom"` in tight layouts.
+
 ### `<ph-drawer>`
 
 Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
@@ -1077,6 +1166,16 @@ Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
 | `scrollable` | `Boolean` | `true` | |
 
 Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
+
+```
+<!-- Right-hand panel, 28rem wide -->
+<ph-drawer v-model="open" position="end" size="28rem" title="Filters">
+  <ph-select3 v-model="status" label="Status" :options="statuses" />
+  <template #footer>
+    <ph-button variant="primary" @click="open = false">Apply</ph-button>
+  </template>
+</ph-drawer>
+```
 
 ### `<ph-confirm-dialog>`
 
@@ -1119,6 +1218,12 @@ Standalone loading spinner (`spinner-border` / `spinner-grow`).
 | `label` | `String` | `'Loading…'` | Visually-hidden text for screen readers |
 
 No emits or slots.
+
+```
+<ph-spinner size="sm" />
+<ph-spinner variant="grow" color="primary" />
+<ph-spinner :size="48" label="Fetching orders…" />
+```
 
 ---
 
@@ -1258,6 +1363,28 @@ Action menu with self-managed open state (no Bootstrap JS/Popper).
 
 Emits: `select(item)`, `open`, `close`. Slots: `trigger` (scoped `{ open, toggle }`),
 default (menu content).
+
+```
+<ph-dropdown label="Actions" variant="outline-primary" size="sm" align="end"
+             :items="[
+               { label: 'Edit',   icon: 'pencil' },
+               { label: 'Archive', icon: 'archive' },
+               { divider: true },
+               { label: 'Delete', icon: 'trash', variant: 'danger' },
+               { label: 'Purge',  disabled: true }
+             ]"
+             @select="onAction">
+  <template #trigger="{ toggle }">
+    <ph-button variant="link" @click="toggle">
+      <ph-icon name="three-dots" /> More
+    </ph-button>
+  </template>
+</ph-dropdown>
+```
+
+`{header: '…'}` renders a non-interactive group label and `{disabled: true}`
+blocks selection, so no item needs its own markup. With `closeOnSelect` (the
+default) the menu collapses after every emit.
 
 ---
 
@@ -1547,6 +1674,17 @@ Bootstrap Icons renderer. `name` maps to the `bi-<name>` class.
 | `label` | `String` | `''` | When set → `role="img"` + `aria-label`; otherwise `aria-hidden` |
 
 No emits or slots.
+
+```
+<ph-icon name="check" />
+<ph-icon name="gear" size="lg" variant="primary" />
+<ph-icon name="arrow-repeat" spin label="Refreshing" />
+<ph-icon name="chevron-down" :size="12" />
+```
+
+An icon with no `label` is `aria-hidden`, so it disappears from the accessibility
+tree — correct for a decorative glyph next to real text. Pass `label` whenever the
+icon is the *only* content of a control, or the control has no accessible name.
 
 ---
 
