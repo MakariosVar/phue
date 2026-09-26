@@ -6,6 +6,7 @@
     </label>
 
     <div
+      ref="control"
       :id="controlId"
       class="form-control d-flex flex-wrap align-items-center gap-1"
       :class="{ 'is-invalid': !!error, 'bg-body-secondary opacity-75': disabled }"
@@ -13,6 +14,7 @@
       aria-haspopup="listbox"
       :aria-expanded="open ? 'true' : 'false'"
       :aria-controls="listId"
+      :aria-activedescendant="activeDescendant"
       :tabindex="disabled ? -1 : 0"
       @click="onControlClick"
     >
@@ -79,7 +81,9 @@
 
       <button
         v-for="(opt, index) in filteredOptions"
+        :id="optionId(index)"
         :key="opt.value"
+        ref="options"
         type="button"
         class="dropdown-item d-flex align-items-center"
         :class="{ active: index === activeIndex, disabled: opt.disabled }"
@@ -225,6 +229,13 @@ export default {
     hasValue() {
       return this.selectedValues.length > 0;
     },
+    activeDescendant() {
+      if (!this.open || this.activeIndex < 0) {
+        return null;
+      }
+      const option = this.filteredOptions[this.activeIndex];
+      return option && !option.disabled ? this.optionId(this.activeIndex) : null;
+    },
     listStyle() {
       return {
         position: 'absolute',
@@ -242,7 +253,7 @@ export default {
     open(value) {
       this.$emit(value ? 'open' : 'close');
       if (value) {
-        this.activeIndex = 0;
+        this.activeIndex = this.firstEnabled();
         this.$nextTick(() => {
           if (this.searchable && this.$refs.search) {
             this.$refs.search.focus();
@@ -252,18 +263,32 @@ export default {
         this.query = '';
       }
     },
+    filteredOptions() {
+      if (this.activeIndex < 0) {
+        return;
+      }
+      const option = this.filteredOptions[this.activeIndex];
+      if (!option || option.disabled) {
+        this.activeIndex = this.firstEnabled();
+      }
+    },
     query() {
-      this.activeIndex = 0;
+      this.activeIndex = this.firstEnabled();
       this.$emit('search', this.query);
     }
   },
   mounted() {
     document.addEventListener('click', this.onDocumentClick);
+    window.addEventListener('keydown', this.onKeydown, true);
   },
   beforeUnmount() {
     document.removeEventListener('click', this.onDocumentClick);
+    window.removeEventListener('keydown', this.onKeydown, true);
   },
   methods: {
+    optionId(index) {
+      return `${this.listId}-opt-${index}`;
+    },
     isSelected(value) {
       return this.selectedValues.includes(value);
     },
@@ -279,6 +304,150 @@ export default {
     },
     onSearchInput(event) {
       this.query = event.target.value;
+    },
+    firstEnabled() {
+      return this.filteredOptions.findIndex((option) => !option.disabled);
+    },
+    lastEnabled() {
+      const options = this.filteredOptions;
+      for (let index = options.length - 1; index >= 0; index--) {
+        if (!options[index].disabled) {
+          return index;
+        }
+      }
+      return -1;
+    },
+    moveActive(step) {
+      const options = this.filteredOptions;
+      if (options.length === 0) {
+        this.activeIndex = -1;
+        return;
+      }
+      let index = this.activeIndex;
+      for (let attempt = 0; attempt < options.length; attempt++) {
+        index = (index + step + options.length) % options.length;
+        if (!options[index].disabled) {
+          this.activeIndex = index;
+          return;
+        }
+      }
+      this.activeIndex = -1;
+    },
+    scrollActiveIntoView() {
+      const nodes = this.$refs.options;
+      const option = Array.isArray(nodes) ? nodes[this.activeIndex] : null;
+      if (option && typeof option.scrollIntoView === 'function') {
+        option.scrollIntoView({ block: 'nearest' });
+      }
+    },
+    revealActive() {
+      this.$nextTick(() => {
+        this.scrollActiveIntoView();
+      });
+    },
+    focusControl() {
+      this.$nextTick(() => {
+        if (this.$refs.control) {
+          this.$refs.control.focus();
+        }
+      });
+    },
+    isOptionNode(node) {
+      return !!node && node.nodeType === 1 && node.getAttribute('role') === 'option';
+    },
+    hasFocusWithin() {
+      const root = this.$refs.root;
+      const active = typeof document === 'undefined' ? null : document.activeElement;
+      return !!(root && active && root !== active && root.contains(active));
+    },
+    removeLastChip() {
+      if (!this.multiple || !this.searchable || this.query !== '') {
+        return false;
+      }
+      const current = this.selectedValues;
+      if (current.length === 0) {
+        return false;
+      }
+      this.$emit('update:modelValue', current.slice(0, -1));
+      return true;
+    },
+    onKeydown(event) {
+      if (this.disabled) {
+        return;
+      }
+      const key = event.key;
+
+      if (key === 'Escape') {
+        if (!this.open) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        this.close();
+        this.focusControl();
+        return;
+      }
+
+      if (key === 'Tab') {
+        if (this.open) {
+          this.close();
+        }
+        return;
+      }
+
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        if (!this.open && !this.hasFocusWithin()) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        if (!this.open) {
+          this.open = true;
+          this.activeIndex = key === 'ArrowDown' ? this.firstEnabled() : this.lastEnabled();
+          this.revealActive();
+          return;
+        }
+        this.moveActive(key === 'ArrowDown' ? 1 : -1);
+        this.revealActive();
+        return;
+      }
+
+      if (key === 'Home' || key === 'End') {
+        if (!this.open) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        this.activeIndex = key === 'Home' ? this.firstEnabled() : this.lastEnabled();
+        this.revealActive();
+        return;
+      }
+
+      if (key === 'Enter') {
+        if (!this.open && !this.hasFocusWithin()) {
+          return;
+        }
+        event.stopPropagation();
+        if (this.isOptionNode(event.target)) {
+          return;
+        }
+        event.preventDefault();
+        if (!this.open) {
+          this.open = true;
+          this.activeIndex = this.firstEnabled();
+          this.revealActive();
+          return;
+        }
+        const option = this.filteredOptions[this.activeIndex];
+        if (option) {
+          this.select(option);
+        }
+        return;
+      }
+
+      if (key === 'Backspace' && this.hasFocusWithin() && this.removeLastChip()) {
+        event.stopPropagation();
+      }
     },
     select(option) {
       if (!option || option.disabled) return;

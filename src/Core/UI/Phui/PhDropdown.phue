@@ -3,6 +3,7 @@
     ref="root"
     data-phui="dropdown"
     class="dropdown d-inline-block position-relative"
+    @keydown="onRootKeydown"
   >
     <slot name="trigger" :open="open" :toggle="toggle">
       <button
@@ -180,8 +181,36 @@ export default {
         this.close();
       }
     },
+    onRootKeydown(event) {
+      if (this.disabled) {
+        return;
+      }
+      const key = event.key;
+      if (key === 'Escape') {
+        if (!this.open) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        this.close();
+        return;
+      }
+      if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ') {
+        if (this.open && key === 'Enter' && this.isItemNode(event.target)) {
+          event.stopPropagation();
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        this.open = true;
+      }
+    },
+    isItemNode(node) {
+      return !!node && node.nodeType === 1 && node.getAttribute('role') === 'menuitem';
+    },
     onKeydown(event) {
       if (event.key === 'Escape' && this.open) {
+        event.stopPropagation();
         this.close();
       }
     }
