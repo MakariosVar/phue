@@ -529,28 +529,6 @@ Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
 form payload without a serialisation step.
 
 
-### `<ph-form>`
-
-Form wrapper with native validation, error collection, submit/reset handling.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `disabled` | `Boolean` | `false` | |
-| `loading` | `Boolean` | `false` | |
-| `errors` | `Object` | `{}` | External errors by field name |
-| `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
-
-Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
-
-```
-<ph-form @submit="onSubmit" @invalid="errors = $event">
-  <template #default="{ validate, submit }">
-    <ph-input name="email" label="Email" required />
-    <ph-button type="submit" @click="validate()">Save</ph-button>
-  </template>
-</ph-form>
-```
-
 ### `<ph-segmented-control>`
 
 Segmented button group (radio-based) with icons and variants.
@@ -573,6 +551,28 @@ Emits: `update:modelValue`, `change`. No slots.
   { label: 'Grid', value: 'grid', icon: 'grid' },
   { label: 'List', value: 'list', icon: 'list' }
 ]" />
+```
+
+### `<ph-form>`
+
+Form wrapper with native validation, error collection, submit/reset handling.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `disabled` | `Boolean` | `false` | |
+| `loading` | `Boolean` | `false` | |
+| `errors` | `Object` | `{}` | External errors by field name |
+| `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
+
+Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
+
+```
+<ph-form @submit="onSubmit" @invalid="errors = $event">
+  <template #default="{ validate, submit }">
+    <ph-input name="email" label="Email" required />
+    <ph-button type="submit" @click="validate()">Save</ph-button>
+  </template>
+</ph-form>
 ```
 
 ### `<ph-form-field>`
