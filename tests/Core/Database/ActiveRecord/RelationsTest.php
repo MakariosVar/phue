@@ -62,26 +62,24 @@ class Profile extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class RelationsTest extends TestCase
 {
-    private Connection $connection;
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->connection = new Connection([
-            'driver'   => 'sqlite',
-            'database' => ':memory:',
-        ]);
+        $connection = BaseActiveRecord::getConnection();
 
-        BaseActiveRecord::setConnection($this->connection);
-
-        $this->connection->execute(
+        // Drop and recreate tables for test isolation
+        $connection->execute('DROP TABLE IF EXISTS orders');
+        $connection->execute('DROP TABLE IF EXISTS profiles');
+        $connection->execute('DROP TABLE IF EXISTS users');
+        
+        $connection->execute(
             'CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)'
         );
-        $this->connection->execute(
+        $connection->execute(
             'CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, title TEXT)'
         );
-        $this->connection->execute(
+        $connection->execute(
             'CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, bio TEXT)'
         );
     }

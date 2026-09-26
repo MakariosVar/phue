@@ -29,12 +29,10 @@ final class SchemaDiffEndpointTest extends TestCase
     {
         parent::setUp();
 
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
-        BaseActiveRecord::setConnection($this->db);
+        $this->db = BaseActiveRecord::getConnection();
 
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS profiles');
         // Model knows id/full_name/email/active; DB additionally holds a leftover legacy column.
         $this->db->execute("CREATE TABLE profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

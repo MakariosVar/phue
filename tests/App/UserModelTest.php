@@ -27,8 +27,10 @@ final class UserModelTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->db = new Connection(['driver' => 'sqlite', 'database' => ':memory:']);
-        BaseActiveRecord::setConnection($this->db);
+        $this->db = BaseActiveRecord::getConnection();
+
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS users');
         $this->db->execute(
             "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password_hash TEXT, auth_key TEXT, roles TEXT DEFAULT '[]')"
         );

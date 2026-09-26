@@ -114,12 +114,7 @@ final class SchemaSyncEngineTest extends TestCase
     {
         parent::setUp();
 
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
-
-        BaseActiveRecord::setConnection($this->db);
+        $this->db = BaseActiveRecord::getConnection();
 
         $registry = new SchemaRegistry();
         $this->engine = new SchemaSyncEngine(

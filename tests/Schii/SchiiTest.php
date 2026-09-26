@@ -49,14 +49,10 @@ class SchiiTest extends TestCase
     {
         parent::setUp();
 
-        // Initialize SQLite in-memory database for testing
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
+        $this->db = BaseActiveRecord::getConnection();
 
-        BaseActiveRecord::setConnection($this->db);
-
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS stub_products');
         $this->db->execute("
             CREATE TABLE stub_products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

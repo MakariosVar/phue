@@ -23,12 +23,10 @@ final class ModelEndpointFilterSortTest extends TestCase
     {
         parent::setUp();
 
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
-        BaseActiveRecord::setConnection($this->db);
+        $this->db = BaseActiveRecord::getConnection();
 
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS profiles');
         $this->db->execute("CREATE TABLE profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,

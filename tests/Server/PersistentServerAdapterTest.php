@@ -41,8 +41,7 @@ final class PersistentServerAdapterTest extends TestCase
 {
     protected function setUp(): void
     {
-        $connection = new Connection(['driver' => 'sqlite']);
-        BaseActiveRecord::setConnection($connection);
+        $connection = BaseActiveRecord::getConnection();
         $connection->execute("CREATE TABLE IF NOT EXISTS test_products (id INTEGER PRIMARY KEY, name TEXT)");
     }
 

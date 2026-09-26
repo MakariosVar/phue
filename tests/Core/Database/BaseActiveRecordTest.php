@@ -22,19 +22,15 @@ class User extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class BaseActiveRecordTest extends TestCase
 {
-    private Connection $connection;
-
     protected function setUp(): void
     {
         parent::setUp();
-        $this->connection = new Connection([
-            'driver'   => 'sqlite',
-            'database' => ':memory:',
-        ]);
 
-        BaseActiveRecord::setConnection($this->connection);
+        $connection = BaseActiveRecord::getConnection();
 
-        $this->connection->execute(
+        // Drop and recreate table for test isolation
+        $connection->execute('DROP TABLE IF EXISTS users');
+        $connection->execute(
             'CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL, status TEXT)'
         );
     }
@@ -239,15 +235,22 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testGetConnectionThrowsWhenNotSet(): void
     {
+        // Save the current connection
+        $savedConnection = BaseActiveRecord::getConnection();
+
+        // Temporarily clear the connection using reflection
         $reflection = new \ReflectionProperty(BaseActiveRecord::class, 'dbConnection');
         $reflection->setValue(null, null);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('No database connection set');
-        User::getConnection();
+        try {
+            User::getConnection();
+            $this->fail('Expected RuntimeException was not thrown');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('No database connection set', $e->getMessage());
+        }
 
         // Restore connection for other tests
-        BaseActiveRecord::setConnection($this->connection);
+        BaseActiveRecord::setConnection($savedConnection);
     }
 
     /**

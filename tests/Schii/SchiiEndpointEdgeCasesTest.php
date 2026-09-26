@@ -55,12 +55,10 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     {
         parent::setUp();
 
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
-        BaseActiveRecord::setConnection($this->db);
+        $this->db = BaseActiveRecord::getConnection();
 
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS edge_products');
         $this->db->execute("
             CREATE TABLE edge_products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -31,13 +31,10 @@ final class SchemaExplorerEndpointsTest extends TestCase
     {
         parent::setUp();
 
-        $this->db = new Connection([
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-        ]);
+        $this->db = BaseActiveRecord::getConnection();
 
-        BaseActiveRecord::setConnection($this->db);
-
+        // Drop and recreate table for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS profiles');
         $this->db->execute("
             CREATE TABLE profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
