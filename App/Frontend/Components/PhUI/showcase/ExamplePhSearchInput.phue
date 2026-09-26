@@ -196,12 +196,5 @@ export default {
       ]
     };
   },
-  methods: {
-    addOption(label) {
-      if (!this.ownerOptions.some((opt) => opt.label === label)) {
-        this.ownerOptions.push({ label, value: label });
-      }
-    }
-  }
 };
 </script>
