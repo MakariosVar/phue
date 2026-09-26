@@ -627,6 +627,7 @@ class PhueComponentLoader
             throw new RuntimeException("Phue component file inaccessible: '{$name}'");
         }
 
+        clearstatcache(true, $resolvedPath);
         $stat = stat($resolvedPath);
         if ($stat === false) {
             throw new RuntimeException("Failed to stat component file: {$resolvedPath}");
