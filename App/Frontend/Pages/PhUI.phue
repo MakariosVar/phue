@@ -28,7 +28,8 @@ return [
                     ['id' => 'range', 'label' => 'Range'],
                     ['id' => 'file-input', 'label' => 'File Input'],
                     ['id' => 'date-picker', 'label' => 'Date Picker'],
-                    ['id' => 'segmented-control', 'label' => 'Segmented Control']
+                    ['id' => 'segmented-control', 'label' => 'Segmented Control'],
+                    ['id' => 'form', 'label' => 'Form']
                 ]
             ],
             [
@@ -228,8 +229,11 @@ return [
                             <span id="segmented-control">
                                 <example-ph-segmented-control />
                             </span>
+                            <span id="form">
+                                <example-ph-form />
+                            </span>
+
                             <!--
-                            <ExamplePhForm />
                             <ExamplePhFormField />
                             <ExamplePhInputShell />
                              -->

@@ -1,0 +1,132 @@
+<template>
+  <example-factory
+    tag="<ph-form />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Form wrapper with native validation, error collection, submit/reset handling.</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <ph-form :loading="isSubmitting" @submit="onFormSubmit">
+            <!-- Main Form Fields Slot -->
+            <template #default="{ disabled, reset }">
+              <div class="mb-3">
+                <label for="title" class="form-label">Project Title</label>
+                <input 
+                  id="title"
+                  type="text" 
+                  name="title" 
+                  class="form-control" 
+                  required 
+                  :disabled="disabled"
+                />
+              </div>
+
+              <div class="mb-3">
+                <label for="category" class="form-label">Category</label>
+                <select 
+                  id="category"
+                  name="category" 
+                  class="form-select" 
+                  required 
+                  :disabled="disabled"
+                >
+                  <option value="">Select a category...</option>
+                  <option value="development">Development</option>
+                  <option value="design">Design</option>
+                </select>
+              </div>
+            </template>
+
+            <!-- Dedicated Form Actions Slot for Buttons -->
+            <template #actions>
+              <button type="submit" class="btn btn-success" :disabled="isSubmitting">
+                {{ isSubmitting ? 'Saving...' : 'Save Project' }}
+              </button>
+              <button type="reset" @click="reset()" class="btn btn-outline-secondary">
+                Reset Fields
+              </button>
+            </template>
+          </ph-form>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+          <ul>
+            <li><code>submit(data)</code></li>
+            <li><code>reset</code></li>
+            <li><code>invalid(errors)</code></li>
+          </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhTextarea",
+  data() {
+    return {
+      loading: false,
+      disabled: false,
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      isSubmitting: false,
+      snippet: `<ph-textarea
+    v-model="message"
+    label="Message"
+    :rows="5"
+    resize="vertical"
+    :helper-text="(message ? message.length : 0) + '/500'"
+/>`,
+      propsData: [
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "",
+        },
+        {
+          name: "loading",
+          type: "Boolean",
+          default: "false",
+          notes: "",
+        },
+        {
+          name: "errors",
+          type: "Object",
+          default: "{}",
+          notes: "External errors by field name",
+        },
+        {
+          name: "validateOn",
+          type: "String",
+          default: "'submit'",
+          notes: "submit | blur | change",
+        }
+      ]
+    };
+  },
+  methods: {
+    onFormSubmit(data) {
+      // Process validated form entries object: { title: "...", category: "..." }
+      console.log('Form Data:', data);
+    }
+  }
+};
+</script>
