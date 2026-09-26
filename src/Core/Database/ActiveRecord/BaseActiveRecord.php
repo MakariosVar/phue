@@ -102,6 +102,13 @@ abstract class BaseActiveRecord implements JsonSerializable
     protected bool $exists = false;
 
     /**
+     * Optional resolver for obtaining the database connection.
+     *
+     * @var \Closure|null
+     */
+    private static ?\Closure $connectionResolver = null;
+
+    /**
      * BaseActiveRecord constructor.
      *
      * @param array<string, mixed> $attributes Initial model attributes.
@@ -109,6 +116,16 @@ abstract class BaseActiveRecord implements JsonSerializable
     public function __construct(array $attributes = [])
     {
         $this->fill($attributes);
+    }
+
+    /**
+     * Sets the connection resolver for obtaining the database connection.
+     *
+     * @param \Closure $resolver The closure to resolve the database connection.
+     * @return void
+     */
+    public static function setConnectionResolver(\Closure $resolver): void {
+        static::$connectionResolver = $resolver;
     }
 
     /**
@@ -130,6 +147,9 @@ abstract class BaseActiveRecord implements JsonSerializable
      */
     public static function getConnection(): Connection
     {
+        if (static::$connectionResolver !== null) {
+            return (static::$connectionResolver)();
+        }
         if (static::$dbConnection === null) {
             throw new RuntimeException('No database connection set for Active Record. Call BaseActiveRecord::setConnection() first.');
         }

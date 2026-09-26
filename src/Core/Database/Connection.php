@@ -3,6 +3,7 @@
 namespace Phue\Core\Database;
 
 use InvalidArgumentException;
+use Phue\Core\ResettableInterface;
 use Phue\Core\Database\Drivers\Abstract\DriverInterface;
 use Phue\Core\Database\Drivers\Pdo\MysqlDriver;
 use Phue\Core\Database\Drivers\Pdo\PostgresDriver;
@@ -13,7 +14,7 @@ use Phue\Core\Database\Drivers\Pdo\SqliteDriver;
  *
  * @package Phue\Core\Database
  */
-class Connection
+class Connection implements ResettableInterface
 {
     protected DriverInterface $driver;
 
@@ -68,5 +69,17 @@ class Connection
     public function table(string $table): QueryBuilder
     {
         return (new QueryBuilder($this))->table($table);
+    }
+
+    /**
+     * Resets driver state and rolls back open transactions upon scope cleanup.
+     *
+     * @return void
+     */
+    public function reset(): void
+    {
+        if (method_exists($this->driver, 'inTransaction') && $this->driver->inTransaction()) {
+            $this->driver->rollBack();
+        }
     }
 }
