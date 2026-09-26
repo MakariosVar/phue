@@ -31,7 +31,7 @@ class Container
     private array $instances = [];
 
     /**
-     * Request-scoped cached instances (flushed after each HTTP request).
+     * Request-scoped cached instances partitioned by scope ID or flat array for FPM.
      *
      * @var array<string, mixed>
      */
@@ -50,6 +50,11 @@ class Container
      * @var array<string, bool>
      */
     private array $resolving = [];
+
+    /**
+     * Active scope context for the current execution unit.
+     */
+    private ?ScopeContext $currentScope = null;
 
     /**
      * Register a general factory binding (compatibility wrapper for bind).
@@ -106,10 +111,40 @@ class Container
             unset($this->instances[$id]);
         } else {
             unset($this->scopedKeys[$id]);
-            unset($this->scopedInstances[$id]);
         }
 
+        // Always clean up existing scoped instances (both partitioned and flat)
+        if ($this->currentScope !== null) {
+            unset($this->scopedInstances[$this->currentScope->id][$id]);
+        }
+        unset($this->scopedInstances[$id]);
         unset($this->instances[$id]);
+    }
+
+    /**
+     * Create a new execution scope context bound to the active coroutine or execution unit.
+     *
+     * @return ScopeContext
+     */
+    public function createScope(): ScopeContext
+    {
+        $coroutineId = class_exists('\Swoole\Coroutine') ? \Swoole\Coroutine::getCid() : -1;
+        $scopeId = $coroutineId > 0 
+            ? 'coroutine_' . $coroutineId 
+            : uniqid('scope_', true);
+
+        return new ScopeContext($scopeId);
+    }
+
+    /**
+     * Set active scope context for the container.
+     *
+     * @param ScopeContext|null $scope
+     * @return void
+     */
+    public function setScope(?ScopeContext $scope): void
+    {
+        $this->currentScope = $scope;
     }
 
     /**
@@ -124,10 +159,16 @@ class Container
     public function get(string $id): mixed
     {
         $isScoped = isset($this->scopedKeys[$id]);
+        $scopeId = $this->currentScope?->id;
 
         // 1. Check existing cached instances based on scope
-        if ($isScoped && isset($this->scopedInstances[$id])) {
-            return $this->scopedInstances[$id];
+        if ($isScoped) {
+            if ($scopeId !== null && isset($this->scopedInstances[$scopeId][$id])) {
+                return $this->scopedInstances[$scopeId][$id];
+            }
+            if ($scopeId === null && isset($this->scopedInstances[$id])) {
+                return $this->scopedInstances[$id];
+            }
         }
 
         if (!$isScoped && isset($this->instances[$id])) {
@@ -139,7 +180,11 @@ class Container
 
         // 3. Store instance in appropriate scope cache
         if ($isScoped) {
-            $this->scopedInstances[$id] = $instance;
+            if ($scopeId !== null) {
+                $this->scopedInstances[$scopeId][$id] = $instance;
+            } else {
+                $this->scopedInstances[$id] = $instance;
+            }
         } else {
             $this->instances[$id] = $instance;
         }
@@ -190,7 +235,13 @@ class Container
      */
     public function has(string $id): bool
     {
-        if (isset($this->factories[$id]) || isset($this->instances[$id]) || isset($this->scopedInstances[$id])) {
+        $scopeId = $this->currentScope?->id;
+
+        $hasScopedInstance = $scopeId !== null 
+            ? isset($this->scopedInstances[$scopeId][$id])
+            : isset($this->scopedInstances[$id]);
+
+        if (isset($this->factories[$id]) || isset($this->instances[$id]) || $hasScopedInstance) {
             return true;
         }
 
@@ -217,9 +268,15 @@ class Container
      */
     public function bound(string $id): bool
     {
+        $scopeId = $this->currentScope?->id;
+
+        $hasScopedInstance = $scopeId !== null 
+            ? isset($this->scopedInstances[$scopeId][$id])
+            : isset($this->scopedInstances[$id]);
+
         return isset($this->factories[$id]) 
             || isset($this->instances[$id]) 
-            || isset($this->scopedInstances[$id]);
+            || $hasScopedInstance;
     }
 
     /**
@@ -241,19 +298,41 @@ class Container
     }
 
     /**
-     * Clear all request-scoped instances and trigger optional reset logic for resettable instances.
+     * Clear all request-scoped instances for a given scope and trigger optional reset logic for resettable instances.
      *
+     * @param ScopeContext|null $scope Target scope to flush, or null to flush current scope or FPM flat instances.
      * @return void
      */
-    public function flushScope(): void
+    public function flushScope(?ScopeContext $scope = null): void
     {
-        foreach ($this->scopedInstances as $instance) {
+        $targetScope = $scope ?? $this->currentScope;
+
+        if ($targetScope !== null) {
+            $scopeId = $targetScope->id;
+
+            if (isset($this->scopedInstances[$scopeId])) {
+                foreach ($this->scopedInstances[$scopeId] as $instance) {
+                    if ($instance instanceof ResettableInterface) {
+                        $instance->reset();
+                    }
+                }
+                unset($this->scopedInstances[$scopeId]);
+            }
+            return;
+        }
+
+        // FPM Fallback: Flush top-level flat scopedInstances array
+        foreach ($this->scopedInstances as $key => $instance) {
+            if (is_array($instance)) {
+                // Ignore partitioned scope arrays if present
+                continue;
+            }
+
             if ($instance instanceof ResettableInterface) {
                 $instance->reset();
             }
+            unset($this->scopedInstances[$key]);
         }
-
-        $this->scopedInstances = [];
     }
 
     /**
