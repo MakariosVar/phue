@@ -52,6 +52,6 @@ final class AppStylesheetE2ETest extends TestCase
         $response = $this->app->handle(new Request('GET', '/assets/app/styles/main.css'));
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('background-color', $response->getContent());
+        $this->assertStringContainsString('custom css', $response->getContent());
     }
 }

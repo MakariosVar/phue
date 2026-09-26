@@ -316,7 +316,15 @@ final class PhSearchInputTest extends TestCase
     {
         $structure = (new PhueTemplateParser())->parseStructure(self::PHUI_DIR . '/PhSearchInput.phue');
 
-        $this->assertArrayNotHasKey('style', $structure);
+        $this->assertArrayHasKey(
+            'style',
+            $structure,
+            'the SFC parser now exposes a style block (may be null), so .phue components can ship scoped CSS'
+        );
+        $this->assertNull(
+            $structure['style'],
+            'PhSearchInput.phue has no <style> block, so style should be null'
+        );
         $this->assertDoesNotMatchRegularExpression(
             '/<style[\s>]/',
             $structure['template'],

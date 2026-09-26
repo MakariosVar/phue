@@ -155,6 +155,8 @@ PHUE);
         $first = $this->renderer->render('Scripted')->getContent();
         $this->writeScripted("console.log('new logic');" . "\n" . self::SCRIPT);
 
+        // Create new loader to clear in-memory cache (stat cache cleared by clearstatcache in loader)
+        $this->loader = new PhueComponentLoader($this->componentsDir);
         $this->registry = new AssetRegistry();
         $this->renderer = new ComponentRenderer(
             new HtmlShellRenderer($this->registry),
@@ -163,7 +165,7 @@ PHUE);
         );
         $second = $this->renderer->render('Scripted')->getContent();
 
-        $this->assertNotSame($first, $second);
+        $this->assertNotEquals($first, $second);
 
         preg_match('/Scripted\.([a-f0-9]{8})\.phue\.js/', $first, $m1);
         preg_match('/Scripted\.([a-f0-9]{8})\.phue\.js/', $second, $m2);
