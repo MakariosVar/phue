@@ -26,7 +26,8 @@ return [
                     ['id' => 'switch', 'label' => 'Switch'],
                     ['id' => 'search-input', 'label' => 'Search Input'],
                     ['id' => 'range', 'label' => 'Range'],
-                    ['id' => 'file-input', 'label' => 'File Input']
+                    ['id' => 'file-input', 'label' => 'File Input'],
+                    ['id' => 'date-picker', 'label' => 'Date Picker']
                 ]
             ],
             [
@@ -221,8 +222,10 @@ return [
                             <span id="file-input">
                                 <example-ph-file-input />
                             </span>
+                            <span id="date-picker">
+                                <example-ph-date-picker />
+                            </span>
                             <!--
-                            <ExamplePhDatePicker />
                             <ExamplePhForm />
                             <ExamplePhSegmentedControl /> -->
                         </div>
