@@ -9,56 +9,123 @@
     @toggleProps="showProps = !showProps"
   >
     <template #description>
-      <p>Form wrapper with native validation, error collection, submit/reset handling.</p>
+      <p>
+        Form wrapper that owns the submit cycle: native constraint validation,
+        an error summary, server-side <code>errors</code> that block submit, and
+        <code>reset</code> that lets the browser clear the fields.
+      </p>
     </template>
     <template #demo>
-        <ph-card v-if="showDemo">
-          <ph-form :loading="isSubmitting" @submit="onFormSubmit">
-            <!-- Main Form Fields Slot -->
-            <template #default="{ disabled, reset }">
-              <div class="mb-3">
-                <label for="title" class="form-label">Project Title</label>
-                <input 
-                  id="title"
-                  type="text" 
-                  name="title" 
-                  class="form-control" 
-                  required 
-                  :disabled="disabled"
-                />
-              </div>
+      <ph-card v-if="showDemo">
+        <div class="d-flex flex-wrap gap-3 mb-3">
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="phform-loading"
+              :checked="isSubmitting"
+              @change="isSubmitting = !isSubmitting"
+            />
+            <label class="form-check-label" for="phform-loading">
+              <code>loading</code>
+            </label>
+          </div>
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="phform-disabled"
+              :checked="isDisabled"
+              @change="isDisabled = !isDisabled"
+            />
+            <label class="form-check-label" for="phform-disabled">
+              <code>disabled</code>
+            </label>
+          </div>
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="phform-server-errors"
+              :checked="withServerErrors"
+              @change="toggleServerErrors"
+            />
+            <label class="form-check-label" for="phform-server-errors">
+              <code>errors</code> from the server
+            </label>
+          </div>
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="phform-summary"
+              :checked="showSummary"
+              @change="showSummary = !showSummary"
+            />
+            <label class="form-check-label" for="phform-summary">
+              <code>show-summary</code>
+            </label>
+          </div>
+        </div>
 
-              <div class="mb-3">
-                <label for="category" class="form-label">Category</label>
-                <select 
-                  id="category"
-                  name="category" 
-                  class="form-select" 
-                  required 
-                  :disabled="disabled"
-                >
-                  <option value="">Select a category...</option>
-                  <option value="development">Development</option>
-                  <option value="design">Design</option>
-                </select>
-              </div>
-            </template>
+        <ph-form
+          :loading="isSubmitting"
+          :disabled="isDisabled"
+          :errors="serverErrors"
+          :show-summary="showSummary"
+          validate-on="blur"
+          @submit="onSubmit"
+          @invalid="lastInvalid = $event"
+        >
+          <template #default="{ busy, errorList }">
+            <ph-input
+              name="title"
+              label="Project title"
+              helper-text="3 to 60 characters."
+              required
+            />
+            <ph-select
+              name="category"
+              label="Category"
+              :options="categories"
+              placeholder="Select a category…"
+              required
+            />
+            <ph-textarea
+              name="summary"
+              label="Summary"
+              :rows="3"
+            />
+            <div v-if="errorList.length" class="small text-body-secondary">
+              {{ errorList.length }} blocked field(s) — the submit did not fire.
+            </div>
+            <div v-if="busy" class="small text-body-secondary">
+              Submit is blocked while <code>loading</code> is true.
+            </div>
+          </template>
 
-            <!-- Dedicated Form Actions Slot for Buttons -->
-            <template #actions>
-              <button type="submit" class="btn btn-success" :disabled="isSubmitting">
-                {{ isSubmitting ? 'Saving...' : 'Save Project' }}
-              </button>
-              <button type="reset" @click="reset()" class="btn btn-outline-secondary">
-                Reset Fields
-              </button>
-            </template>
-          </ph-form>
-        </ph-card>
+          <template #actions="{ busy, submit, reset }">
+            <ph-button type="submit" variant="success" :loading="busy">
+              Save project
+            </ph-button>
+            <ph-button type="button" variant="outline-secondary" :disabled="busy" @click="reset()">
+              Reset
+            </ph-button>
+          </template>
+        </ph-form>
+
+        <hr />
+
+        <h6>Last <code>submit</code> payload</h6>
+        <pre class="bg-body-tertiary p-2 rounded small mb-0">{{ lastPayload }}</pre>
+
+        <h6 class="mt-3">Last <code>invalid</code> payload</h6>
+        <pre class="bg-body-tertiary p-2 rounded small mb-0">{{ lastInvalidText }}</pre>
+      </ph-card>
     </template>
     <template #snippet>
       <div v-if="showCode" class="mt-3">
-        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
       </div>
     </template>
     <template #props>
@@ -66,11 +133,22 @@
         <h4>Props</h4>
         <props-table :items="propsData" />
         <strong>Emits:</strong>
-          <ul>
-            <li><code>submit(data)</code></li>
-            <li><code>reset</code></li>
-            <li><code>invalid(errors)</code></li>
-          </ul>
+        <ul>
+          <li><code>submit(data)</code> — only when validation passes</li>
+          <li><code>reset</code> — after the browser cleared the fields</li>
+          <li><code>invalid(errors)</code> — only on a failed validation pass</li>
+          <li><code>update:errors(errors)</code> — on every validation pass</li>
+        </ul>
+        <strong>Slots:</strong>
+        <ul>
+          <li><code>default</code> — scoped <code>{ errors, errorList, validate, reset, submit, disabled, loading, busy }</code></li>
+          <li><code>actions</code> — scoped <code>{ validate, reset, submit, disabled, loading, busy }</code></li>
+        </ul>
+        <p class="small text-body-secondary mb-0">
+          Fields must be native form controls, or PhUI controls that forward
+          <code>name</code> to their inner control — otherwise the form cannot see
+          them. That is why every control in this kit takes a <code>name</code> prop.
+        </p>
       </ph-card>
     </template>
   </example-factory>
@@ -78,54 +156,116 @@
 
 <script>
 export default {
-  name: "ExamplePhTextarea",
+  name: "ExamplePhForm",
   data() {
     return {
-      loading: false,
-      disabled: false,
       showCode: false,
       showDemo: true,
       showProps: true,
       isSubmitting: false,
-      snippet: `<ph-textarea
-    v-model="message"
-    label="Message"
-    :rows="5"
-    resize="vertical"
-    :helper-text="(message ? message.length : 0) + '/500'"
-/>`,
+      isDisabled: false,
+      showSummary: true,
+      withServerErrors: false,
+      serverErrors: {},
+      lastPayload: "— not submitted yet —",
+      lastInvalid: {},
+      categories: [
+        { label: "Development", value: "development" },
+        { label: "Design", value: "design" },
+        { label: "Marketing", value: "marketing" }
+      ],
+      snippet: `<ph-form
+  :loading="isSaving"
+  :errors="serverErrors"
+  validate-on="blur"
+  @submit="onSubmit"
+>
+  <template #default="{ errorList }">
+    <ph-input name="title" label="Project title" required />
+    <ph-select name="category" label="Category" :options="categories" required />
+    <ph-textarea name="summary" label="Summary" :rows="3" />
+  </template>
+
+  <template #actions="{ busy }">
+    <ph-button type="submit" :loading="busy">Save</ph-button>
+    <ph-button type="button" @click="reset()">Reset</ph-button>
+  </template>
+</ph-form>`,
       propsData: [
+        {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Form's own name; kept out of the submit payload",
+        },
         {
           name: "disabled",
           type: "Boolean",
           default: "false",
-          notes: "",
+          notes: "Disables every field it manages; already-disabled fields stay disabled",
         },
         {
           name: "loading",
           type: "Boolean",
           default: "false",
-          notes: "",
+          notes: "aria-busy + blocks submit (double-submit guard)",
         },
         {
           name: "errors",
           type: "Object",
           default: "{}",
-          notes: "External errors by field name",
+          notes: "Server errors by field name; blocks submit. Accepts strings, arrays or {key: msg}",
         },
         {
           name: "validateOn",
           type: "String",
           default: "'submit'",
           notes: "submit | blur | change",
+        },
+        {
+          name: "nativeValidation",
+          type: "Boolean",
+          default: "false",
+          notes: "Let the browser show its own bubbles instead of the summary",
+        },
+        {
+          name: "showSummary",
+          type: "Boolean",
+          default: "true",
+          notes: "Render the error summary with focus links",
+        },
+        {
+          name: "summaryTitle",
+          type: "String",
+          default: "'Please fix the following:'",
+          notes: "Summary heading",
         }
       ]
     };
   },
+  computed: {
+    lastInvalidText() {
+      const keys = Object.keys(this.lastInvalid);
+      if (!keys.length) {
+        return "— no failed validation —";
+      }
+      return JSON.stringify(this.lastInvalid, null, 2);
+    }
+  },
   methods: {
-    onFormSubmit(data) {
-      // Process validated form entries object: { title: "...", category: "..." }
-      console.log('Form Data:', data);
+    onSubmit(data) {
+      this.lastPayload = JSON.stringify(data, null, 2);
+      this.isSubmitting = true;
+      const self = this;
+      window.setTimeout(function () {
+        self.isSubmitting = false;
+      }, 1500);
+    },
+    toggleServerErrors() {
+      this.withServerErrors = !this.withServerErrors;
+      this.serverErrors = this.withServerErrors
+        ? { title: ["The title is already taken.", "Try another one."] }
+        : {};
     }
   }
 };

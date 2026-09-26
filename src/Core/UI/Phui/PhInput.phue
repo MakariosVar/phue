@@ -13,6 +13,7 @@
       :placeholder="placeholder"
       :disabled="disabled"
       :readonly="readonly"
+      :required="required"
       :class="['form-control', { 'is-invalid': !!error }]"
       @input="$emit('update:modelValue', $event.target.value)"
       @blur="$emit('blur', $event)"

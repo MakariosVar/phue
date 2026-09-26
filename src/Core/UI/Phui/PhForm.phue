@@ -4,7 +4,7 @@
     :name="name"
     :class="['ph-form', { 'ph-form--loading': loading }]"
     :aria-busy="loading ? 'true' : null"
-    :novalidate="!nativeValidation"
+    novalidate
     @submit.prevent="onSubmit"
     @reset="onReset"
     @input.capture="onFieldEvent"
@@ -12,7 +12,7 @@
     @blur.capture="onFieldEvent"
   >
     <div
-      v-if="showSummary && errorList.length"
+      v-if="showSummary && !nativeValidation && errorList.length"
       class="alert alert-danger ph-form__summary"
       role="alert"
     >
@@ -94,9 +94,13 @@ export default {
   data() {
     return {
       nativeErrors: {},
-      customValidity: {},
-      lockedFields: []
+      customValidity: {}
     };
+  },
+  created() {
+    // Non-reactive on purpose: this holds DOM nodes, which have no business
+    // being wrapped in a reactive proxy.
+    this.lockedFields = [];
   },
   computed: {
     serverErrors() {
@@ -249,6 +253,7 @@ export default {
       }
       this.applyServerErrors();
       const collected = {};
+      const invalid = [];
       let ok = true;
       this.fields().forEach((el) => {
         if (el.disabled) {
@@ -258,6 +263,7 @@ export default {
           return;
         }
         ok = false;
+        invalid.push(el);
         el.setAttribute('aria-invalid', 'true');
         if (this.customValidity[el.name]) {
           return;
@@ -267,6 +273,9 @@ export default {
       this.nativeErrors = collected;
       this.$emit('update:errors', this.mergedErrors);
       if (!ok) {
+        if (this.nativeValidation && typeof invalid[0].reportValidity === 'function') {
+          invalid[0].reportValidity();
+        }
         this.$emit('invalid', collected);
       }
       return ok;

@@ -10,6 +10,7 @@
       :name="name || null"
       :value="modelValue"
       :disabled="disabled"
+      :required="required"
       :class="['form-select', { 'is-invalid': !!error }]"
       @change="$emit('update:modelValue', $event.target.value)"
     >
