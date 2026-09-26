@@ -50,6 +50,8 @@ if ($lines === false) {
 $tags = [];
 $current = null;
 $currentProps = [];
+$currentSlots = [];
+$currentEmits = [];
 $currentDescription = [];
 
 /**
@@ -70,6 +72,13 @@ function splitCells(string $row): array
 $i = 0;
 $count = count($lines);
 
+// Which table the parser is currently inside. A component section is allowed to
+// hold several tables (props, emits, slots, key maps); only the props table
+// feeds `attributes`. Guessing from "any row starting with a backticked word"
+// mislabels every slot and emit row as an attribute.
+$table = 'none';
+$pendingTable = 'none';
+
 while ($i < $count) {
     $line = $lines[$i];
 
@@ -78,11 +87,15 @@ while ($i < $count) {
         $name = $m[1];
 
         if ($current !== null) {
-            $tags[] = buildTag($current, $currentProps, $currentDescription);
+            $tags[] = buildTag($current, $currentProps, $currentSlots, $currentEmits, $currentDescription);
         }
         $current = $name;
         $currentProps = [];
+        $currentSlots = [];
+        $currentEmits = [];
         $currentDescription = [];
+        $table = 'none';
+        $pendingTable = 'none';
         $i++;
         continue;
     }
@@ -94,22 +107,88 @@ while ($i < $count) {
 
     $trimmed = trim($line);
 
-    // Props table row: "| `prop` | Type | Default | Notes |"
-    if (preg_match('/^\|\s*`([A-Za-z][A-Za-z0-9_]*)`\s*\|/', $trimmed, $m)
-        && !str_contains($trimmed, 'Prop') // skip header row "| Prop | Type |"
-    ) {
-        $cells = splitCells($trimmed);
-        if (count($cells) >= 3) {
-            $propName = $m[1];
-            $type = $cells[1] ?? '';
-            $notes = $cells[3] ?? '';
-            $currentProps[$propName] = [
-                'isBoolean' => stripos($type, 'boolean') !== false,
-                'notes' => cleanNotes($notes),
-            ];
-        }
+    // A bolded caption names the table that follows it, e.g. "**Emits**".
+    if (preg_match('/^\*\*([A-Za-z]+)\*\*:?\s*$/', $trimmed, $m)) {
+        $caption = strtolower($m[1]);
+        $pendingTable = match ($caption) {
+            'slot', 'slots' => 'slots',
+            'emit', 'emits', 'event', 'events' => 'emits',
+            'prop', 'props', 'property', 'properties', 'options' => 'props',
+            default => 'none',
+        };
+        $table = 'none';
         $i++;
         continue;
+    }
+
+    if (str_starts_with($trimmed, '|')) {
+        $cells = splitCells($trimmed);
+
+        // Header row: its first cell names the table, and it supersedes any caption.
+        if (!isSeparatorRow($cells)) {
+            $first = strtolower(strip_backticks($cells[0] ?? ''));
+            $headerKind = match ($first) {
+                'prop', 'props', 'property', 'properties', 'option', 'options', 'attribute' => 'props',
+                'slot', 'slots' => 'slots',
+                'emit', 'emits', 'event', 'events' => 'emits',
+                default => null,
+            };
+            if ($headerKind !== null) {
+                $table = $headerKind;
+                $pendingTable = 'none';
+                $i++;
+                continue;
+            }
+            // Not a header we know: a stray table inside the section, so leave
+            // the current mode alone and let data rows fall through below.
+        }
+
+        // Separator row: closes the caption-based detection, keeps the mode.
+        if (isSeparatorRow($cells)) {
+            if ($table === 'none' && $pendingTable !== 'none') {
+                $table = $pendingTable;
+                $pendingTable = 'none';
+            }
+            $i++;
+            continue;
+        }
+
+        // Data row, routed by the table we are currently inside.
+        if ($table !== 'none' && preg_match('/^\|\s*`?([A-Za-z][A-Za-z0-9_-]*)`?\s*\|/', $trimmed, $m)) {
+            $entry = strip_backticks($m[1]);
+            switch ($table) {
+                case 'props':
+                    if (count($cells) >= 3) {
+                        $currentProps[$entry] = [
+                            'isBoolean' => stripos($cells[1] ?? '', 'boolean') !== false,
+                            'notes' => cleanNotes($cells[3] ?? ($cells[2] ?? '')),
+                        ];
+                    }
+                    break;
+                case 'slots':
+                    $currentSlots[$entry] = [
+                        'name' => $entry,
+                        'description' => cleanNotes($cells[1] ?? ''),
+                    ];
+                    break;
+                case 'emits':
+                    $currentEmits[] = [
+                        'name' => $entry,
+                        'payload' => cleanNotes($cells[1] ?? ''),
+                    ];
+                    break;
+            }
+            $i++;
+            continue;
+        }
+
+        $i++;
+        continue;
+    }
+
+    // Any non-table content closes the table.
+    if ($trimmed !== '') {
+        $table = 'none';
     }
 
     // Description: first non-empty, non-table paragraph line inside the section
@@ -121,7 +200,27 @@ while ($i < $count) {
 }
 
 if ($current !== null) {
-    $tags[] = buildTag($current, $currentProps, $currentDescription);
+    $tags[] = buildTag($current, $currentProps, $currentSlots, $currentEmits, $currentDescription);
+}
+
+/** True for "|---|---|" style rows. */
+function isSeparatorRow(array $cells): bool
+{
+    if ($cells === []) {
+        return false;
+    }
+    foreach ($cells as $cell) {
+        if (!preg_match('/^:?-{2,}:?$/', trim($cell))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** "`emit`" -> "emit" */
+function strip_backticks(string $value): string
+{
+    return trim(str_replace('`', '', $value));
 }
 
 function cleanNotes(string $notes): string
@@ -132,12 +231,27 @@ function cleanNotes(string $notes): string
     return trim((string) $notes);
 }
 
-function buildTag(string $name, array $props, array $description): array
+function buildTag(string $name, array $props, array $slots, array $emits, array $description): array
 {
     $tag = ['name' => $name];
-    if ($description !== []) {
-        $tag['description'] = cleanNotes(implode(' ', $description));
+
+    $intro = $description === [] ? '' : cleanNotes(implode(' ', $description));
+
+    // VS Code's custom-data schema has no emits concept, so fold them into the
+    // description rather than mislabelling them as attributes.
+    $emitted = [];
+    foreach ($emits as $emit) {
+        $payload = $emit['payload'];
+        $isEmpty = $payload === '' || $payload === '—' || $payload === '-' || $payload === '–';
+        $emitted[] = $emit['name'] . '(' . ($isEmpty ? '' : $payload) . ')';
     }
+    $emitNote = $emitted === [] ? '' : 'Emits: ' . implode(', ', $emitted) . '.';
+
+    $parts = array_values(array_filter([$intro, $emitNote], fn($p) => $p !== ''));
+    if ($parts !== []) {
+        $tag['description'] = implode(' ', $parts);
+    }
+
     if ($props !== []) {
         $attributes = [];
         foreach ($props as $prop => $meta) {
@@ -153,6 +267,14 @@ function buildTag(string $name, array $props, array $description): array
         usort($attributes, fn($a, $b) => strcmp($a['name'], $b['name']));
         $tag['attributes'] = $attributes;
     }
+
+    // Slots are not part of the schema either, but tooling that reads custom
+    // data does look for them, and an empty list is worse than none.
+    if ($slots !== []) {
+        $tag['slots'] = array_values($slots);
+        usort($tag['slots'], fn($a, $b) => strcmp($a['name'], $b['name']));
+    }
+
     return $tag;
 }
 
