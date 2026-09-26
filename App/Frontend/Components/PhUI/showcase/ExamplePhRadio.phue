@@ -52,7 +52,7 @@ export default {
       propsData: [
         {
           name: "modelValue",
-          type: "String | Number |Boolean",
+          type: "String | Number | Boolean",
           default: `null`,
           notes: "Bound via <strong>v-model</strong>",
         },
