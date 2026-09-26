@@ -329,7 +329,7 @@ final class WebControllerTest extends TestCase
 
     public function testEveryFullPageEmbedsThemeBootScriptInHead(): void
     {
-        foreach (['/', '/docs', '/ui'] as $route) {
+        foreach (['/', '/docs', '/phui'] as $route) {
             $content = $this->app->handle(new Request('GET', $route))->getContent();
 
             $this->assertMatchesRegularExpression(
@@ -368,7 +368,7 @@ final class WebControllerTest extends TestCase
 
     public function testUiRouteReturnsHtml(): void
     {
-        $response = $this->app->handle(new Request('GET', '/ui'));
+        $response = $this->app->handle(new Request('GET', '/phui'));
         $content = $response->getContent();
 
         $this->assertSame(200, $response->getStatusCode());
@@ -379,7 +379,7 @@ final class WebControllerTest extends TestCase
 
     public function testUiRouteTitleContainsUI(): void
     {
-        $response = $this->app->handle(new Request('GET', '/ui'));
+        $response = $this->app->handle(new Request('GET', '/phui'));
         $content = $response->getContent();
 
         preg_match('/<title>(.*?)<\/title>/', $content, $title);
@@ -389,22 +389,30 @@ final class WebControllerTest extends TestCase
 
     public function testUiRouteEmbedsInitialState(): void
     {
-        $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/phui'))->getContent();
 
         preg_match('/window\.__INITIAL_STATE__ = (\{.*?\});/s', $content, $state);
         $this->assertArrayHasKey(1, $state);
 
         $decoded = json_decode($state[1], true);
         $this->assertIsArray($decoded);
-        $this->assertArrayHasKey('radioValue', $decoded);
-        $this->assertSame('option1', $decoded['radioValue']);
-        $this->assertArrayHasKey('checked', $decoded);
-        $this->assertSame(true, $decoded['checked']);
+
+        // The state array is the page's ONLY server-side binding scope: ssr/server.ts
+        // builds the page app as createSSRApp({ template, data }), so anything the
+        // template binds during SSR has to be a key here.
+        $this->assertArrayHasKey('activeSection', $decoded);
+        $this->assertSame('index', $decoded['activeSection']);
+        $this->assertArrayHasKey('shellHeight', $decoded);
+        $this->assertNotSame('', $decoded['shellHeight']);
+
+        $this->assertArrayHasKey('navItems', $decoded);
+        $this->assertIsArray($decoded['navItems']);
+        $this->assertNotEmpty($decoded['navItems'], 'the sidebar must be driven by shipped state');
     }
 
     public function testUiRouteTitleContainsPhui(): void
     {
-        $response = $this->app->handle(new Request('GET', '/ui'));
+        $response = $this->app->handle(new Request('GET', '/phui'));
         $content = $response->getContent();
 
         preg_match('/<title>(.*?)<\/title>/', $content, $title);
@@ -414,7 +422,7 @@ final class WebControllerTest extends TestCase
 
     public function testUiRouteIsComponentShowcase(): void
     {
-        $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/phui'))->getContent();
 
         // Sidebar + usage code blocks still ship in the served HTML.
         $this->assertStringContainsString('phue-nav-link', $content);
@@ -440,7 +448,7 @@ final class WebControllerTest extends TestCase
         // Hydration contract: the shipped client module is now self-sufficient —
         // discovered children are auto-imported (wrapped with their raw template)
         // instead of being injected via whitelist state.
-        preg_match('/src="(\/assets\/phue\/Pages\/UI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
+        preg_match('/src="(\/assets\/phue\/Pages\/PhUI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
         $this->assertArrayHasKey(1, $module);
 
         $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();
@@ -465,12 +473,12 @@ final class WebControllerTest extends TestCase
 
     public function testUiRouteAutoDiscoversSelfSufficientModule(): void
     {
-        $content = $this->app->handle(new Request('GET', '/ui'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/phui'))->getContent();
 
         // No phuiUrls state is shipped anymore.
         $this->assertStringNotContainsString('phuiUrls', $content);
 
-        preg_match('/src="(\/assets\/phue\/Pages\/UI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
+        preg_match('/src="(\/assets\/phue\/Pages\/PhUI\.[a-f0-9]{8}\.phue\.js)"/', $content, $module);
         $this->assertArrayHasKey(1, $module);
 
         $moduleScript = $this->app->handle(new Request('GET', $module[1]))->getContent();

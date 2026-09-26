@@ -141,7 +141,7 @@ final class SsrRenderedPagesTest extends TestCase
 
     public function testUiMountContainerLeaksNoRawTemplate(): void
     {
-        $response = $this->app->handle(new Request('GET', '/ui'));
+        $response = $this->app->handle(new Request('GET', '/phui'));
 
         $this->assertSame(200, $response->getStatusCode());
 

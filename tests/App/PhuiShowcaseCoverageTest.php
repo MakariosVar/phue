@@ -103,7 +103,7 @@ final class PhuiShowcaseCoverageTest extends TestCase
 
     private function uiPageModuleUrl(): string
     {
-        $response = $this->app->handle(new Request('GET', '/ui'));
+        $response = $this->app->handle(new Request('GET', '/phui'));
         $this->assertSame(200, $response->getStatusCode(), '/ui must render.');
 
         preg_match('#/assets/phue/Pages/PhUI\.[a-f0-9]{8}\.phue\.js#', $response->getContent(), $matches);

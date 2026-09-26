@@ -190,10 +190,11 @@ final class PhCodeHighlightE2ETest extends TestCase
         );
 
         $this->assertSame(
-            [self::BASE_URL . '/assets/vendor/prismjs/themes/prism-tomorrow.min.css'],
+            [self::BASE_URL . '/assets/vendor/prismjs/themes/prism-twilight.min.css'],
             $result['links'],
             'Exactly one theme stylesheet, with a clean path (a doubled slash here means '
-            . 'the base was concatenated with a trailing slash).',
+            . 'the base was concatenated with a trailing slash). Twilight is PhCode\'s '
+            . 'declared default theme.',
         );
 
         $this->assertSame('1', $result['highlighted'], 'The block must report a successful highlight.');
@@ -288,7 +289,7 @@ final class PhCodeHighlightE2ETest extends TestCase
             'The picker must render a Bootstrap dropdown menu.',
         );
         $this->assertSame(
-            ['Tomorrow'],
+            ['Twilight'],
             $picker['opened']['checked'],
             'The default theme must be the one marked as active.',
         );

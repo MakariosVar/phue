@@ -126,8 +126,10 @@ export default {
     },
     size: {
       type: String,
-      default: 'md',
-      validator: (v) => ['sm', 'md', 'lg'].includes(v)
+      default: 'md'
+      // No validator on purpose: <ph-input-shell> owns the token table and is the
+      // single place a size is validated. A duplicated ['sm','md','lg'] list here
+      // would silently go stale the moment the shell grows a size.
     }
   },
   emits: ['update:modelValue', 'search', 'clear', 'focus', 'blur'],

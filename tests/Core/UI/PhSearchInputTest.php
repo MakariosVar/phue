@@ -157,8 +157,18 @@ final class PhSearchInputTest extends TestCase
     {
         $all = $this->source('PhSearchInput');
 
+        // Forwarded verbatim to the shell, which owns the metrics and the validator.
         $this->assertStringContainsString(':size="size"', $all);
-        $this->assertStringContainsString("validator: (v) => ['sm', 'md', 'lg'].includes(v)", $all);
+        $this->assertStringNotContainsString(
+            "['sm', 'md', 'lg']",
+            $all,
+            'a literal size list here is a second source of truth and goes stale',
+        );
+        $this->assertStringContainsString(
+            'Object.prototype.hasOwnProperty.call(',
+            $this->source('PhInputShell'),
+            'the shell must validate size against its own token table',
+        );
     }
 
     public function testInvalidStateReachesTheShellNotOnlyTheInput(): void
