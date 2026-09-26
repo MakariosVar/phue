@@ -51,7 +51,7 @@
           <!-- Example 4 -->
           <ph-segmented-control
             v-model="page"
-            variant="dark"
+            variant="secondary"
             block
             :options="[
               { label: 'Home', value: 'Home', icon: 'house' },
