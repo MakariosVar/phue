@@ -214,4 +214,14 @@ class RestModule extends Module
             }
         }
     }
+
+    /**
+     * Returns programmatic routes registered by RestModule for CLI route caching.
+     *
+     * @return array<int, array{method: string, path: string, regex: string, handler: mixed, paramCount: int, middleware: array<string>}>
+     */
+    public function getRoutesForCaching(): array
+    {
+        return $this->router->getCompiledRoutes();
+    }
 }

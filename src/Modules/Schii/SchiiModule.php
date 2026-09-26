@@ -129,6 +129,29 @@ class SchiiModule extends Module
     }
 
     /**
+     * Returns programmatic routes registered by SchiiModule for CLI route caching.
+     *
+     * @return array<int, array{method: string, path: string, regex: string, handler: mixed, paramCount: int, middleware: array<string>}>
+     */
+    public function getRoutesForCaching(): array
+    {
+        $isolatedRouter = new Router();
+        
+        // Save existing router reference and attach temporary router
+        $originalRouter = $this->router ?? null;
+        $this->router = $isolatedRouter;
+
+        try {
+            $this->routes();
+            return $isolatedRouter->getCompiledRoutes();
+        } finally {
+            if ($originalRouter !== null) {
+                $this->router = $originalRouter;
+            }
+        }
+    }
+
+    /**
      * Registers schema registries, inspectors, generators, endpoints, and renderers.
      *
      * @return void

@@ -106,6 +106,17 @@ abstract class Module
         return false;
     }
 
+    /**
+     * Returns programmatic routes for CLI route caching.
+     * Override in modules that register routes dynamically in init() or routes().
+     *
+     * @return array<int, array{method: string, path: string, regex: string, handler: mixed, paramCount: int, middleware: array<string>}>
+     */
+    public function getRoutesForCaching(): array
+    {
+        return [];
+    }
+
     /** Override to register DI bindings. */
     protected function bindings(): void {}
 
