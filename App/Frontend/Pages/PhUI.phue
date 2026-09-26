@@ -18,6 +18,7 @@ return [
                     ['id' => 'input', 'label' => 'Input'],
                     ['id' => 'select', 'label' => 'Select'],
                     ['id' => 'textarea', 'label' => 'Textarea'],
+                    ['id' => 'checkbox', 'label' => 'Checkbox'],
                 ]
             ],
             [
@@ -187,6 +188,9 @@ return [
                             </span>
                             <span id="textarea">
                                 <example-ph-textarea />
+                            </span>
+                            <span id="checkbox">
+                                <example-ph-checkbox />
                             </span>
                             <!--
                             <ExamplePhCheckbox />
