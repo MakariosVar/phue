@@ -1,0 +1,93 @@
+<template>
+  <example-factory
+    tag="<ph-switch />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Boolean toggle (<code>.form-switch</code>). Same contract as <code>{{'<ph-checkbox>'}}</code>.</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+            <ph-switch v-model="enabled" label="Enable feature" size="sm" />
+            <ph-switch v-model="enabled" label="Enable feature" disabled size="md" />
+            <ph-switch v-model="enabled" label="Enable feature" required size="lg" />
+            <p class="mt-2">Enabled: <code>{{ enabled }}</code></p>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+          <ul>
+            <li><code>update:modelValue</code> (Emits the radio's <code>value</code>).</li>
+          </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhSwitch",
+  data() {
+    return {
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      enabled: false,
+      snippet: `<ph-switch v-model="enabled" label="Enable feature" size="sm" />
+<ph-switch v-model="enabled" label="Enable feature" disabled size="md" />
+<ph-switch v-model="enabled" label="Enable feature" required size="lg" />`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "Boolean",
+          default: `null`,
+          notes: "Bound via <strong>v-model</strong>",
+        },
+        {
+          name: 'id',
+          type: 'String',
+          default: "null",
+          notes: "Falls back to <code>ph-switch-<_id></code>",
+        },
+        {
+            name: "label",
+            type: "String",
+            default: "''",
+            notes: "Or default slot",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes:'',
+        },
+        {
+          name: "required",
+          type: "Boolean",
+          default: "false",
+          notes:'',
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes:'sm | md | lg',
+        },
+      ],
+    };
+  },
+};
+</script>

@@ -21,6 +21,7 @@ return [
                     ['id' => 'textarea', 'label' => 'Textarea'],
                     ['id' => 'checkbox', 'label' => 'Checkbox'],
                     ['id' => 'radio', 'label' => 'Radio'],
+                    ['id' => 'switch', 'label' => 'Switch'],
                 ]
             ],
             [
@@ -180,7 +181,7 @@ return [
                     <ph-card title='Form Controls'>
                         <div class="d-flex flex-column gap-2">
                             <span id="button">
-                                <ExamplePhButton />
+                                <example-ph-button />
                             </span>
                             <span id="input">
                                 <example-ph-input />
@@ -197,8 +198,10 @@ return [
                             <span id="radio">
                                 <example-ph-radio />
                             </span>
+                            <span id="switch">
+                                <example-ph-switch />
+                            </span>
                             <!--
-                            <ExamplePhSwitch />
                             <ExamplePhSelect3 />
                             <ExamplePhFileInput />
                             <ExamplePhDatePicker />
