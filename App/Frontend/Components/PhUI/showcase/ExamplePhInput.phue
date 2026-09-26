@@ -1,0 +1,217 @@
+<template>
+  <example-factory
+    tag="<ph-input />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Single-line text input with label, helper/error text, disabled/readonly states. The id is auto-generated with Vue's useId() unless you pass your own.</p>
+    </template>
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <!-- Example 1 -->
+        <ph-input
+          label="Name"
+          placeholder="Enter your name"
+          v-model="example1"
+          required
+        />
+
+        <!-- Example 2 -->
+        <ph-input
+          label="Email"
+          type="email"
+          :error="'Invalid Email'"
+          placeholder="Enter your email"
+          v-model="example2"
+        />
+        
+        <div class="row">
+          <div class="col-md-6">
+            <!-- Example 3 -->
+            <ph-input
+              label="API Key (readonly)"
+              v-model="example3"
+              helperText="Keep it safe!"
+              readonly
+            />
+          </div>
+          <div class="col-md-6">
+            <!-- Example 4 -->
+            <ph-input
+              label="Tax Amount"
+              v-model="example4"
+              type="number"
+              disabled
+            />
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6">
+            <div>
+              <small>Name: </small>
+              <code>{{ example1 ? example1 : "" }}</code>
+            </div>
+            <div>
+              <small>Email: </small>
+              <code>{{ example2 ? example2 : "" }}</code>
+            </div>
+          </div>
+        </div>
+      </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+          <ul>
+            <li><code>update:modelValue</code> on <code>input</code></li>
+            <li><code>blur</code></li>
+            <li><code>focus</code></li>
+          </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInput",
+  data() {
+    return {
+      loading: false,
+      disabled: false,
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      example1: "",
+      example2: "Wrong_ Email@hello.world",
+      example3: "apky_gG&wP=w3lUvU",
+      example4: 150,
+      savedAt: "",
+      snippet: `<!-- Example 1 -->
+<ph-input
+  label="Name"
+  placeholder="Enter your name"
+  v-model="example1"
+  required
+/>
+
+<!-- Example 2 -->
+<ph-input
+  label="Email"
+  type="email"
+  :error="'Invalid Email'"
+  placeholder="Enter your email"
+  v-model="example2"
+/>
+
+<div class="row">
+  <div class="col-md-6">
+    <!-- Example 3 -->
+    <ph-input
+      label="API Key (readonly)"
+      v-model="example3"
+      helperText="Keep it safe!"
+      readonly
+    />
+  </div>
+  <div class="col-md-6">
+    <!-- Example 4 -->
+    <ph-input
+      label="Tax Amount"
+      v-model="example4"
+      type="number"
+      disabled
+    />
+  </div>
+</div>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "String | Number",
+          default: `''`,
+          notes: "Bound via <strong>v-model</strong>",
+        },
+        {
+          name: "id",
+          type: "String",
+          default: 'null',
+          notes: "Falls back to <strong>ph-input-<_id></strong>",
+        },
+        {
+          name: "type",
+          type: "String",
+          default: 'text',
+          notes: "Any native input type",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "Rendered with `form-label`; <strong>*</strong> marker when required",
+        },
+        {
+          name: "placeholder",
+          type: "String",
+          default: "''",
+          notes:
+            'The placeholder text for the input field',
+        },
+        {
+          name: "helperText",
+          type: "String",
+          default: "''",
+          notes:
+            'Shown as `form-text`',
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes:
+            'Non-empty -> is-invalid + red `form-text`',
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Whether the input field is disabled',
+        },
+        {
+          name: "readonly",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Whether the input field is read-only',
+        },
+        {
+          name: "required",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Only visual (<strong>*</strong>); validation is your job',
+        },
+
+
+      ],
+    };
+  },
+  methods: {
+    demoClick() {
+      this.savedAt = new Date().toISOString();
+    },
+  },
+};
+</script>

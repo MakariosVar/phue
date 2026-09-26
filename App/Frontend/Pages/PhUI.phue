@@ -1,0 +1,607 @@
+<php>
+return [
+    'title' => 'Phue PhUI — Built-in Components',
+    'state' => [
+        'activeSection' => 'index',
+        'searchQuery' => '',
+        'navItems' => [
+            [
+                'id' => 'index',
+                'label' => 'Overview',
+                'components' => []
+            ],
+            [
+                'id' => 'forms',
+                'label' => 'Form Controls',
+                'components' => [
+                    [
+                        'id' => 'button',
+                        'label' => 'Button',
+                    ],
+                    [
+                        'id' => 'input',
+                        'label' => 'Input',
+                    ],
+                ]
+            ],
+            [
+                'id' => 'data',
+                'label' => 'Data Display',
+                'components' => [
+                    [
+                        'id' => 'table',
+                        'label' => 'Table',
+                    ],
+                    [
+                        'id' => 'badge',
+                        'label' => 'Badge',
+                    ]
+                ]
+            ],
+            [
+                'id' => 'feedback',
+                'label' => 'Feedback',
+                'components' => [
+                    [
+                        'id' => 'alert',
+                        'label' => 'Alert',
+                    ],
+                    [
+                        'id' => 'modal',
+                        'label' => 'Modal',
+                    ],
+                    [
+                        'id' => 'progress-bar',
+                        'label' => 'Progress Bar',
+                    ]
+                ]
+            ],
+            [
+                'id' => 'navigation',
+                'label' => 'Navigation',
+                'components' => []
+            ],
+            [
+                'id' => 'content',
+                'label' => 'Content & Layout',
+                'components' => []
+            ],
+            [
+                'id' => 'ssr',
+                'label' => 'Server-Side',
+                'components' => []
+            ],
+        ],
+    ],
+];
+</php>
+
+<template>
+    <div ref="shellEl" class="d-flex overflow-hidden" v-cloak :style="{ height: shellHeight }">
+
+        <ph-toast position="top-right" />
+        <ph-confirm-dialog />
+
+        <!-- Sidebar: fixed-height column, never scrolls with the page. -->
+        <aside
+            class="phue-sidebar border-end d-flex flex-column flex-shrink-0 overflow-hidden"
+            style="width: 260px; background: var(--bs-body-bg);"
+        >
+            <div class="px-4 mb-4 pt-1">
+                <h1 class="h4 fw-semibold mb-1">Phue PhUI</h1>
+                <p class="small text-body-secondary mb-0">Built-in components</p>
+            </div>
+
+            <div class="px-4 mb-3">
+                <ph-search-input
+                    v-model="searchQuery"
+                    placeholder="Search…"
+                    size="sm"
+                    :clearable="true"
+                />
+            </div>
+
+            <nav class="nav flex-column px-3 pb-3 flex-grow-1 overflow-y-auto" style="gap: 0.1rem; min-height: 0;" aria-label="PhUI components">
+                <div style="display: contents;" v-for="nav in filteredNavItems" :key="nav.id">
+                    <!-- Main Nav Link -->
+                    <a
+                        :href="'#' + nav.id"
+                        class="phue-nav-link nav-link d-flex align-items-center"
+                        :class="{ 'phue-nav-link--active': activeSection === nav.id }"
+                        :style="{
+                            borderLeft: '3px solid ' + (activeSection === nav.id ? 'var(--bs-primary)' : 'transparent'),
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '0.375rem',
+                            fontSize: '0.875rem',
+                            fontWeight: activeSection === nav.id ? '600' : '500',
+                            color: activeSection === nav.id ? 'var(--bs-emphasis-color)' : 'var(--bs-body-color)',
+                            background: activeSection === nav.id ? 'var(--bs-secondary-bg)' : 'transparent',
+                            textDecoration: 'none',
+                            transition: 'all 0.15s ease',
+                            cursor: 'pointer'
+                        }"
+                        :aria-current="activeSection === nav.id ? 'true' : null"
+                        @click.prevent="scrollTo(nav.id)"
+                    >
+                        <span style="flex: 1;">{{ nav.label }}</span>
+                        <span
+                            v-if="nav.components.length"
+                            class="small d-inline-flex align-items-center"
+                            :style="{
+                                transform: expandedSections[nav.id] ? 'none' : 'rotate(-90deg)',
+                                transition: 'transform 0.15s ease',
+                                cursor: 'pointer'
+                            }"
+                            @click.stop.prevent="toggleSection(nav.id)"
+                        >▾</span>
+                    </a>
+
+                    <!-- Sub Links -->
+                    <a
+                        v-for="comp in (expandedSections[nav.id] ? nav.components : [])"
+                        :key="comp.id"
+                        :href="'#' + comp.id"
+                        class="phue-nav-sub-link d-flex align-items-center ms-4 p-1"
+                        :class="{ 'phue-nav-link--active': activeSection === comp.id }"
+                        :style="{
+                            color: activeSection === comp.id ? 'var(--bs-primary)' : 'var(--bs-secondary-color)',
+                            fontWeight: activeSection === comp.id ? '600' : '400',
+                            background: activeSection === comp.id ? 'var(--bs-secondary-bg)' : 'transparent',
+                            borderRadius: '0.25rem',
+                            textDecoration: 'none',
+                            transition: 'all 0.15s ease',
+                            cursor: 'pointer'
+                        }"
+                        :aria-current="activeSection === comp.id ? 'true' : null"
+                        @click.prevent="scrollTo(comp.id)"
+                    >
+                        {{ comp.label }}
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main: the only scroll container on the page. -->
+        <main
+            ref="mainEl"
+            class="flex-grow-1 p-4 overflow-y-auto"
+            style="min-width: 0; min-height: 0;"
+            @scroll.passive="requestSpySync"
+        >
+            <div ref="contentEl">
+                <!-- Overview -->
+                <section id="index" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Overview</h2>
+                    <phui-overview />
+                </section>
+
+                <!-- Form Controls -->
+                <section id="forms" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Form Controls</h2>
+                    <ph-card title='Form Controls'>
+                        <div class="d-flex flex-column gap-2">
+                            <span id="button">
+                                <ExamplePhButton />
+                            </span>
+                            <span id="input">
+                                <example-ph-input />
+                            </span>
+                            <!--<ExamplePhSelect />
+                            <ExamplePhTextarea />
+                            <ExamplePhCheckbox />
+                            <ExamplePhRadio />
+                            <ExamplePhSwitch />
+                            <ExamplePhSelect3 />
+                            <ExamplePhFileInput />
+                            <ExamplePhDatePicker />
+                            <ExamplePhSearchInput />
+                            <ExamplePhNumberInput />
+                            <ExamplePhRange />
+                            <ExamplePhForm />
+                            <ExamplePhSegmentedControl /> -->
+                        </div>
+                    </ph-card>
+
+                </section>
+
+                <!-- Data Display -->
+                <section id="data" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Data Display</h2>
+                    <div class="row g-4">
+                        <!-- <ExamplePhDataTable />
+                        <ExamplePhBadge />
+                        <ExamplePhAvatar />
+                        <ExamplePhCard />
+                        <ExamplePhChip />
+                        <ExamplePhEmptyState />
+                        <ExamplePhStat />
+                        <ExamplePhListGroup />
+                        <ExamplePhDescriptionList />
+                        <ExamplePhTimeline />
+                        <ExamplePhCode />
+                        <ExamplePhTreeView />
+                        <ExamplePhAccordion />
+                        <ExamplePhIcon /> -->
+                    </div>
+                </section>
+
+                <!-- Feedback -->
+                <section id="feedback" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Feedback</h2>
+                    <div class="row g-4">
+                        <!-- <ExamplePhAlert />
+                        <ExamplePhModal />
+                        <ExamplePhProgressBar />
+                        <ExamplePhSkeleton />
+                        <ExamplePhSpinner />
+                        <ExamplePhTooltip />
+                        <ExamplePhToast />
+                        <ExamplePhDrawer />
+                        <ExamplePhConfirmDialog />
+                        <ExamplePhPopover /> -->
+                    </div>
+                </section>
+
+                <!-- Navigation -->
+                <section id="navigation" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Navigation</h2>
+                    <div class="row g-4">
+                        <!-- <ExamplePhBreadcrumb />
+                        <ExamplePhLink />
+                        <ExamplePhPagination />
+                        <ExamplePhTabs />
+                        <ExamplePhTheme />
+                        <ExamplePhDropdown />
+                        <ExamplePhStepper /> -->
+                    </div>
+                </section>
+
+                <!-- Content & Layout -->
+                <section id="content" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Content & Layout</h2>
+                    <div class="row g-4">
+                        <!-- <ExamplePhText />
+                        <ExamplePhHeading />
+                        <ExamplePhBox />
+                        <ExamplePhStack />
+                        <ExamplePhFlex />
+                        <ExamplePhRow />
+                        <ExamplePhCol />
+                        <ExamplePhDivider />
+                        <ExampleSpacer /> -->
+                    </div>
+                </section>
+
+                <!-- Server-Side -->
+                <section id="ssr" class="mb-5">
+                    <h2 class="h4 fw-semibold mb-3">Server-Side</h2>
+                    <div class="row g-4">
+                        <!-- <ExamplePhNavigation />
+                        <ExamplePhMarkdown /> -->
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</template>
+
+<script>
+import { createSSRApp, reactive, toRefs, computed, watch, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
+
+/** First-paint shell height before the real offset is measured (topbar + .app-content padding). */
+const SHELL_FALLBACK_HEIGHT = 'calc(100dvh - 4.75rem)';
+
+/** Never collapse the shell below this, no matter how small the viewport gets. */
+const SHELL_MIN_HEIGHT = 240;
+
+/** Distance from the scroller's top edge where a target becomes the "current" one. */
+const SPY_ACTIVATION_OFFSET = 32;
+
+/** Breathing room kept above a target when scrolling it into view. */
+const SPY_TARGET_PADDING = 8;
+
+export default function mountApp(injectedContext = null) {
+    if (typeof window !== 'undefined' && window.__phueApp?.unmount) {
+        window.__phueApp.unmount();
+    }
+
+    // Safely retrieve state across all possible PHP/V8Js and Browser environments
+    const getInitialState = () => {
+        if (injectedContext) return injectedContext;
+        if (typeof globalThis !== 'undefined' && globalThis.__INITIAL_STATE__) return globalThis.__INITIAL_STATE__;
+        if (typeof window !== 'undefined' && window.__INITIAL_STATE__) return window.__INITIAL_STATE__;
+        try { if (typeof __INITIAL_STATE__ !== 'undefined') return __INITIAL_STATE__; } catch (e) {}
+        return {};
+    };
+
+    const app = createSSRApp({
+        name: 'PhUI',
+        setup() {
+            const initState = getInitialState();
+
+            // Initialize state. We start navItems as empty to safely manage hydration.
+            const state = reactive({
+                activeSection: initState.activeSection ?? 'index',
+                searchQuery: initState.searchQuery ?? '',
+                navItems: [],
+            });
+
+            const shellEl = ref(null);
+            const mainEl = ref(null);
+            const contentEl = ref(null);
+            const shellHeight = ref(SHELL_FALLBACK_HEIGHT);
+            const expandedSections = reactive({});
+
+            /** Flat, DOM-ordered list of every spy target (sections + their components). */
+            const orderedSpyIds = computed(() => {
+                const ids = [];
+                for (const nav of state.navItems) {
+                    ids.push(nav.id);
+                    for (const comp of nav.components) ids.push(comp.id);
+                }
+                return ids;
+            });
+
+            let elementCache = null;
+            function invalidateElementCache() {
+                elementCache = null;
+            }
+
+            function targetElements() {
+                if (elementCache === null) {
+                    elementCache = new Map();
+                    for (const id of orderedSpyIds.value) {
+                        elementCache.set(id, document.getElementById(id));
+                    }
+                }
+                return elementCache;
+            }
+
+            /** Returns the nav group id owning the given target id, or null. */
+            function parentGroupOf(id) {
+                for (const nav of state.navItems) {
+                    if (nav.id === id) return nav.id;
+                    if (nav.components.some((comp) => comp.id === id)) return nav.id;
+                }
+                return null;
+            }
+
+            /**
+             * Marks a target active and reveals the nav group that owns it, so the
+             * sub-navlist always shows the entry the reader is currently looking at.
+             */
+            function setActiveSection(id, expand = true) {
+                if (!id) return;
+                state.activeSection = id;
+                if (!expand) return;
+                const group = parentGroupOf(id);
+                if (group) expandedSections[group] = true;
+            }
+
+            function prefersReducedMotion() {
+                return typeof window.matchMedia === 'function'
+                    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            }
+
+            /**
+             * Scrolls the target to the top of the scroller. Deliberately does NOT use
+             * scrollIntoView(): that walks up and scrolls every scrollable ancestor,
+             * including the document, which would drag the whole layout.
+             */
+            function scrollTargetIntoView(id) {
+                const el = document.getElementById(id);
+                const main = mainEl.value;
+                if (!el || !main) return;
+                const delta = el.getBoundingClientRect().top - main.getBoundingClientRect().top;
+                main.scrollTo({
+                    top: Math.max(0, main.scrollTop + delta - SPY_TARGET_PADDING),
+                    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+                });
+            }
+
+            function scrollTo(id) {
+                setActiveSection(id);
+                scrollTargetIntoView(id);
+                if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
+                    history.replaceState(null, '', `#${id}`);
+                }
+            }
+
+            function toggleSection(id) {
+                expandedSections[id] = !expandedSections[id];
+            }
+
+            /**
+             * Scroll spy: the active target is the last one whose top has crossed the
+             * activation line. Because orderedSpyIds follows document order, the first
+             * target still below that line ends the scan.
+             */
+            function syncActiveFromScroll() {
+                const main = mainEl.value;
+                if (!main) return;
+                const ids = orderedSpyIds.value;
+                if (!ids.length) return;
+
+                const elements = targetElements();
+                const activationLine = main.getBoundingClientRect().top + SPY_ACTIVATION_OFFSET;
+                const atBottom = main.scrollTop + main.clientHeight >= main.scrollHeight - 2;
+
+                let current = null;
+                let firstExisting = null;
+
+                for (const id of ids) {
+                    const el = elements.get(id);
+                    if (!el) continue;
+                    if (firstExisting === null) firstExisting = id;
+                    if (el.getBoundingClientRect().top <= activationLine) {
+                        current = id;
+                        continue;
+                    }
+                    break;
+                }
+
+                if (atBottom) {
+                    for (let i = ids.length - 1; i >= 0; i--) {
+                        if (elements.get(ids[i])) {
+                            current = ids[i];
+                            break;
+                        }
+                    }
+                }
+
+                setActiveSection(current || firstExisting);
+            }
+
+            let spyFrame = 0;
+            function requestSpySync() {
+                if (spyFrame) return;
+                spyFrame = requestAnimationFrame(() => {
+                    spyFrame = 0;
+                    syncActiveFromScroll();
+                });
+            }
+
+            /**
+             * Pins the shell to exactly the space the layout leaves below the topbar,
+             * so the page never scrolls as a whole and the sidebar cannot move.
+             */
+            function measureShell() {
+                const shell = shellEl.value;
+                if (!shell) return;
+                const absoluteTop = shell.getBoundingClientRect().top + (window.scrollY || 0);
+                const viewport = document.documentElement.clientHeight || window.innerHeight;
+                shellHeight.value = `${Math.round(Math.max(SHELL_MIN_HEIGHT, viewport - absoluteTop))}px`;
+            }
+
+            function onResize() {
+                invalidateElementCache();
+                measureShell();
+                requestSpySync();
+            }
+
+            function syncExpandedSections() {
+                const query = String(state.searchQuery || '').trim().toLowerCase();
+                const activeGroup = parentGroupOf(state.activeSection);
+                for (const nav of state.navItems) {
+                    if (nav.id === activeGroup) {
+                        expandedSections[nav.id] = true;
+                        continue;
+                    }
+                    if (!query) continue;
+                    expandedSections[nav.id] = nav.label.toLowerCase().includes(query)
+                        || nav.components.some((comp) => comp.label.toLowerCase().includes(query));
+                }
+            }
+
+            const filteredNavItems = computed(() => {
+                const query = String(state.searchQuery || '').trim().toLowerCase();
+                if (!query) return state.navItems;
+                return state.navItems
+                    .map((nav) => ({
+                        ...nav,
+                        components: nav.components.filter((comp) =>
+                            comp.label.toLowerCase().includes(query),
+                        ),
+                    }))
+                    .filter((nav) =>
+                        nav.label.toLowerCase().includes(query) || nav.components.length > 0,
+                    );
+            });
+
+            // Hydration mismatch avoider logic
+            const hydrateNavData = () => {
+                state.navItems = (initState.navItems ?? []).map((nav) => ({
+                    ...nav,
+                    components: nav.components ?? [],
+                }));
+                invalidateElementCache();
+                syncExpandedSections();
+            };
+
+            if (typeof window === 'undefined') {
+                // SERVER: Always try to populate data immediately
+                hydrateNavData();
+            } else {
+                // CLIENT: Check if the server actually successfully rendered the sidebar elements
+                const navEl = document.querySelector('.phue-sidebar nav');
+
+                if (navEl && navEl.children.length > 0) {
+                    // The server successfully rendered the HTML data. Safe to hydrate immediately.
+                    hydrateNavData();
+                } else {
+                    // The server rendered an empty sidebar.
+                    // We MUST wait until after mount to populate data, or Vue will throw a mismatch!
+                    onMounted(() => {
+                        hydrateNavData();
+                    });
+                }
+            }
+
+            watch(() => state.searchQuery, () => {
+                invalidateElementCache();
+                syncExpandedSections();
+            });
+
+            let topbarObserver = null;
+            let contentObserver = null;
+
+            onMounted(() => {
+                measureShell();
+                window.addEventListener('resize', onResize);
+
+                // The topbar can wrap or grow, which moves the shell without resizing it.
+                const topbar = document.querySelector('.app-topbar');
+                if (topbar && typeof ResizeObserver !== 'undefined') {
+                    topbarObserver = new ResizeObserver(onResize);
+                    topbarObserver.observe(topbar);
+                }
+
+                // Late-growing content (async components, webfonts) changes target positions.
+                if (contentEl.value && typeof ResizeObserver !== 'undefined') {
+                    contentObserver = new ResizeObserver(() => {
+                        invalidateElementCache();
+                        requestSpySync();
+                    });
+                    contentObserver.observe(contentEl.value);
+                }
+
+                const hash = window.location.hash.replace(/^#/, '');
+                if (hash && document.getElementById(hash)) {
+                    setActiveSection(hash);
+                    nextTick(() => scrollTargetIntoView(hash));
+                } else {
+                    requestSpySync();
+                }
+            });
+
+            onBeforeUnmount(() => {
+                window.removeEventListener('resize', onResize);
+                topbarObserver?.disconnect();
+                contentObserver?.disconnect();
+                if (spyFrame) cancelAnimationFrame(spyFrame);
+            });
+
+            return {
+                ...toRefs(state),
+                shellEl,
+                mainEl,
+                contentEl,
+                shellHeight,
+                filteredNavItems,
+                expandedSections,
+                toggleSection,
+                scrollTo,
+                requestSpySync
+            };
+        }
+    });
+
+    // Ensure we only attach to window and mount if we are in the browser
+    if (typeof window !== 'undefined') {
+        window.__phueApp = app;
+        window.__phueApp.mount('#app');
+    }
+
+    return app;
+};
+</script>

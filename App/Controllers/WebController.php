@@ -31,21 +31,16 @@ class WebController extends Controller
             'doc' => (string) $request->getQuery('doc', 'getting-started'),
         ]);
     }
-
-    #[Route('/ui', methods: ['GET'])]
+    
+    #[Route('/phui', methods: ['GET'])]
     public function ui(): Response
     {
-        return $this->ui->render('Pages/UI', [
-            'checked'      => true,
-            'radioValue'   => 'option1',
-            'loading'      => false,
-            'currentPage'  => 3,
-            'totalPages'   => 10,
-            'activeTab'    => 'tab1',
-            'modalOpen'    => false,
-            'alertDismissed' => false,
-            'inputValue'   => 'Sample text',
-            'selectValue'  => 'option2',
-        ]);
+        return $this->ui->render('Pages/PhUI', []);
+    }
+
+    #[Route('/ui/showcase', methods: ['GET'])]
+    public function uiShowcase(): Response
+    {
+        return $this->ui->render('Pages/PhUIShowcase', []);
     }
 }

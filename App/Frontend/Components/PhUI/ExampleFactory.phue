@@ -1,0 +1,77 @@
+<template>
+    <ph-card>
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h4>
+          <code>{{ tag }}</code>
+        </h4>
+        <div class="d-flex gap-2">
+          <ph-button
+            @click="toggleDemo"
+            size="sm"
+            :variant="showDemo ? 'success' : 'outline-success'"
+          >
+            Demo
+          </ph-button>
+          <ph-button
+            @click="toggleCode"
+            size="sm"
+            :variant="showCode ? 'secondary' : 'outline-secondary'"
+          >
+            Code
+          </ph-button>
+          <ph-button
+            @click="toggleProps"
+            size="sm"
+            :variant="showProps ? 'warning' : 'outline-warning'"
+          >
+            Props
+          </ph-button>
+        </div>
+      </div>
+      <ph-divider variant="primary" />
+      <slot name="description"></slot>
+      <slot name="demo"></slot>
+      <slot name="snippet"></slot>
+      <slot name="props"></slot>
+    </ph-card>
+</template>
+
+<script>
+export default {
+  name: 'ExampleFactory',
+  props: {
+    tag: {
+      type: String,
+      required: true
+    },
+    showDemo: {
+      type: Boolean,
+      default: true
+    },
+    showCode: {
+      type: Boolean,
+      default: false
+    },
+    showProps: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['toggleCode', 'toggleDemo', 'toggleProps'],
+  data() {
+    return {
+    };
+  },
+  methods: {
+    toggleCode() {      
+      this.$emit('toggleCode');
+    },
+    toggleDemo() {
+      this.$emit('toggleDemo');
+    },
+    toggleProps() {
+      this.$emit('toggleProps');
+    }
+  }
+};
+</script>

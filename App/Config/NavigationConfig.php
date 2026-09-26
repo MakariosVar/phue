@@ -43,7 +43,7 @@ class NavigationConfig
         $allItems = [
             self::item('Home', '/'),
             self::item('Docs', '/docs'),
-            self::item('PHUI Components', '/ui'),
+            self::item('PHUI Components', '/phui'),
         ];
 
         if ((bool) env('SCHII_ENABLED', true)) {

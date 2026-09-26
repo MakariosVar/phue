@@ -1,0 +1,237 @@
+<template>
+  <example-factory
+    tag="<ph-button />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Button with variant, size, block, loading and disabled states. All Bootstrap 5 button variants are supported.</p>
+    </template>
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <!-- Example 1: Solid Variants -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Solid Variants</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <ph-button variant="primary" @click="onClick('primary')">Primary</ph-button>
+            <ph-button variant="secondary" @click="onClick('secondary')">Secondary</ph-button>
+            <ph-button variant="success" @click="onClick('success')">Success</ph-button>
+            <ph-button variant="danger" @click="onClick('danger')">Danger</ph-button>
+            <ph-button variant="warning" @click="onClick('warning')">Warning</ph-button>
+            <ph-button variant="info" @click="onClick('info')">Info</ph-button>
+            <ph-button variant="light" @click="onClick('light')">Light</ph-button>
+            <ph-button variant="dark" @click="onClick('dark')">Dark</ph-button>
+            <ph-button variant="link" @click="onClick('link')">Link</ph-button>
+          </div>
+        </div>
+
+        <!-- Example 2: Outline Variants -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Outline Variants</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <ph-button variant="outline-primary" @click="onClick('outline-primary')">Outline Primary</ph-button>
+            <ph-button variant="outline-secondary" @click="onClick('outline-secondary')">Outline Secondary</ph-button>
+            <ph-button variant="outline-success" @click="onClick('outline-success')">Outline Success</ph-button>
+            <ph-button variant="outline-danger" @click="onClick('outline-danger')">Outline Danger</ph-button>
+            <ph-button variant="outline-warning" @click="onClick('outline-warning')">Outline Warning</ph-button>
+            <ph-button variant="outline-info" @click="onClick('outline-info')">Outline Info</ph-button>
+            <ph-button variant="outline-light" @click="onClick('outline-light')">Outline Light</ph-button>
+            <ph-button variant="outline-dark" @click="onClick('outline-dark')">Outline Dark</ph-button>
+          </div>
+        </div>
+
+        <!-- Example 3: Sizes -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Sizes</h6>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <ph-button size="sm" variant="primary" @click="onClick('size-sm')">Small</ph-button>
+            <ph-button size="md" variant="primary" @click="onClick('size-md')">Medium</ph-button>
+            <ph-button size="lg" variant="primary" @click="onClick('size-lg')">Large</ph-button>
+          </div>
+        </div>
+
+        <!-- Example 4: Block / Full width -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Block (full width)</h6>
+          <ph-button variant="primary" block @click="onClick('block')">Full width button</ph-button>
+        </div>
+
+        <!-- Example 5: Loading state -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Loading state</h6>
+          <ph-button variant="primary" :loading="loading" @click="loading = !loading; onClick('primary-loading');">
+            {{ loading ? 'Loading...' : 'Click to load' }}
+          </ph-button>
+        </div>
+
+        <!-- Example 6: Disabled state -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">Disabled</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <ph-button variant="primary" disabled>Disabled Primary</ph-button>
+            <ph-button variant="outline-primary" disabled>Disabled Outline</ph-button>
+            <ph-button variant="danger" disabled>Disabled Danger</ph-button>
+          </div>
+        </div>
+
+        <!-- Example 7: With icons -->
+        <div class="mb-3">
+          <h6 class="text-body-secondary small mb-2">With icons</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <ph-button variant="primary" @click="onClick('Download')">
+              <ph-icon name="download" size="sm" class="me-1" />
+              Download
+            </ph-button>
+            <ph-button variant="outline-primary" @click="onClick('Upload')">
+              <ph-icon name="upload" size="sm" class="me-1" />
+              Upload
+            </ph-button>
+            <ph-button variant="ghost" @click="onClick('Settings')">
+              <ph-icon name="gear" size="sm" class="me-1" />
+              Settings
+            </ph-button>
+          </div>
+        </div>
+
+        <!-- Live state display -->
+        <div class="mt-3 p-3 bg-body-tertiary rounded">
+          <small>Last clicked: <code>{{ lastClicked || 'never' }}</code></small>
+        </div>
+      </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="600px" />
+      </div>
+    </template>
+    <template #props>
+      <span v-if="showProps">
+        <ph-card class="mt-3">
+          <h4>Props</h4>
+          <props-table :items="propsData" />
+          <strong>Emits:</strong>
+          <ul>
+            <li><code>click($event)</code></li>
+          </ul>
+        </ph-card>
+      </span>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhButton",
+  data() {
+    return {
+      loading: false,
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      lastClicked: "",
+      snippet: `<!-- Solid Variants -->
+<div class="d-flex flex-wrap gap-2">
+  <ph-button variant="primary">Primary</ph-button>
+  <ph-button variant="secondary">Secondary</ph-button>
+  <ph-button variant="success">Success</ph-button>
+  <ph-button variant="danger">Danger</ph-button>
+  <ph-button variant="warning">Warning</ph-button>
+  <ph-button variant="info">Info</ph-button>
+  <ph-button variant="light">Light</ph-button>
+  <ph-button variant="dark">Dark</ph-button>
+  <ph-button variant="link">Link</ph-button>
+</div>
+
+<!-- Outline Variants -->
+<div class="d-flex flex-wrap gap-2">
+  <ph-button variant="outline-primary">Outline Primary</ph-button>
+  <ph-button variant="outline-secondary">Outline Secondary</ph-button>
+  <ph-button variant="outline-success">Outline Success</ph-button>
+  <ph-button variant="outline-danger">Outline Danger</ph-button>
+  <ph-button variant="outline-warning">Outline Warning</ph-button>
+  <ph-button variant="outline-info">Outline Info</ph-button>
+  <ph-button variant="outline-light">Outline Light</ph-button>
+  <ph-button variant="outline-dark">Outline Dark</ph-button>
+</div>
+
+<!-- Sizes -->
+<div class="d-flex flex-wrap gap-2 align-items-center">
+  <ph-button size="sm" variant="primary">Small</ph-button>
+  <ph-button size="md" variant="primary">Medium</ph-button>
+  <ph-button size="lg" variant="primary">Large</ph-button>
+</div>
+
+<!-- Block (full width) -->
+<ph-button variant="primary" block>Full width button</ph-button>
+
+<!-- Loading state -->
+<ph-button variant="primary" :loading="loading" @click="loading = !loading">
+  {{ loading ? 'Loading...' : 'Click to load' }}
+</ph-button>
+
+<!-- Disabled -->
+<div class="d-flex flex-wrap gap-2">
+  <ph-button variant="primary" disabled>Disabled Primary</ph-button>
+  <ph-button variant="outline-primary" disabled>Disabled Outline</ph-button>
+  <ph-button variant="danger" disabled>Disabled Danger</ph-button>
+</div>
+
+<!-- With icons -->
+<ph-button variant="primary">
+  <ph-icon name="download" size="sm" class="me-1" />
+  Download
+</ph-button>`,
+      propsData: [
+        {
+          name: "type",
+          type: "String",
+          default: "'button'",
+          notes: "Native button type (button, submit, reset)",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "'primary'",
+          notes: "<strong>primary</strong> | <strong>secondary</strong> | <strong>success</strong> | <strong>danger</strong> | <strong>warning</strong> | <strong>info</strong> | <strong>light</strong> | <strong>dark</strong> | <strong>link</strong> |<strong>outline-primary</strong> | <strong>outline-secondary</strong> | <strong>outline-success</strong> | <strong>outline-danger</strong> | <strong>outline-warning</strong> | <strong>outline-info</strong> | <strong>outline-light</strong> | <strong>outline-dark</strong>.",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "Size: <strong>sm</strong> (btn-sm), <strong>md</strong> (default), <strong>lg</strong> (btn-lg)",
+        },
+        {
+          name: "block",
+          type: "Boolean",
+          default: "false",
+          notes: "Full width button (w-100)",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "Disables the button",
+        },
+        {
+          name: "loading",
+          type: "Boolean",
+          default: "false",
+          notes: "Shows spinner and disables button",
+        },
+      ],
+    };
+  },
+  methods: {
+    onClick(variant) {
+        if (this.loading) {
+            setTimeout(() => this.loading = !this.loading, 2000)
+        }
+        this.lastClicked = `${variant} at ${new Date().toLocaleTimeString()}`;
+    },
+  },
+};
+</script>
