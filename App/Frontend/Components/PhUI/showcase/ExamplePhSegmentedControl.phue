@@ -1,0 +1,201 @@
+<template>
+  <example-factory
+    tag="<ph-segmented-control />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Segmented button group (radio-based) with icons and variants.</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <p class="fw-bold">Size</p>
+          <!-- Example 1 -->
+          <ph-segmented-control
+            v-model="page"
+            size="sm"
+            variant="primary"
+            :options="[
+              { label: 'Home', value: 'Home', icon: 'house' },
+              { label: 'Profile', value: 'Profile', icon: 'person' }
+            ]"
+          />
+          <spacer/>
+          <!-- Example 2 -->
+          <ph-segmented-control
+            v-model="page"
+            variant="warning"
+            size="md"
+            :options="[
+              { label: 'Home', value: 'Home', icon: 'house' },
+              { label: 'Profile', value: 'Profile', icon: 'person' }
+            ]"
+          />
+          <spacer/>
+          <!-- Example 3 -->
+          <ph-segmented-control
+            v-model="page"
+            variant="secondary"
+            size="lg"
+            :options="[
+              { label: 'Home', value: 'Home', icon: 'house' },
+              { label: 'Profile', value: 'Profile', icon: 'person' }
+            ]"
+          />
+          <spacer/>
+          <p class="fw-bold">Block</p>
+          <!-- Example 4 -->
+          <ph-segmented-control
+            v-model="page"
+            variant="dark"
+            block
+            :options="[
+              { label: 'Home', value: 'Home', icon: 'house' },
+              { label: 'Profile', value: 'Profile', icon: 'person' }
+            ]"
+          />
+          <div class="mt-3">
+            <ph-badge size="lg" :variant="page === 'Home' ? 'primary' : 'info'">
+              {{ page }} Page
+            </ph-badge>
+          </div>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+          <ul>
+            <li><code>update:modelValue</code></li>
+            <li><code>change</code></li>
+          </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+    name: "ExamplePhSegmentedControl",
+  data() {
+    return {
+      loading: false,
+      disabled: false,
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      page: "Home",
+      snippet: `<p class="fw-bold">Size</p>
+<!-- Example 1 -->
+<ph-segmented-control
+  v-model="page"
+  size="sm"
+  variant="primary"
+  :options="[
+    { label: 'Home', value: 'Home', icon: 'house' },
+    { label: 'Profile', value: 'Profile', icon: 'person' }
+  ]"
+/>
+<spacer/>
+<!-- Example 2 -->
+<ph-segmented-control
+  v-model="page"
+  variant="warning"
+  size="md"
+  :options="[
+    { label: 'Home', value: 'Home', icon: 'house' },
+    { label: 'Profile', value: 'Profile', icon: 'person' }
+  ]"
+/>
+<spacer/>
+<!-- Example 3 -->
+<ph-segmented-control
+  v-model="page"
+  variant="secondary"
+  size="lg"
+  :options="[
+    { label: 'Home', value: 'Home', icon: 'house' },
+    { label: 'Profile', value: 'Profile', icon: 'person' }
+  ]"
+/>
+<spacer/>
+<p class="fw-bold">Block</p>
+<!-- Example 4 -->
+<ph-segmented-control
+  v-model="page"
+  variant="dark"
+  block
+  :options="[
+    { label: 'Home', value: 'Home', icon: 'house' },
+    { label: 'Profile', value: 'Profile', icon: 'person' }
+  ]"
+/>
+<div class="mt-3">
+  <ph-badge size="lg" :variant="page === 'Home' ? 'primary' : 'info'">
+    {{ page }} Page
+  </ph-badge>
+</div>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "String | Number | Boolean",
+          default: "null",
+          notes: "",
+        },
+        {
+          name: "options",
+          type: "Array",
+          default: "required",
+          notes: "{label, value, icon?, disabled?, key?}",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg",
+        },
+        {
+          name: "block",
+          type: "Boolean",
+          default: "false",
+          notes: "Full width",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "'primary'",
+          notes: "Bootstrap variant",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "",
+        },
+        {
+          name: "name",
+          type: "String",
+          default: "'ph-segmented'",
+          notes: "Radio group name",
+        },
+        {
+          name: "ariaLabel",
+          type: "String",
+          default: "'Segmented control'",
+          notes: "",
+        }
+      ],
+    };
+  },
+};
+</script>
