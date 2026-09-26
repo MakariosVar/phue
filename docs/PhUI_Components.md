@@ -277,27 +277,6 @@ Emits: `update:modelValue` (emits the radio's `value`).
 <ph-radio v-model="plan" name="plan" value="free" label="Free" />
 <ph-radio v-model="plan" name="plan" value="pro" label="Pro" />
 ```
-
-### `<ph-form-field>`
-
-Layout wrapper around any control: label, slot, and error-or-helper text. Adds
-`was-validated` to the wrapper when an error is present (used by Bootstrap for
-feedback styling on the slotted control).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `label` | `String` | `''` | `form-label` |
-| `error` | `String` | `''` | `valid-feedback d-block` |
-| `helperText` | `String` | `''` | `form-text`; shown only when `error` is empty |
-
-Slots: default. No emits.
-
-```
-<ph-form-field label="Email" :error="error">
-  <ph-input v-model="email" placeholder="you@example.com" />
-</ph-form-field>
-```
-
 ### `<ph-switch>`
 
 Boolean toggle (`.form-switch`). Same contract as `<ph-checkbox>`.
@@ -530,6 +509,28 @@ via `native`.
 | `clearable` | `Boolean` | `true` | |
 
 Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
+
+
+### `<ph-form-field>`
+
+Layout wrapper around any control: label, slot, and error-or-helper text. Adds
+`was-validated` to the wrapper when an error is present (used by Bootstrap for
+feedback styling on the slotted control).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `label` | `String` | `''` | `form-label` |
+| `error` | `String` | `''` | `valid-feedback d-block` |
+| `helperText` | `String` | `''` | `form-text`; shown only when `error` is empty |
+
+Slots: default. No emits.
+
+```
+<ph-form-field label="Email" :error="error">
+  <ph-input v-model="email" placeholder="you@example.com" />
+</ph-form-field>
+```
+
 
 ### `<ph-input-shell>`
 
