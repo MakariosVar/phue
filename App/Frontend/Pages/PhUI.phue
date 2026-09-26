@@ -17,6 +17,7 @@ return [
                 'components' => [
                     ['id' => 'button', 'label' => 'Button'],
                     ['id' => 'input', 'label' => 'Input'],
+                    ['id' => 'number-input', 'label' => 'Number Input'],
                     ['id' => 'select', 'label' => 'Select'],
                     ['id' => 'textarea', 'label' => 'Textarea'],
                     ['id' => 'checkbox', 'label' => 'Checkbox'],
@@ -186,6 +187,9 @@ return [
                             <span id="input">
                                 <example-ph-input />
                             </span>
+                            <span id="number-input">
+                                <example-ph-number-input />
+                            </span>
                             <span id="select">
                                 <example-ph-select />
                             </span>
@@ -206,7 +210,6 @@ return [
                             <ExamplePhFileInput />
                             <ExamplePhDatePicker />
                             <ExamplePhSearchInput />
-                            <ExamplePhNumberInput />
                             <ExamplePhRange />
                             <ExamplePhForm />
                             <ExamplePhSegmentedControl /> -->

@@ -30,7 +30,9 @@
         <props-table :items="propsData" />
         <strong>Emits:</strong>
           <ul>
-            <li><code>update:modelValue</code> (Emits the radio's <code>value</code>).</li>
+            <li><code>update:modelValue</code> (on <code>change</code>)</li>
+            <li><code>blur</code></li>
+            <li><code>focus</code></li>
           </ul>
       </ph-card>
     </template>
