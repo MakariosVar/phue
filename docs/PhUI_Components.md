@@ -203,6 +203,7 @@ Numeric input with increment/decrement controls, min/max, step, precision.
 | `precision` | `Number` | `0` | Decimal places |
 | `controls` | `Boolean` | `true` | Show ± buttons |
 | `label` | `String` | `''` | |
+| `variation` | `String` | `outline-secondary` | Bootstrap variations |
 | `placeholder` | `String` | `''` | |
 | `helperText` | `String` | `''` | |
 | `error` | `String` | `''` | |

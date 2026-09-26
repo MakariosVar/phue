@@ -11,7 +11,8 @@
       <button
         v-if="controls"
         type="button"
-        class="btn btn-outline-secondary"
+        class="btn"
+        :class="[`btn-${variation}`]"
         @click="decrement"
         :disabled="disabled || modelValue <= min"
         aria-label="Decrement"
@@ -41,7 +42,8 @@
       <button
         v-if="controls"
         type="button"
-        class="btn btn-outline-secondary"
+        class="btn"
+        :class="[`btn-${variation}`]"
         @click="increment"
         :disabled="disabled || modelValue >= max"
         aria-label="Increment"
@@ -86,6 +88,10 @@ export default {
     controls: {
       type: Boolean,
       default: true
+    },
+    variation: {
+      type: String,
+      default: 'outline-secondary'
     },
     label: {
       type: String,

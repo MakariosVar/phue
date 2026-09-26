@@ -27,6 +27,7 @@
               <ph-number-input
                 v-model="counter2"
                 label="Counter 2"
+                variation="primary"
                 :min="0"
                 :max="100"
                 :step="0.04"
@@ -112,6 +113,7 @@ export default {
     <ph-number-input
       v-model="counter2"
       label="Counter 2"
+      variation="primary"
       :min="0"
       :max="100"
       :step="0.04"
@@ -191,6 +193,12 @@ export default {
           type: "String",
           default: "''",
           notes: "",
+        },
+        {
+          name: "variation",
+          type: "String",
+          default: "outline-secondary",
+          notes: "Bootstrap variations"
         },
         {
           name: "placeholder",

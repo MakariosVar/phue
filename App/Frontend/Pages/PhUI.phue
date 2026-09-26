@@ -184,7 +184,6 @@ return [
 
                 <!-- Form Controls -->
                 <section id="forms" class="mb-5">
-                    <h2 class="h4 fw-semibold mb-3">Form Controls</h2>
                     <ph-card title='Form Controls'>
                         <div class="d-flex flex-column gap-2">
                             <span id="button">
