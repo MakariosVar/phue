@@ -25,6 +25,7 @@ return [
                     ['id' => 'radio', 'label' => 'Radio'],
                     ['id' => 'switch', 'label' => 'Switch'],
                     ['id' => 'search-input', 'label' => 'Search Input'],
+                    ['id' => 'range', 'label' => 'Range']
                 ]
             ],
             [
@@ -213,11 +214,12 @@ return [
                             <span id="search-input">
                                 <example-ph-search-input />
                             </span>
+                            <span id="range">
+                                <example-ph-range />
+                            </span>
                             <!--
                             <ExamplePhFileInput />
                             <ExamplePhDatePicker />
-                            <ExamplePhSearchInput />
-                            <ExamplePhRange />
                             <ExamplePhForm />
                             <ExamplePhSegmentedControl /> -->
                         </div>
