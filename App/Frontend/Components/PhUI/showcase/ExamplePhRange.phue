@@ -37,7 +37,7 @@
 
 <script>
 export default {
-  name: "ExamplePhInput",
+  name: "ExamplePhRange",
   data() {
     return {
       showCode: false,

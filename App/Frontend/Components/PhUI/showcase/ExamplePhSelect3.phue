@@ -97,7 +97,7 @@
 
 <script>
 export default {
-  name: "ExamplePhInput",
+  name: "ExamplePhSelect3",
   data() {
     return {
       showCode: false,

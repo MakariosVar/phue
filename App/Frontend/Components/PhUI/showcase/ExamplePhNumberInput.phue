@@ -80,7 +80,7 @@
 
 <script>
 export default {
-  name: "ExamplePhSwitch",
+  name: "ExamplePhNumberInput",
   data() {
     return {
       showCode: false,
