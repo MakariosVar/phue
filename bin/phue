@@ -28,6 +28,8 @@ use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
 use Phue\Core\Console\Commands\CacheClearCommand;
 use Phue\Core\Console\Commands\OptimizeCommand;
+use Phue\Core\Console\Commands\RouteCacheCommand;
+use Phue\Core\Console\Commands\RouteClearCommand;
 use Phue\Core\Console\CommandInterface;
 
 $basePath = dirname(__DIR__);
@@ -55,7 +57,9 @@ $app
     ->add(new NpmRemoveCommand())
     ->add(new NpmListCommand())
     ->add(new CacheClearCommand())
-    ->add(new OptimizeCommand());
+    ->add(new OptimizeCommand())
+    ->add(new RouteCacheCommand())
+    ->add(new RouteClearCommand());
 
 // Module-specific commands
 foreach ($modules as $moduleClass) {

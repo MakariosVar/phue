@@ -43,6 +43,48 @@ class Router
     protected bool $isSorted = false;
 
     /**
+     * Direct injection of pre-compiled routes from route cache file.
+     *
+     * @param array<int, array{
+     *     method: string,
+     *     path: string,
+     *     regex: string,
+     *     handler: mixed,
+     *     paramCount: int,
+     *     middleware: array<string>
+     * }> $routes
+     * @return self
+     */
+    public function registerCachedRoutes(array $routes): self
+    {
+        $this->routes = $routes;
+        $this->isSorted = true;
+
+        return $this;
+    }
+
+    /**
+     * Returns the internal list of compiled routes for caching.
+     *
+     * @return array<int, array{
+     *     method: string,
+     *     path: string,
+     *     regex: string,
+     *     handler: mixed,
+     *     paramCount: int,
+     *     middleware: array<string>
+     * }>
+     */
+    public function getCompiledRoutes(): array
+    {
+        if (!$this->isSorted) {
+            $this->sortRoutes();
+        }
+
+        return $this->routes;
+    }
+
+    /**
      * Register a new route manually.
      *
      * @param string                $method     HTTP method (GET, POST, PUT, DELETE, etc.)

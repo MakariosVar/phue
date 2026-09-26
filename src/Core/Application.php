@@ -21,6 +21,7 @@ use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
+use Phue\Core\Routing\Loader\AttributeRouteLoader;
 use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\ComponentRenderer;
@@ -28,6 +29,7 @@ use Phue\Core\UI\PhuePartialRenderer;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Throwable;
+
 /**
  * Class Application
  *
@@ -107,6 +109,35 @@ class Application
 
         // Load configured module classes
         $this->loadModules((array) $this->config->get('app.modules', []));
+        
+        // Cache application routes
+        $this->cacheRoutes();
+    }
+
+    /**
+     * Cache the application routes.
+     *
+     * @return void
+     */
+    private function cacheRoutes(): void
+    {
+        // Route Caching Integration
+        $routeCacheFile = $this->basePath . '/storage/cache/routes.php';
+        $shouldCacheRoutes = (bool) $this->config->get('app.routeCache', !$this->debug);
+
+        $loader = new AttributeRouteLoader();
+        $cachedRoutes = $shouldCacheRoutes ? $loader->loadCached($routeCacheFile) : null;
+
+        if ($cachedRoutes !== null) {
+            $this->router->registerCachedRoutes($cachedRoutes);
+        } else {
+            $this->router->registerController(AssetsController::class);
+            $this->router->registerController(\Phue\Core\Health\HealthController::class);
+
+            if ($shouldCacheRoutes) {
+                $loader->saveCache($routeCacheFile, $this->router->getCompiledRoutes());
+            }
+        }
     }
 
     /**
@@ -122,11 +153,11 @@ class Application
         });
         $this->container->alias('logger', LoggerInterface::class);
 
-        $this->container->singleton(Config::class, fn (): Config => $this->config);
-        $this->container->singleton(Container::class, fn (): Container => $this->container);
-        $this->container->singleton(Router::class, fn (): Router => $this->router);
-        $this->container->singleton(EventDispatcher::class, fn (): EventDispatcher => $this->events);
-        $this->container->singleton(self::class, fn (): self => $this);
+        $this->container->singleton(Config::class, fn(): Config => $this->config);
+        $this->container->singleton(Container::class, fn(): Container => $this->container);
+        $this->container->singleton(Router::class, fn(): Router => $this->router);
+        $this->container->singleton(EventDispatcher::class, fn(): EventDispatcher => $this->events);
+        $this->container->singleton(self::class, fn(): self => $this);
 
         // Explicitly register SecurityMiddleware singleton with trusted proxies configuration
         $this->container->singleton(SecurityMiddleware::class, function (): SecurityMiddleware {
@@ -273,7 +304,7 @@ class Application
                         /** @var \Phue\Core\Request $request */
                         $request = $c->get(\Phue\Core\Request::class);
                         return $auth->authenticate($request);
-                    } catch (\Throwable) {
+                    } catch (Throwable) {
                         return null;
                     }
                 }
@@ -345,7 +376,7 @@ class Application
             return $registry;
         });
 
-        $this->container->singleton(AssetServer::class, fn (): AssetServer => new AssetServer(
+        $this->container->singleton(AssetServer::class, fn(): AssetServer => new AssetServer(
             $this->container->get(AssetRegistry::class),
             (bool) $this->config->get('app.debug', false)
         ));
@@ -354,13 +385,13 @@ class Application
             return new HtmlShellRenderer($this->container->get(AssetRegistry::class));
         });
 
-        // Auto-register AssetsController & HealthController to Router
-        $this->router->registerController(AssetsController::class);
-        $this->router->registerController(\Phue\Core\Health\HealthController::class);
     }
 
     /**
      * Automatically bootstrap Active Record and Database Connection using config values.
+     *
+     * Registers Connection as a scoped service to maintain isolated database state
+     * across concurrent request scopes in persistent long-running environments.
      *
      * @return void
      */
@@ -376,9 +407,10 @@ class Application
         $dbConfig = $this->config->get("database.connections.{$defaultConnection}");
 
         if (is_array($dbConfig)) {
-            $connection = new Connection($dbConfig);
-            $this->container->singleton(Connection::class, fn (): Connection => $connection);
-            BaseActiveRecord::setConnection($connection);
+            $this->container->scoped(Connection::class, fn(): Connection => new Connection($dbConfig));
+            $this->container->alias('db', Connection::class);
+
+            BaseActiveRecord::setConnectionResolver(fn(): Connection => $this->container->get(Connection::class));
         }
     }
 
@@ -403,10 +435,10 @@ class Application
     }
 
     /**
-    * Retrieve the current authenticated user accessor instance, if available.
-    *
-    * @return CurrentUserInterface|null User accessor instance or null if not bound.
-    */
+     * Retrieve the current authenticated user accessor instance, if available.
+     *
+     * @return CurrentUserInterface|null User accessor instance or null if not bound.
+     */
     public function user(): ?CurrentUserInterface
     {
         if ($this->container->has(CurrentUserInterface::class)) {
@@ -443,19 +475,19 @@ class Application
         $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
 
         // Reset per-request script tracking so SPA responses only include current page scripts
-        $this->container->get(\Phue\Core\Asset\AssetRegistry::class)->beginRequest();
+        $this->container->get(AssetRegistry::class)->beginRequest();
 
         // Build the global middleware pipeline
         $pipeline = array_reduce(
             array_reverse($this->middlewareStack),
-            fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
+            fn(callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
                 if (is_string($middleware)) {
                     /** @var callable $middleware */
                     $middleware = $this->container->get($middleware);
                 }
                 return $middleware($req, $next);
             },
-            fn (Request $req): Response => $this->dispatchToRouter($req)
+            fn(Request $req): Response => $this->dispatchToRouter($req)
         );
 
         /** @var LoggerInterface $logger */
@@ -481,8 +513,7 @@ class Application
             $response = new Response('Not Found', 404);
         } catch (MethodNotAllowedException $e) {
             $logger->warning('HTTP 405 Method Not Allowed: ' . $request->getMethod() . ' ' . $request->getUri(), ['exception' => $e]);
-            $response = (new Response('Method Not Allowed', 405))
-                ->setHeader('Allow', implode(', ', $e->getAllowedMethods()));
+            $response = (new Response('Method Not Allowed', 405))->setHeader('Allow', implode(', ', $e->getAllowedMethods()));
         } catch (Throwable $e) {
             $response = $this->renderExceptionResponse($e, $request);
         } finally {
@@ -545,8 +576,7 @@ class Application
                 // 1. Check for Request type (Request class or subclass/interface)
                 if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
                     $args[] = $req;
-                }
-                // 2. Direct route path parameter match by name (e.g. $id)
+                }                 // 2. Direct route path parameter match by name (e.g.$id)
                 elseif (array_key_exists($paramName, $coercedParams)) {
                     $args[] = $coercedParams[$paramName];
                 }
@@ -572,7 +602,7 @@ class Application
         // Build route-specific middleware pipeline (Class-level -> Method-level)
         $routePipeline = array_reduce(
             array_reverse($routeMiddlewares),
-            fn (callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
+            fn(callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
                 if (is_string($middleware)) {
                     /** @var callable $middleware */
                     $middleware = $this->container->get($middleware);
@@ -739,7 +769,7 @@ class Application
 
             // Register under "module.{id}" if a valid ID is present
             if ($module->id !== '') {
-                $this->container->singleton("module.{$module->id}", fn () => $module);
+                $this->container->singleton("module.{$module->id}", fn() => $module);
                 $loaded[$module->id] = $module;
             }
 
@@ -785,8 +815,8 @@ class Application
                 return Response::json([
                     'error' => $e->getMessage(),
                     'class' => get_class($e),
-                    'file'  => $e->getFile(),
-                    'line'  => $e->getLine(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
                     'trace' => explode("\n", $e->getTraceAsString()),
                 ], 500);
             }

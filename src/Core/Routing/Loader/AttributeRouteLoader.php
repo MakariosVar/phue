@@ -18,6 +18,48 @@ use RegexIterator;
 class AttributeRouteLoader
 {
     /**
+     * Loads routes from a compiled PHP array cache file if valid.
+     *
+     * @param string $cacheFile Absolute path to the cached routes file.
+     * @return array<int, array<string, mixed>>|null Returns array of compiled routes or null if missing/invalid.
+     */
+    public function loadCached(string $cacheFile): ?array
+    {
+        if (!file_exists($cacheFile)) {
+            return null;
+        }
+
+        /** @var array{scannedAt?: int, routes?: array<int, array<string, mixed>>} $data */
+        $data = require $cacheFile;
+
+        return is_array($data) && isset($data['routes']) ? $data['routes'] : null;
+    }
+
+    /**
+     * Exports and saves compiled route definitions to a PHP array cache file.
+     *
+     * @param string                     $cacheFile Absolute path to output cache file.
+     * @param array<int, array<mixed>>   $routes    Compiled route array structure.
+     * @return void
+     */
+    public function saveCache(string $cacheFile, array $routes): void
+    {
+        $dir = dirname($cacheFile);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $export = var_export([
+            'scannedAt' => time(),
+            'routes'    => $routes,
+        ], true);
+
+        $content = "<?php\n\ndeclare(strict_types=1);\n\n// Auto-generated route cache file. Do not edit directly.\nreturn {$export};\n";
+
+        file_put_contents($cacheFile, $content, LOCK_EX);
+    }
+
+    /**
      * Loads and resolves all route and middleware attributes defined in a given controller class.
      *
      * @param class-string $controllerClass The fully qualified class name of the controller.
@@ -126,7 +168,7 @@ class AttributeRouteLoader
 
             // Extract path relative to scanned directory
             $relativePath = substr($filePath, strlen($realDirectory));
-            $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR); // Αφαιρεί το αρχικό / ή \
+            $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR);
             
             // Convert directory separators to namespace separators
             $classWithExtension = str_replace(DIRECTORY_SEPARATOR, '\\', $relativePath);
