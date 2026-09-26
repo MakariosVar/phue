@@ -67,7 +67,7 @@ return [
 
 ### 1.3 Shared conventions
 
-**Spacing scale** (used by `gap`, `size`, `padding`, `margin` props):
+**Spacing scale** (used by `gap`, `padding`, `margin` props):
 
 | Token  | Value  |
 |--------|--------|
@@ -81,6 +81,13 @@ return [
 
 Numeric values are interpreted as **pixels**. An unknown string is passed
 through as a raw CSS value (e.g. `gap="1.25rem"`).
+
+> **`size` is not a spacing prop.** On form controls (`<ph-input-shell>`,
+> `<ph-search-input>`, `<ph-switch>`, `<ph-badge>`, `<ph-button>`, …) `size` is a
+> *control-size* token (`sm` / `md` / `lg`) that maps to Bootstrap's
+> `*-sm` / default / `*-lg` metrics, not to a length from the scale above.
+> `<ph-input-shell>` reads its metrics from a single `SIZE_TOKENS` table so the
+> styles and the prop validator cannot drift apart.
 
 **Variants.** Components that read `variant` map the neutral/error names onto
 Bootstrap classes: `error` → `bg-danger`/`alert-danger`, `neutral` →
@@ -181,6 +188,80 @@ Emits: `update:modelValue` (on `input`), `blur`, `focus`.
 <ph-input v-model="email" label="Email" placeholder="you@example.com"
           helper-text="We never share your email." :error="emailError" />
 ```
+
+### `<ph-input-shell>`
+
+Shared bordered shell for composite controls: the magnifier/prefix icon, the
+field and the trailing clear button all live **inside one border box** and light
+up as a single unit on focus.
+
+**Why it exists.** Bootstrap 5.3 declares the focus ring as a `box-shadow` on
+`.form-control:focus` — on that element only — and ships **no**
+`.input-group:focus-within` rule. So a row of siblings glued together with
+`input-group` can never render one unified ring: the field glows in the middle
+while the affixes and the button stay flat. This component inverts the structure
+instead of fighting it — the shell owns `border`, `border-radius` and the ring,
+and the slotted control is a borderless, transparent flex child. Affixes are
+spaced by the shell's `gap`, not by per-slot padding.
+
+Because a `.phue` file cannot ship a `<style>` block, the ring is emitted as a
+bound style driven by `focusin`/`focusout` (which are exactly `:focus-within`
+semantics), reusing Bootstrap's own values — `#86b7fe` + `0 0 0 .25rem
+rgba(13,110,253,.25)`, and the `--bs-danger-rgb` variant when invalid.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — drives padding, font-size, gap and radius |
+| `invalid` | `Boolean` | `false` | Error border + red focus ring |
+| `disabled` | `Boolean` | `false` | Muted background, `not-allowed`, focus suppressed |
+
+Emits: `focus`, `blur` (as `focusin`/`focusout`, so they fire for the affixes too).
+
+Slots:
+
+| Slot | Scoped props | Notes |
+|---|---|---|
+| `prefix` | — | Leading affix (icons, static text) |
+| `default` | `{ controlStyle, size, disabled, invalid }` | **The control.** Bind `:style="controlStyle"` — it neutralises `.form-control`'s own box so the field does not draw a second border inside the shell |
+| `suffix` | — | Trailing affix (clear button, badges) |
+
+Methods: `focus()` — focuses the slotted control, so consumers never need a
+template ref into slot content. Clicking the shell's padding also redirects focus
+to the control, but a direct hit on the control is left to the browser so the
+caret lands where the user clicked.
+
+```
+<ph-input-shell size="sm" :invalid="!!error">
+  <template #prefix>
+    <span class="d-inline-flex align-items-center" aria-hidden="true">
+      <ph-icon name="search" size="sm" variant="muted" />
+    </span>
+  </template>
+
+  <template #default="{ controlStyle }">
+    <input
+      type="search"
+      class="form-control"
+      :style="controlStyle"
+      :value="modelValue"
+      @input="$emit('update:modelValue', $event.target.value)"
+    />
+  </template>
+
+  <template #suffix>
+    <button v-if="modelValue" type="button" class="btn btn-sm p-0 border-0"
+            aria-label="Clear" @click="clear">
+      <ph-icon name="x" size="sm" />
+    </button>
+  </template>
+</ph-input-shell>
+```
+
+> The slotted control keeps the `form-control` class on purpose: `controlStyle`
+> then overrides only the box-drawing declarations, so the placeholder colour and
+> disabled colour still come from Bootstrap. It also sets `appearance: none`,
+> without which `type="search"` lets the browser draw its own clear affordance
+> next to yours.
 
 ### `<ph-select>`
 
@@ -313,26 +394,54 @@ Emits: `update:modelValue` (on `change`), `blur`, `focus`.
 
 ### `<ph-search-input>`
 
-Search input with debounce, clear button, and search icon.
+Search input built on `<ph-input-shell>`, so the clear button renders **inside**
+the border box and the focus ring covers the magnifier, the field and the button
+as one unit.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `modelValue` | `String` | `''` | |
-| `id` | `String` | `null` | |
+| `id` | `String` | `null` | Falls back to `ph-search-<id>` |
 | `placeholder` | `String` | `'Search…'` | |
-| `debounce` | `Number` | `300` | Ms |
-| `clearable` | `Boolean` | `true` | |
+| `debounce` | `Number` | `300` | Ms. `0` emits `search` **synchronously** |
+| `clearable` | `Boolean` | `true` | Shows the ✕ while `modelValue` is non-empty |
 | `label` | `String` | `''` | |
+| `ariaLabel` | `String` | `'Search'` | Accessible name, applied only when no visible `label` is rendered |
 | `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
+| `error` | `String` | `''` | Red shell border + red focus ring + `role="alert"` message |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | Sets the real `required` / `aria-required` (unlike the other form controls, this one is not visual-only) |
 | `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
 
 Emits: `update:modelValue`, `search(query)`, `clear`, `focus`, `blur`.
 
+**`search` fires from user input only.** The debounce is driven by the `input`
+event, not by a `modelValue` watcher, so a parent that pushes a new value
+programmatically does **not** trigger a search. > **BC:** earlier versions
+debounced off the watcher and therefore did fire `search` on external updates.
+Listen to `update:modelValue` if you need to react to programmatic changes.
+
+| Key | Behaviour |
+|---|---|
+| `Enter` | Cancels the pending debounce and emits `search` immediately |
+| `Esc` | Clears the field, emits `clear`, and returns focus to the input |
+
+Other behaviour:
+
+- Clicking the magnifier focuses the field, as does clicking anywhere on the
+  shell's padding.
+- The magnifier is `aria-hidden` and is **not** a tab stop — the input is the
+  single keyboard stop, so no redundant tab target is added.
+- The pending debounce is cancelled on `clear` and on unmount, so a stale
+  `search` can never land after the field was emptied.
+- The browser's native `::-webkit-search-cancel-button` is suppressed
+  (`appearance: none`), so there is exactly one ✕.
+- `autocomplete="off"`, `spellcheck="false"` and `enterkeyhint="search"` are set
+  on the input.
+
 ```
-<ph-search-input v-model="query" @search="onSearch" placeholder="Search users…" />
+<ph-search-input v-model="query" @search="onSearch" placeholder="Search users…"
+                 :error="queryError" size="sm" label="Users" />
 ```
 
 ### `<ph-number-input>`
@@ -1469,6 +1578,7 @@ No emits or slots.
 | PhHeading | `<ph-heading>` | Typography |
 | PhIcon | `<ph-icon>` | Data display |
 | PhInput | `<ph-input>` | Form control |
+| PhInputShell | `<ph-input-shell>` | Form control (bordered shell primitive for composite controls) |
 | PhLink | `<ph-link>` | Navigation |
 | PhListGroup | `<ph-list-group>` | Data display |
 | PhMarkdown | `<ph-markdown>` | SSR partial (server-side markdown rendering) |
@@ -1494,9 +1604,11 @@ No emits or slots.
 | PhTabs | `<ph-tabs>` | Navigation |
 | PhText | `<ph-text>` | Typography |
 | PhTextarea | `<ph-textarea>` | Form control |
+| PhTheme | `<ph-theme>` | Navigation |
 | PhTimeline | `<ph-timeline>` | Data display |
 | PhToast | `<ph-toast>` | Feedback |
 | PhTooltip | `<ph-tooltip>` | Feedback |
+| PhTreeNode | `<ph-tree-node>` | Internal — recursion helper rendered by `<ph-tree-view>`; not for direct use |
 | PhTreeView | `<ph-tree-view>` | Data display |
 | Spacer | `<spacer>` | Layout |
 

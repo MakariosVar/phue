@@ -1,0 +1,196 @@
+<template>
+  <div
+    data-phui="input-shell"
+    :class="shellClasses"
+    :style="shellStyle"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+    @mousedown="onShellMouseDown"
+  >
+    <span
+      v-if="$slots.prefix"
+      class="ph-input-shell__affix d-inline-flex align-items-center flex-shrink-0"
+    >
+      <slot name="prefix" />
+    </span>
+
+    <slot
+      :control-style="controlStyle"
+      :size="size"
+      :disabled="disabled"
+      :invalid="invalid"
+    />
+
+    <span
+      v-if="$slots.suffix"
+      class="ph-input-shell__affix d-inline-flex align-items-center flex-shrink-0"
+    >
+      <slot name="suffix" />
+    </span>
+  </div>
+</template>
+
+<script>
+/**
+ * Bootstrap's focus ring lives on the element that carries `.form-control:focus`
+ * (a box-shadow on that element only) and Bootstrap ships no `.input-group:focus-within`
+ * rule, so a group of glued siblings can never render one unified ring. This primitive
+ * inverts the structure instead: a single bordered shell owns the border, the radius
+ * and the ring, while the slotted control is a borderless, transparent flex child.
+ *
+ * Because a `.phue` file may not carry a `<style>` block, the ring is emitted as a
+ * bound style driven by `focusin`/`focusout` — which are exactly `:focus-within`
+ * semantics — using Bootstrap's own token values. The `focused` flag plus
+ * `FOCUS_BORDER_COLOR`/`FOCUS_RING` below are the only things to delete once a
+ * real `.ph-input-shell:focus-within` CSS rule exists.
+ */
+const FOCUS_BORDER_COLOR = '#86b7fe';
+const FOCUS_RING = '0 0 0 .25rem rgba(13, 110, 253, .25)';
+const INVALID_FOCUS_RING = '0 0 0 .25rem rgba(var(--bs-danger-rgb), .25)';
+
+/** Single source of truth for the control metrics, mirroring .form-control-{sm,lg}. */
+const SIZE_TOKENS = {
+  sm: { py: '.25rem', px: '.5rem', gap: '.25rem', fontSize: '.875rem', radius: 'var(--bs-border-radius-sm)' },
+  md: { py: '.375rem', px: '.75rem', gap: '.375rem', fontSize: '1rem', radius: 'var(--bs-border-radius)' },
+  lg: { py: '.5rem', px: '1rem', gap: '.5rem', fontSize: '1.25rem', radius: 'var(--bs-border-radius-lg)' }
+};
+
+const FOCUSABLE = 'input, textarea, select';
+
+export default {
+  name: 'PhInputShell',
+  props: {
+    size: {
+      type: String,
+      default: 'md',
+      validator: (v) => Object.prototype.hasOwnProperty.call(SIZE_TOKENS, v)
+    },
+    invalid: {
+      type: Boolean,
+      default: false
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['focus', 'blur'],
+  data() {
+    return {
+      focused: false
+    };
+  },
+  computed: {
+    tokens() {
+      return SIZE_TOKENS[this.size] || SIZE_TOKENS.md;
+    },
+    shellClasses() {
+      return [
+        'ph-input-shell',
+        'd-flex',
+        {
+          [`ph-input-shell--${this.size}`]: true,
+          'ph-input-shell--invalid': this.invalid,
+          'ph-input-shell--disabled': this.disabled
+        }
+      ];
+    },
+    shellStyle() {
+      const t = this.tokens;
+
+      // Longhands only: a `border` shorthand plus a `borderColor` override would be
+      // dropped in the wrong order by Vue's style diffing once the override is removed.
+      const style = {
+        width: '100%',
+        gap: t.gap,
+        padding: `${t.py} ${t.px}`,
+        fontSize: t.fontSize,
+        fontWeight: '400',
+        lineHeight: '1.5',
+        color: 'var(--bs-body-color)',
+        background: 'var(--bs-body-bg)',
+        borderWidth: 'var(--bs-border-width)',
+        borderStyle: 'solid',
+        borderColor: 'var(--bs-border-color)',
+        borderRadius: t.radius,
+        transition: 'border-color .15s ease-in-out, box-shadow .15s ease-in-out'
+      };
+
+      if (this.disabled) {
+        style.background = 'var(--bs-secondary-bg)';
+        style.cursor = 'not-allowed';
+      } else if (this.invalid) {
+        style.borderColor = 'var(--bs-form-invalid-border-color)';
+        if (this.focused) style.boxShadow = INVALID_FOCUS_RING;
+      } else if (this.focused) {
+        style.borderColor = FOCUS_BORDER_COLOR;
+        style.boxShadow = FOCUS_RING;
+      }
+
+      return style;
+    },
+    /**
+     * Handed to the default slot so consumers do not re-declare the neutralisation
+     * of `.form-control`'s own box. The class is intentionally kept on the control
+     * for its placeholder colour and disabled colour, which the inline style then
+     * overrides where it would otherwise draw a second box.
+     */
+    controlStyle() {
+      return {
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        flex: '1 1 auto',
+        width: '100%',
+        minWidth: '0',
+        margin: '0',
+        padding: '0',
+        borderWidth: '0',
+        borderStyle: 'none',
+        borderRadius: '0',
+        background: 'transparent',
+        boxShadow: 'none',
+        outline: '0',
+        color: 'inherit',
+        fontSize: 'inherit',
+        fontWeight: 'inherit',
+        lineHeight: 'inherit'
+      };
+    }
+  },
+  methods: {
+    controlElement() {
+      return this.$el ? this.$el.querySelector(FOCUSABLE) : null;
+    },
+    /** Focuses the slotted control, so consumers never need their own template ref. */
+    focus() {
+      const control = this.controlElement();
+      if (control) control.focus();
+    },
+    onFocusIn(event) {
+      if (this.disabled) return;
+      this.focused = true;
+      this.$emit('focus', event);
+    },
+    onFocusOut(event) {
+      // focusout fires before the incoming focus target is committed, so relatedTarget
+      // is what tells "left the shell" apart from "moved to the suffix button".
+      const next = event.relatedTarget;
+      if (next && this.$el && this.$el.contains(next)) return;
+      this.focused = false;
+      this.$emit('blur', event);
+    },
+    onShellMouseDown(event) {
+      if (this.disabled || event.button !== 0) return;
+      if (event.target.closest('button, a, [role="button"]')) return;
+
+      const control = this.controlElement();
+      if (!control || control === event.target) return;
+
+      // The shell's own padding is clickable surface, so redirect the focus ourselves
+      // instead of leaving a dead zone around the field.
+      event.preventDefault();
+      control.focus();
+    }
+  }
+};
+</script>
