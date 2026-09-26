@@ -4,6 +4,7 @@ return [
     'state' => [
         'activeSection' => 'index',
         'searchQuery' => '',
+        'shellHeight' => 'calc(100dvh - 4.75rem)',
         'navItems' => [
             [
                 'id' => 'index',
@@ -293,7 +294,6 @@ return [
 <script>
 import { createSSRApp, reactive, toRefs, computed, watch, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 
-/** First-paint shell height before the real offset is measured (topbar + .app-content padding). */
 const SHELL_FALLBACK_HEIGHT = 'calc(100dvh - 4.75rem)';
 
 /** Never collapse the shell below this, no matter how small the viewport gets. */
@@ -334,7 +334,7 @@ export default function mountApp(injectedContext = null) {
             const shellEl = ref(null);
             const mainEl = ref(null);
             const contentEl = ref(null);
-            const shellHeight = ref(SHELL_FALLBACK_HEIGHT);
+            const shellHeight = ref(initState.shellHeight ?? SHELL_FALLBACK_HEIGHT);
             const expandedSections = reactive({});
 
             /** Flat, DOM-ordered list of every spy target (sections + their components). */
