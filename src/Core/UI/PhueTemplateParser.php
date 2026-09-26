@@ -54,9 +54,9 @@ class PhueTemplateParser
     {
         $structure = $this->parseStructure($filePath);
         $meta = $this->evaluatePhpBlock(
-            $structure['phpCode'] ?? '', 
-            $params, 
-            $filePath, 
+            $structure['phpCode'] ?? '',
+            $params,
+            $filePath,
             $structure['phpStartLine'] ?? 1
         );
 
@@ -68,18 +68,19 @@ class PhueTemplateParser
             template: $structure['template'],
             state: $state,
             scripts: $scripts,
-            inlineScript: $structure['script']
+            inlineScript: $structure['script'],
+            style: $structure['style']
         );
 
         return new PhueComponent($title, $view);
     }
 
     /**
-     * Parses ONLY static structure (template, script, raw phpCode) without executing embedded PHP.
+     * Parses ONLY static structure (template, script, style, raw phpCode) without executing embedded PHP.
      *
      * @param string $filePath Absolute path to the target component file.
      *
-     * @return array{template: string, script: ?string, phpCode: ?string, phpStartLine: int} Structural AST block map.
+     * @return array{template: string, script: ?string, style: ?string, phpCode: ?string, phpStartLine: int} Structural AST block map.
      *
      * @throws RuntimeException If file does not exist, is unreadable, or violates structure rules.
      */
@@ -100,6 +101,7 @@ class PhueTemplateParser
         $phpStartLine = $blocks['php']['startLine'] ?? 1;
         $templateContent = $blocks['template']['body'] ?? null;
         $scriptBlock = $blocks['script'] ?? null;
+        $styleBlock = $blocks['style'] ?? null;
 
         if ($templateContent === null || trim($templateContent) === '') {
             throw new RuntimeException("Phue component is missing required <template> block: {$filePath}");
@@ -115,16 +117,22 @@ class PhueTemplateParser
             $scriptContent = trim($scriptBlock['body']);
         }
 
+        $styleContent = null;
+        if ($styleBlock !== null) {
+            $styleContent = trim($styleBlock['body']);
+        }
+
         return [
-            'template'     => trim($templateContent),
-            'script'       => $scriptContent,
-            'phpCode'      => $phpContent,
+            'template' => trim($templateContent),
+            'script' => $scriptContent,
+            'style' => $styleContent,
+            'phpCode' => $phpContent,
             'phpStartLine' => $phpStartLine,
         ];
     }
 
     /**
-     * Parses raw single-file component content into distinct top-level tags (<php>, <template>, <script>).
+     * Parses raw single-file component content into distinct top-level tags (<php>, <template>, <script>, <style>).
      *
      * @param string $content  Raw file string content.
      * @param string $filePath Source path for exception contextual error logging.
@@ -142,6 +150,7 @@ class PhueTemplateParser
         $offset += strspn($content, " \t\r\n", $offset);
 
         $scriptPattern = '/\G\s*<script\b[^>]*>(.*)(<\/script\s*>)/smsi';
+        $stylePattern = '/\G\s*<style\b[^>]*>(.*)(<\/style\s*>)/smsi';
         $tagStartPattern = '/\G\s*<(php|template)\b[^>]*>/i';
 
         while ($offset < $length) {
@@ -191,8 +200,8 @@ class PhueTemplateParser
                 $raw = substr($content, $tagMatchOffset, $rawLength);
 
                 $blocks[$tagName] = [
-                    'raw'       => $raw,
-                    'body'      => $body,
+                    'raw' => $raw,
+                    'body' => $body,
                     'startLine' => $startLine + 1,
                 ];
 
@@ -207,9 +216,25 @@ class PhueTemplateParser
                 $scriptStartLine = substr_count(substr($content, 0, $match[0][1]), "\n") + 1;
 
                 $blocks['script'] = [
-                    'raw'       => $match[0][0],
-                    'body'      => $match[1][0],
+                    'raw' => $match[0][0],
+                    'body' => $match[1][0],
                     'startLine' => $scriptStartLine,
+                ];
+
+                $offset += strlen($match[0][0]);
+                $offset += strspn($content, " \t\r\n", $offset);
+            } elseif (preg_match($stylePattern, $content, $match, PREG_OFFSET_CAPTURE, $offset)) {
+                if (isset($blocks['style'])) {
+                    $styleStartLine = substr_count(substr($content, 0, $match[0][1]), "\n") + 1;
+                    throw new RuntimeException("Duplicate top-level <style> section in {$filePath} on line {$styleStartLine}");
+                }
+
+                $styleStartLine = substr_count(substr($content, 0, $match[0][1]), "\n") + 1;
+
+                $blocks['style'] = [
+                    'raw' => $match[0][0],
+                    'body' => $match[1][0],
+                    'startLine' => $styleStartLine,
                 ];
 
                 $offset += strlen($match[0][0]);

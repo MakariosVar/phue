@@ -18,6 +18,13 @@ use RuntimeException;
 class ComponentRenderer
 {
     /**
+     * Track rendered component styles to deduplicate per request.
+     *
+     * @var array<string, bool>
+     */
+    private array $renderedStyles = [];
+
+    /**
      * @param HtmlShellRenderer $shellRenderer The HTML shell renderer.
      * @param AssetRegistry $assetRegistry The asset registry.
      * @param PhueComponentLoader|null $loader The component loader.
@@ -128,7 +135,8 @@ class ComponentRenderer
                 scripts: $view->getScripts(),
                 inlineScript: null,
                 html: $view->getHtml(),
-                styles: $view->getStyles()
+                styles: $view->getStyles(),
+                style: $view->getStyle()
             );
 
             return $this->renderView($title, $moduleView, $name);
@@ -181,7 +189,8 @@ class ComponentRenderer
                     scripts: $view->getScripts(),
                     inlineScript: $view->getInlineScript(),
                     html: $renderedHtml,
-                    styles: $view->getStyles()
+                    styles: $view->getStyles(),
+                    style: $view->getStyle()
                 );
             }
         }
@@ -194,7 +203,15 @@ class ComponentRenderer
             $this->assetRegistry->addRequestStyle($style);
         }
 
-        $pageMarkup = $view->hasHtml() ? $view->getHtml() : $view->getTemplate();
+        $styleTag = '';
+        if ($view->hasStyle() && $componentName !== null && !isset($this->renderedStyles[$componentName])) {
+            $this->renderedStyles[$componentName] = true;
+            $scopeAttr = 'data-phue-scope="' . htmlspecialchars($componentName, ENT_QUOTES, 'UTF-8') . '"';
+            $styleTag = "<style {$scopeAttr}>" . $view->getStyle() . "</style>";
+        }
+
+        $rawMarkup = $view->hasHtml() ? $view->getHtml() : $view->getTemplate();
+        $pageMarkup = $styleTag . $rawMarkup;
 
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';

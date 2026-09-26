@@ -6,7 +6,7 @@ namespace Phue\Core\UI;
 
 /**
  * Encapsulates view template data, initial client state payload, JavaScript asset dependencies,
- * and optional server-rendered HTML output for HTML-first primitive execution.
+ * component-scoped CSS styles, and optional server-rendered HTML output for HTML-first primitive execution.
  *
  * @package Phue\Core\UI
  */
@@ -21,6 +21,7 @@ class View
      * @param string|null $inlineScript     Inline ESM JavaScript logic extracted from the <script> block.
      * @param string|null $html             Fully resolved server-rendered HTML markup (HTML-first / SSR mode).
      * @param array<int, string> $styles    External CSS style URLs to be enqueued.
+     * @param string|null $style            Component-scoped CSS string extracted from the <style> block.
      */
     public function __construct(
         private string $template,
@@ -28,7 +29,8 @@ class View
         private array $scripts = [],
         private ?string $inlineScript = null,
         private ?string $html = null,
-        private array $styles = []
+        private array $styles = [],
+        private ?string $style = null
     ) {}
 
     /**
@@ -69,6 +71,26 @@ class View
     public function getStyles(): array
     {
         return $this->styles;
+    }
+
+    /**
+     * Retrieves the component-scoped raw CSS style string.
+     *
+     * @return string|null CSS style string or null if absent.
+     */
+    public function getStyle(): ?string
+    {
+        return $this->style;
+    }
+
+    /**
+     * Determines whether the view contains an inline scoped CSS style block.
+     *
+     * @return bool True if a style block exists and is non-empty, false otherwise.
+     */
+    public function hasStyle(): bool
+    {
+        return $this->style !== null && trim($this->style) !== '';
     }
 
     /**

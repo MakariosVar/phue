@@ -501,7 +501,7 @@ class PhueComponentLoader
     /**
      * Evaluates a component structure with parameters to return a PhueComponent.
      *
-     * @param array{template: string, script: ?string, phpCode: ?string, phpStartLine?: int, filePath?: string} $structure
+     * @param array{template: string, script: ?string, style?: ?string, phpCode: ?string, phpStartLine?: int, filePath?: string} $structure
      * @param array<string, mixed> $params
      * @return PhueComponent
      */
@@ -526,7 +526,8 @@ class PhueComponentLoader
             scripts: $scripts,
             styles: $styles,
             inlineScript: $structure['script'],
-            html: $html
+            html: $html,
+            style: $structure['style'] ?? null
         );
 
         return new PhueComponent($title, $view);
