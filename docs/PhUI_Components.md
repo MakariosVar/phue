@@ -184,6 +184,11 @@ The id is auto-generated with Vue's `useId()` unless you pass your own.
 
 Emits: `update:modelValue` (on `input`), `blur`, `focus`.
 
+```
+<ph-input v-model="email" label="Email" placeholder="you@example.com"
+          helper-text="We never share your email." :error="emailError" />
+```
+
 ### `<ph-number-input>`
 
 Numeric input with increment/decrement controls, min/max, step, precision.
@@ -211,11 +216,6 @@ Emits: `update:modelValue`, `blur`, `focus`.
 <ph-number-input v-model="quantity" :min="0" :max="100" :step="5" label="Quantity" />
 ```
 
-
-```
-<ph-input v-model="email" label="Email" placeholder="you@example.com"
-          helper-text="We never share your email." :error="emailError" />
-```
 ### `<ph-select>`
 
 Native select bound to `modelValue`. Options accept either objects
