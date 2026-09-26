@@ -7,6 +7,7 @@
 
     <select
       :id="selectId"
+      :name="name || null"
       :value="modelValue"
       :disabled="disabled"
       :class="['form-select', { 'is-invalid': !!error }]"
@@ -44,6 +45,10 @@ export default {
     id: {
       type: String,
       default: null
+    },
+    name: {
+      type: String,
+      default: ''
     },
     label: {
       type: String,

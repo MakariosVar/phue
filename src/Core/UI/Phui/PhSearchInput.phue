@@ -26,6 +26,7 @@
         <input
           :id="inputId"
           ref="input"
+          :name="name || null"
           type="search"
           class="form-control"
           :style="controlStyle"
@@ -85,6 +86,10 @@ export default {
     id: {
       type: String,
       default: null
+    },
+    name: {
+      type: String,
+      default: ''
     },
     placeholder: {
       type: String,

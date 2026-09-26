@@ -134,6 +134,12 @@ export default {
           notes: "Falls back to ph-search-<id>",
         },
         {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Forwarded to the inner control, so <code>&lt;ph-form&gt;</code> can validate and submit it",
+        },
+        {
           name: "placeholder",
           type: "String",
           default: "'Search…'",

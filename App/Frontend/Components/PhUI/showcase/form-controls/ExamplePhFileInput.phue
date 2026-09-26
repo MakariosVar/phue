@@ -84,6 +84,12 @@ export default {
 />`,
       propsData: [
         {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Forwarded to the inner control, so <code>&lt;ph-form&gt;</code> can validate and submit it",
+        },
+        {
           name: "modelValue",
           type: "Array",
           default: "[]",

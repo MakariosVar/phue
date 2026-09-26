@@ -1,20 +1,53 @@
 <template>
   <form
     data-phui="form"
-    class="ph-form"
+    :name="name"
+    :class="['ph-form', { 'ph-form--loading': loading }]"
+    :aria-busy="loading ? 'true' : null"
+    :novalidate="!nativeValidation"
     @submit.prevent="onSubmit"
     @reset="onReset"
+    @input.capture="onFieldEvent"
+    @change.capture="onFieldEvent"
+    @blur.capture="onFieldEvent"
   >
+    <div
+      v-if="showSummary && errorList.length"
+      class="alert alert-danger ph-form__summary"
+      role="alert"
+    >
+      <strong>{{ summaryTitle }}</strong>
+      <ul class="mb-0 mt-1 ps-3">
+        <li v-for="item in errorList" :key="item.field">
+          <a :href="'#' + item.field" @click.prevent="focusField(item.field)">
+            {{ item.label }}
+          </a>
+          <span>: {{ item.message }}</span>
+        </li>
+      </ul>
+    </div>
+
     <slot
-      :errors="errors"
+      :errors="mergedErrors"
+      :error-list="errorList"
       :validate="validate"
       :reset="reset"
       :submit="submit"
       :disabled="disabled"
       :loading="loading"
+      :busy="busy"
     />
+
     <div v-if="$slots.actions" class="ph-form-actions mt-3 d-flex gap-2">
-      <slot name="actions" />
+      <slot
+        name="actions"
+        :validate="validate"
+        :reset="reset"
+        :submit="submit"
+        :disabled="disabled"
+        :loading="loading"
+        :busy="busy"
+      />
     </div>
   </form>
 </template>
@@ -23,6 +56,10 @@
 export default {
   name: 'PhForm',
   props: {
+    name: {
+      type: String,
+      default: ''
+    },
     disabled: {
       type: Boolean,
       default: false
@@ -39,41 +76,287 @@ export default {
       type: String,
       default: 'submit',
       validator: (v) => ['submit', 'blur', 'change'].includes(v)
+    },
+    nativeValidation: {
+      type: Boolean,
+      default: false
+    },
+    showSummary: {
+      type: Boolean,
+      default: true
+    },
+    summaryTitle: {
+      type: String,
+      default: 'Please fix the following:'
     }
   },
-  emits: ['submit', 'reset', 'invalid'],
+  emits: ['submit', 'reset', 'invalid', 'update:errors'],
+  data() {
+    return {
+      nativeErrors: {},
+      customValidity: {},
+      lockedFields: []
+    };
+  },
+  computed: {
+    serverErrors() {
+      return this.normalizeErrors(this.errors);
+    },
+    mergedErrors() {
+      return Object.assign({}, this.serverErrors, this.nativeErrors);
+    },
+    errorList() {
+      const merged = this.mergedErrors;
+      return Object.keys(merged).map((field) => ({
+        field: field,
+        label: field,
+        message: merged[field]
+      }));
+    },
+    busy() {
+      return this.loading;
+    }
+  },
+  watch: {
+    disabled(value) {
+      this.$nextTick(() => this.applyDisabled(value));
+    },
+    loading() {
+      this.$nextTick(() => this.applyDisabled(this.disabled));
+    },
+    errors() {
+      this.$nextTick(() => this.applyServerErrors());
+    }
+  },
+  mounted() {
+    this.applyDisabled(this.disabled);
+    this.applyServerErrors();
+  },
   methods: {
-    validate() {
-      const inputs = this.$el.querySelectorAll('[name]');
-      const newErrors = {};
-      let isValid = true;
-      inputs.forEach(input => {
-        if (input.checkValidity && !input.checkValidity()) {
-          newErrors[input.name] = input.validationMessage;
-          isValid = false;
+    /**
+     * Every native control inside the form that can be validated. This is the
+     * single enumeration used by validation, collection and error targeting,
+     * so a control can never be validated but not submitted (or vice versa).
+     *
+     * `form.elements` excludes the form itself and never includes buttons, so
+     * there is no need (and no room) to filter the form's own `name` out here —
+     * doing so would drop a legitimate field that happens to share it.
+     */
+    fields() {
+      if (!this.$el || !this.$el.elements) {
+        return [];
+      }
+      return Array.prototype.slice.call(this.$el.elements).filter((el) => {
+        if (!el.name || el.type === 'hidden') {
+          return false;
+        }
+        return typeof el.checkValidity === 'function';
+      });
+    },
+    fieldByName(name) {
+      const list = this.fields();
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].name === name) {
+          return list[i];
+        }
+      }
+      return null;
+    },
+    /**
+     * Accepts `{field: 'msg'}`, `{field: ['m1','m2']}` and the Laravel-ish
+     * `{field: {key: 'msg'}}` shape, and flattens all of them to one string.
+     */
+    normalizeErrors(source) {
+      const out = {};
+      if (!source || typeof source !== 'object') {
+        return out;
+      }
+      Object.keys(source).forEach((key) => {
+        const value = source[key];
+        if (value === null || value === undefined || value === false || value === '') {
+          return;
+        }
+        if (Array.isArray(value)) {
+          const list = value.filter((m) => m !== null && m !== undefined && m !== '');
+          if (list.length) {
+            out[key] = list.join(' ');
+          }
+          return;
+        }
+        if (typeof value === 'object') {
+          const list = Object.keys(value).map((k) => k + ' ' + value[k]);
+          if (list.length) {
+            out[key] = list.join(' ');
+          }
+          return;
+        }
+        out[key] = String(value);
+      });
+      return out;
+    },
+    /**
+     * Pushes the `errors` prop onto the real controls via setCustomValidity, so
+     * a server-side error blocks submit exactly like a native one does and
+     * `:invalid` / Bootstrap feedback work without extra wiring. Only validity
+     * this component set is ever cleared, so a caller that manages its own
+     * setCustomValidity keeps it.
+     */
+    applyServerErrors() {
+      if (!this.$el) {
+        return;
+      }
+      const previous = this.customValidity;
+      Object.keys(previous).forEach((name) => {
+        const el = this.fieldByName(name);
+        if (el && el.validationMessage === previous[name]) {
+          el.setCustomValidity('');
+          el.removeAttribute('aria-invalid');
         }
       });
-      this.$emit('invalid', newErrors);
-      return isValid;
+      const next = {};
+      this.errorList.forEach((item) => {
+        const el = this.fieldByName(item.field);
+        if (!el) {
+          return;
+        }
+        el.setCustomValidity(item.message);
+        el.setAttribute('aria-invalid', 'true');
+        next[item.field] = item.message;
+      });
+      this.customValidity = next;
     },
-    reset() {
-      this.$el.reset();
-      this.$emit('reset');
+    applyDisabled(state) {
+      if (!this.$el) {
+        return;
+      }
+      if (state) {
+        this.fields().forEach((el) => {
+          if (!el.disabled) {
+            el.disabled = true;
+            this.lockedFields.push(el);
+          }
+        });
+        return;
+      }
+      this.lockedFields.forEach((el) => {
+        el.disabled = false;
+      });
+      this.lockedFields = [];
+    },
+    validate() {
+      if (!this.$el) {
+        return true;
+      }
+      this.applyServerErrors();
+      const collected = {};
+      let ok = true;
+      this.fields().forEach((el) => {
+        if (el.disabled) {
+          return;
+        }
+        if (el.checkValidity()) {
+          return;
+        }
+        ok = false;
+        el.setAttribute('aria-invalid', 'true');
+        if (this.customValidity[el.name]) {
+          return;
+        }
+        collected[el.name] = el.validationMessage || 'This field is invalid.';
+      });
+      this.nativeErrors = collected;
+      this.$emit('update:errors', this.mergedErrors);
+      if (!ok) {
+        this.$emit('invalid', collected);
+      }
+      return ok;
+    },
+    collect() {
+      if (!this.$el || typeof FormData !== 'function') {
+        return {};
+      }
+      const out = {};
+      // FormData(form) never yields the form's own name, so there is nothing to
+      // filter out; a field sharing the form's name is a real field and is kept.
+      new FormData(this.$el).forEach((value, key) => {
+        if (key.slice(-2) === '[]') {
+          const base = key.slice(0, -2);
+          if (!out[base]) {
+            out[base] = [];
+          }
+          out[base].push(value);
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(out, key)) {
+          if (Array.isArray(out[key])) {
+            out[key].push(value);
+          } else {
+            out[key] = [out[key], value];
+          }
+          return;
+        }
+        out[key] = value;
+      });
+      return out;
     },
     submit() {
-      if (this.validate()) {
-        const formData = new FormData(this.$el);
-        const data = Object.fromEntries(formData.entries());
-        this.$emit('submit', data);
+      if (this.loading) {
+        return null;
+      }
+      if (!this.validate()) {
+        return null;
+      }
+      const data = this.collect();
+      this.$emit('submit', data);
+      return data;
+    },
+    focusField(name) {
+      const el = this.fieldByName(name);
+      if (!el || typeof el.focus !== 'function') {
+        return;
+      }
+      el.focus();
+      if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     },
-    onSubmit(event) {
-      event.preventDefault();
+    /**
+     * Validation timing. `submit` only runs on submit; `blur` on field blur;
+     * `change` while typing. The listeners are capture-phase on the form so a
+     * child that stops propagation cannot opt out of validation.
+     */
+    onFieldEvent(event) {
+      if (this.validateOn === 'submit') {
+        return;
+      }
+      if (this.validateOn === 'blur' && event.type !== 'blur') {
+        return;
+      }
+      if (this.validateOn === 'change' && event.type === 'blur') {
+        return;
+      }
+      this.$nextTick(() => this.validate());
+    },
+    onSubmit() {
       this.submit();
     },
-    onReset(event) {
-      event.preventDefault();
-      this.reset();
+    /**
+     * Native reset, deliberately not cancelled: the browser clears the fields
+     * itself. `onReset` never calls back into reset(), so a reset button and
+     * the slot's reset() both emit exactly once with no recursion.
+     */
+    reset() {
+      if (this.$el) {
+        this.$el.reset();
+      }
+    },
+    onReset() {
+      this.nativeErrors = {};
+      this.$nextTick(() => {
+        this.applyServerErrors();
+        this.$emit('update:errors', this.mergedErrors);
+      });
+      this.$emit('reset');
     }
   }
 };

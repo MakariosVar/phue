@@ -53,6 +53,12 @@ export default {
 <ph-switch v-model="enabled" label="Enable feature" required size="lg" />`,
       propsData: [
         {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Forwarded to the inner control, so <code>&lt;ph-form&gt;</code> can validate and submit it",
+        },
+        {
           name: "modelValue",
           type: "Boolean",
           default: `null`,

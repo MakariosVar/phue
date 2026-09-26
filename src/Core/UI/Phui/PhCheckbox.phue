@@ -3,6 +3,7 @@
     <input
       ref="inputEl"
       type="checkbox"
+      :name="name || null"
       :checked="modelValue"
       :disabled="disabled"
       class="form-check-input"
@@ -23,6 +24,10 @@ export default {
       default: false
     },
     label: {
+      type: String,
+      default: ''
+    },
+    name: {
       type: String,
       default: ''
     },

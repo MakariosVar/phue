@@ -25,6 +25,7 @@
       ref="input"
       type="file"
       class="d-none"
+      :name="name || null"
       :multiple="multiple"
       :accept="accept || null"
       :disabled="disabled"
@@ -71,6 +72,10 @@ export default {
     modelValue: {
       type: Array,
       default: () => []
+    },
+    name: {
+      type: String,
+      default: ''
     },
     multiple: {
       type: Boolean,

@@ -21,6 +21,7 @@
       </button>
       <input
         :id="inputId"
+        :name="name || null"
         type="number"
         class="form-control text-center"
         :class="{ 'is-invalid': !!error, 'border-0 rounded-0': controls }"
@@ -68,6 +69,10 @@ export default {
     id: {
       type: String,
       default: null
+    },
+    name: {
+      type: String,
+      default: ''
     },
     min: {
       type: Number,

@@ -59,6 +59,12 @@ export default {
 <ph-checkbox v-model="blocked" disabled>I read the terms</ph-checkbox>`,
       propsData: [
         {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Forwarded to the inner control, so <code>&lt;ph-form&gt;</code> can validate and submit it",
+        },
+        {
           name: "modelValue",
           type: "Boolean",
           default: `false`,

@@ -10,6 +10,7 @@
       <input
         v-if="!dual"
         :id="inputId"
+        :name="name || null"
         type="range"
         class="form-range flex-grow-1"
         :min="min"
@@ -45,6 +46,7 @@
           :key="`input-${side}`"
           :ref="(el) => setInput(side, el)"
           :id="side === 'low' ? lowId : highId"
+          :name="name ? name + '-' + side : null"
           type="range"
           class="ph-range-slider__input"
           :style="inputStyle"
@@ -95,6 +97,10 @@ export default {
     id: {
       type: String,
       default: null
+    },
+    name: {
+      type: String,
+      default: ''
     },
     min: {
       type: Number,

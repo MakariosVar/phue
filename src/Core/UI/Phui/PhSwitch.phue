@@ -11,6 +11,7 @@
       class="form-check-input"
       type="checkbox"
       role="switch"
+      :name="name || null"
       :style="inputStyle"
       :checked="modelValue"
       :disabled="disabled"
@@ -49,6 +50,10 @@ export default {
     id: {
       type: String,
       default: null
+    },
+    name: {
+      type: String,
+      default: ''
     },
     label: {
       type: String,

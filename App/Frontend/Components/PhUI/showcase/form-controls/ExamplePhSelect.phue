@@ -113,6 +113,12 @@ export default {
           notes: "Falls back to <strong>ph-select-<_id></strong>",
         },
         {
+          name: "name",
+          type: "String",
+          default: "''",
+          notes: "Forwarded to the inner control, so <code>&lt;ph-form&gt;</code> can validate and submit it",
+        },
+        {
           name: "label",
           type: "String",
           default: "''",
