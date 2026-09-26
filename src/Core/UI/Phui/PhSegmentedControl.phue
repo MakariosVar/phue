@@ -1,27 +1,28 @@
 <template>
   <div
     data-phui="segmented-control"
-    class="ph-segmented-control"
+    class="d-flex align-items-center gap-1"
+    :class="{'flex-column': block}"
     role="radiogroup"
     :aria-label="ariaLabel"
   >
-    <template v-for="(option, index) in options" :key="option.key || option.value || index">
+    <template v-for="(option, index) in options":key="option.key || option.value || index">
       <input
         type="radio"
         class="btn-check"
-        :id="`ph-segmented-${index}`"
-        :name="name"
+        :id="`${inputId}-${index}`"
+        :name="groupName"
         :value="option.value"
         :checked="modelValue == option.value"
         :disabled="option.disabled || disabled"
-        @change="$emit('update:modelValue', option.value)"
+        @change="$emit('update:modelValue', option.value); $emit('change', option.value)"
       />
       <label
-        :for="`ph-segmented-${index}`"
+        :for="`${inputId}-${index}`"
         class="btn"
         :class="[
           modelValue == option.value ? 'active' : '',
-          variant ? `btn-${variant}-outline` : 'btn-outline-primary',
+          `btn-outline-${variant}`,
           size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : '',
           block ? 'w-100' : ''
         ]"
@@ -35,6 +36,8 @@
 </template>
 
 <script>
+import { useId } from "vue";
+
 export default {
   name: 'PhSegmentedControl',
   props: {
@@ -66,13 +69,29 @@ export default {
     },
     name: {
       type: String,
-      default: 'ph-segmented'
+      default: null
     },
     ariaLabel: {
       type: String,
       default: 'Segmented control'
     }
   },
-  emits: ['update:modelValue', 'change']
+  emits: ['update:modelValue', 'change'],
+  setup() {
+    const HashID = useId();
+    return { HashID };
+  },
+  computed: {
+    inputId() {
+      return `ph-segmented-${this.HashID}`;
+    },
+    /**
+     * Radios are grouped by `name`, so two controls that shared a name would
+     * silently uncheck each other. Scope the fallback name per instance.
+     */
+    groupName() {
+      return this.name || this.inputId;
+    }
+  }
 };
 </script>
