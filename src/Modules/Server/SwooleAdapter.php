@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Container;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Core\ScopeContext;
 use Swoole\Http\Request as SwooleRequest;
 use Swoole\Http\Response as SwooleResponse;
 use Swoole\Http\Server as SwooleHttpServer;
@@ -57,24 +58,35 @@ final class SwooleAdapter implements ServerAdapterInterface
         $this->server->set($this->settings);
 
         $this->server->on('request', function (SwooleRequest $swRequest, SwooleResponse $swResponse) {
+            // Establish request execution scope context for active coroutine
+            $scope = $this->container->createScope();
+            $this->container->setScope($scope);
+
             try {
                 // 1. Convert Swoole Request to Phue Request
                 $phueRequest = $this->transformSwooleRequest($swRequest);
 
-                // 2. Process via Phue Application Kernel
+                // 2. Bind coroutine-scoped Request into container
+                $this->container->scoped(Request::class, fn () => $phueRequest);
+
+                // 3. Process via Phue Application Kernel
                 $phueResponse = $this->handleRequest($phueRequest);
 
-                // 3. Emit headers and status code to Swoole Response
+                // 4. Emit headers and status code to Swoole Response
                 $swResponse->status($phueResponse->getStatusCode());
                 foreach ($phueResponse->getHeaders() as $name => $value) {
                     $swResponse->header($name, (string) $value);
                 }
 
-                // 4. Send payload
+                // 5. Send payload
                 $swResponse->end($phueResponse->getContent());
             } catch (\Throwable $e) {
                 $swResponse->status(500);
                 $swResponse->end('Internal Server Error: ' . $e->getMessage());
+            } finally {
+                // Flush scoped instances and detach active context
+                $this->container->flushScope($scope);
+                $this->container->setScope(null);
             }
         });
 
