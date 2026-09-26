@@ -500,7 +500,7 @@ via `native`.
 | `min` | `String` | `''` | ISO lower bound |
 | `max` | `String` | `''` | ISO upper bound |
 | `native` | `Boolean` | `false` | Use native `<input type=date>` |
-| `weekStart` | `Number` | `1` | `0` = Sunday |
+| `weekStart` | `Number` | `1` | `0` = Sunday. Not working with `native |
 | `id` | `String` | `null` | Falls back to `ph-date-picker-<id>` |
 | `label` | `String` | `''` | |
 | `placeholder` | `String` | `'Select date…'` | |
