@@ -301,17 +301,6 @@ that excludes the typed term), and you widen `options` from the `search` handler
 ```
 <ph-select3 v-model="user" :options="foundUsers" @search="q => foundUsers = loadUsers(q)" />
 ```
-
-Keyboard (the control is focusable, `tabindex="0"`):
-
-| Key | Behaviour |
-|---|---|
-| `ArrowDown` / `ArrowUp` | Opens the list, then moves the active option |
-| `Enter` | Selects the active option, or opens the list |
-| `Escape` | Closes the list (`stopPropagation`, so a parent dialog does not also close) |
-| `Backspace` | Multiple mode with an empty query removes the last chip |
-
-
 ### `<ph-textarea>`
 
 Multi-line textarea. Emits on `input` as you type.
