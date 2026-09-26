@@ -3,42 +3,88 @@
     data-phui="range"
     class="ph-range"
   >
-    <label v-if="label" :for="inputId" class="form-label">
+    <label v-if="label" :for="labelFor" class="form-label">
       {{ label }}
     </label>
     <div class="d-flex align-items-center gap-2">
       <input
-        v-if="dual"
-        type="range"
-        :id="`${inputId}-min`"
-        class="form-range flex-grow-1"
-        :min="min"
-        :max="max"
-        :step="step"
-        :value="modelValue[0]"
-        :disabled="disabled"
-        @input="onInputMin"
-      />
-      <input
+        v-if="!dual"
         :id="inputId"
         type="range"
         class="form-range flex-grow-1"
         :min="min"
         :max="max"
         :step="step"
-        :value="dual ? modelValue[1] : modelValue"
+        :value="modelValue"
         :disabled="disabled"
         @input="onInput"
       />
+      <div
+        v-else
+        class="ph-range-slider"
+        :style="sliderStyle"
+        @pointerdown="onPointerDown"
+      >
+        <div
+          ref="rail"
+          class="ph-range-slider__rail"
+          :style="railStyle"
+        >
+          <div class="ph-range-slider__fill" :style="fillStyle" aria-hidden="true"></div>
+          <span
+            v-for="side in sides"
+            :key="`thumb-${side}`"
+            class="ph-range-slider__thumb"
+            :style="thumbStyle(side)"
+            :data-thumb="side"
+            aria-hidden="true"
+          ></span>
+        </div>
+        <input
+          v-for="side in sides"
+          :key="`input-${side}`"
+          :ref="(el) => setInput(side, el)"
+          :id="side === 'low' ? lowId : highId"
+          type="range"
+          class="ph-range-slider__input"
+          :style="inputStyle"
+          :min="min"
+          :max="max"
+          :step="step"
+          :value="sideValue(side)"
+          :disabled="disabled"
+          :aria-label="thumbLabel(side)"
+          @input="onThumbInput($event, side)"
+          @focus="focused = side"
+          @blur="focused = null"
+        />
+      </div>
       <span v-if="showValue" class="ph-range-value text-body-secondary small fw-monospace" style="min-width: 4rem;">
-        {{ dual ? `${modelValue[0]} — ${modelValue[1]}` : modelValue }}
+        {{ displayValue }}
       </span>
     </div>
   </div>
 </template>
 
 <script>
-import { useId } from "vue";
+import { markRaw, useId } from "vue";
+
+const THUMB_SIZE = 18;
+const RAIL_HEIGHT = 6;
+
+/** Decimal places implied by a step, so 0.1 steps never leak float dust. */
+function decimalsOf(step) {
+  const text = String(step);
+
+  if (text.includes('e') || text.includes('E')) {
+    return 6;
+  }
+
+  const dot = text.indexOf('.');
+
+  return dot === -1 ? 0 : text.length - dot - 1;
+}
+
 export default {
   name: 'PhRange',
   props: {
@@ -84,28 +130,268 @@ export default {
     const HashID = useId();
     return { HashID };
   },
+  data() {
+    return {
+      /** Side ('low' | 'high') that currently owns the keyboard focus ring. */
+      focused: null,
+      /** Side being dragged with the pointer, null when idle. */
+      dragSide: null,
+      dragMove: null,
+      dragEnd: null,
+      // markRaw: the map holds live DOM nodes, which must never be proxied.
+      inputEls: markRaw({})
+    };
+  },
   computed: {
     inputId() {
       return this.id || `ph-range-${this.HashID}`;
+    },
+    lowId() {
+      return `${this.inputId}-low`;
+    },
+    highId() {
+      return `${this.inputId}-high`;
+    },
+    labelFor() {
+      return this.dual ? this.lowId : this.inputId;
+    },
+    sides() {
+      return ['low', 'high'];
+    },
+    /** Ordered, in-range [low, high] pair. A parent may pass a reversed pair. */
+    pair() {
+      const raw = Array.isArray(this.modelValue) ? this.modelValue : [this.min, this.max];
+      const first = this.clamp(this.toNumber(raw[0], this.min));
+      const second = this.clamp(this.toNumber(raw[1], this.max));
+
+      return first <= second ? [first, second] : [second, first];
+    },
+    displayValue() {
+      if (!this.dual) {
+        return this.modelValue;
+      }
+
+      const [low, high] = this.pair;
+
+      return `${low} — ${high}`;
+    },
+    sliderStyle() {
+      return {
+        position: 'relative',
+        flex: '1 1 auto',
+        minWidth: '10rem',
+        padding: '.5rem 0',
+        touchAction: this.disabled ? 'auto' : 'none',
+        userSelect: 'none',
+        cursor: this.disabled ? 'default' : 'pointer'
+      };
+    },
+    railStyle() {
+      return {
+        position: 'relative',
+        height: `${RAIL_HEIGHT}px`,
+        borderRadius: 'var(--bs-border-radius-pill)',
+        background: 'var(--bs-secondary-bg)',
+        boxShadow: 'inset 0 0 0 1px var(--bs-border-color)'
+      };
+    },
+    fillStyle() {
+      const [low, high] = this.pair;
+
+      return {
+        position: 'absolute',
+        top: '0',
+        bottom: '0',
+        left: `${this.percentOf(low)}%`,
+        right: `${100 - this.percentOf(high)}%`,
+        borderRadius: 'inherit',
+        background: 'var(--bs-primary)',
+        opacity: this.disabled ? '0.5' : '1'
+      };
+    },
+    /**
+     * The native inputs stay in the DOM (tab order, arrow keys, screen
+     * readers) but are transparent and click-through: the rail owns the
+     * pointer, the painted thumbs are what the eye tracks.
+     */
+    inputStyle() {
+      return {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        margin: '0',
+        padding: '0',
+        opacity: '0',
+        pointerEvents: 'none'
+      };
     }
+  },
+  beforeUnmount() {
+    this.unbindDrag();
   },
   methods: {
     onInput(event) {
-      const val = Number(event.target.value);
-      if (this.dual) {
-        const next = [...this.modelValue];
-        next[1] = val;
+      this.$emit('update:modelValue', Number(event.target.value));
+    },
+    onThumbInput(event, side) {
+      this.commit(side, Number(event.target.value));
+    },
+    onPointerDown(event) {
+      if (this.disabled) return;
+      if (typeof event.button === 'number' && event.button !== 0) return;
+
+      const side = this.sideFromEvent(event);
+
+      if (side === null) return;
+
+      event.preventDefault();
+      this.dragSide = side;
+      this.bindDrag();
+
+      // Move focus to the hidden input so arrow keys keep working after a drag.
+      this.inputEls[side]?.focus();
+      this.commit(side, this.valueFromClientX(event.clientX));
+    },
+    sideFromEvent(event) {
+      const side = event.target?.dataset?.thumb;
+
+      if (side === 'low' || side === 'high') {
+        return side;
+      }
+
+      // Rail / fill click: hand the gesture to the closest thumb.
+      const [low, high] = this.pair;
+      const value = this.valueFromClientX(event.clientX);
+
+      return Math.abs(value - low) <= Math.abs(value - high) ? 'low' : 'high';
+    },
+    commit(side, value) {
+      const [low, high] = this.pair;
+      const next = side === 'low' ? [Math.min(value, high), high] : [low, Math.max(value, low)];
+      const index = side === 'low' ? 0 : 1;
+      const input = this.inputEls[side];
+
+      // Keep the native thumb in sync even when the parent ignores v-model.
+      if (input && input.value !== String(next[index])) {
+        input.value = String(next[index]);
+      }
+
+      if (next[0] !== low || next[1] !== high) {
         this.$emit('update:modelValue', next);
-      } else {
-        this.$emit('update:modelValue', val);
       }
     },
-    onInputMin(event) {
-      if (!this.dual) return;
-      const val = Number(event.target.value);
-      const next = [...this.modelValue];
-      next[0] = Math.min(val, next[1]);
-      this.$emit('update:modelValue', next);
+    bindDrag() {
+      if (this.dragMove !== null) return;
+
+      this.dragMove = (event) => {
+        if (this.dragSide === null) return;
+
+        event.preventDefault();
+        this.commit(this.dragSide, this.valueFromClientX(event.clientX));
+      };
+      this.dragEnd = () => {
+        this.dragSide = null;
+        this.unbindDrag();
+      };
+
+      window.addEventListener('pointermove', this.dragMove);
+      window.addEventListener('pointerup', this.dragEnd);
+      window.addEventListener('pointercancel', this.dragEnd);
+    },
+    unbindDrag() {
+      if (this.dragMove === null) return;
+
+      window.removeEventListener('pointermove', this.dragMove);
+      window.removeEventListener('pointerup', this.dragEnd);
+      window.removeEventListener('pointercancel', this.dragEnd);
+      this.dragMove = null;
+      this.dragEnd = null;
+    },
+    setInput(side, el) {
+      if (el) {
+        this.inputEls[side] = el;
+      } else {
+        delete this.inputEls[side];
+      }
+    },
+    sideValue(side) {
+      const [low, high] = this.pair;
+
+      return side === 'low' ? low : high;
+    },
+    thumbLabel(side) {
+      if (!this.label) {
+        return side === 'low' ? 'Minimum' : 'Maximum';
+      }
+
+      return `${this.label} (${side === 'low' ? 'min' : 'max'})`;
+    },
+    thumbStyle(side) {
+      const [low, high] = this.pair;
+      const percent = this.percentOf(side === 'low' ? low : high);
+
+      return {
+        position: 'absolute',
+        top: '50%',
+        left: `${percent}%`,
+        width: `${THUMB_SIZE}px`,
+        height: `${THUMB_SIZE}px`,
+        marginLeft: `${-THUMB_SIZE / 2}px`,
+        transform: 'translateY(-50%)',
+        borderRadius: '50%',
+        background: 'var(--bs-body-bg)',
+        border: '1px solid var(--bs-border-color)',
+        boxShadow: this.focused === side
+          ? '0 0 0 4px rgba(var(--bs-primary-rgb), .25)'
+          : 'var(--bs-box-shadow-sm)',
+        cursor: this.disabled ? 'default' : 'grab',
+        opacity: this.disabled ? '0.5' : '1'
+      };
+    },
+    percentOf(value) {
+      const span = this.max - this.min;
+
+      if (span <= 0) {
+        return 0;
+      }
+
+      return ((value - this.min) / span) * 100;
+    },
+    valueFromClientX(clientX) {
+      const rail = this.$refs.rail;
+
+      if (!rail) {
+        return this.min;
+      }
+
+      const rect = rail.getBoundingClientRect();
+
+      if (!rect.width) {
+        return this.min;
+      }
+
+      const ratio = (clientX - rect.left) / rect.width;
+
+      return this.quantize(this.min + Math.min(1, Math.max(0, ratio)) * (this.max - this.min));
+    },
+    quantize(raw) {
+      const step = this.step > 0 ? this.step : 1;
+      const stepped = this.min + Math.round((raw - this.min) / step) * step;
+
+      return this.clamp(Number(stepped.toFixed(Math.min(decimalsOf(step), 10))));
+    },
+    clamp(value) {
+      const lower = this.min;
+      const upper = Math.max(this.max, this.min);
+
+      return Math.min(Math.max(value, lower), upper);
+    },
+    toNumber(value, fallback) {
+      const parsed = Number(value);
+
+      return Number.isFinite(parsed) ? parsed : fallback;
     }
   }
 };
