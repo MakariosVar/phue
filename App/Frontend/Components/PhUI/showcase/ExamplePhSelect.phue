@@ -1,0 +1,166 @@
+<template>
+  <example-factory
+    tag="<ph-select />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Native select bound to modelValue. Options accept either objects <code>{ label, value, disabled? }</code> or plain primitives (normalized internally).</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+            <div class="row">
+                <div class="col-md-6">
+                    <ph-select v-model="framework" label="Framework"
+                        :options="[
+                            { label: 'Vue 3', value: 'vue' },
+                            { label: 'PHP', value: 'php' },
+                            { label: 'React', value: 'react', disabled: true }
+                        ]"
+                    />
+                </div>
+                <div class="col-md-6">
+                    <ph-select v-model="version" label="Version"
+                        :disabled="true"
+                        placeholder="Select a version"
+                        helperText="Coming soon"
+                        :options="[
+                            { label: 'Vue 3', value: 'vue' },
+                            { label: 'PHP', value: 'php' },
+                            { label: 'React', value: 'react', disabled: true }
+                        ]"
+                    />
+                </div>
+            </div>
+            {{ framework }}
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+          <ul>
+            <li><code>update:modelValue</code> on <code>change</code></li>
+          </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInput",
+  data() {
+    return {
+      loading: false,
+      disabled: false,
+      showCode: false,
+      showDemo: false,
+      showProps: true,
+      framework: "",
+      savedAt: "",
+      snippet: `<div class="row">
+    <div class="col-md-6">
+        <ph-select v-model="framework" label="Framework"
+            :options="[
+                { label: 'Vue 3', value: 'vue' },
+                { label: 'PHP', value: 'php' },
+                { label: 'React', value: 'react', disabled: true }
+            ]"
+        />
+    </div>
+    <div class="col-md-6">
+        <ph-select v-model="version" label="Version"
+            :disabled="true"
+            placeholder="Select a version"
+            helperText="Coming soon"
+            :options="[
+                { label: 'Vue 3', value: 'vue' },
+                { label: 'PHP', value: 'php' },
+                { label: 'React', value: 'react', disabled: true }
+            ]"
+        />
+    </div>
+</div>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "String | Number",
+          default: `''`,
+          notes: "Bound via <strong>v-model</strong>",
+        },
+        {
+            name: "options",
+            type: "Array",
+            default: '[]',
+            notes: "<code> { label, value, disabled? }</code> or plain primitives",
+        },
+        {
+          name: "id",
+          type: "String",
+          default: 'null',
+          notes: "Falls back to <strong>ph-select-<_id></strong>",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "<strong>*</strong> marker when required",
+        },
+        {
+          name: "placeholder",
+          type: "String",
+          default: "''",
+          notes:
+            'Rendered as a disabled, selected option',
+        },
+        {
+          name: "helperText",
+          type: "String",
+          default: "''",
+          notes:
+            'Shown as `form-text`',
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes:
+            'Non-empty -> is-invalid + red `form-text`',
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Whether the input field is disabled',
+        },
+        {
+          name: "required",
+          type: "Boolean",
+          default: "false",
+          notes:
+            'Visual only',
+        },
+
+
+      ],
+    };
+  },
+  methods: {
+    demoClick() {
+      this.savedAt = new Date().toISOString();
+    },
+  },
+};
+</script>

@@ -14,14 +14,9 @@ return [
                 'id' => 'forms',
                 'label' => 'Form Controls',
                 'components' => [
-                    [
-                        'id' => 'button',
-                        'label' => 'Button',
-                    ],
-                    [
-                        'id' => 'input',
-                        'label' => 'Input',
-                    ],
+                    ['id' => 'button', 'label' => 'Button',],
+                    ['id' => 'input', 'label' => 'Input',],
+                    ['id' => 'select', 'label' => 'Select',],
                 ]
             ],
             [
@@ -186,7 +181,10 @@ return [
                             <span id="input">
                                 <example-ph-input />
                             </span>
-                            <!--<ExamplePhSelect />
+                            <span id="select">
+                                <example-ph-select />
+                            </span>
+                            <!--
                             <ExamplePhTextarea />
                             <ExamplePhCheckbox />
                             <ExamplePhRadio />
