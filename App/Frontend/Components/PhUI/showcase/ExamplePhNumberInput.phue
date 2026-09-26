@@ -30,7 +30,7 @@
                 :min="0"
                 :max="100"
                 :step="0.04"
-                precision="2"
+                :precision="2"
               />
             </div>
             <div class="col-md-6">

@@ -68,6 +68,7 @@ export default {
       showDemo: true,
       showProps: true,
       framework: "",
+      version: '',
       snippet: `<div class="row">
     <div class="col-md-6">
         <ph-select v-model="framework" label="Framework"
