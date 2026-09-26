@@ -184,6 +184,34 @@ The id is auto-generated with Vue's `useId()` unless you pass your own.
 
 Emits: `update:modelValue` (on `input`), `blur`, `focus`.
 
+### `<ph-number-input>`
+
+Numeric input with increment/decrement controls, min/max, step, precision.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number` | `''` | |
+| `id` | `String` | `null` | |
+| `min` | `Number` | `0` | |
+| `max` | `Number` | `100` | |
+| `step` | `Number` | `1` | |
+| `precision` | `Number` | `0` | Decimal places |
+| `controls` | `Boolean` | `true` | Show ± buttons |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `''` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `disabled` | `Boolean` | `false` | |
+| `readonly` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `blur`, `focus`.
+
+```
+<ph-number-input v-model="quantity" :min="0" :max="100" :step="5" label="Quantity" />
+```
+
+
 ```
 <ph-input v-model="email" label="Email" placeholder="you@example.com"
           helper-text="We never share your email." :error="emailError" />
@@ -346,33 +374,6 @@ Other behaviour:
 ```
 <ph-search-input v-model="query" @search="onSearch" placeholder="Search users…"
                  :error="queryError" size="sm" label="Users" />
-```
-
-### `<ph-number-input>`
-
-Numeric input with increment/decrement controls, min/max, step, precision.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number` | `''` | |
-| `id` | `String` | `null` | |
-| `min` | `Number` | `0` | |
-| `max` | `Number` | `100` | |
-| `step` | `Number` | `1` | |
-| `precision` | `Number` | `0` | Decimal places |
-| `controls` | `Boolean` | `true` | Show ± buttons |
-| `label` | `String` | `''` | |
-| `placeholder` | `String` | `''` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `disabled` | `Boolean` | `false` | |
-| `readonly` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`, `blur`, `focus`.
-
-```
-<ph-number-input v-model="quantity" :min="0" :max="100" :step="5" label="Quantity" />
 ```
 
 ### `<ph-range>`
