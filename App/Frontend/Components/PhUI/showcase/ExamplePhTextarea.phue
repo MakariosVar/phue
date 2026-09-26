@@ -50,7 +50,7 @@ export default {
       loading: false,
       disabled: false,
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       message: "",
       snippet: `<ph-textarea

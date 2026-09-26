@@ -47,7 +47,7 @@ export default {
       loading: false,
       disabled: false,
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       accepted: false,
       partial: false,

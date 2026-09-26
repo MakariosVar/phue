@@ -130,7 +130,7 @@ export default {
     return {
       loading: false,
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       lastClicked: "",
       snippet: `<!-- Solid Variants -->

@@ -82,7 +82,7 @@ export default {
   data() {
     return {
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       dueOn: null,
       startsAt: null,

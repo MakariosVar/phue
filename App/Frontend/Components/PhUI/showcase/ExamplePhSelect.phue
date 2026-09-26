@@ -65,7 +65,7 @@ export default {
       loading: false,
       disabled: false,
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       framework: "",
       snippet: `<div class="row">

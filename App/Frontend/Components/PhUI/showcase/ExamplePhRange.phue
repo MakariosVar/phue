@@ -41,7 +41,7 @@ export default {
   data() {
     return {
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       priceRange: 300,
       priceRangeDual: [200, 800],

@@ -84,7 +84,7 @@ export default {
   data() {
     return {
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       counter1: 10,
       counter2: 20.064,

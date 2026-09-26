@@ -45,7 +45,7 @@ export default {
   data() {
     return {
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       enabled: false,
       snippet: `<ph-switch v-model="enabled" label="Enable feature" size="sm" />

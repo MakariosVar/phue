@@ -92,7 +92,7 @@ export default {
       loading: false,
       disabled: false,
       showCode: false,
-      showDemo: false,
+      showDemo: true,
       showProps: true,
       example1: "",
       example2: "Wrong_ Email@hello.world",
