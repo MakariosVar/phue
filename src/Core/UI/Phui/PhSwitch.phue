@@ -3,6 +3,7 @@
     data-phui="switch"
     class="form-check form-switch"
     :class="wrapperClasses"
+    :style="wrapperStyle"
   >
     <input
       :id="switchId"
@@ -10,6 +11,7 @@
       class="form-check-input"
       type="checkbox"
       role="switch"
+      :style="inputStyle"
       :checked="modelValue"
       :disabled="disabled"
       :required="required"
@@ -30,6 +32,12 @@
 
 <script>
 import { useId } from "vue";
+
+const SIZE_TOKENS = {
+  sm: { fontSize: '.875rem', offset: '2.1875rem' },
+  md: { fontSize: '1rem', offset: '2.5rem' },
+  lg: { fontSize: '1.25rem', offset: '3.125rem' }
+};
 
 export default {
   name: 'PhSwitch',
@@ -57,7 +65,7 @@ export default {
     size: {
       type: String,
       default: 'md',
-      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+      validator: (val) => Object.prototype.hasOwnProperty.call(SIZE_TOKENS, val)
     }
   },
   emits: ['update:modelValue', 'blur', 'focus'],
@@ -70,14 +78,21 @@ export default {
       return this.id || `ph-switch-${this.HashID}`;
     },
     wrapperClasses() {
-      const classes = [];
-      if (this.size === 'lg') {
-        classes.push('form-switch-lg');
+      return [`ph-switch--${this.size}`];
+    },
+    wrapperStyle() {
+      if (this.size === 'md') {
+        return null;
       }
-      if (this.size === 'sm') {
-        classes.push('form-switch-sm');
+
+      return { paddingLeft: SIZE_TOKENS[this.size].offset };
+    },
+    inputStyle() {
+      if (this.size === 'md') {
+        return null;
       }
-      return classes;
+
+      return { fontSize: SIZE_TOKENS[this.size].fontSize };
     }
   }
 };
