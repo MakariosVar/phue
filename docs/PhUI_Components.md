@@ -243,6 +243,31 @@ Emits: `update:modelValue` (on `change`).
            ]" />
 ```
 
+
+### `<ph-select3>`
+
+Searchable single/multiple select with chips (replaces the limits of the native
+`<ph-select>`).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
+| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
+| `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
+| `label` | `String` | `''` | |
+| `placeholder` | `String` | `'Select…'` | |
+| `helperText` | `String` | `''` | |
+| `error` | `String` | `''` | |
+| `multiple` | `Boolean` | `false` | |
+| `searchable` | `Boolean` | `true` | |
+| `clearable` | `Boolean` | `false` | |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
+Slots: `footer` (scoped `{ close }`).
+
+
 ### `<ph-textarea>`
 
 Multi-line textarea. Emits on `input` as you type.
@@ -443,29 +468,6 @@ Emits: `update:modelValue`, `change`. No slots.
   { label: 'List', value: 'list', icon: 'list' }
 ]" />
 ```
-
-### `<ph-select3>`
-
-Searchable single/multiple select with chips (replaces the limits of the native
-`<ph-select>`).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number \| Array` | `''` | Array when `multiple` |
-| `options` | `Array` | `[]` | `{label,value,disabled?}` or primitives |
-| `id` | `String` | `null` | Falls back to `ph-select3-<id>` |
-| `label` | `String` | `''` | |
-| `placeholder` | `String` | `'Select…'` | |
-| `helperText` | `String` | `''` | |
-| `error` | `String` | `''` | |
-| `multiple` | `Boolean` | `false` | |
-| `searchable` | `Boolean` | `true` | |
-| `clearable` | `Boolean` | `false` | |
-| `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
-
-Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
-Slots: `footer` (scoped `{ close }`).
 
 ### `<ph-file-input>`
 
