@@ -188,81 +188,6 @@ Emits: `update:modelValue` (on `input`), `blur`, `focus`.
 <ph-input v-model="email" label="Email" placeholder="you@example.com"
           helper-text="We never share your email." :error="emailError" />
 ```
-
-### `<ph-input-shell>`
-
-Shared bordered shell for composite controls: the magnifier/prefix icon, the
-field and the trailing clear button all live **inside one border box** and light
-up as a single unit on focus.
-
-**Why it exists.** Bootstrap 5.3 declares the focus ring as a `box-shadow` on
-`.form-control:focus` — on that element only — and ships **no**
-`.input-group:focus-within` rule. So a row of siblings glued together with
-`input-group` can never render one unified ring: the field glows in the middle
-while the affixes and the button stay flat. This component inverts the structure
-instead of fighting it — the shell owns `border`, `border-radius` and the ring,
-and the slotted control is a borderless, transparent flex child. Affixes are
-spaced by the shell's `gap`, not by per-slot padding.
-
-Because a `.phue` file cannot ship a `<style>` block, the ring is emitted as a
-bound style driven by `focusin`/`focusout` (which are exactly `:focus-within`
-semantics), reusing Bootstrap's own values — `#86b7fe` + `0 0 0 .25rem
-rgba(13,110,253,.25)`, and the `--bs-danger-rgb` variant when invalid.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — drives padding, font-size, gap and radius |
-| `invalid` | `Boolean` | `false` | Error border + red focus ring |
-| `disabled` | `Boolean` | `false` | Muted background, `not-allowed`, focus suppressed |
-
-Emits: `focus`, `blur` (as `focusin`/`focusout`, so they fire for the affixes too).
-
-Slots:
-
-| Slot | Scoped props | Notes |
-|---|---|---|
-| `prefix` | — | Leading affix (icons, static text) |
-| `default` | `{ controlStyle, size, disabled, invalid }` | **The control.** Bind `:style="controlStyle"` — it neutralises `.form-control`'s own box so the field does not draw a second border inside the shell |
-| `suffix` | — | Trailing affix (clear button, badges) |
-
-Methods: `focus()` — focuses the slotted control, so consumers never need a
-template ref into slot content. Clicking the shell's padding also redirects focus
-to the control, but a direct hit on the control is left to the browser so the
-caret lands where the user clicked.
-
-```
-<ph-input-shell size="sm" :invalid="!!error">
-  <template #prefix>
-    <span class="d-inline-flex align-items-center" aria-hidden="true">
-      <ph-icon name="search" size="sm" variant="muted" />
-    </span>
-  </template>
-
-  <template #default="{ controlStyle }">
-    <input
-      type="search"
-      class="form-control"
-      :style="controlStyle"
-      :value="modelValue"
-      @input="$emit('update:modelValue', $event.target.value)"
-    />
-  </template>
-
-  <template #suffix>
-    <button v-if="modelValue" type="button" class="btn btn-sm p-0 border-0"
-            aria-label="Clear" @click="clear">
-      <ph-icon name="x" size="sm" />
-    </button>
-  </template>
-</ph-input-shell>
-```
-
-> The slotted control keeps the `form-control` class on purpose: `controlStyle`
-> then overrides only the box-drawing declarations, so the placeholder colour and
-> disabled colour still come from Bootstrap. It also sets `appearance: none`,
-> without which `type="search"` lets the browser draw its own clear affordance
-> next to yours.
-
 ### `<ph-select>`
 
 Native select bound to `modelValue`. Options accept either objects
@@ -605,6 +530,80 @@ via `native`.
 | `clearable` | `Boolean` | `true` | |
 
 Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
+
+### `<ph-input-shell>`
+
+Shared bordered shell for composite controls: the magnifier/prefix icon, the
+field and the trailing clear button all live **inside one border box** and light
+up as a single unit on focus.
+
+**Why it exists.** Bootstrap 5.3 declares the focus ring as a `box-shadow` on
+`.form-control:focus` — on that element only — and ships **no**
+`.input-group:focus-within` rule. So a row of siblings glued together with
+`input-group` can never render one unified ring: the field glows in the middle
+while the affixes and the button stay flat. This component inverts the structure
+instead of fighting it — the shell owns `border`, `border-radius` and the ring,
+and the slotted control is a borderless, transparent flex child. Affixes are
+spaced by the shell's `gap`, not by per-slot padding.
+
+Because a `.phue` file cannot ship a `<style>` block, the ring is emitted as a
+bound style driven by `focusin`/`focusout` (which are exactly `:focus-within`
+semantics), reusing Bootstrap's own values — `#86b7fe` + `0 0 0 .25rem
+rgba(13,110,253,.25)`, and the `--bs-danger-rgb` variant when invalid.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — drives padding, font-size, gap and radius |
+| `invalid` | `Boolean` | `false` | Error border + red focus ring |
+| `disabled` | `Boolean` | `false` | Muted background, `not-allowed`, focus suppressed |
+
+Emits: `focus`, `blur` (as `focusin`/`focusout`, so they fire for the affixes too).
+
+Slots:
+
+| Slot | Scoped props | Notes |
+|---|---|---|
+| `prefix` | — | Leading affix (icons, static text) |
+| `default` | `{ controlStyle, size, disabled, invalid }` | **The control.** Bind `:style="controlStyle"` — it neutralises `.form-control`'s own box so the field does not draw a second border inside the shell |
+| `suffix` | — | Trailing affix (clear button, badges) |
+
+Methods: `focus()` — focuses the slotted control, so consumers never need a
+template ref into slot content. Clicking the shell's padding also redirects focus
+to the control, but a direct hit on the control is left to the browser so the
+caret lands where the user clicked.
+
+```
+<ph-input-shell size="sm" :invalid="!!error">
+  <template #prefix>
+    <span class="d-inline-flex align-items-center" aria-hidden="true">
+      <ph-icon name="search" size="sm" variant="muted" />
+    </span>
+  </template>
+
+  <template #default="{ controlStyle }">
+    <input
+      type="search"
+      class="form-control"
+      :style="controlStyle"
+      :value="modelValue"
+      @input="$emit('update:modelValue', $event.target.value)"
+    />
+  </template>
+
+  <template #suffix>
+    <button v-if="modelValue" type="button" class="btn btn-sm p-0 border-0"
+            aria-label="Clear" @click="clear">
+      <ph-icon name="x" size="sm" />
+    </button>
+  </template>
+</ph-input-shell>
+```
+
+> The slotted control keeps the `form-control` class on purpose: `controlStyle`
+> then overrides only the box-drawing declarations, so the placeholder colour and
+> disabled colour still come from Bootstrap. It also sets `appearance: none`,
+> without which `type="search"` lets the browser draw its own clear affordance
+> next to yours.
 
 ---
 
