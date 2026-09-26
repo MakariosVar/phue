@@ -407,9 +407,7 @@ Emits: `update:modelValue`, `search(query)`, `clear`, `focus`, `blur`.
 
 **`search` fires from user input only.** The debounce is driven by the `input`
 event, not by a `modelValue` watcher, so a parent that pushes a new value
-programmatically does **not** trigger a search. > **BC:** earlier versions
-debounced off the watcher and therefore did fire `search` on external updates.
-Listen to `update:modelValue` if you need to react to programmatic changes.
+programmatically does **not** trigger a search.
 
 | Key | Behaviour |
 |---|---|
