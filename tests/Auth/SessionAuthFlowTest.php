@@ -23,6 +23,8 @@ use Phue\Modules\Schii\Schema\SchemaRegistry;
 #[Group('integration')]
 final class SessionAuthFlowTest extends TestCase
 {
+    private Connection $db;
+
     protected function setUp(): void
     {
         parent::setUp();

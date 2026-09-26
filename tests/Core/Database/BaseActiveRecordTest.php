@@ -35,6 +35,22 @@ class BaseActiveRecordTest extends TestCase
         );
     }
 
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        // Ensure connection is restored after each test
+        if (BaseActiveRecord::getConnection() === null) {
+            $bootstrapPath = '/tmp/phue_test_' . getmypid() . '.sqlite';
+            if (file_exists($bootstrapPath)) {
+                $connection = new \Phue\Core\Database\Connection([
+                    'driver'   => 'sqlite',
+                    'database' => $bootstrapPath,
+                ]);
+                BaseActiveRecord::setConnection($connection);
+            }
+        }
+    }
+
     /**
      * Tests model creation, persistence, and primary key assignment.
      */
@@ -235,22 +251,32 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testGetConnectionThrowsWhenNotSet(): void
     {
-        // Save the current connection
-        $savedConnection = BaseActiveRecord::getConnection();
+        // Save the current connection resolver
+        $reflection = new \ReflectionClass(BaseActiveRecord::class);
+        $savedResolver = $reflection->getStaticPropertyValue('connectionResolver');
+        $reflection->setStaticPropertyValue('connectionResolver', null);
 
-        // Temporarily clear the connection using reflection
-        $reflection = new \ReflectionProperty(BaseActiveRecord::class, 'dbConnection');
-        $reflection->setValue(null, null);
+        // Temporarily clear the static connection using reflection
+        $reflection->setStaticPropertyValue('dbConnection', null);
 
         try {
             User::getConnection();
             $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('No database connection set', $e->getMessage());
+        } finally {
+            // Restore the connection resolver
+            $reflection->setStaticPropertyValue('connectionResolver', $savedResolver);
+            // Restore the connection from bootstrap
+            $bootstrapPath = '/tmp/phue_test_' . getmypid() . '.sqlite';
+            if (file_exists($bootstrapPath)) {
+                $connection = new \Phue\Core\Database\Connection([
+                    'driver'   => 'sqlite',
+                    'database' => $bootstrapPath,
+                ]);
+                BaseActiveRecord::setConnection($connection);
+            }
         }
-
-        // Restore connection for other tests
-        BaseActiveRecord::setConnection($savedConnection);
     }
 
     /**

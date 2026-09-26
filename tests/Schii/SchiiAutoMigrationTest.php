@@ -70,6 +70,9 @@ class SchiiAutoMigrationTest extends TestCase
         parent::setUp();
 
         $this->db = BaseActiveRecord::getConnection();
+
+        // Drop tables for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS migratable_products');
     }
 
     /**

@@ -16,7 +16,13 @@ class ApplicationErrorHandlingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->app = new Application(dirname(__DIR__, 3));
+        // Ensure cache directory exists for route caching
+        $basePath = dirname(__DIR__, 2);
+        $cacheDir = $basePath . '/storage/cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $this->app = new Application($basePath);
     }
 
     public function testApplicationReturnsHtmlErrorPageForUnhandledException(): void
@@ -30,7 +36,7 @@ class ApplicationErrorHandlingTest extends TestCase
         $content = $response->getContent();
         // Should return HTML error page, not raw error message
         $this->assertStringContainsString('<!DOCTYPE html>', $content);
-        $this->assertStringContainsString('Something went wrong', $content);
+        $this->assertStringContainsString('An uncaught exception occurred while processing your request.', $content);
     }
 
     public function testApplicationReturnsJsonErrorForApiException(): void

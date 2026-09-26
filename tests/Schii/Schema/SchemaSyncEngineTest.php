@@ -116,6 +116,11 @@ final class SchemaSyncEngineTest extends TestCase
 
         $this->db = BaseActiveRecord::getConnection();
 
+        // Drop tables for test isolation
+        $this->db->execute('DROP TABLE IF EXISTS sync_widgets');
+        $this->db->execute('DROP TABLE IF EXISTS sync_indexed');
+        $this->db->execute('DROP TABLE IF EXISTS sync_typed');
+
         $registry = new SchemaRegistry();
         $this->engine = new SchemaSyncEngine(
             $registry,

@@ -51,6 +51,12 @@ final class RestErrorProductionTest extends TestCase
 
         $db = $app->getContainer()->get(Connection::class);
 
+        // Drop tables for test isolation (using file-based SQLite)
+        $db->execute('DROP TABLE IF EXISTS users');
+        $db->execute('DROP TABLE IF EXISTS articles');
+        $db->execute('DROP TABLE IF EXISTS products');
+        $db->execute('DROP TABLE IF EXISTS secrets');
+
         $db->execute('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password_hash TEXT, auth_key TEXT, roles TEXT)');
         $db->execute('CREATE TABLE articles (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT)');
         $db->execute('CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
