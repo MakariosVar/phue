@@ -454,52 +454,6 @@ Emits: `update:modelValue`.
 <ph-range v-model="priceRange" :min="0" :max="1000" dual show-value label="Price" />
 ```
 
-### `<ph-form>`
-
-Form wrapper with native validation, error collection, submit/reset handling.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `disabled` | `Boolean` | `false` | |
-| `loading` | `Boolean` | `false` | |
-| `errors` | `Object` | `{}` | External errors by field name |
-| `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
-
-Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
-
-```
-<ph-form @submit="onSubmit" @invalid="errors = $event">
-  <template #default="{ validate, submit }">
-    <ph-input name="email" label="Email" required />
-    <ph-button type="submit" @click="validate()">Save</ph-button>
-  </template>
-</ph-form>
-```
-
-### `<ph-segmented-control>`
-
-Segmented button group (radio-based) with icons and variants.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `String \| Number \| Boolean` | `null` | |
-| `options` | `Array` | **required** | `{label, value, icon?, disabled?, key?}` |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
-| `block` | `Boolean` | `false` | Full width |
-| `variant` | `String` | `'primary'` | Bootstrap variant |
-| `disabled` | `Boolean` | `false` | |
-| `name` | `String` | `'ph-segmented'` | Radio group name |
-| `ariaLabel` | `String` | `'Segmented control'` | |
-
-Emits: `update:modelValue`, `change`. No slots.
-
-```
-<ph-segmented-control v-model="view" :options="[
-  { label: 'Grid', value: 'grid', icon: 'grid' },
-  { label: 'List', value: 'list', icon: 'list' }
-]" />
-```
-
 ### `<ph-file-input>`
 
 File picker with drag & drop, `accept`/`maxSize` validation and image previews.
@@ -574,6 +528,52 @@ Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
 `datetime` mode) — never a `Date` — so it round-trips through `v-model` into a
 form payload without a serialisation step.
 
+
+### `<ph-form>`
+
+Form wrapper with native validation, error collection, submit/reset handling.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `disabled` | `Boolean` | `false` | |
+| `loading` | `Boolean` | `false` | |
+| `errors` | `Object` | `{}` | External errors by field name |
+| `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
+
+Emits: `submit(data)`, `reset`, `invalid(errors)`. Slot: default (scoped `{errors, validate, reset, submit, disabled, loading}`), `actions`.
+
+```
+<ph-form @submit="onSubmit" @invalid="errors = $event">
+  <template #default="{ validate, submit }">
+    <ph-input name="email" label="Email" required />
+    <ph-button type="submit" @click="validate()">Save</ph-button>
+  </template>
+</ph-form>
+```
+
+### `<ph-segmented-control>`
+
+Segmented button group (radio-based) with icons and variants.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String \| Number \| Boolean` | `null` | |
+| `options` | `Array` | **required** | `{label, value, icon?, disabled?, key?}` |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `block` | `Boolean` | `false` | Full width |
+| `variant` | `String` | `'primary'` | Bootstrap variant |
+| `disabled` | `Boolean` | `false` | |
+| `name` | `String` | `'ph-segmented'` | Radio group name |
+| `ariaLabel` | `String` | `'Segmented control'` | |
+
+Emits: `update:modelValue`, `change`. No slots.
+
+```
+<ph-segmented-control v-model="view" :options="[
+  { label: 'Grid', value: 'grid', icon: 'grid' },
+  { label: 'List', value: 'list', icon: 'list' }
+]" />
+```
 
 ### `<ph-form-field>`
 
