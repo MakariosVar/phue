@@ -16,6 +16,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <ph-select v-model="framework" label="Framework"
+                        :helperText="'Value: ' + framework"
                         :options="[
                             { label: 'Vue 3', value: 'vue' },
                             { label: 'PHP', value: 'php' },
@@ -36,7 +37,6 @@
                     />
                 </div>
             </div>
-            {{ framework }}
         </ph-card>
     </template>
     <template #snippet>
@@ -68,10 +68,10 @@ export default {
       showDemo: false,
       showProps: true,
       framework: "",
-      savedAt: "",
       snippet: `<div class="row">
     <div class="col-md-6">
         <ph-select v-model="framework" label="Framework"
+            :helperText="'Value: ' + framework"
             :options="[
                 { label: 'Vue 3', value: 'vue' },
                 { label: 'PHP', value: 'php' },
@@ -156,11 +156,6 @@ export default {
 
       ],
     };
-  },
-  methods: {
-    demoClick() {
-      this.savedAt = new Date().toISOString();
-    },
   },
 };
 </script>

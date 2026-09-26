@@ -98,7 +98,6 @@ export default {
       example2: "Wrong_ Email@hello.world",
       example3: "apky_gG&wP=w3lUvU",
       example4: 150,
-      savedAt: "",
       snippet: `<!-- Example 1 -->
 <ph-input
   label="Name"
@@ -207,11 +206,6 @@ export default {
 
       ],
     };
-  },
-  methods: {
-    demoClick() {
-      this.savedAt = new Date().toISOString();
-    },
   },
 };
 </script>
