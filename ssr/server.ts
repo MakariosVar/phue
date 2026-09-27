@@ -2,15 +2,20 @@ import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { compile as compileDom } from "@vue/compiler-dom";
 import { compile as compileSsr } from "@vue/compiler-ssr";
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync, existsSync, renameSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import vuePkg from "vue/package.json" with { type: "json" };
 
+interface ComponentEntry {
+    h: string;
+    s?: string;
+}
+
 interface RenderPayload {
     template?: string;
     data?: Record<string, any>;
-    components?: Record<string, string>;
+    components?: Record<string, string | ComponentEntry>;
 }
 
 interface CompilePayload {
@@ -21,6 +26,9 @@ interface CompilePayload {
 const SOCKET_PATH = process.env.PHUE_SSR_SOCKET || "/tmp/phue-ssr.sock";
 const CACHE_DIR = join(import.meta.dir, ".cache");
 
+// In-memory cache: hash -> module namespace object
+const moduleCache = new Map<string, any>();
+
 // Ensure temporary cache directory exists for module imports
 try {
     mkdirSync(CACHE_DIR, { recursive: true });
@@ -29,15 +37,44 @@ try {
 }
 
 /**
- * Writes source to a temporary file and dynamically imports it.
- * Resolves bare imports like 'vue' cleanly via node/bun module resolution.
+ * Resolves a module from an exact source or pre-computed hash.
+ * If source 's' is provided, compiles/caches it atomically under hash 'h'.
+ * If only hash 'h' is provided, resolves from in-memory cache or disk.
  */
-async function loadModuleFromSource(source: string) {
-    const hash = createHash("sha256").update(source).digest("hex").slice(0, 12);
+async function resolveModule(entry: ComponentEntry | string) {
+    let hash: string;
+    let source: string | undefined;
+
+    if (typeof entry === "string") {
+        source = entry;
+        hash = createHash("sha256").update(source).digest("hex").slice(0, 12);
+    } else {
+        hash = entry.h;
+        source = entry.s;
+    }
+
+    // 1. In-memory Map cache lookup
+    if (moduleCache.has(hash)) {
+        return moduleCache.get(hash);
+    }
+
     const filePath = join(CACHE_DIR, `${hash}.mjs`);
 
-    writeFileSync(filePath, source, "utf-8");
-    return await import(filePath);
+    // 2. Transmit/Write source if present
+    if (source) {
+        if (!existsSync(filePath)) {
+            const tempPath = join(CACHE_DIR, `.${hash}.mjs.tmp`);
+            writeFileSync(tempPath, source, "utf-8");
+            renameSync(tempPath, filePath);
+        }
+    } else if (!existsSync(filePath)) {
+        throw new Error(`Component hash '${hash}' not found in sidecar cache and no source provided.`);
+    }
+
+    // 3. Dynamic import and register in moduleCache
+    const mod = await import(filePath);
+    moduleCache.set(hash, mod);
+    return mod;
 }
 
 Bun.serve({
@@ -65,7 +102,6 @@ Bun.serve({
                         );
                     }
 
-                    // Use @vue/compiler-ssr if ssr flag is passed, otherwise fall back to compiler-dom
                     const compileFn = payload.ssr ? compileSsr : compileDom;
                     const compiled = compileFn(payload.template, {
                         mode: "module",
@@ -103,8 +139,8 @@ Bun.serve({
                     let app: any;
 
                     if (payload.components && payload.components["PhNavigation"]) {
-                        const source = payload.components["PhNavigation"];
-                        const mod = await loadModuleFromSource(source);
+                        const rawNav = payload.components["PhNavigation"];
+                        const mod = await resolveModule(rawNav);
 
                         const rootComponent: any = {
                             ...(mod.default || {}),
@@ -118,50 +154,31 @@ Bun.serve({
                             rootComponent.render = mod.__phueSsrRender ?? mod.default?.ssrRender;
                         }
 
-                        // Pass payload.data as rootProps specifically for PhNavigation component hydration
                         app = createSSRApp(rootComponent, payload.data || {});
-
-                        // Configure a stable application ID prefix for useId() alignment
                         app.config.idPrefix = "phue-ssr";
                     } else {
-                        // Pass payload.data ONLY to the data option to avoid attribute fallthrough leaks
                         app = createSSRApp({
                             template: payload.template,
                             data: () => payload.data || {},
                         });
                     }
 
-                    if (
-                        payload.components &&
-                        typeof payload.components === "object"
-                    ) {
-                        for (const [name, source] of Object.entries(
-                            payload.components,
-                        )) {
-                            if (
-                                typeof source === "string" &&
-                                source.trim() !== ""
-                            ) {
-                                const mod = await loadModuleFromSource(source);
+                    if (payload.components && typeof payload.components === "object") {
+                        for (const [name, rawEntry] of Object.entries(payload.components)) {
+                            const mod = await resolveModule(rawEntry);
 
-                                const definition: any = {
-                                    ...(mod.default || {}),
-                                    ssrRender:
-                                        mod.__phueSsrRender ??
-                                        mod.default?.ssrRender,
-                                    template:
-                                        mod.__phueTemplate ??
-                                        mod.default?.template,
-                                };
+                            const definition: any = {
+                                ...(mod.default || {}),
+                                ssrRender: mod.__phueSsrRender ?? mod.default?.ssrRender,
+                                template: mod.__phueTemplate ?? mod.default?.template,
+                            };
 
-                                const resolvedRender =
-                                    mod.__phueRender ?? mod.default?.render;
-                                if (resolvedRender) {
-                                    definition.render = resolvedRender;
-                                }
-
-                                app.component(name, definition);
+                            const resolvedRender = mod.__phueRender ?? mod.default?.render;
+                            if (resolvedRender) {
+                                definition.render = resolvedRender;
                             }
+
+                            app.component(name, definition);
                         }
                     }
 

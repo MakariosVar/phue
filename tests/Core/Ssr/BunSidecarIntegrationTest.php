@@ -9,6 +9,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * BunSidecarIntegrationTest — exercises the real ssr/server.ts sidecar over the
@@ -160,7 +161,7 @@ final class BunSidecarIntegrationTest extends TestCase
      */
     private function phuiModule(string $name): string
     {
-        $loader = new PhueComponentLoader(dirname(__DIR__, 3) . '/src/Core/UI/Phui');
+        $loader = TestComponentLoader::make(dirname(__DIR__, 3) . '/src/Core/UI/Phui');
         $module = $loader->buildForSsr($name);
 
         if ($module === null || trim($module) === '') {

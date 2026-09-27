@@ -7,7 +7,8 @@ use function Phue\Core\env;
 /**
  * Server-Side Rendering (SSR) Configuration
  *
- * Configures the connection parameters, limits, and state for the SSR engine execution.
+ * Configures connection parameters, compilation caching, protocol switches, and limits
+ * for the Bun SSR sidecar execution engine.
  */
 return [
     /**
@@ -16,10 +17,9 @@ return [
     'enabled' => (bool) env('SSR_ENABLED', true),
 
     /**
-     * Unix domain socket path for communicating with the SSR sidecar service.
-     * Note: Abstract sockets starting with "\0" must remain hardcoded in config files.
+     * Unix domain socket filesystem path for communicating with the SSR sidecar service.
      */
-    'socket' => "/tmp/phue-ssr.sock",
+    'socket' => (string) env('SSR_SOCKET', '/tmp/phue-ssr.sock'),
 
     /**
      * Maximum time in milliseconds to wait when opening a socket connection.
@@ -34,7 +34,7 @@ return [
     /**
      * HTTP Host header value sent in sidecar request headers.
      */
-    'host_header' => 'phue-ssr',
+    'host_header' => (string) env('SSR_HOST_HEADER', 'phue-ssr'),
 
     /**
      * Maximum payload threshold size allowed in Kilobytes before aborting rendering.

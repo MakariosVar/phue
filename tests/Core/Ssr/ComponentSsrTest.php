@@ -47,7 +47,11 @@ final class ComponentSsrTest extends TestCase
 
     public function testEngineAttachesComponentsToEnvelope(): void
     {
-        $source = 'export const __phueTemplate = "<button></button>"; export default { name: "PhButton" };';
+        // A per-run nonce keeps this first-sight: BunSsrEngine tracks the hashes
+        // the sidecar has already confirmed in a *static* registry, so a fixed
+        // source string would be omitted from 's' on the second run of the suite.
+        $source = 'export const __phueTemplate = "<button></button>"; export default { name: "PhButton" };'
+            . '/*' . bin2hex(random_bytes(8)) . '*/';
 
         $client = new RecordingSsrClient('{"ok":true,"html":"<div>ok</div>"}');
 
@@ -65,7 +69,76 @@ final class ComponentSsrTest extends TestCase
         $this->assertSame(1, $envelope['v']);
         $this->assertSame('<div class="page"><ph-button /></div>', $envelope['template']);
         $this->assertSame(['title' => 'Demo'], $envelope['data']);
-        $this->assertSame(['PhButton' => $source], $envelope['components']);
+
+        // Contract: components travel content-addressed as {h, s?}, never as a
+        // bare source string, so the sidecar can answer with hashes alone.
+        $this->assertSame(
+            [
+                'PhButton' => [
+                    'h' => substr(hash('sha256', $source), 0, 12),
+                    's' => $source,
+                ],
+            ],
+            $envelope['components']
+        );
+    }
+
+    public function testEngineOmitsSourceOnRepeatRenderForAKnownHash(): void
+    {
+        // Content-addressed contract: once the sidecar has confirmed a hash, the
+        // next envelope carries the hash only. This is what shrinks a 45-dep
+        // page payload from ~497 KB to ~12 KB.
+        $source = 'export const __phueTemplate = "<button></button>"; export default {};'
+            . '/*' . bin2hex(random_bytes(8)) . '*/';
+
+        $hash = substr(hash('sha256', $source), 0, 12);
+        $client = new RecordingSsrClient('{"ok":true,"html":"<div>ok</div>"}');
+        $engine = new BunSsrEngine($client);
+
+        $context = ['components' => ['PhButton' => $source]];
+
+        $engine->render(template: '<div><ph-button /></div>', state: [], context: $context);
+        $first = $client->lastPayload();
+
+        $this->assertNotNull($first);
+        $this->assertSame(['h' => $hash, 's' => $source], $first['components']['PhButton']);
+
+        $engine->render(template: '<div><ph-button /></div>', state: [], context: $context);
+        $second = $client->lastPayload();
+
+        $this->assertNotNull($second);
+        $this->assertSame(['h' => $hash], $second['components']['PhButton']);
+        $this->assertArrayNotHasKey('s', $second['components']['PhButton']);
+    }
+
+    public function testEngineDropsTrackedHashesAfterATransportFailure(): void
+    {
+        // Self-healing contract: a transport failure must invalidate the local
+        // hash registry, otherwise the next render would send hashes the
+        // (possibly restarted) sidecar has never seen and silently lose its
+        // child components.
+        $source = 'export const __phueTemplate = "<button></button>"; export default {};'
+            . '/*' . bin2hex(random_bytes(8)) . '*/';
+
+        $context = ['components' => ['PhButton' => $source]];
+
+        $healthy = new RecordingSsrClient('{"ok":true,"html":"<div>ok</div>"}');
+        (new BunSsrEngine($healthy))->render(template: '<div><ph-button /></div>', state: [], context: $context);
+        $this->assertArrayHasKey('s', (array) ($healthy->lastPayload()['components']['PhButton'] ?? []));
+
+        // Sidecar dies: transport returns null.
+        $dead = new RecordingSsrClient('null');
+        $this->assertNull(
+            (new BunSsrEngine($dead))->render(template: '<div><ph-button /></div>', state: [], context: $context)
+        );
+
+        // Next render must re-transmit the full source.
+        $recovered = new RecordingSsrClient('{"ok":true,"html":"<div>ok</div>"}');
+        (new BunSsrEngine($recovered))->render(template: '<div><ph-button /></div>', state: [], context: $context);
+        $payload = $recovered->lastPayload();
+
+        $this->assertNotNull($payload);
+        $this->assertArrayHasKey('s', $payload['components']['PhButton']);
     }
 
     public function testEngineOmitsComponentsKeyWhenContextHasNone(): void

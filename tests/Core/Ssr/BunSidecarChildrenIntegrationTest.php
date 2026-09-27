@@ -10,6 +10,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * BunSidecarChildrenIntegrationTest — end-to-end regression guard for the
@@ -48,7 +49,7 @@ final class BunSidecarChildrenIntegrationTest extends TestCase
         $this->baseDir = sys_get_temp_dir() . '/phue_ssr_children_' . uniqid('', true);
         mkdir($this->baseDir, 0777, true);
 
-        $this->loader = new PhueComponentLoader($this->baseDir);
+        $this->loader = TestComponentLoader::make($this->baseDir);
         $registry = new ComponentLoaderRegistry();
         $this->loader->setRegistry($registry);
         $registry->addLoader($this->loader);

@@ -71,13 +71,27 @@ class UnixSsrClient implements SsrClient
 
             @fwrite($client, $request);
 
-            // Read raw response stream
+            // Total wall-clock deadline calculation
+            $deadline = microtime(true) + ($this->timeoutMs / 1000.0);
             $response = '';
+
+            // Read raw response stream with spin protection and global timeout enforcement
             while (!feof($client)) {
-                $chunk = @fread($client, 8192);
-                if ($chunk === false) {
-                    break;
+                if (microtime(true) > $deadline) {
+                    @fclose($client);
+                    return null;
                 }
+
+                $chunk = @fread($client, 8192);
+
+                // Check metadata only if read returned empty or false to avoid hot-path syscalls
+                if ($chunk === false || $chunk === '') {
+                    $info = stream_get_meta_data($client);
+                    if ($chunk === false || $chunk === '' || $info['timed_out']) {
+                        break;
+                    }
+                }
+
                 $response .= $chunk;
             }
 

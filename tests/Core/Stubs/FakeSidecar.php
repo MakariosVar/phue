@@ -20,6 +20,17 @@ final class FakeSidecar
 
     private string $socketPath;
 
+    /**
+     * In-memory hash => module source registry.
+     *
+     * Stands in for the `moduleCache` Map in ssr/server.ts, so that
+     * hash-only component entries are only accepted after the sidecar has
+     * been handed the corresponding source at least once.
+     *
+     * @var array<string, string>
+     */
+    private array $moduleCache = [];
+
     public function __construct(string $socketPath)
     {
         $this->socketPath = $socketPath;
@@ -195,6 +206,15 @@ final class FakeSidecar
         }
 
         try {
+            $components = $this->resolveComponentEntries($components);
+        } catch (RuntimeException $exception) {
+            return $this->http(
+                500,
+                ['ok' => false, 'error' => ['code' => 'COMPILE_ERROR', 'message' => $exception->getMessage()]]
+            );
+        }
+
+        try {
             $html = $this->pretendToRender($payload['template'], $payload['data'] ?? [], $components);
 
             return $this->http(200, ['ok' => true, 'html' => $html]);
@@ -256,6 +276,64 @@ final class FakeSidecar
         }
 
         throw new RuntimeException("Unsupported fake template: {$template}");
+    }
+
+    /**
+     * Normalises the content-addressed components map back to Name => source.
+     *
+     * Mirrors resolveModule() in ssr/server.ts: an entry is either a bare
+     * source string (legacy) or a {h, s?} envelope. When 's' is present the
+     * module is registered under the supplied hash; when only 'h' is present
+     * the hash must already be known, otherwise the sidecar raises
+     * COMPILE_ERROR exactly like the Bun implementation does.
+     *
+     * @param array<array-key, mixed> $components Raw components map from the envelope.
+     *
+     * @return array<string, string> Name => ESM module source.
+     *
+     * @throws RuntimeException When a hash-only entry references an unknown module.
+     */
+    private function resolveComponentEntries(array $components): array
+    {
+        $resolved = [];
+
+        foreach ($components as $name => $entry) {
+            if (!is_string($name)) {
+                continue;
+            }
+
+            if (is_string($entry)) {
+                // Legacy shape: the hash is derived server-side.
+                $this->moduleCache[substr(hash('sha256', $entry), 0, 12)] = $entry;
+                $resolved[$name] = $entry;
+
+                continue;
+            }
+
+            if (!is_array($entry) || !isset($entry['h']) || !is_string($entry['h'])) {
+                continue;
+            }
+
+            $hash = $entry['h'];
+            $source = $entry['s'] ?? null;
+
+            if (is_string($source) && $source !== '') {
+                $this->moduleCache[$hash] = $source;
+                $resolved[$name] = $source;
+
+                continue;
+            }
+
+            if (!isset($this->moduleCache[$hash])) {
+                throw new RuntimeException(
+                    "Component hash '{$hash}' not found in sidecar cache and no source provided."
+                );
+            }
+
+            $resolved[$name] = $this->moduleCache[$hash];
+        }
+
+        return $resolved;
     }
 
     /**
