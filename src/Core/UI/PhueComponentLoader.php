@@ -95,6 +95,14 @@ class PhueComponentLoader
     private ?array $componentIndex = null;
 
     /**
+     * Process-lifetime memoization for parsed children component tags keyed by file path.
+     * Content-hash invalidated so it survives process boundaries safely.
+     *
+     * @var array<string, array{hash: string, children: array<int, string>}>
+     */
+    private array $templateChildrenMemo = [];
+
+    /**
      * PhueComponentLoader constructor.
      *
      * @param string                  $componentsDir   Absolute or relative path to component files directory.
@@ -142,7 +150,7 @@ class PhueComponentLoader
 
     /**
      * Full process-level memoization flush.
-     * Clears per-request state along with compiled client & SSR module caches.
+     * Clears per-request state along with compiled client, SSR, and children AST memo caches.
      *
      * @return void
      */
@@ -151,6 +159,7 @@ class PhueComponentLoader
         $this->beginRequest();
         $this->ssrMemo = [];
         $this->clientMemo = [];
+        $this->templateChildrenMemo = [];
     }
 
     /**
@@ -361,8 +370,19 @@ class PhueComponentLoader
         $resolvedChildHashes = [];
 
         if ($this->registry !== null) {
-            $discoverer = new ComponentDiscoverer($this->registry);
-            $children = $discoverer->scanTemplate($structure['template']);
+            // Content-hash memoization for children discovery (skips regex scan if content hasn't changed)
+            if ($contentHash !== '' && isset($this->templateChildrenMemo[$filePath]) && $this->templateChildrenMemo[$filePath]['hash'] === $contentHash) {
+                $children = $this->templateChildrenMemo[$filePath]['children'];
+            } else {
+                $discoverer = new ComponentDiscoverer($this->registry);
+                $children = $discoverer->scanTemplate($structure['template']);
+                if ($contentHash !== '') {
+                    $this->templateChildrenMemo[$filePath] = [
+                        'hash' => $contentHash,
+                        'children' => $children,
+                    ];
+                }
+            }
 
             $this->buildingStack[$name] = true;
             try {
