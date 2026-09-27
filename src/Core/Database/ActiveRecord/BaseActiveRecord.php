@@ -81,6 +81,13 @@ abstract class BaseActiveRecord implements JsonSerializable
     protected array $original = [];
 
     /**
+     * Attributes that should be hidden from array / JSON serialization.
+     *
+     * @var array<int, string>
+     */
+    protected array $hidden = [];
+
+    /**
      * Validation errors store.
      *
      * @var array<string, mixed>
@@ -832,7 +839,8 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Converts model attributes and optional loaded relations to array format safely preventing infinite cyclic recursion.
+     * Converts model attributes and optional loaded relations to array format safely,
+     * hiding declared hidden attributes and preventing infinite cyclic recursion.
      *
      * @param array<int, string> $visited Call stack tracker for visited FQCNs.
      * @return array<string, mixed>
@@ -841,14 +849,22 @@ abstract class BaseActiveRecord implements JsonSerializable
     {
         $class = static::class;
         if (in_array($class, $visited, true)) {
-            return $this->attributes;
+            return array_diff_key($this->attributes, array_flip($this->hidden));
         }
 
         $visited[] = $class;
-        $attributes = $this->attributes;
+
+        // Dynamic filtering per serialization pass
+        $attributes = array_diff_key($this->attributes, array_flip($this->hidden));
 
         foreach ($this->relations as $key => $relation) {
+            // Respect parent hidden declaration for relation properties
+            if (in_array($key, $this->hidden, true)) {
+                continue;
+            }
+
             if ($relation instanceof self) {
+                // Nested models execute their own toArray() using their OWN $hidden array
                 $attributes[$key] = $relation->toArray($visited);
             } elseif (is_array($relation)) {
                 $attributes[$key] = array_map(
