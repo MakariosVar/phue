@@ -251,12 +251,18 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testGetConnectionThrowsWhenNotSet(): void
     {
-        // Save the current connection resolver
         $reflection = new \ReflectionClass(BaseActiveRecord::class);
-        $savedResolver = $reflection->getStaticPropertyValue('connectionResolver');
-        $reflection->setStaticPropertyValue('connectionResolver', null);
 
-        // Temporarily clear the static connection using reflection
+        // Capture BOTH halves of the static state. Guessing the bootstrap file
+        // path and rebuilding a Connection is what used to break this: when the
+        // file was absent the restore was skipped, dbConnection stayed null, and
+        // the next getConnection() fell back to the application .env — MariaDB.
+        // Every later test then ran SQLite DDL against MariaDB and failed with
+        // "AUTOINCREMENT", taking 46 unrelated tests with it.
+        $savedResolver = $reflection->getStaticPropertyValue('connectionResolver');
+        $savedConnection = $reflection->getStaticPropertyValue('dbConnection');
+
+        $reflection->setStaticPropertyValue('connectionResolver', null);
         $reflection->setStaticPropertyValue('dbConnection', null);
 
         try {
@@ -265,17 +271,10 @@ class BaseActiveRecordTest extends TestCase
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('No database connection set', $e->getMessage());
         } finally {
-            // Restore the connection resolver
+            // Restore the exact previous values, unconditionally. Do not call
+            // setConnection() here: it also reassigns the resolver.
             $reflection->setStaticPropertyValue('connectionResolver', $savedResolver);
-            // Restore the connection from bootstrap
-            $bootstrapPath = '/tmp/phue_test_' . getmypid() . '.sqlite';
-            if (file_exists($bootstrapPath)) {
-                $connection = new \Phue\Core\Database\Connection([
-                    'driver'   => 'sqlite',
-                    'database' => $bootstrapPath,
-                ]);
-                BaseActiveRecord::setConnection($connection);
-            }
+            $reflection->setStaticPropertyValue('dbConnection', $savedConnection);
         }
     }
 
