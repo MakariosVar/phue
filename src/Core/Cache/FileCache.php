@@ -7,6 +7,7 @@ namespace Phue\Core\Cache;
 use DateInterval;
 use DateTime;
 use Psr\SimpleCache\CacheInterface;
+use InvalidArgumentException;
 
 /**
  * File-based PSR-16 Simple Cache Implementation.
@@ -17,6 +18,11 @@ use Psr\SimpleCache\CacheInterface;
  */
 class FileCache implements CacheInterface
 {
+    /**
+     * PSR-16 reserved characters that must throw an InvalidArgumentException.
+     */
+    private const RESERVED_CHARACTERS = '{}()/\@:';
+
     /**
      * FileCache constructor.
      *
@@ -36,9 +42,11 @@ class FileCache implements CacheInterface
      * @param mixed  $default Default value to return if the key doesn't exist.
      *
      * @return mixed The value of the item from the cache, or $default in case of cache miss.
+     * @throws InvalidArgumentException If the $key string is not a legal value.
      */
     public function get(string $key, mixed $default = null): mixed
     {
+        $this->validateKey($key);
         $filePath = $this->getFilePath($key);
 
         if (!file_exists($filePath)) {
@@ -62,7 +70,7 @@ class FileCache implements CacheInterface
             return $default;
         }
 
-        return $data['value'] ?? $default;
+        return array_key_exists('value', $data) ? $data['value'] : $default;
     }
 
     /**
@@ -73,9 +81,12 @@ class FileCache implements CacheInterface
      * @param null|int|DateInterval  $ttl   Optional. The TTL value of this item.
      *
      * @return bool True on success and false on failure.
+     * @throws InvalidArgumentException If the $key string is not a legal value.
      */
     public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
     {
+        $this->validateKey($key);
+
         $expiresAt = null;
 
         if ($ttl instanceof DateInterval) {
@@ -103,9 +114,12 @@ class FileCache implements CacheInterface
      * @param string $key The unique cache key of the item to delete.
      *
      * @return bool True if the item was successfully removed or did not exist.
+     * @throws InvalidArgumentException If the $key string is not a legal value.
      */
     public function delete(string $key): bool
     {
+        $this->validateKey($key);
+
         $filePath = $this->getFilePath($key);
 
         if (file_exists($filePath)) {
@@ -116,7 +130,8 @@ class FileCache implements CacheInterface
     }
 
     /**
-     * Wipes clean the entire cache directory.
+     * Wipes clean all .cache files in the root storage directory.
+     * Ignores subdirectories (e.g. views/) to preserve cache type isolation.
      *
      * @return bool True on success and false on failure.
      */
@@ -144,12 +159,13 @@ class FileCache implements CacheInterface
      * @param mixed            $default Default value to return for keys that do not exist.
      *
      * @return iterable<string, mixed> A map of key to value pairs.
+     * @throws InvalidArgumentException If any key in $keys is invalid.
      */
     public function getMultiple(iterable $keys, mixed $default = null): iterable
     {
         $result = [];
         foreach ($keys as $key) {
-            $result[$key] = $this->get($key, $default);
+            $result[(string) $key] = $this->get((string) $key, $default);
         }
 
         return $result;
@@ -162,6 +178,7 @@ class FileCache implements CacheInterface
      * @param null|int|DateInterval   $ttl    Optional. The TTL value of this item.
      *
      * @return bool True on success and false on failure.
+     * @throws InvalidArgumentException If any key in $values is invalid.
      */
     public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
     {
@@ -181,6 +198,7 @@ class FileCache implements CacheInterface
      * @param iterable<string> $keys A list of string-based keys to be deleted.
      *
      * @return bool True if all items were successfully removed.
+     * @throws InvalidArgumentException If any key in $keys is invalid.
      */
     public function deleteMultiple(iterable $keys): bool
     {
@@ -200,10 +218,50 @@ class FileCache implements CacheInterface
      * @param string $key The cache item key.
      *
      * @return bool True if item exists and is not expired.
+     * @throws InvalidArgumentException If the $key string is not a legal value.
      */
     public function has(string $key): bool
     {
-        return $this->get($key, $this) !== $this;
+        $this->validateKey($key);
+
+        $filePath = $this->getFilePath($key);
+
+        if (!file_exists($filePath)) {
+            return false;
+        }
+
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            return false;
+        }
+
+        /** @var array{value: mixed, expires_at: int|null}|null $data */
+        $data = json_decode($content, true);
+
+        if (!is_array($data) || !array_key_exists('value', $data)) {
+            return false;
+        }
+
+        if (isset($data['expires_at']) && $data['expires_at'] !== null && time() > $data['expires_at']) {
+            $this->delete($key);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validates cache key for PSR-16 compliance.
+     *
+     * @param string $key
+     * @return void
+     * @throws InvalidArgumentException
+     */
+    private function validateKey(string $key): void
+    {
+        if ($key === '' || strpbrk($key, self::RESERVED_CHARACTERS) !== false) {
+            throw new InvalidArgumentException("Invalid PSR-16 cache key: '{$key}' contains reserved characters or is empty.");
+        }
     }
 
     /**
