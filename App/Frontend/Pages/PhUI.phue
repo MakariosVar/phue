@@ -92,7 +92,7 @@ return [
 
         <!-- Sidebar: fixed-height column, never scrolls with the page. -->
         <aside
-            class="phue-sidebar border-end d-flex flex-column flex-shrink-0 overflow-hidden"
+            class="phue-sidebar border-end d-flex flex-column flex-shrink-0 overflow-y-auto"
             style="width: 260px; background: var(--bs-body-bg);"
         >
             <div class="px-4 mb-4 pt-1">
@@ -109,11 +109,10 @@ return [
                 />
             </div>
 
-            <nav class="nav flex-column px-3 pb-3 flex-grow-1 overflow-y-auto" style="gap: 0.1rem; min-height: 0;" aria-label="PhUI components">
+            <div class="flex-column px-3 pb-3" style="gap: 0.1rem; min-height: 0;" aria-label="PhUI components">
                 <div style="display: contents;" v-for="nav in filteredNavItems" :key="nav.id">
                     <!-- Main Nav Link -->
                     <a
-                        :href="'#' + nav.id"
                         class="phue-nav-link nav-link d-flex align-items-center"
                         :class="{ 'phue-nav-link--active': activeSection === nav.id }"
                         :style="{
@@ -129,7 +128,7 @@ return [
                             cursor: 'pointer'
                         }"
                         :aria-current="activeSection === nav.id ? 'true' : null"
-                        @click.prevent="scrollTo(nav.id)"
+                        @click.stop.prevent="toggleSection(nav.id)"
                     >
                         <span style="flex: 1;">{{ nav.label }}</span>
                         <span
@@ -140,7 +139,6 @@ return [
                                 transition: 'transform 0.15s ease',
                                 cursor: 'pointer'
                             }"
-                            @click.stop.prevent="toggleSection(nav.id)"
                         >▾</span>
                     </a>
 
@@ -166,7 +164,7 @@ return [
                         {{ comp.label }}
                     </a>
                 </div>
-            </nav>
+            </div>
         </aside>
 
         <!-- Main: the only scroll container on the page. -->
