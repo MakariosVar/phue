@@ -17,6 +17,11 @@ use Phue\Core\Exceptions\CircularDependencyException;
 class Container
 {
     /**
+     * Reserved fallback scope key when no active ScopeContext is set.
+     */
+    private const FALLBACK_SCOPE = '__none__';
+
+    /**
      * Registered service factories indexed by ID/Class name.
      *
      * @var array<string, callable>
@@ -31,9 +36,10 @@ class Container
     private array $instances = [];
 
     /**
-     * Request-scoped cached instances partitioned by scope ID or flat array for FPM.
+     * Request-scoped cached instances partitioned strictly by scope ID.
+     * Format: [scope_id => [service_id => instance]]
      *
-     * @var array<string, mixed>
+     * @var array<string, array<string, mixed>>
      */
     private array $scopedInstances = [];
 
@@ -50,6 +56,13 @@ class Container
      * @var array<string, bool>
      */
     private array $resolving = [];
+
+    /**
+     * Map of alias keys to concrete abstract identifiers.
+     *
+     * @var array<string, string>
+     */
+    private array $aliases = [];
 
     /**
      * Active scope context for the current execution unit.
@@ -102,23 +115,24 @@ class Container
      */
     public function bind(string $id, ?callable $factory = null, bool $isScoped = false): void
     {
+        $targetId = $this->resolveAliasTarget($id);
+
         if ($factory !== null) {
-            $this->factories[$id] = $factory;
+            $this->factories[$targetId] = $factory;
         }
 
         if ($isScoped) {
-            $this->scopedKeys[$id] = true;
-            unset($this->instances[$id]);
+            $this->scopedKeys[$targetId] = true;
+            unset($this->instances[$targetId]);
         } else {
-            unset($this->scopedKeys[$id]);
+            unset($this->scopedKeys[$targetId]);
         }
 
-        // Always clean up existing scoped instances (both partitioned and flat)
-        if ($this->currentScope !== null) {
-            unset($this->scopedInstances[$this->currentScope->id][$id]);
-        }
-        unset($this->scopedInstances[$id]);
-        unset($this->instances[$id]);
+        // Clean up existing instance across active and fallback scope storage
+        $scopeKey = $this->getEffectiveScopeKey();
+        unset($this->scopedInstances[$scopeKey][$targetId]);
+        unset($this->scopedInstances[self::FALLBACK_SCOPE][$targetId]);
+        unset($this->instances[$targetId]);
     }
 
     /**
@@ -148,45 +162,79 @@ class Container
     }
 
     /**
+     * Get current active scope context.
+     *
+     * @return ScopeContext|null
+     */
+    public function getScope(): ?ScopeContext
+    {
+        return $this->currentScope;
+    }
+
+    /**
+     * Resolves current effective scope storage key.
+     */
+    private function getEffectiveScopeKey(?ScopeContext $scope = null): string
+    {
+        $targetScope = $scope ?? $this->currentScope;
+        return $targetScope?->id ?? self::FALLBACK_SCOPE;
+    }
+
+    /**
+     * Resolve an alias identifier to its concrete target ID with cycle protection.
+     *
+     * @param string $id Identifier or alias to resolve.
+     * @return string Concrete target identifier.
+     * @throws CircularDependencyException If an alias cycle is detected.
+     */
+    private function resolveAliasTarget(string $id): string
+    {
+        $targetId = $id;
+        $visited = [];
+
+        while (isset($this->aliases[$targetId])) {
+            if (isset($visited[$targetId])) {
+                $chain = implode(' -> ', array_keys($visited)) . " -> {$targetId}";
+                throw new CircularDependencyException("Circular alias dependency detected: {$chain}");
+            }
+
+            $visited[$targetId] = true;
+            $targetId = $this->aliases[$targetId];
+        }
+
+        return $targetId;
+    }
+
+    /**
      * Resolve a service or class instance from the container based on its scope.
      *
      * @param string $id Service identifier or target class name.
      * @return mixed Resolved instance or value.
-     * @throws CircularDependencyException If a circular dependency is detected during instantiation.
-     * @throws ContainerException If an uninstantiable class or unresolved parameter is encountered.
-     * @throws NotFoundException If no factory or autowirable class exists for the requested ID.
      */
     public function get(string $id): mixed
     {
-        $isScoped = isset($this->scopedKeys[$id]);
-        $scopeId = $this->currentScope?->id;
+        $targetId = $this->resolveAliasTarget($id);
 
-        // 1. Check existing cached instances based on scope
+        $isScoped = isset($this->scopedKeys[$targetId]);
+        $scopeKey = $this->getEffectiveScopeKey();
+
+        // Single storage lookup
         if ($isScoped) {
-            if ($scopeId !== null && isset($this->scopedInstances[$scopeId][$id])) {
-                return $this->scopedInstances[$scopeId][$id];
+            if (isset($this->scopedInstances[$scopeKey][$targetId])) {
+                return $this->scopedInstances[$scopeKey][$targetId];
             }
-            if ($scopeId === null && isset($this->scopedInstances[$id])) {
-                return $this->scopedInstances[$id];
-            }
+        } elseif (isset($this->instances[$targetId])) {
+            return $this->instances[$targetId];
         }
 
-        if (!$isScoped && isset($this->instances[$id])) {
-            return $this->instances[$id];
-        }
+        // Resolve fresh instance using concrete target ID
+        $instance = $this->make($targetId);
 
-        // 2. Resolve fresh instance
-        $instance = $this->make($id);
-
-        // 3. Store instance in appropriate scope cache
+        // Store instance in single partitioned storage location
         if ($isScoped) {
-            if ($scopeId !== null) {
-                $this->scopedInstances[$scopeId][$id] = $instance;
-            } else {
-                $this->scopedInstances[$id] = $instance;
-            }
+            $this->scopedInstances[$scopeKey][$targetId] = $instance;
         } else {
-            $this->instances[$id] = $instance;
+            $this->instances[$targetId] = $instance;
         }
 
         return $instance;
@@ -202,26 +250,28 @@ class Container
      */
     public function make(string $id): mixed
     {
-        if (isset($this->resolving[$id])) {
-            $chain = implode(' -> ', array_keys($this->resolving)) . " -> {$id}";
+        $targetId = $this->resolveAliasTarget($id);
+
+        if (isset($this->resolving[$targetId])) {
+            $chain = implode(' -> ', array_keys($this->resolving)) . " -> {$targetId}";
             throw new CircularDependencyException("Circular dependency detected: {$chain}");
         }
 
-        $this->resolving[$id] = true;
+        $this->resolving[$targetId] = true;
 
         try {
-            if (isset($this->factories[$id])) {
-                return $this->factories[$id]($this);
+            if (isset($this->factories[$targetId])) {
+                return $this->factories[$targetId]($this);
             }
 
-            if (class_exists($id) || interface_exists($id)) {
-                return $this->autowire($id);
+            if (class_exists($targetId) || interface_exists($targetId)) {
+                return $this->autowire($targetId);
             }
         } finally {
-            unset($this->resolving[$id]);
+            unset($this->resolving[$targetId]);
         }
 
-        $this->missingFactory($id);
+        $this->missingFactory($targetId);
     }
 
     /**
@@ -235,19 +285,20 @@ class Container
      */
     public function has(string $id): bool
     {
-        $scopeId = $this->currentScope?->id;
+        $targetId = $this->resolveAliasTarget($id);
+        $scopeKey = $this->getEffectiveScopeKey();
 
-        $hasScopedInstance = $scopeId !== null 
-            ? isset($this->scopedInstances[$scopeId][$id])
-            : isset($this->scopedInstances[$id]);
-
-        if (isset($this->factories[$id]) || isset($this->instances[$id]) || $hasScopedInstance) {
+        if (
+            isset($this->factories[$targetId]) || 
+            isset($this->instances[$targetId]) || 
+            isset($this->scopedInstances[$scopeKey][$targetId])
+        ) {
             return true;
         }
 
-        if (class_exists($id)) {
+        if (class_exists($targetId)) {
             try {
-                $reflection = new ReflectionClass($id);
+                $reflection = new ReflectionClass($targetId);
                 return $reflection->isInstantiable();
             } catch (\ReflectionException) {
                 return false;
@@ -268,70 +319,45 @@ class Container
      */
     public function bound(string $id): bool
     {
-        $scopeId = $this->currentScope?->id;
+        $targetId = $this->resolveAliasTarget($id);
+        $scopeKey = $this->getEffectiveScopeKey();
 
-        $hasScopedInstance = $scopeId !== null 
-            ? isset($this->scopedInstances[$scopeId][$id])
-            : isset($this->scopedInstances[$id]);
-
-        return isset($this->factories[$id]) 
-            || isset($this->instances[$id]) 
-            || $hasScopedInstance;
+        return isset($this->factories[$targetId]) 
+            || isset($this->instances[$targetId]) 
+            || isset($this->scopedInstances[$scopeKey][$targetId]);
     }
 
     /**
      * Register an alias for an existing abstract binding or service.
      *
-     * Maps an alias string directly to a factory closure that resolves
-     * the target abstract FQCN via the container.
-     *
-     * @param string $alias    Alias identifier (e.g. 'cache').
+     * @param string $alias    Alias identifier (e.g. 'db').
      * @param string $abstract Target abstract class or interface FQCN.
      *
      * @return self Fluent instance reference for chaining.
      */
     public function alias(string $alias, string $abstract): self
     {
-        $this->factories[$alias] = fn (): mixed => $this->get($abstract);
-
+        $this->aliases[$alias] = $abstract;
         return $this;
     }
 
     /**
-     * Clear all request-scoped instances for a given scope and trigger optional reset logic for resettable instances.
+     * Clear all request-scoped instances for a given scope and trigger optional reset logic.
      *
-     * @param ScopeContext|null $scope Target scope to flush, or null to flush current scope or FPM flat instances.
+     * @param ScopeContext|null $scope Target scope to flush, or null to flush the fallback bucket (__none__).
      * @return void
      */
     public function flushScope(?ScopeContext $scope = null): void
     {
-        $targetScope = $scope ?? $this->currentScope;
+        $scopeKey = $scope?->id ?? self::FALLBACK_SCOPE;
 
-        if ($targetScope !== null) {
-            $scopeId = $targetScope->id;
-
-            if (isset($this->scopedInstances[$scopeId])) {
-                foreach ($this->scopedInstances[$scopeId] as $instance) {
-                    if ($instance instanceof ResettableInterface) {
-                        $instance->reset();
-                    }
+        if (isset($this->scopedInstances[$scopeKey])) {
+            foreach ($this->scopedInstances[$scopeKey] as $instance) {
+                if ($instance instanceof ResettableInterface) {
+                    $instance->reset();
                 }
-                unset($this->scopedInstances[$scopeId]);
             }
-            return;
-        }
-
-        // FPM Fallback: Flush top-level flat scopedInstances array
-        foreach ($this->scopedInstances as $key => $instance) {
-            if (is_array($instance)) {
-                // Ignore partitioned scope arrays if present
-                continue;
-            }
-
-            if ($instance instanceof ResettableInterface) {
-                $instance->reset();
-            }
-            unset($this->scopedInstances[$key]);
+            unset($this->scopedInstances[$scopeKey]);
         }
     }
 
