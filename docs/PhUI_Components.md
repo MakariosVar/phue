@@ -27,11 +27,33 @@ You just write the tag in kebab-case:
 The loader builds the `components: { PhButton, PhInput, ... }` map itself and
 only ships the JS module for the referenced components.
 
-### 1.1.1 Component Styles Metadata (`'styles'` in `<php>` block)
+### 1.1.1 Styles: the `<style>` block and the `'styles'` key
 
-A `.phue` component (page or partial) can declare its own stylesheet dependencies
-in the `<php>` block return array:
+A `.phue` component (page or partial) has two independent ways to ship CSS.
 
+**A `<style>` block**, rendered once per page into the document head:
+
+```
+<template>
+<div class="ring">…</div>
+</template>
+
+<style>
+.ring:focus-within { outline: 2px solid #86b7fe; }
+</style>
+```
+
+`PhueTemplateParser` recognises it as a fourth top-level block, `View` carries it
+as `$style`, and `ComponentRenderer` emits it as a scoped `<style
+data-phue-scope="<component>">` the first time that component renders on a page.
+
+> **Currently un-scoped.** `data-phue-scope` is emitted for identification only —
+> nothing rewrites the selectors, so the CSS applies as written and two components
+> styling the same class will collide. Reach for a prefixed class (`.my-ring`)
+> rather than assuming the attribute scopes anything.
+
+It is separate from `'styles'`, which is for **external** stylesheets via the
+`<php>` block:
 ```php
 <php>
 return [
@@ -52,9 +74,9 @@ return [
 4. `HtmlShellRenderer` renders `<link rel="stylesheet" href="...">` in `<head>`
 5. `AssetRegistry::beginRequest()` clears the request pool — styles are **request-scoped**, no leak across pages
 
-> **Key point:** Styles are **request-scoped** (lazy). Each page/component declares its own styles, they're added to the request pool during render, and cleared on the next `beginRequest()`. No global pollution, no manual cleanup needed.
+> **Key point:** external stylesheets are **request-scoped** (lazy). Each page/component declares its own styles, they're added to the request pool during render, and cleared on the next `beginRequest()`. No global pollution, no manual cleanup needed.
 
-> **BC note:** `$styles` was appended as the **last** `View` constructor parameter (after `$html`), so existing positional calls `new View($tpl, $state, $scripts, $inlineScript, $html)` remain 100% compatible.
+> **BC note:** both parameters were appended to the end of the `View` constructor, after `$html`, so existing positional calls `new View($tpl, $state, $scripts, $inlineScript, $html)` remain 100% compatible. `$styles` (the array of URLs) was added first, `$style` (the `<style>` block body) after it.
 
 > **Asset URL convention:** Use absolute paths from registered asset sources, e.g. `/assets/app/styles/main.css` (serves `App/Assets/styles/main.css` via `registerSource('/assets/app', ...)` in `public/index.php`).
 
@@ -181,7 +203,7 @@ The id is auto-generated with Vue's `useId()` unless you pass your own.
 | `error` | `String` | `''` | Non-empty → `is-invalid` + red `form-text` |
 | `disabled` | `Boolean` | `false` | |
 | `readonly` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | Only visual (`*`); validation is your job |
+| `required` | `Boolean` | `false` | Sets the native `required` attribute (and the `*` marker) |
 
 Emits: `update:modelValue` (on `input`), `blur`, `focus`.
 
@@ -211,7 +233,7 @@ Numeric input with increment/decrement controls, min/max, step, precision.
 | `error` | `String` | `''` | |
 | `disabled` | `Boolean` | `false` | |
 | `readonly` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false`  Sets the native `required` attribute |
 
 Emits: `update:modelValue`, `blur`, `focus`.
 
@@ -235,7 +257,7 @@ Native select bound to `modelValue`. Options accept either objects
 | `helperText` | `String` | `''` | |
 | `error` | `String` | `''` | `is-invalid` + red `form-text` |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | Visual only |
+| `required` | `Boolean` | `false` | Sets the native `required` attribute |
 
 Emits: `update:modelValue` (on `change`).
 
@@ -267,7 +289,7 @@ Searchable combobox with chips, replacing the limits of the native
 | `searchable` | `Boolean` | `true` | Renders the filter input; autofocuses it on open |
 | `clearable` | `Boolean` | `false` | ✕ appears only once a value is selected |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | Visual only (`*` marker) |
+| `required` | `Boolean` | `false` | **Visual only** (`*` marker) — `<ph-select3>` owns its own input, so it is not part of a `<ph-form>` |
 
 Emits: `update:modelValue`, `search(query)`, `open`, `close`, `clear`.
 Slots: `footer` — scoped `{ close }`.
@@ -322,7 +344,7 @@ Multi-line textarea. Emits on `input` as you type.
 | `error` | `String` | `''` | `is-invalid` + red `form-text` |
 | `disabled` | `Boolean` | `false` | |
 | `readonly` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | Visual only |
+| `required` | `Boolean` | `false` | Sets the native `required` attribute |
 
 Emits: `update:modelValue`, `blur`, `focus`.
 
@@ -380,7 +402,7 @@ Boolean toggle (`.form-switch`). Same contract as `<ph-checkbox>`.
 | `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `label` | `String` | `''` | Or default slot |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false`  Sets the native `required` attribute |
 | `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
 
 Emits: `update:modelValue` (on `change`), `blur`, `focus`.
@@ -408,7 +430,7 @@ as one unit.
 | `helperText` | `String` | `''` | |
 | `error` | `String` | `''` | Red shell border + red focus ring + `role="alert"` message |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | Sets the real `required` / `aria-required` (unlike the other form controls, this one is not visual-only) |
+| `required` | `Boolean` | `false` | Sets the real `required` / `aria-required` |
 | `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
 
 Emits: `update:modelValue`, `search(query)`, `clear`, `focus`, `blur`.
@@ -480,7 +502,7 @@ File picker with drag & drop, `accept`/`maxSize` validation and image previews.
 | `helperText` | `String` | `''` | |
 | `error` | `String` | `''` | |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | **Visual only** (`*` marker). The real input is `d-none`, so a required file input would block submit on an invisible element |
 
 Emits: `update:modelValue`, `change(files)`, `remove(file)`, `error(reason)`.
 
@@ -517,7 +539,7 @@ via `native`.
 | `helperText` | `String` | `''` | |
 | `error` | `String` | `''` | |
 | `disabled` | `Boolean` | `false` | |
-| `required` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false`  Sets the native `required` attribute |
 | `clearable` | `Boolean` | `true` | |
 
 Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
@@ -574,7 +596,7 @@ Form wrapper that owns the submit cycle: native validation, an error summary, se
 | `loading` | `Boolean` | `false` | Sets `aria-busy` and **blocks** `submit` — the double-submit guard |
 | `errors` | `Object` | `{}` | Server errors by field name. See below |
 | `validateOn` | `String` | `'submit'` | `submit` \| `blur` \| `change` |
-| `nativeValidation` | `Boolean` | `false` | `true` hands validation back to the browser (`novalidate` is removed, native bubbles appear). Default is `false`, which suppresses the native bubbles and uses the summary instead |
+| `nativeValidation` | `Boolean` | `false` | `true` asks the browser to render **its own** bubble via `reportValidity()` on the first failing field, and hides the summary. The `<form>` is `novalidate` either way, so the submit event is never swallowed by the browser and `invalid` always fires — see below |
 | `showSummary` | `Boolean` | `true` | Render the error summary |
 | `summaryTitle` | `String` | `'Please fix the following:'` | Summary heading |
 
@@ -584,7 +606,7 @@ Form wrapper that owns the submit cycle: native validation, an error summary, se
 |---|---|---|
 | `submit` | `data` | Only after validation passes |
 | `reset` | — | After the browser has cleared the fields |
-| `invalid` | `errors` | Only on a validation pass that failed |
+| `invalid` | `errors` | Only on a validation pass that failed. Carries the **whole** failure set, server errors included — it is never an empty object on a failed pass |
 | `update:errors` | `errors` | On **every** validation pass, so a pass that clears errors reports them |
 
 **Slots**
@@ -654,16 +676,23 @@ in tests.
 this.serverErrors = response.errors;   // { title: ['The title is already taken.'] }
 ```
 
+**`nativeValidation`.** The `<form>` always carries `novalidate`, in both modes.
+That is deliberate: if the browser were allowed to block the submit event, the form
+would never learn that validation failed, `invalid` would not fire and the caller
+could not react. So the form owns the submit event and, in native mode, calls
+`reportValidity()` on the first failing control to get the browser's own bubble —
+and hides the summary, so the two never appear together.
+
 > `reset()` deliberately does **not** cancel the native reset — the browser clears
 > the fields, and `reset` is emitted once afterwards. A `type="reset"` button and
 > the slot's `reset()` are therefore equivalent, and neither can recurse.
 
-> `required` on `<ph-input>`, `<ph-select>`, `<ph-textarea>` and friends is
-> **visual only** (the `*` marker); it does not set the native `required`
-> attribute. Within a `<ph-form>` you want the real attribute, so the fields must
-> be native controls (`<input required>`, `<select required>`) — which is why the
-> showcase above is the composition that actually validates. `<ph-search-input>`
-> is the one control that does set the real attribute.
+> **`required` is real, not decorative.** `<ph-input>`, `<ph-textarea>`,
+> `<ph-select>`, `<ph-number-input>`, `<ph-switch>`, `<ph-search-input>` and
+> `<ph-date-picker>` all bind `required` to their inner control, so the browser
+> and `<ph-form>` both act on it. The exceptions are deliberate and are marked in
+> each component's table: `<ph-select3>` (it owns its own input) and
+> `<ph-file-input>` (its real input is hidden).
 
 
 ### `<ph-form-field>`
@@ -702,10 +731,14 @@ instead of fighting it — the shell owns `border`, `border-radius` and the ring
 and the slotted control is a borderless, transparent flex child. Affixes are
 spaced by the shell's `gap`, not by per-slot padding.
 
-Because a `.phue` file cannot ship a `<style>` block, the ring is emitted as a
-bound style driven by `focusin`/`focusout` (which are exactly `:focus-within`
-semantics), reusing Bootstrap's own values — `#86b7fe` + `0 0 0 .25rem
-rgba(13,110,253,.25)`, and the `--bs-danger-rgb` variant when invalid.
+Because Bootstrap 5.3 gives no unified ring for a glued-together `input-group`,
+this component emits the ring as a **bound style** driven by `focusin`/`focusout`
+(which are exactly `:focus-within` semantics, and work inside a slotted control),
+reusing Bootstrap's own values — `#86b7fe` + `0 0 0 .25rem rgba(13,110,253,.25)`,
+and the `--bs-danger-rgb` variant when invalid. It is bound style rather than a
+`<style>` block so the ring is driven by one code path for both mouse and
+keyboard focus, and so the invalid variant can be switched from the `invalid`
+prop.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
