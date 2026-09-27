@@ -351,16 +351,24 @@ final class PhueComponentChildResolutionCostTest extends TestCase
         }
     }
 
-    public function testComponentNamesThatCollideWithNativeHtmlTagsAreNotDiscovered(): void
+    public function testSingleLetterComponentNamesAreReservedForNativeHtmlTags(): void
     {
-        // DOCUMENTED LIMITATION, asserted so it stays visible.
+        // DESIGN DECISION, asserted so it stays visible and stays documented.
         //
         // ComponentDiscoverer::NATIVE_HTML_TAGS contains the single-letter HTML
         // elements, so a component named exactly A, B, I, P, Q, S, U or W is
-        // classified as native markup and silently dropped from the dependency
-        // graph. This is not a regression from the child memo; it predates it.
-        // Real components avoid those names, but anyone naming a component "B"
-        // gets a component that renders as plain markup with no warning.
+        // classified as native markup and dropped from the dependency graph.
+        //
+        // This is deliberate. A .phue template IS HTML, so <b>, <i>, <p> and <a>
+        // must mean the real elements with no opt-in flag and no escaping, and
+        // the scanner has to case-fold the tag before comparing. The only
+        // PascalCase names that can collide are the ones folding to a
+        // single-letter HTML element — which is precisely why the kit prefixes
+        // everything with `Ph`.
+        //
+        // If you ever change this behaviour, three things have to move together:
+        // this test, docs/PhUI_Components.md section 1.1.1, and the naming
+        // contract in .opencode/phui.md.
         $this->write('Bold', '<b>bold</b>', 'Bold');
         $this->write('B', '<span>a component literally named B</span>', 'B');
 

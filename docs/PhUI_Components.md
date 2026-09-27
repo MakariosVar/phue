@@ -27,7 +27,36 @@ You just write the tag in kebab-case:
 The loader builds the `components: { PhButton, PhInput, ... }` map itself and
 only ships the JS module for the referenced components.
 
-### 1.1.1 Styles: the `<style>` block and the `'styles'` key
+### 1.1.1 Reserved component names: `A`, `B`, `I`, `P`, `Q`, `S`, `U`, `W`
+
+**These eight names cannot be used for components. It is deliberate, not a bug.**
+
+Discovery classifies a tag as *native markup* when the tag case-folds to an
+HTML element name. A `.phue` template is HTML, so `<b>`, `<i>`, `<p>`, `<a>`
+must mean the real elements — no opt-in flag, no escaping, no prefix. The
+scanner therefore normalises the tag to lower case before that check, and the
+only PascalCase names that can collide are the ones whose lower-case form *is*
+a single-letter HTML element:
+
+| Reserved | Renders as | Reserved | Renders as |
+|----------|-----------|----------|-----------|
+| `A` | `<a>` (anchor) | `Q` | `<q>` (inline quote) |
+| `B` | `<b>` (bold) | `S` | `<s>` (strikethrough) |
+| `I` | `<i>` (italic) | `U` | `<u>` (underline) |
+| `P` | `<p>` (paragraph) | `W` | `<w>` (obsolete, still valid HTML) |
+
+The same rule is why the built-in kit uses a `Ph` prefix (`PhButton`,
+`PhCard`, …) rather than bare words: `PhButton` case-folds to `phbutton`, which
+is not an HTML element, so it can never collide. Following that convention
+avoids the whole class of problem.
+
+**Consequence, stated plainly:** a component named `B` is never discovered. The
+tag renders as plain native markup, no error is raised, and the component's
+script is simply never shipped. There is no escape hatch — `<B />` and `<b />`
+both case-fold to `b`, so neither reaches the component. If you need a
+single-letter-looking component, give it a real name: `Bold`, `Chip`, `Tag`.
+
+### 1.1.2 Styles: the `<style>` block and the `'styles'` key
 
 A `.phue` component (page or partial) has two independent ways to ship CSS.
 

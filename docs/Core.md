@@ -44,7 +44,7 @@ on top of these primitives.
 | `ComponentLoaderRegistry` | `Frontend/ComponentLoaderRegistry.php` | Composite, fail-safe `.phue` component resolution |
 | `PhueComponentLoader` | `UI/PhueComponentLoader.php` | Loads & caches `.phue` components from a directory |
 | `PhuePartialRenderer` | `UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) |
-| `ComponentDiscoverer` | `UI/ComponentDiscoverer.php` | Auto-discovers components referenced by a template |
+| `ComponentDiscoverer` | `UI/ComponentDiscoverer.php` | Auto-discovers components referenced by a template (reserved names: see [PhUI_Components.md §1.1.1](PhUI_Components.md)) |
 | `PhueTemplateParser` | `UI/PhueTemplateParser.php` | Parses `.phue` SFCs (PHP/Template/Script blocks) |
 | `MarkdownParser` | `Utils/MarkdownParser.php` | XSS-safe markdown parser (fenced code blocks without structural newlines) |
 
