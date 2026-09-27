@@ -184,6 +184,7 @@ class QueryBuilder
      * @param mixed $operator Comparison operator or value.
      * @param mixed $value Target comparison value.
      * @return static
+     * @throws InvalidArgumentException If an invalid operator is provided.
      */
     protected function addWhereClause(string $boolean, string $column, mixed $operator = null, mixed $value = null): static
     {
@@ -195,8 +196,19 @@ class QueryBuilder
         $quotedColumn = $this->quoteIdentifier($column);
         $cleanOperator = strtoupper(trim((string)$operator));
 
+        // Allowed SQL comparison operators whitelist
+        $allowedOperators = [
+            '=', '!=', '<>', '<', '>', '<=', '>=', 
+            'LIKE', 'NOT LIKE', 'ILIKE', 'NOT ILIKE',
+            'IS', 'IS NOT'
+        ];
+
+        if (!in_array($cleanOperator, $allowedOperators, true)) {
+            throw new InvalidArgumentException("Invalid operator provided for WHERE clause: [{$operator}]");
+        }
+
         // Append ESCAPE clause when doing LIKE queries to correctly handle escaped wildcards
-        $sqlClause = "{$quotedColumn} {$operator} ?";
+        $sqlClause = "{$quotedColumn} {$cleanOperator} ?";
         if ($cleanOperator === 'LIKE' || $cleanOperator === 'NOT LIKE') {
             $sqlClause .= " ESCAPE '\\'";
         }
