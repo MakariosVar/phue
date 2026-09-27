@@ -117,6 +117,28 @@ try {
 }
 ```
 
+### Connection singleton vs scoped
+
+In persistent runtimes (Swoole, RoadRunner) the `Connection` should be bound as a
+**singleton**, not scoped:
+
+```php
+// In Application::bootstrapDatabase()
+$this->container->singleton(Connection::class, fn (): Connection => new Connection($dbConfig));
+$this->container->alias('db', Connection::class);
+```
+
+A singleton connection reuses the same PDO handle across requests, preserving
+connection pooling and avoiding the overhead of a new TCP handshake per request.
+Combined with `BaseActiveRecord::setConnectionResolver(fn () => $container->get(Connection::class))`,
+the Active Record layer always resolves the current connection from the
+container, while the underlying PDO handle stays pooled.
+
+**Why not scoped?** A scoped connection creates a new PDO handle per request,
+which defeats connection pooling, loses any connection-level state (prepared
+statements, temporary tables, transaction context), and adds unnecessary
+overhead in persistent runtimes.
+
 ---
 
 ## 3. Fluent QueryBuilder (`QueryBuilder.php`)
@@ -147,6 +169,12 @@ $deletedRows = $db->table('users')->where('status', 'expired')->delete();
 - **LIKE wildcard escaping**: `where('name', 'LIKE', '...')` automatically
   appends an `ESCAPE '\'` clause, so backslash-escaped wildcards (`\%`, `\_`)
   are treated as literals instead of scanning the whole table.
+- **Operator whitelist**: `addWhereClause()` only accepts a strict whitelist of
+  SQL operators (`=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `LIKE`, `NOT LIKE`,
+  `ILIKE`, `NOT ILIKE`, `IS`, `IS NOT`). Any operator outside this list throws
+  `InvalidArgumentException`. The operator is sanitized and the cleaned version
+  is used in the SQL string; for `LIKE`/`NOT LIKE`/`ILIKE`/`NOT ILIKE` the
+  `ESCAPE` clause is preserved.
 
 ---
 
@@ -212,6 +240,52 @@ instances via `newFromBuilder()`.
 - **Validation error bag**: `getErrors()` / `setErrors()` expose a validation
   error store that higher layers (e.g. `ModelEndpoint`) populate when schema
   rules fail, serialised back to the client.
+
+### Serialization control (`$hidden`)
+
+To prevent sensitive attributes (password hashes, tokens, etc.) from being
+included in `toArray()`, `jsonSerialize()`, or API responses, declare a
+`$hidden` array on your model:
+
+```php
+namespace App\Models;
+
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+
+class User extends BaseActiveRecord
+{
+    protected array $hidden = ['password_hash', 'auth_key'];
+}
+```
+
+- `toArray()` filters out keys listed in `$hidden` using
+  `array_diff_key($attributes, array_flip($this->hidden))`.
+- The filter applies on **every** serialization pass (including early returns
+  from cycle guards) and is applied recursively to loaded relations — each
+  nested model uses **its own** `$hidden` declaration.
+- The filter runs on `jsonSerialize()` and `toArray()`, so API responses
+  automatically exclude hidden attributes.
+
+### Connection resolver vs direct connection
+
+For request-scoped environments (Swoole, RoadRunner), prefer a **resolver**
+over a static connection so each request gets a fresh connection from the
+container:
+
+```php
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Connection;
+
+BaseActiveRecord::setConnectionResolver(
+    fn (): Connection => $container->get(Connection::class)
+);
+```
+
+`setConnectionResolver()` is preferred over `setConnection()` because it
+returns the current connection on each call, which is essential in persistent
+runtimes where the container may swap the underlying connection per request.
+The static `$dbConnection` property is only used as a fallback when no resolver
+is set.
 
 ---
 

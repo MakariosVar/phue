@@ -94,6 +94,27 @@ The constructor does, in order:
 | `ComponentDiscoverer`, `PhuePartialRenderer`, `ComponentRenderer` | singleton | Rendering pipeline |
 | `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts) |
 
+### Database connection is a singleton
+
+`Application::bootstrapDatabase()` binds the database connection as a **singleton**,
+not scoped:
+
+```php
+$this->container->singleton(Connection::class, fn (): Connection => new Connection($dbConfig));
+$this->container->alias('db', Connection::class);
+```
+
+A singleton connection reuses the same PDO handle across requests, preserving
+connection pooling and avoiding the overhead of a new TCP handshake per request.
+Combined with `BaseActiveRecord::setConnectionResolver(fn () => $container->get(Connection::class))`,
+the Active Record layer always resolves the current connection from the
+container, while the underlying PDO handle stays pooled.
+
+**Why not scoped?** A scoped connection creates a new PDO handle per request,
+which defeats connection pooling, loses any connection-level state (prepared
+statements, temporary tables, transaction context), and adds unnecessary
+overhead in persistent runtimes.
+
 Two global middlewares are registered by default, in this order:
 
 1. `ErrorHandlerMiddleware` — runs first (outermost), so exceptions anywhere in
@@ -197,14 +218,42 @@ $response = $app->handle($request); // or handle() to capture from globals
 
 The flow:
 
-1. Binds the request as request-scoped (`Request::class`).
-2. Calls `AssetRegistry::beginRequest()` so per-request script tracking resets
+1. **Kernel scope boundary:** adopt an existing scope or create a new one.
+   ```php
+   $existingScope = $this->container->getScope();
+   $isLocallyCreatedScope = false;
+
+   if ($existingScope === null) {
+       $scope = $this->container->createScope();
+       $this->container->setScope($scope);
+       $isLocallyCreatedScope = true;
+   } else {
+       $scope = $existingScope;
+   }
+   ```
+2. Binds the request as request-scoped (`Request::class`).
+3. Calls `AssetRegistry::beginRequest()` so per-request script tracking resets
    (SPA responses only include the current page's scripts).
-3. Builds and runs the global middleware pipeline.
-4. Exception mapping (below) — with a `finally` block that always calls
-   `$container->flushScope()`, so request state never leaks between requests,
-   even when an exception was thrown.
-5. Applies `SecurityMiddleware::applyHeaders()` on the final response.
+4. Builds and runs the global middleware pipeline.
+5. Exception mapping (below) — with a `finally` block that:
+   ```php
+   finally {
+       // 1. Flush the request scope
+       $this->container->flushScope($scope);
+
+       // 2. Flush the fallback bucket (state created outside any scope)
+       $this->container->flushScope(null);
+
+       // 3. Detach scope only if handle() created it
+       if ($isLocallyCreatedScope) {
+           $this->container->setScope(null);
+       }
+   }
+   ```
+   This ensures the request scope is flushed, the fallback bucket is cleared
+   (state created outside any scope, e.g. boot-time migrations), and the scope
+   context is detached only if `handle()` created it.
+6. Applies `SecurityMiddleware::applyHeaders()` on the final response.
 
 | Exception | Response |
 |---|---|
@@ -422,6 +471,91 @@ Before purging, the container calls `reset()` on every instance that implements
 `ResettableInterface` (in `src/Core/Interfaces/`), so a service can clean up its
 own state. `Application::handle()` does this automatically in a `finally` block,
 so request state is always cleaned — even when an exception was thrown.
+
+### Alias resolution (all entry points)
+
+`alias($alias, $id)` registers an alternative key for the same service. The
+container resolves alias chains **in every entry point** (`get()`, `has()`,
+`bound()`, `make()`) via a shared `resolveAliasTarget()` method:
+
+```php
+$container->alias('logger', LoggerInterface::class);
+$container->get('logger');    // resolves LoggerInterface
+$container->has('logger');    // true
+$container->bound('logger');  // true
+$container->make('logger');   // resolves LoggerInterface
+```
+
+- **Cycle detection:** self-referential aliases (`alias('db', 'db')`) and mutual
+  recursion (`alias('a', 'b'); alias('b', 'a')`) are detected via a visited set
+  and throw an exception — no infinite loops.
+- **Single target:** the final concrete ID is used for caching and scoping, so
+  `alias('cache', CacheInterface::class)` caches under `CacheInterface` and is
+  correctly flushed.
+
+### Single storage for scoped instances (`FALLBACK_SCOPE`)
+
+The container maintains **one storage array** for scoped instances, keyed by
+scope ID. The "no active scope" state is represented by the reserved
+`FALLBACK_SCOPE` key (`__none__`):
+
+```php
+// Inside the container (simplified)
+private const FALLBACK_SCOPE = '__none__';
+private array $scopedInstances = [];
+```
+
+- When no scope is active (`setScope(null)`), services are stored under
+  `FALLBACK_SCOPE`.
+- When a scope is active, services are stored under that scope's ID.
+- `flushScope($scope)` targets the given scope's bucket.
+- `flushScope(null)` flushes the **fallback bucket** (`FALLBACK_SCOPE`), not the
+  current scope.
+
+This eliminates the "two buckets" problem where services resolved outside a
+scope were invisible inside a request scope, and the fallback bucket was never
+flushed. Now there is **one storage location per scope**, and `flushScope(null)`
+explicitly drains the fallback bucket.
+
+### Flushing request state (`flushScope()`)
+
+At the end of a request you clear all request-scoped instances:
+
+```php
+$container->flushScope();
+```
+
+Before purging, the container calls `reset()` on every instance that implements
+`ResettableInterface` (in `src/Core/Interfaces/`), so a service can clean up its
+own state. `Application::handle()` does this automatically in a `finally` block,
+so request state is always cleaned — even when an exception was thrown.
+
+### Request-scope flush with fallback (kernel pattern)
+
+`Application::handle()` implements the kernel-scope pattern:
+
+```php
+try {
+    $response = $pipeline($request);
+} finally {
+    // 1. Flush the request scope
+    $this->container->flushScope($scope);
+
+    // 2. Flush the fallback bucket (state created outside any scope)
+    $this->container->flushScope(null);
+
+    // 3. Detach scope only if handle() created it
+    if ($isLocallyCreatedScope) {
+        $this->container->setScope(null);
+    }
+}
+```
+
+This ensures:
+- The request scope is flushed.
+- Any state prepared outside a scope (e.g. boot-time migrations, warm caches)
+  is also flushed.
+- No stale scope context leaks into the next request.
 
 ### Autowiring
 

@@ -37,29 +37,47 @@ Related guides: [Core](Core.md), [Schii](Schii.md) (protected CRUD endpoints),
 App models extend `Phue\Modules\Auth\BaseUser` — an ActiveRecord-backed
 implementation of `IdentityInterface`. This gives you `getId()`,
 `findIdentity()`, `findIdentityByAuthKey()`, `getRoles()` (reads a JSON `roles`
-column), and `validatePassword()` with zero boilerplate:
+column), and `validatePassword()` with zero boilerplate.
+
+**Secure User model configuration:**
 
 ```php
 namespace App\Models;
 
 use Phue\Modules\Auth\BaseUser;
 use Phue\Modules\Schii\Attribute\Field;
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 
 class User extends BaseUser
 {
+    // Hide sensitive credentials from serialization (API responses, logs, etc.)
+    protected array $hidden = ['password_hash', 'auth_key'];
+
     #[Field(type: 'text')]
     public string $username;
 
-    #[Field(type: 'text')]
+    #[Field(type: 'text', writable: false, readonly: true, column: false)]
     public string $password_hash;
 
-    #[Field(type: 'text')]
+    #[Field(type: 'text', writable: false, readonly: true, column: false)]
     public ?string $auth_key = null;
 
-    #[Field(type: 'text')]
-    public mixed $roles = '[]';
+    // The roles column carries authorization grants — it MUST NOT be writable
+    // through the generic CRUD endpoint. Role assignment belongs on a dedicated
+    // privileged path.
+    #[Field(type: 'json', writable: false)]
+    public array $roles = [];
+
+    // Hide credentials from serialization (toArray/jsonSerialize)
+    protected array $hidden = ['password_hash', 'auth_key'];
 }
 ```
+
+**Key points:**
+
+- `password_hash` and `auth_key` are `writable: false`, `readonly: true`, `column: false` — they are never written through the generic CRUD endpoint and are excluded from serialization via `$hidden`.
+- The `roles` column carries authorization grants and **must be `writable: false`** — role assignment belongs on a dedicated privileged path, not the generic CRUD endpoint.
+- `$hidden = ['password_hash', 'auth_key']` prevents credentials from leaking into API responses (`toArray()`, `jsonSerialize()`, Schii responses).
 
 ### Token resolution semantics
 
@@ -214,19 +232,42 @@ $rbac->addRole('admin', ['admin.dashboard']);
 $rbac->addChild('admin', 'editor');
 $rbac->addChild('editor', 'author');
 
-// Assign role to user ID (static assignment)
+// Assign role to user ID (static assignment / bootstrap)
 $rbac->assign(10, 'admin');
 
 // checkAccess accepts an optional explicitRoles array:
-// - with explicitRoles: uses them directly (DB-backed identity pattern)
-// - without: falls back to static assignments
+$rbac->checkAccess($userId, $permission, $explicitRoles = []);
+
+// - with explicitRoles: uses them directly as the authority (DB-backed identity pattern)
+// - without explicitRoles: falls back to static assignments from config/rbac_seeding.php
+
 if ($rbac->checkAccess(10, 'posts.create')) {
-    // Access granted
+    // Access granted via static assignment
 }
 if ($rbac->checkAccess($userId, 'admin.product.read', $user->getRoles())) {
     // Authorized via the authenticated identity's DB-loaded roles
 }
 ```
+
+### Authority model: explicit roles are the authority
+
+`RbacManager::checkAccess()` resolves the effective role set as:
+
+```php
+$userRoles = !empty($explicitRoles)
+    ? $explicitRoles                    // identity-supplied roles = authority
+    : ($this->assignments[$userContext] ?? []);  // fallback to static assignments
+```
+
+**Design rationale:** the `roles` column on the identity model is the **authority**.
+It is per-user and dynamic, which is exactly why it exists; `config/rbac_seeding.php`
+is only the bootstrap for the first administrator.
+
+**Security implication:** the `roles` column **can only grant** — it never removes
+access unless the column is empty. The security boundary is the **write path**:
+the `roles` column **must not be writable** through the generic CRUD endpoint.
+Role assignment belongs on a dedicated privileged path that checks the actor's
+own authority over the target.
 
 Role inheritance is recursive — `admin` → `editor` → `author` means an admin
 satisfies `posts.create` too. Cycles are detected with a visited set.
