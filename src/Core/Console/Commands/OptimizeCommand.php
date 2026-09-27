@@ -8,8 +8,12 @@ use Phue\Core\Cache\FileCache;
 use Phue\Core\Console\CommandInterface;
 use Phue\Core\Console\PathResolver;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueTemplateParser;
+use Phue\Core\UI\TemplateCompilerBridge;
+
+use function Phue\Core\env;
 
 /**
  * CLI Command to optimize (clear + warm) application caches.
@@ -18,12 +22,14 @@ use Phue\Core\UI\PhueTemplateParser;
  *   - general: Clear FileCache, then pre-load component structures & configs
  *   - views:   Clear compiled views, then parse & compile all .phue components
  *   - schemas: Clear generated schemas, then generate for all ActiveRecord models
+ *   - ssr:     Clear SSR sidecar cache debris and verify sidecar connectivity
  *
  * Usage:
  *   optimize                    # optimize all (default, excludes logs)
  *   optimize --type=general     # optimize only general cache
  *   optimize --type=views       # optimize only views cache
  *   optimize --type=schemas     # optimize only schemas cache
+ *   optimize --type=ssr         # optimize only SSR sidecar cache
  *   optimize --dry-run          # show what would be optimized without executing
  *
  * @package Phue\Core\Console\Commands
@@ -31,10 +37,11 @@ use Phue\Core\UI\PhueTemplateParser;
 final class OptimizeCommand implements CommandInterface
 {
     private const TYPES = [
-        'all'     => ['general', 'views', 'schemas'],
+        'all'     => ['general', 'views', 'schemas', 'ssr'],
         'general' => ['general'],
         'views'   => ['views'],
         'schemas' => ['schemas'],
+        'ssr'     => ['ssr'],
     ];
 
     /**
@@ -61,7 +68,7 @@ final class OptimizeCommand implements CommandInterface
 
     public function getDescription(): string
     {
-        return 'Optimizes (clears + warms) application caches. Usage: optimize [--type=all|general|views|schemas] [--dry-run]';
+        return 'Optimizes (clears + warms) application caches. Usage: optimize [--type=all|general|views|schemas|ssr] [--dry-run]';
     }
 
     public function execute(array $args = [], $outputStream = \STDOUT, $errorStream = \STDERR): int
@@ -106,12 +113,17 @@ final class OptimizeCommand implements CommandInterface
                     break;
 
                 case 'views':
-                    $ok = $this->optimizeViews($viewsDir, $componentsDir, $phuiDir, $outputStream);
+                    $ok = $this->optimizeViews($cacheDir, $viewsDir, $componentsDir, $phuiDir, $outputStream);
                     $success &= $ok;
                     break;
 
                 case 'schemas':
                     $ok = $this->optimizeSchemas($schemasDir, $outputStream);
+                    $success &= $ok;
+                    break;
+
+                case 'ssr':
+                    $ok = $this->optimizeSsr($basePath, $outputStream);
                     $success &= $ok;
                     break;
             }
@@ -129,7 +141,7 @@ final class OptimizeCommand implements CommandInterface
     private function optimizeGeneral(string $cacheDir, $outputStream): bool
     {
         fwrite($outputStream, "  Clearing general cache...\n");
-        $fileCache = new \Phue\Core\Cache\FileCache($cacheDir);
+        $fileCache = new FileCache($cacheDir);
         $ok = $fileCache->clear();
         fwrite($outputStream, $ok ? "  ✓ General cache cleared\n" : "  ✗ General cache clear failed\n");
 
@@ -138,18 +150,18 @@ final class OptimizeCommand implements CommandInterface
         }
 
         fwrite($outputStream, "  Warming general cache...\n");
-
-        // The general cache is primarily warmed on-demand during requests.
-        // The FileCache doesn't have a "warm all" concept - it's populated on demand.
-        // However, we can pre-load the PhueComponentLoader structure cache
-        // which uses the FileCache internally for persistent cross-request caching.
         fwrite($outputStream, "  ✓ General cache warmed (on-demand)\n");
 
         return true;
     }
 
-    private function optimizeViews(string $viewsDir, string $componentsDir, string $phuiDir, $outputStream): bool
-    {
+    private function optimizeViews(
+        string $cacheDir,
+        string $viewsDir, 
+        string $componentsDir, 
+        string $phuiDir, 
+        $outputStream
+    ): bool {
         fwrite($outputStream, "  Clearing views cache...\n");
         $files = glob($viewsDir . '/*.php');
         $count = 0;
@@ -164,23 +176,37 @@ final class OptimizeCommand implements CommandInterface
 
         fwrite($outputStream, "  Warming views cache (parsing & compiling components)...\n");
 
-        $registry = new \Phue\Core\Frontend\ComponentLoaderRegistry();
-        $parser = new PhueTemplateParser();
+        $persistentCache = new FileCache($cacheDir);
+        $compilerBridge = new TemplateCompilerBridge(cache: $persistentCache);
+        $registry = new ComponentLoaderRegistry();
+        $parser = new PhueTemplateParser($viewsDir);
 
         $warmed = 0;
 
         // Warm App/Frontend components
         if (is_dir($componentsDir)) {
-            $loader = new PhueComponentLoader($componentsDir, $parser);
+            $loader = new PhueComponentLoader(
+                componentsDir: $componentsDir,
+                parser: $parser,
+                persistentCache: $persistentCache,
+                viewsCacheDir: $viewsDir,
+                compilerBridge: $compilerBridge
+            );
             $loader->setRegistry($registry);
-            $warmed += $this->warmComponentLoader($loader, $registry, $componentsDir, $outputStream);
+            $warmed += $this->warmComponentLoader($loader, $componentsDir, $outputStream);
         }
 
         // Warm PhUI core components
         if (is_dir($phuiDir)) {
-            $loader = new PhueComponentLoader($phuiDir, $parser);
+            $loader = new PhueComponentLoader(
+                componentsDir: $phuiDir,
+                parser: $parser,
+                persistentCache: $persistentCache,
+                viewsCacheDir: $viewsDir,
+                compilerBridge: $compilerBridge
+            );
             $loader->setRegistry($registry);
-            $warmed += $this->warmComponentLoader($loader, $registry, $phuiDir, $outputStream);
+            $warmed += $this->warmComponentLoader($loader, $phuiDir, $outputStream);
         }
 
         fwrite($outputStream, "  ✓ Views cache warmed ({$warmed} components parsed & compiled)\n");
@@ -188,11 +214,14 @@ final class OptimizeCommand implements CommandInterface
         return true;
     }
 
-    private function warmComponentLoader(PhueComponentLoader $loader, ComponentLoaderRegistry $registry, string $componentsDir, $outputStream): int
-    {
+    private function warmComponentLoader(
+        PhueComponentLoader $loader, 
+        string $componentsDir, 
+        $outputStream
+    ): int {
         $warmed = 0;
+        $ssrSkipped = false;
 
-        // Discover all .phue files in the components directory
         $phueFiles = [];
         if (is_dir($componentsDir)) {
             $iterator = new \RecursiveIteratorIterator(
@@ -200,7 +229,6 @@ final class OptimizeCommand implements CommandInterface
             );
             foreach ($iterator as $file) {
                 if ($file->isFile() && $file->getExtension() === 'phue') {
-                    // Logical component name = PascalCase basename (e.g., "Docs", "AppLayout")
                     $name = basename($file->getPathname(), '.phue');
                     $phueFiles[] = $name;
                 }
@@ -209,16 +237,31 @@ final class OptimizeCommand implements CommandInterface
 
         foreach ($phueFiles as $name) {
             try {
-                // Load component to trigger structure parsing & caching
                 if ($loader->hasComponent($name)) {
                     $component = $loader->load($name);
+                    
                     if ($component !== null) {
+                        $loader->buildFor($name);
+
+                        // Try compiling SSR module; if sidecar is offline, suppress repeated spam lines
+                        if (!$ssrSkipped) {
+                            try {
+                                $loader->buildForSsr($name);
+                            } catch (\Throwable) {
+                                $ssrSkipped = true;
+                            }
+                        }
+
                         $warmed++;
                     }
                 }
             } catch (\Throwable $e) {
                 fwrite($outputStream, "  ✗ Failed to warm component '{$name}': " . $e->getMessage() . "\n");
             }
+        }
+
+        if ($ssrSkipped) {
+            fwrite($outputStream, "  ⚠ SSR module compilation skipped (sidecar socket offline)\n");
         }
 
         return $warmed;
@@ -240,14 +283,8 @@ final class OptimizeCommand implements CommandInterface
 
         fwrite($outputStream, "  Warming schemas cache (generating for ActiveRecord models)...\n");
 
-        // Schema warming is handled by Schii module's SchemaRegistry.
-        // We attempt to use it if the module is installed.
         try {
             $registry = new \Phue\Modules\Schii\Schema\SchemaRegistry();
-            // SchemaRegistry generates on-demand via getSchema(). 
-            // There's no bulk-generate API, but we can scan for ActiveRecord models
-            // and call getSchema() on each to trigger generation.
-            
             $modelsDir = PathResolver::resolveBasePath() . '/App/Models';
             $warmed = 0;
             
@@ -270,9 +307,56 @@ final class OptimizeCommand implements CommandInterface
             return true;
 
         } catch (\Throwable $e) {
-            // Schii module not available or SchemaRegistry not available
             fwrite($outputStream, "  ⚠ Schema warming skipped (Schii module not available)\n");
             return true;
         }
+    }
+
+    private function optimizeSsr(string $basePath, $outputStream): bool
+    {
+        fwrite($outputStream, "  Clearing SSR sidecar cache debris...\n");
+        $ssrCacheDir = $basePath . '/ssr/.cache';
+        $files = glob($ssrCacheDir . '/*');
+        $count = 0;
+        $success = true;
+
+        if ($files !== false) {
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    if (unlink($file)) {
+                        $count++;
+                    } else {
+                        $success = false;
+                    }
+                }
+            }
+        }
+
+        fwrite($outputStream, $success ? "  ✓ SSR cache cleared ({$count} files)\n" : "  ✗ SSR cache clear failed\n");
+
+        fwrite($outputStream, "  Verifying SSR sidecar health...\n");
+
+        $ssrConfigFile = $basePath . '/config/ssr.php';
+        $ssrConfig = is_file($ssrConfigFile) ? require $ssrConfigFile : [];
+
+        $socket = (string) ($ssrConfig['socket'] ?? env('SSR_SOCKET', '/tmp/phue-ssr.sock'));
+        $connectTimeoutMs = (int) ($ssrConfig['connect_timeout_ms'] ?? env('SSR_CONNECT_TIMEOUT_MS', 200));
+        $timeoutMs = (int) ($ssrConfig['timeout_ms'] ?? env('SSR_TIMEOUT_MS', 2000));
+        $hostHeader = (string) ($ssrConfig['host_header'] ?? env('SSR_HOST_HEADER', 'phue-ssr'));
+
+        $client = new UnixSsrClient(
+            socket: $socket,
+            connectTimeoutMs: $connectTimeoutMs,
+            timeoutMs: $timeoutMs,
+            hostHeader: $hostHeader
+        );
+
+        if ($client->isAvailable()) {
+            fwrite($outputStream, "  ✓ SSR sidecar service is healthy\n");
+        } else {
+            fwrite($outputStream, "  ⚠ SSR sidecar service is offline or unreachable\n");
+        }
+
+        return $success;
     }
 }
