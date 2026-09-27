@@ -13,11 +13,11 @@ use Phue\Core\Console\PathResolver;
  *
  * Supports clearing specific cache categories or all caches at once.
  * Cache types:
- *   - general: PSR-16 file cache (storage/cache/*.cache)
+ *   - general: PSR-16 file cache (storage/cache/*.cache) and route cache (storage/cache/routes.php)
  *   - views:   Compiled PHP views (storage/cache/views/*.php)
  *   - schemas: Generated database schemas (storage/generated/schemas/*)
  *   - logs:    Application logs (storage/logs/*)
- *   - ssr:     SSR compiled modules (ssr/.cache/*.mjs)
+ *   - ssr:     SSR compiled modules (ssr/.cache/*)
  *
  * Usage:
  *   cache:clear                    # clears all (default)
@@ -25,6 +25,7 @@ use Phue\Core\Console\PathResolver;
  *   cache:clear --type=views       # clears only compiled views
  *   cache:clear --type=schemas     # clears only generated schemas
  *   cache:clear --type=logs        # clears only logs
+ *   cache:clear --type=ssr         # clears only ssr sidecar cache
  *
  * @package Phue\Core\Console\Commands
  */
@@ -118,6 +119,15 @@ final class CacheClearCommand implements CommandInterface
                 case 'general':
                     $fileCache = new FileCache($cacheDir);
                     $ok = $fileCache->clear();
+
+                    // Unlink compiled route cache file
+                    $routeCacheFile = $cacheDir . '/routes.php';
+                    if (is_file($routeCacheFile)) {
+                        if (!unlink($routeCacheFile)) {
+                            $ok = false;
+                        }
+                    }
+
                     fwrite($outputStream, $ok ? "  ✓ General cache cleared\n" : "  ✗ General cache clear failed\n");
                     $success &= $ok;
                     break;
@@ -127,8 +137,12 @@ final class CacheClearCommand implements CommandInterface
                     $count = 0;
                     if ($files !== false) {
                         foreach ($files as $file) {
-                            if (is_file($file) && unlink($file)) {
-                                $count++;
+                            if (is_file($file)) {
+                                if (unlink($file)) {
+                                    $count++;
+                                } else {
+                                    $success = false;
+                                }
                             }
                         }
                     }
@@ -140,8 +154,12 @@ final class CacheClearCommand implements CommandInterface
                     $count = 0;
                     if ($files !== false) {
                         foreach ($files as $file) {
-                            if (is_file($file) && unlink($file)) {
-                                $count++;
+                            if (is_file($file)) {
+                                if (unlink($file)) {
+                                    $count++;
+                                } else {
+                                    $success = false;
+                                }
                             }
                         }
                     }
@@ -153,8 +171,12 @@ final class CacheClearCommand implements CommandInterface
                     $count = 0;
                     if ($files !== false) {
                         foreach ($files as $file) {
-                            if (is_file($file) && unlink($file)) {
-                                $count++;
+                            if (is_file($file)) {
+                                if (unlink($file)) {
+                                    $count++;
+                                } else {
+                                    $success = false;
+                                }
                             }
                         }
                     }
@@ -167,8 +189,12 @@ final class CacheClearCommand implements CommandInterface
                     $count = 0;
                     if ($files !== false) {
                         foreach ($files as $file) {
-                            if (is_file($file) && unlink($file)) {
-                                $count++;
+                            if (is_file($file)) {
+                                if (unlink($file)) {
+                                    $count++;
+                                } else {
+                                    $success = false;
+                                }
                             }
                         }
                     }
