@@ -82,7 +82,7 @@ $pendingTable = 'none';
 while ($i < $count) {
     $line = $lines[$i];
 
-    // Component heading: "### `<ph-xxx>`" or "### `<spacer>`"
+    // Component heading: "### `<ph-xxx>`" or "### `<xxx>`"
     if (preg_match('/^#{2,4}\s+`?<((?:ph-)?[a-z0-9-]+)>`?\s*$/', trim($line), $m)) {
         $name = $m[1];
 

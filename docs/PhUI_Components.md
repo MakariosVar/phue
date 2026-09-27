@@ -1656,7 +1656,7 @@ No emits.
 </ph-row>
 ```
 
-### `<spacer>`
+### `<ph-spacer>`
 
 Tiny non-collapsing spacer (`flex-shrink-0`, `aria-hidden`). `horizontal` swaps
 the dominant axis.
@@ -1671,7 +1671,7 @@ No emits.
 ```
 <ph-stack gap="none">
   <span>Above the gap</span>
-  <spacer size="lg" />
+  <ph-spacer size="lg" />
   <span>Below the gap</span>
 </ph-stack>
 ```
@@ -1862,7 +1862,7 @@ icon is the *only* content of a control, or the control has no accessible name.
 | PhTooltip | `<ph-tooltip>` | Feedback |
 | PhTreeNode | `<ph-tree-node>` | Internal — recursion helper rendered by `<ph-tree-view>`; not for direct use |
 | PhTreeView | `<ph-tree-view>` | Data display |
-| Spacer | `<spacer>` | Layout |
+| Spacer | `<ph-spacer>` | Layout |
 
 Live demonstrations of every component live on the built-in `/ui` showcase page
 (`App/Frontend/Pages/UI.phue`).

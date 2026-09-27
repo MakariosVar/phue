@@ -24,7 +24,7 @@
               { label: 'Profile', value: 'Profile', icon: 'person' }
             ]"
           />
-          <spacer/>
+          <ph-spacer/>
           <!-- Example 2 -->
           <ph-segmented-control
             v-model="page"
@@ -35,7 +35,7 @@
               { label: 'Profile', value: 'Profile', icon: 'person' }
             ]"
           />
-          <spacer/>
+          <ph-spacer/>
           <!-- Example 3 -->
           <ph-segmented-control
             v-model="page"
@@ -46,7 +46,7 @@
               { label: 'Profile', value: 'Profile', icon: 'person' }
             ]"
           />
-          <spacer/>
+          <ph-spacer/>
           <p class="fw-bold">Block</p>
           <!-- Example 4 -->
           <ph-segmented-control
@@ -106,7 +106,7 @@ export default {
     { label: 'Profile', value: 'Profile', icon: 'person' }
   ]"
 />
-<spacer/>
+<ph-spacer/>
 <!-- Example 2 -->
 <ph-segmented-control
   v-model="page"
@@ -117,7 +117,7 @@ export default {
     { label: 'Profile', value: 'Profile', icon: 'person' }
   ]"
 />
-<spacer/>
+<ph-spacer/>
 <!-- Example 3 -->
 <ph-segmented-control
   v-model="page"
@@ -128,7 +128,7 @@ export default {
     { label: 'Profile', value: 'Profile', icon: 'person' }
   ]"
 />
-<spacer/>
+<ph-spacer/>
 <p class="fw-bold">Block</p>
 <!-- Example 4 -->
 <ph-segmented-control

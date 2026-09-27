@@ -522,7 +522,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "false"
+                    "description": "false Sets the native required attribute"
                 },
                 {
                     "name": "week-start",
@@ -774,7 +774,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "false"
+                    "description": "**Visual only** (* marker). The real input is d-none, so a required file input would block submit on an invisible element"
                 }
             ]
         },
@@ -838,7 +838,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "true hands validation back to the browser (novalidate is removed, native bubbles appear). Default is false, which suppresses the native bubbles and uses the summary instead"
+                    "description": "true asks the browser to render **its own** bubble via reportValidity() on the first failing field, and hides the summary. The <form> is novalidate either way, so the submit event is never swallowed by the browser and invalid always fires — see below"
                 },
                 {
                     "name": "show-summary",
@@ -992,7 +992,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "Only visual (*); validation is your job"
+                    "description": "Sets the native required attribute (and the * marker)"
                 },
                 {
                     "name": "type",
@@ -1258,7 +1258,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "false"
+                    "description": "false Sets the native required attribute"
                 },
                 {
                     "name": "step",
@@ -1556,7 +1556,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "Sets the real required / aria-required (unlike the other form controls, this one is not visual-only)"
+                    "description": "Sets the real required / aria-required"
                 },
                 {
                     "name": "size",
@@ -1656,7 +1656,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "Visual only"
+                    "description": "Sets the native required attribute"
                 }
             ]
         },
@@ -1718,7 +1718,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "Visual only (* marker)"
+                    "description": "**Visual only** (* marker) — <ph-select3> owns its own input, so it is not part of a <ph-form>"
                 },
                 {
                     "name": "searchable",
@@ -1753,6 +1753,24 @@
                 {
                     "name": "width",
                     "description": "Number → px"
+                }
+            ]
+        },
+        {
+            "name": "ph-spacer",
+            "description": "Tiny non-collapsing spacer (flex-shrink-0, aria-hidden). horizontal swaps",
+            "attributes": [
+                {
+                    "name": "horizontal",
+                    "values": [
+                        "true",
+                        "false"
+                    ],
+                    "description": "Width vs height"
+                },
+                {
+                    "name": "size",
+                    "description": "Scale / px / raw CSS"
                 }
             ]
         },
@@ -1910,7 +1928,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "false"
+                    "description": "false Sets the native required attribute"
                 },
                 {
                     "name": "size",
@@ -2020,7 +2038,7 @@
                         "true",
                         "false"
                     ],
-                    "description": "Visual only"
+                    "description": "Sets the native required attribute"
                 },
                 {
                     "name": "resize",
@@ -2155,24 +2173,6 @@
                 {
                     "name": "selected",
                     "description": "Selected node keys"
-                }
-            ]
-        },
-        {
-            "name": "spacer",
-            "description": "Tiny non-collapsing spacer (flex-shrink-0, aria-hidden). horizontal swaps",
-            "attributes": [
-                {
-                    "name": "horizontal",
-                    "values": [
-                        "true",
-                        "false"
-                    ],
-                    "description": "Width vs height"
-                },
-                {
-                    "name": "size",
-                    "description": "Scale / px / raw CSS"
                 }
             ]
         }
