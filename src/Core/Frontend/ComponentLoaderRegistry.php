@@ -39,6 +39,26 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Flushes per-request state across candidate loaders.
+     *
+     * @return void
+     */
+    public function clearMemo(): void
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+                if ($loader !== null) {
+                    $loader->clearMemo();
+                }
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
+            }
+        }
+    }
+
+    /**
      * Register a loader instance or a lazy factory callable that returns a loader.
      *
      * @param PhueComponentLoader|callable $loader
@@ -59,6 +79,26 @@ class ComponentLoaderRegistry
             $this->logger->warning(sprintf('ComponentLoaderRegistry error in %s: %s', $method, $e->getMessage()), [
                 'exception' => $e,
             ]);
+        }
+    }
+
+    /**
+     * Resets per-request caches across all candidate loaders.
+     *
+     * @return void
+     */
+    public function beginRequest(): void
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+                if ($loader !== null) {
+                    $loader->beginRequest();
+                }
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
+            }
         }
     }
 
@@ -222,23 +262,9 @@ class ComponentLoaderRegistry
      */
     public function moduleUrl(string $name): ?string
     {
-        foreach ($this->loaders as $candidate) {
-            try {
-                /** @var PhueComponentLoader|null $loader */
-                $loader = is_callable($candidate) ? $candidate() : $candidate;
-
-                if ($loader === null) {
-                    continue;
-                }
-
-                $hash = $loader->moduleHash($name);
-                if ($hash !== null) {
-                    return "/assets/phue/{$name}.{$hash}.phue.js";
-                }
-            } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
-                continue;
-            }
+        $hash = $this->moduleHash($name);
+        if ($hash !== null) {
+            return "/assets/phue/{$name}.{$hash}.phue.js";
         }
 
         return null;

@@ -86,11 +86,10 @@ The constructor does, in order:
 | `SecurityMiddleware` | singleton | Constructed with `app.trustedProxies` |
 | `ErrorPages\ErrorPageRenderer`, `ErrorPages\ErrorHandlerMiddleware` | singleton | Error pages from `App/Errors/` |
 | `CacheInterface` (alias `cache`) | singleton | `FileCache` rooted at `storage/cache` |
-| `PhueComponentLoader` | singleton | App components from `App/Frontend` |
-| `app.components.loader` | singleton | Sub-folder components from `App/Frontend/Components` |
+| `PhueComponentLoader` | singleton | App components from `App/Frontend` (recursive, covers `App/Frontend/Components/**`) |
 | `phui.loader` | singleton | PhUI kit from `src/Core/UI/Phui` |
 | `SsrEngine` (alias `ssr.engine`) | singleton | `BunSsrEngine` when `ssr.enabled`, else `NullSsrEngine` |
-| `ComponentLoaderRegistry` | singleton | Composite loader — priority: App/Frontend → App/Frontend/Components → PhUI |
+| `ComponentLoaderRegistry` | singleton | Composite loader — priority: App/Frontend → PhUI |
 | `ComponentDiscoverer`, `PhuePartialRenderer`, `ComponentRenderer` | singleton | Rendering pipeline |
 | `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts) |
 

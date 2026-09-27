@@ -197,20 +197,57 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
         $this->assertNull($loader->getStructure('Missing'));
     }
 
-    public function testStaleIndexRebuildsOnMiss(): void
+    public function testIndexIsARequestScopedSnapshotRebuiltOnTheBoundary(): void
     {
+        // CONTRACT CHANGE (was: testStaleIndexRebuildsOnMiss).
+        //
+        // The old contract was "a miss invalidates the index and rebuilds it".
+        // That is precisely the defect this test used to lock in: hasComponent()
+        // is called once per component-tag occurrence by scanTemplate(), so on
+        // /phui it produced ~2,900 misses, each walking the component directory
+        // twice and throwing a RuntimeException. That accounted for ~1.3s of a
+        // 1.7s response.
+        //
+        // The index is now a per-request snapshot, rebuilt once per request.
+        // Freshness therefore comes from the request boundary, not from a miss.
         $this->writeComponentAt('Docs/Early.phue', '<div>Early</div>');
         $loader = TestComponentLoader::make($this->componentsDir);
 
-        // Warm up: builds (and rebuilds) the child index through a miss
+        // Warm up: builds the index exactly once.
         $this->assertFalse($loader->hasComponent('Missing'));
 
-        // A file added AFTER the index was built must still be found —
-        // the index invalidates itself and rebuilds on the next miss.
         $this->writeComponentAt('Docs/Late.phue', '<div>Late</div>');
+
+        // Inside the same request the snapshot must NOT change: that stability
+        // is what keeps resolution O(1) instead of O(tags * loaders * files).
+        $this->assertFalse(
+            $loader->hasComponent('Late'),
+            'the index must be a stable snapshot for the duration of a request'
+        );
+
+        // The next request picks it up.
+        $loader->beginRequest();
 
         $this->assertTrue($loader->hasComponent('Late'));
         $this->assertSame('Late', $loader->load('Late')->title);
+    }
+
+    public function testIndexRebuildsAcrossNestedDirectoriesOnTheBoundary(): void
+    {
+        // The regression guard for a directory-mtime based rebuild heuristic:
+        // creating a file in a SUBDIRECTORY does not change the parent's mtime,
+        // so watching only the root directory can never see it. This asserts
+        // the boundary rebuild is unconditional and therefore immune to that.
+        $this->writeComponentAt('Docs/Shallow.phue', '<div>Shallow</div>');
+        $loader = TestComponentLoader::make($this->componentsDir);
+
+        $this->assertTrue($loader->hasComponent('Shallow'));
+
+        $this->writeComponentAt('Docs/deep/Deeper/Deeper.phue', '<div>Deeper</div>');
+        $loader->beginRequest();
+
+        $this->assertTrue($loader->hasComponent('Deeper'));
+        $this->assertSame('Deeper', $loader->load('Deeper')->title);
     }
 
     public function testDiscovererFindsNestedComponentsThroughRegistry(): void

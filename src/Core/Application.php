@@ -110,7 +110,7 @@ class Application
 
         // Load configured module classes
         $this->loadModules((array) $this->config->get('app.modules', []));
-        
+
         // Cache application routes
         $this->cacheRoutes();
     }
@@ -203,20 +203,10 @@ class Application
         $this->container->alias('ssr.compiler', TemplateCompilerBridge::class);
 
         // Primary App Component Loader Singleton (/App/Frontend)
+        // Note: Automatically covers both root /App/Frontend and subfolders like /App/Frontend/Components
         $this->container->singleton(PhueComponentLoader::class, function ($c) use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
                 componentsDir: $this->basePath . '/App/Frontend',
-                parser: null,
-                persistentCache: $c->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir,
-                compilerBridge: $c->get(TemplateCompilerBridge::class)
-            );
-        });
-
-        // App Components Subdirectory Loader Singleton (/App/Frontend/Components)
-        $this->container->singleton('app.components.loader', function ($c) use ($viewsCacheDir): PhueComponentLoader {
-            return new PhueComponentLoader(
-                componentsDir: $this->basePath . '/App/Frontend/Components',
                 parser: null,
                 persistentCache: $c->get(CacheInterface::class),
                 viewsCacheDir: $viewsCacheDir,
@@ -273,19 +263,7 @@ class Application
                 }
             });
 
-            // Priority 2: App Components Subfolder Loader (/App/Frontend/Components)
-            $registry->addLoader(function () use ($registry): ?PhueComponentLoader {
-                try {
-                    /** @var PhueComponentLoader $loader */
-                    $loader = $this->container->get('app.components.loader');
-                    $loader->setRegistry($registry);
-                    return $loader;
-                } catch (Throwable) {
-                    return null;
-                }
-            });
-
-            // Priority 3: PhUI Framework Core Library Loader (/src/Core/UI/Phui)
+            // Priority 2: PhUI Framework Core Library Loader (/src/Core/UI/Phui)
             $registry->addLoader(function () use ($registry): ?PhueComponentLoader {
                 try {
                     /** @var PhueComponentLoader $loader */
@@ -406,8 +384,7 @@ class Application
     /**
      * Automatically bootstrap Active Record and Database Connection using config values.
      *
-     * Registers Connection as a scoped service to maintain isolated database state
-     * across concurrent request scopes in persistent long-running environments.
+     * Registers Connection as a process-level singleton instance for shared database operations.
      *
      * @return void
      */
@@ -503,9 +480,6 @@ class Application
 
         $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
 
-        // Reset per-request script tracking so SPA responses only include current page scripts
-        $this->container->get(AssetRegistry::class)->beginRequest();
-
         // Build the global middleware pipeline
         $pipeline = array_reduce(
             array_reverse($this->middlewareStack),
@@ -523,6 +497,14 @@ class Application
         $logger = $this->container->get(LoggerInterface::class);
 
         try {
+            // Reset per-request component loader caches inside the try block (Defensive lifecycle)
+            if ($this->container->has(ComponentLoaderRegistry::class)) {
+                $this->container->get(ComponentLoaderRegistry::class)->beginRequest();
+            }
+
+            // Reset per-request script tracking so SPA responses only include current page scripts
+            $this->container->get(AssetRegistry::class)->beginRequest();
+
             $response = $pipeline($request);
         } catch (\Phue\Core\Http\Exceptions\HttpException $e) {
             $statusCode = $e->getStatusCode();
@@ -576,6 +558,7 @@ class Application
 
         return $security->applyHeaders($response, $request);
     }
+
     /**
      * Dispatch request to router, wrap route-level middlewares, and resolve handler execution.
      *

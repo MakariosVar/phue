@@ -16,7 +16,7 @@ use RuntimeException;
  * Class PhueComponentLoader
  *
  * Loads, parses, and evaluates single-file Phue components (.phue).
- * Handles structural AST caching (in-memory & PSR-16 persistent) and dynamic runtime context evaluation.
+ * Handles structural AST caching and dynamic runtime context evaluation.
  *
  * @package Phue\Core\UI
  */
@@ -30,25 +30,25 @@ class PhueComponentLoader
     private string $componentsDir;
 
     /**
-     * Caches ONLY static raw structure per file path in-memory for the current request.
+     * Caches ONLY static raw structure per file path in-memory for the current request pass.
      *
-     * @var array<string, array{mtime: int, size: int, structure: array{template: string, script: ?string, phpCode: ?string, filePath?: string}}>
+     * @var array<string, array{mtime: int, size: int, contentHash: string, structure: array{template: string, script: ?string, phpCode: ?string, filePath?: string}}>
      */
     private array $cache = [];
 
     /**
-     * L1 in-memory memoization array for compiled SSR modules.
-     * Mapped by component name -> array{key: string, code: string}.
+     * L1 in-memory memoization array for compiled SSR modules (Per-process lifetime).
+     * Mapped by component name -> array{key: string, code: string, hash: string}.
      *
-     * @var array<string, array{key: string, code: string}>
+     * @var array<string, array{key: string, code: string, hash: string}>
      */
     private array $ssrMemo = [];
 
     /**
-     * L1 in-memory memoization array for compiled Client modules.
-     * Mapped by component name -> array{key: string, code: string}.
+     * L1 in-memory memoization array for compiled Client modules (Per-process lifetime).
+     * Mapped by component name -> array{key: string, code: string, hash: string}.
      *
-     * @var array<string, array{key: string, code: string}>
+     * @var array<string, array{key: string, code: string, hash: string}>
      */
     private array $clientMemo = [];
 
@@ -88,11 +88,11 @@ class PhueComponentLoader
     private TemplateCompilerBridge $compilerBridge;
 
     /**
-     * Lazy recursive child directory index mapping basename -> relative path.
+     * Per-request snapshot component resolution index mapping logical component name -> relative path.
      *
      * @var array<string, string>|null
      */
-    private ?array $childIndex = null;
+    private ?array $componentIndex = null;
 
     /**
      * PhueComponentLoader constructor.
@@ -129,16 +129,28 @@ class PhueComponentLoader
     }
 
     /**
-     * Flushes L1 in-memory structure and compiled module memoization caches.
+     * Per-request lifecycle boundary reset.
+     * Clears per-request snapshot index and transient raw structure AST caches.
+     *
+     * @return void
+     */
+    public function beginRequest(): void
+    {
+        $this->componentIndex = null;
+        $this->cache = [];
+    }
+
+    /**
+     * Full process-level memoization flush.
+     * Clears per-request state along with compiled client & SSR module caches.
      *
      * @return void
      */
     public function clearMemo(): void
     {
-        $this->cache = [];
+        $this->beginRequest();
         $this->ssrMemo = [];
         $this->clientMemo = [];
-        $this->childIndex = null;
     }
 
     /**
@@ -154,7 +166,7 @@ class PhueComponentLoader
     }
 
     /**
-     * Checks if a component with the given logical name exists and is accessible.
+     * Checks if a component with the given logical name exists and is accessible in $O(1)$ time.
      *
      * @param string $name Component logical name.
      *
@@ -162,12 +174,13 @@ class PhueComponentLoader
      */
     public function hasComponent(string $name): bool
     {
-        try {
-            $this->getOrFetchStructure($name);
-            return true;
-        } catch (Exception) {
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_\-\/]*$/', $name) || str_contains($name, '..')) {
             return false;
         }
+
+        $index = $this->getComponentIndex();
+
+        return isset($index[$name]);
     }
 
     /**
@@ -205,7 +218,6 @@ class PhueComponentLoader
 
     /**
      * Retrieves the un-evaluated raw JavaScript content for a component by name.
-     * Performs zero PHP evaluation to ensure no side effects or variable leaks occur.
      *
      * @param string $name Component logical name.
      *
@@ -281,7 +293,7 @@ class PhueComponentLoader
     }
 
     /**
-     * Computes SHA-1 hash prefix for Client compiled module without double compilation.
+     * Computes SHA-1 hash prefix for Client compiled module in O(1) time if memoized.
      *
      * @param string $name Component logical name.
      *
@@ -292,11 +304,29 @@ class PhueComponentLoader
         return $this->moduleHash($name);
     }
 
-    
+    /**
+     * Computes or resolves Client module hash.
+     *
+     * Relies on L1 memoization populated by buildFor(). Assumes that ComponentLoaderRegistry::beginRequest()
+     * or clearMemo() is executed between HTTP requests to invalidate stale transitive child hashes.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null.
+     */
+    public function moduleHash(string $name): ?string
+    {
+        $module = $this->buildFor($name);
+        if ($module === null) {
+            return null;
+        }
+
+        return $this->clientMemo[$name]['hash'] ?? substr(sha1($module), 0, 8);
+    }
 
     /**
      * Builds the complete, dependency-aware JS SFC module for a given component name.
-     * Uses L1 memoization keyed by composite file stat and transitive children hash fingerprints.
+     * Uses L1 memoization with pre-computed hash caching.
      *
      * @param string $name Component logical name.
      *
@@ -319,10 +349,12 @@ class PhueComponentLoader
         $filePath = $structure['filePath'] ?? '';
         $mtime = 0;
         $size = 0;
+        $contentHash = '';
 
         if ($filePath !== '' && isset($this->cache[$filePath])) {
             $mtime = $this->cache[$filePath]['mtime'];
             $size = $this->cache[$filePath]['size'];
+            $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
         }
 
         $children = [];
@@ -346,8 +378,8 @@ class PhueComponentLoader
             }
         }
 
-        // Composite fingerprint: component stat + transitive children hashes
-        $fingerprint = "{$mtime}_{$size}_" . implode('_', $resolvedChildHashes);
+        // Composite fingerprint: stat + content digest + transitive children hashes
+        $fingerprint = "{$mtime}_{$size}_{$contentHash}_" . implode('_', $resolvedChildHashes);
 
         // L1 memoization lookup
         if (isset($this->clientMemo[$name]) && $this->clientMemo[$name]['key'] === $fingerprint) {
@@ -389,7 +421,8 @@ class PhueComponentLoader
                  . "export const __phueRender = render;\n"
                  . "export default { render: __phueRender{$componentsProp} };\n";
 
-            $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+            $hash = substr(sha1($code), 0, 8);
+            $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
             return $code;
         }
 
@@ -440,13 +473,13 @@ class PhueComponentLoader
              . "export const __phueRender = render;\n"
              . "{$proxyBlock}{$scriptContent}";
 
-        $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+        $hash = substr(sha1($code), 0, 8);
+        $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
         return $code;
     }
 
     /**
      * Builds SSR-only JS module for Sidecar V8 execution.
-     * Uses L1 memoization keyed by file stat fingerprint.
      *
      * @param string $name
      * @return string|null
@@ -462,13 +495,15 @@ class PhueComponentLoader
         $filePath = $structure['filePath'] ?? '';
         $mtime = 0;
         $size = 0;
+        $contentHash = '';
 
         if ($filePath !== '' && isset($this->cache[$filePath])) {
             $mtime = $this->cache[$filePath]['mtime'];
             $size = $this->cache[$filePath]['size'];
+            $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
         }
 
-        $fingerprint = "{$mtime}_{$size}";
+        $fingerprint = "{$mtime}_{$size}_{$contentHash}";
 
         // L1 memoization lookup
         if (isset($this->ssrMemo[$name]) && $this->ssrMemo[$name]['key'] === $fingerprint) {
@@ -483,7 +518,8 @@ class PhueComponentLoader
                   . "export const __phueSsrRender = ssrRender;\n"
                   . "export default { ssrRender: __phueSsrRender };\n";
 
-            $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+            $hash = substr(sha1($code), 0, 8);
+            $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
             return $code;
         }
 
@@ -523,7 +559,8 @@ class PhueComponentLoader
               . "export const __phueSsrRender = ssrRender;\n"
               . "{$proxyBlock}{$scriptContent}";
 
-        $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+        $hash = substr(sha1($code), 0, 8);
+        $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
         return $code;
     }
 
@@ -607,22 +644,6 @@ class PhueComponentLoader
     }
 
     /**
-     * Returns the module hash for a component.
-     *
-     * @param string $name
-     * @return string|null
-     */
-    public function moduleHash(string $name): ?string
-    {
-        $module = $this->buildFor($name);
-        if ($module === null) {
-            return null;
-        }
-
-        return substr(sha1($module), 0, 8);
-    }
-
-    /**
      * Evaluates a component structure with parameters to return a PhueComponent.
      *
      * @param array{template: string, script: ?string, style?: ?string, phpCode: ?string, phpStartLine?: int, filePath?: string} $structure
@@ -658,15 +679,14 @@ class PhueComponentLoader
     }
 
     /**
-     * Builds the lazy recursive child index mapping basenames to relative paths.
-     * Uses shallowest path first for deterministic collision policy.
+     * Builds and returns the per-request snapshot index mapping logical names -> relative file paths.
      *
      * @return array<string, string>
      */
-    private function getChildIndex(): array
+    private function getComponentIndex(): array
     {
-        if ($this->childIndex !== null) {
-            return $this->childIndex;
+        if ($this->componentIndex !== null) {
+            return $this->componentIndex;
         }
 
         $index = [];
@@ -674,7 +694,6 @@ class PhueComponentLoader
             new RecursiveDirectoryIterator($this->componentsDir, RecursiveDirectoryIterator::SKIP_DOTS)
         );
 
-        // Collect all candidate files with their directory depths to favor shallowest paths on collision
         $candidates = [];
 
         foreach ($iterator as $file) {
@@ -690,7 +709,10 @@ class PhueComponentLoader
                 $basename = pathinfo($relativePath, PATHINFO_FILENAME);
                 $depth = substr_count($relativePath, '/');
 
+                $exactName = substr($relativePath, 0, -5); // strip '.phue'
+
                 $candidates[] = [
+                    'exactName' => $exactName,
                     'basename' => $basename,
                     'relativePath' => $relativePath,
                     'depth' => $depth,
@@ -698,57 +720,57 @@ class PhueComponentLoader
             }
         }
 
-        // Sort by depth ascending so shallower paths take precedence
         usort($candidates, fn($a, $b) => $a['depth'] <=> $b['depth']);
 
         foreach ($candidates as $candidate) {
-            $basename = $candidate['basename'];
-            // First one wins (shallowest)
-            if (!isset($index[$basename])) {
-                $index[$basename] = $candidate['relativePath'];
+            $relativePath = $candidate['relativePath'];
+            
+            $index[$candidate['exactName']] = $relativePath;
+
+            if (!isset($index[$candidate['basename']])) {
+                $index[$candidate['basename']] = $relativePath;
             }
         }
 
-        return $this->childIndex = $index;
+        return $this->componentIndex = $index;
     }
 
     /**
-     * Fetches component structure from disk or cache.
+     * Fetches component structure from disk or cache using O(1) index lookup.
+     * Rebuilds index automatically if target file was removed from disk.
      *
      * @param string $name
+     * @param bool $isRetry
      * @return array
+     * @throws RuntimeException If component name format is invalid, file is missing, or path containment fails.
      */
-    private function getOrFetchStructure(string $name): array
+    private function getOrFetchStructure(string $name, bool $isRetry = false): array
     {
         if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_\-\/]*$/', $name) || str_contains($name, '..')) {
             throw new RuntimeException("Invalid component name format: '{$name}'");
         }
 
-        $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $name) . '.phue';
+        $index = $this->getComponentIndex();
 
-        // Flat path check first (fast path)
-        if (!file_exists($targetPath)) {
-            // Fallback to lazy recursive child index lookup by basename
-            $childIndex = $this->getChildIndex();
-            
-            if (isset($childIndex[$name])) {
-                $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $childIndex[$name]);
-            } else {
-                // If index lookup misses, invalidate cache/index once for Swoole freshness staleness check and retry
-                $this->childIndex = null;
-                $childIndex = $this->getChildIndex();
-
-                if (isset($childIndex[$name])) {
-                    $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $childIndex[$name]);
-                } else {
-                    throw new RuntimeException("Phue component file not found: '{$name}'");
-                }
-            }
+        if (!isset($index[$name])) {
+            throw new RuntimeException("Phue component file not found: '{$name}'");
         }
 
+        $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $index[$name]);
         $resolvedPath = realpath($targetPath);
-        if ($resolvedPath === false || !str_starts_with($resolvedPath, $this->componentsDir . DIRECTORY_SEPARATOR)) {
+
+        // 1. Structural Recovery: File was removed from disk -> retry index build once
+        if ($resolvedPath === false) {
+            if (!$isRetry) {
+                $this->componentIndex = null;
+                return $this->getOrFetchStructure($name, isRetry: true);
+            }
             throw new RuntimeException("Phue component file inaccessible: '{$name}'");
+        }
+
+        // 2. Security Enforcement: Path traversal / containment violation -> immediate fail, ZERO retries
+        if (!str_starts_with($resolvedPath, $this->componentsDir . DIRECTORY_SEPARATOR)) {
+            throw new RuntimeException("Phue component file outside components directory: '{$name}'");
         }
 
         clearstatcache(true, $resolvedPath);
@@ -760,6 +782,7 @@ class PhueComponentLoader
         $mtime = $stat['mtime'];
         $size = $stat['size'];
 
+        // L1 in-memory structure cache check (per-request)
         if (isset($this->cache[$resolvedPath])) {
             $cached = $this->cache[$resolvedPath];
             if ($cached['mtime'] === $mtime && $cached['size'] === $size) {
@@ -768,14 +791,19 @@ class PhueComponentLoader
             }
         }
 
+        // Calculate content hash ONCE per file per request boundary pass
+        $contentHash = sha1_file($resolvedPath) ?: '';
+
+        // L2 persistent PSR-16 cache check (cross-process)
         $cacheKey = 'phue_structure_' . md5($resolvedPath);
         if ($this->persistentCache !== null) {
             $persistentData = $this->persistentCache->get($cacheKey);
             if (
                 is_array($persistentData) &&
-                isset($persistentData['mtime'], $persistentData['size'], $persistentData['structure']) &&
+                isset($persistentData['mtime'], $persistentData['size'], $persistentData['contentHash'], $persistentData['structure']) &&
                 $persistentData['mtime'] === $mtime &&
-                $persistentData['size'] === $size
+                $persistentData['size'] === $size &&
+                hash_equals($persistentData['contentHash'], $contentHash)
             ) {
                 $this->cache[$resolvedPath] = $persistentData;
                 $persistentData['structure']['filePath'] = $resolvedPath;
@@ -787,9 +815,10 @@ class PhueComponentLoader
         $structure['filePath'] = $resolvedPath;
 
         $payload = [
-            'mtime'     => $mtime,
-            'size'      => $size,
-            'structure' => $structure,
+            'mtime'       => $mtime,
+            'size'        => $size,
+            'contentHash' => $contentHash,
+            'structure'   => $structure,
         ];
 
         $this->cache[$resolvedPath] = $payload;
