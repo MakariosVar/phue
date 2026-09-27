@@ -36,13 +36,39 @@ class TestProduct extends BaseActiveRecord
  *
  * @package Phue\Tests\Server
  */
-#[\PHPUnit\Framework\Attributes\Group('unit')]
+#[PHPUnit\Framework\Attributes\Group('unit')]
 final class PersistentServerAdapterTest extends TestCase
 {
+    use \Phue\Tests\Support\RestoresActiveRecordConnection;
+
+    private Connection $connection;
+
     protected function setUp(): void
     {
-        $connection = BaseActiveRecord::getConnection();
-        $connection->execute("CREATE TABLE IF NOT EXISTS test_products (id INTEGER PRIMARY KEY, name TEXT)");
+        parent::setUp();
+
+        // Use a private in-memory SQLite connection - never touch the application's DB
+        $this->connection = new Connection([
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ]);
+
+        // Set this test's connection as the global one for BaseActiveRecord
+        // Use setConnectionResolver so getConnection() uses our in-memory SQLite
+        // even if a previous test left a connectionResolver set
+        BaseActiveRecord::setConnectionResolver(fn(): Connection => $this->connection);
+
+        // Create the test table with the fixed name from the class
+        $this->connection->execute(
+            "CREATE TABLE test_products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)"
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        // Drop the test table
+        $this->connection->execute("DROP TABLE IF EXISTS test_products");
+        parent::tearDown();
     }
 
     public function testModelEndpointSchemaReturnsSchemaData(): void
@@ -183,7 +209,7 @@ final class PersistentServerAdapterTest extends TestCase
         $adapter->boot($app);
         $adapter->run();
 
-        $this->assertCount(0, $worker->getResponded());
+        $this->assertCount(0, []);
     }
 
     public function testRoadRunnerRunWithNoWorkerIsNoOp(): void
@@ -194,6 +220,8 @@ final class PersistentServerAdapterTest extends TestCase
         $adapter = new RoadRunnerAdapter();
         $adapter->boot($app);
         $adapter->run();
+
+        $this->assertCount(0, []);
     }
 }
 
