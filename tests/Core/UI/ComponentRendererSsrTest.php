@@ -15,6 +15,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\View;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * ComponentRendererSsrTest — locks the Phase 3 SSR seam in ComponentRenderer.
@@ -123,7 +124,7 @@ PHUE);
             $renderer = new ComponentRenderer(
                 new HtmlShellRenderer($this->registry),
                 $this->registry,
-                new PhueComponentLoader($viewsDir),
+                TestComponentLoader::make($viewsDir),
                 'AppLayout',
                 ssrEngine: $engine
             );
@@ -181,7 +182,7 @@ PHUE);
             $renderer = new ComponentRenderer(
                 new HtmlShellRenderer($this->registry),
                 $this->registry,
-                new PhueComponentLoader($viewsDir),
+                TestComponentLoader::make($viewsDir),
                 'AppLayout',
                 requestResolver: fn (): Request => $request,
                 ssrEngine: $engine
@@ -230,7 +231,7 @@ export default {
 PHUE);
 
         try {
-            $loader = new PhueComponentLoader($viewsDir);
+            $loader = TestComponentLoader::make($viewsDir);
             $registry = new ComponentLoaderRegistry();
             $loader->setRegistry($registry);
             $registry->addLoader($loader);
@@ -281,7 +282,7 @@ PHUE);
 PHUE);
 
         try {
-            $loader = new PhueComponentLoader($viewsDir);
+            $loader = TestComponentLoader::make($viewsDir);
             $registry = new ComponentLoaderRegistry();
             $loader->setRegistry($registry);
             $registry->addLoader($loader);

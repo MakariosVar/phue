@@ -122,8 +122,7 @@ class ComponentRenderer
             $scriptUrl = $this->loaderRegistry?->moduleUrl($name);
 
             if ($scriptUrl === null) {
-                $module = PhueComponentLoader::buildModule($view->getTemplate(), $inlineScript);
-                $hash = substr(sha1($module), 0, 8);
+                $hash = $this->loader?->moduleHash($name);
                 $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
             }
 
@@ -162,11 +161,16 @@ class ComponentRenderer
                 $components = [];
 
                 foreach ($deps as $depName => $depHash) {
+                    if ($depName === $componentName) {
+                        continue;
+                    }
+
+                    // Query SSR module via loaderRegistry
                     $source = method_exists($this->loaderRegistry, 'buildForSsr') 
                         ? $this->loaderRegistry->buildForSsr($depName) 
                         : $this->loaderRegistry->moduleFor($depName, $depHash);
 
-                    if ($source !== null && trim($source) !== '' && $depName !== $componentName) {
+                    if ($source !== null && trim($source) !== '') {
                         $components[$depName] = trim($source);
                     }
                 }
@@ -316,7 +320,7 @@ JS,
                         $deps = $discoverer->resolveTransitiveDependencies('PhNavigation');
                         $components = [];
 
-                        // Include PhNavigation itself as root entry in components map using buildForSsr if available
+                        // Include PhNavigation itself as root entry in components map
                         $navSource = method_exists($this->loaderRegistry, 'buildForSsr') 
                             ? $this->loaderRegistry->buildForSsr('PhNavigation') 
                             : null;
@@ -335,11 +339,15 @@ JS,
 
                         // Include transitive dependencies
                         foreach ($deps as $depName => $depHash) {
+                            if ($depName === 'PhNavigation') {
+                                continue;
+                            }
+
                             $source = method_exists($this->loaderRegistry, 'buildForSsr') 
                                 ? $this->loaderRegistry->buildForSsr($depName) 
                                 : $this->loaderRegistry->moduleFor($depName, $depHash);
 
-                            if ($source !== null && trim($source) !== '' && $depName !== 'PhNavigation') {
+                            if ($source !== null && trim($source) !== '') {
                                 $components[$depName] = trim($source);
                             }
                         }
