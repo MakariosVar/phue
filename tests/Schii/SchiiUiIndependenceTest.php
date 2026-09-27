@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Modules\Schii\SchiiModule;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Schii module independence & UI surface contracts:
@@ -78,8 +79,8 @@ PHP);
     private function addPhuiLoader(Application $app): void
     {
         $registry = $app->getContainer()->get(ComponentLoaderRegistry::class);
-        $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
-        $registry->addLoader(new PhueComponentLoader(dirname(__DIR__, 2) . '/App/Frontend'));
+        $registry->addLoader(TestComponentLoader::make(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
+        $registry->addLoader(TestComponentLoader::make(dirname(__DIR__, 2) . '/App/Frontend'));
     }
 
     private function authedSession(Application $app): void

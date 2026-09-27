@@ -253,8 +253,44 @@ PHP);
 
     public function testModuleOwnsPhiiComponentFileWithExactCasing(): void
     {
-        $frontend = dirname(__DIR__, 3) . '/src/Modules/Schii/Frontend';
+        $frontend = dirname(__DIR__, 3) . '/src/Modules/Phii/Frontend';
         $this->assertFileExists("{$frontend}/Phii.phue");
         $this->assertFileDoesNotExist("{$frontend}/phii.phue", 'Component file must be named Phii.phue (case-sensitive).');
+    }
+
+    public function testPhiiViewsAreNotParkedInTheSchiiModuleFrontend(): void
+    {
+        $schiiFrontend = dirname(__DIR__, 3) . '/src/Modules/Schii/Frontend';
+
+        foreach (['Phii.phue', 'PhiiPreviewPanel.phue'] as $leaked) {
+            $this->assertFileDoesNotExist(
+                "{$schiiFrontend}/{$leaked}",
+                "{$leaked} is owned by the Phii module; keeping it under Schii would let the Schii loader serve Phii pages."
+            );
+        }
+    }
+
+    public function testPhiiLoaderServiceResolvesAgainstARealDirectory(): void
+    {
+        $app = new Application($this->tmpBase);
+        $container = $app->getContainer();
+
+        $this->assertTrue(
+            $container->has('phii.loader'),
+            'phii.renderer resolves phii.loader; a missing service turns /phii into a 500.'
+        );
+
+        try {
+            $loader = $container->get('phii.loader');
+        } catch (\Throwable $e) {
+            $this->fail("phii.loader must construct against a valid componentsDir. Got: {$e->getMessage()}");
+        }
+
+        // A malformed componentsDir (e.g. __DIR__ . '../Phii/Frontend' with a
+        // missing separator) must not be able to reach the router silently.
+        $this->assertTrue(
+            $loader->hasComponent('Phii'),
+            'The registered phii.loader must actually own Phii.phue.'
+        );
     }
 }

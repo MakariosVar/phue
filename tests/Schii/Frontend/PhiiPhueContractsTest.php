@@ -20,7 +20,13 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PhiiPhueContractsTest extends TestCase
 {
-    private const FRONTEND = __DIR__ . '/../../../src/Modules/Schii/Frontend';
+    /**
+     * Phii components are owned by the Phii module, not by Schii. A Phii view
+     * living under src/Modules/Schii/Frontend would be a cross-module leak:
+     * it would make the Schii loader able to serve Phii pages and hide the
+     * ownership contract that PhiiRoutingTest locks.
+     */
+    private const FRONTEND = __DIR__ . '/../../../src/Modules/Phii/Frontend';
 
     private PhueTemplateParser $parser;
 

@@ -17,6 +17,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
 use Phue\Core\Database\Connection;
 use Phue\Core\Ssr\NullSsrEngine;
+use Phue\Core\UI\TemplateCompilerBridge;
 use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Modules\Schii\Config\SchiiConfig;
@@ -123,7 +124,8 @@ class SchiiModule extends Module
                 componentsDir: $this->basePath . '/src/Core/UI/Phui',
                 parser: null,
                 persistentCache: $this->container->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir
+                viewsCacheDir: $viewsCacheDir,
+                compilerBridge: $this->container->get(TemplateCompilerBridge::class)
             );
         });
     }
@@ -264,7 +266,11 @@ class SchiiModule extends Module
         // 5. Register Component Loader & Renderer Services (Schii)
         $this->container->singleton(
             'schii.loader',
-            fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
+            fn($c): PhueComponentLoader => 
+                new PhueComponentLoader(
+                    componentsDir: __DIR__ . '/Frontend',
+                    compilerBridge: $c->get(TemplateCompilerBridge::class)
+                )
         );
 
         if ($this->container->has(ComponentLoaderRegistry::class)) {
@@ -304,14 +310,17 @@ class SchiiModule extends Module
                 ssrEngine: $c->get(NullSsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
                 requestResolver: fn () => $c->get(\Phue\Core\Request::class),
-                userResolver: $userResolver
-                
+                userResolver: $userResolver,
             );
         });
 
         $this->container->singleton(
             'phii.loader',
-            fn(): PhueComponentLoader => new PhueComponentLoader(__DIR__ . '/Frontend')
+            fn($c): PhueComponentLoader => 
+                new PhueComponentLoader(
+                    componentsDir: __DIR__ . '/../Phii/Frontend',
+                    compilerBridge: $c->get(TemplateCompilerBridge::class)
+                )
         );
 
         // Register Component Loader & Renderer Services (Phii)
@@ -340,7 +349,7 @@ class SchiiModule extends Module
                 partialRenderer: $c->get(PhuePartialRenderer::class),
                 ssrEngine: $c->get(NullSsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
-                requestResolver: fn () => $c->get(\Phue\Core\Request::class)
+                requestResolver: fn () => $c->get(\Phue\Core\Request::class),
             );
         });
 

@@ -18,6 +18,7 @@ use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Core\Ssr\NullSsrEngine;
 use Phue\Core\Ssr\SsrEngine;
 use Phue\Core\Ssr\UnixSsrClient;
+use Phue\Core\UI\TemplateCompilerBridge;
 use Phue\Core\Routing\Exceptions\MethodNotAllowedException;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Routing\Router;
@@ -192,50 +193,65 @@ class Application
         // Enable ErrorHandlerMiddleware at global middleware stack
         $this->use(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class);
 
+        // Register TemplateCompilerBridge Singleton for SSR/Client Template Compilations
+        $this->container->singleton(TemplateCompilerBridge::class, function ($c): TemplateCompilerBridge {
+            return new TemplateCompilerBridge(
+                socketPath: (string) $this->config->get('ssr.socket', "/tmp/phue-ssr.sock"),
+                cache: $c->get(CacheInterface::class)
+            );
+        });
+        $this->container->alias('ssr.compiler', TemplateCompilerBridge::class);
+
         // Primary App Component Loader Singleton (/App/Frontend)
-        $this->container->singleton(PhueComponentLoader::class, function () use ($viewsCacheDir): PhueComponentLoader {
+        $this->container->singleton(PhueComponentLoader::class, function ($c) use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
                 componentsDir: $this->basePath . '/App/Frontend',
                 parser: null,
-                persistentCache: $this->container->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir
+                persistentCache: $c->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir,
+                compilerBridge: $c->get(TemplateCompilerBridge::class)
             );
         });
 
         // App Components Subdirectory Loader Singleton (/App/Frontend/Components)
-        $this->container->singleton('app.components.loader', function () use ($viewsCacheDir): PhueComponentLoader {
+        $this->container->singleton('app.components.loader', function ($c) use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
                 componentsDir: $this->basePath . '/App/Frontend/Components',
                 parser: null,
-                persistentCache: $this->container->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir
+                persistentCache: $c->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir,
+                compilerBridge: $c->get(TemplateCompilerBridge::class)
             );
         });
 
         // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
-        $this->container->singleton('phui.loader', function () use ($viewsCacheDir): PhueComponentLoader {
+        $this->container->singleton('phui.loader', function ($c) use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
                 componentsDir: $this->basePath . '/src/Core/UI/Phui',
                 parser: null,
-                persistentCache: $this->container->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir
+                persistentCache: $c->get(CacheInterface::class),
+                viewsCacheDir: $viewsCacheDir,
+                compilerBridge: $c->get(TemplateCompilerBridge::class)
             );
         });
 
-        $this->container->singleton(SsrEngine::class, function (): SsrEngine {
-            if (!$this->config->get('ssr.enabled', true)) {
-                return new NullSsrEngine();
-            }
-
-            $client = new UnixSsrClient(
-                socket: (string) $this->config->get('ssr.socket', "\0phue-ssr"),
+        // Register UnixSsrClient singleton for transport layer socket access
+        $this->container->singleton(UnixSsrClient::class, function (): UnixSsrClient {
+            return new UnixSsrClient(
+                socket: (string) $this->config->get('ssr.socket', "/tmp/phue-ssr.sock"),
                 connectTimeoutMs: (int) $this->config->get('ssr.connect_timeout_ms', 200),
                 timeoutMs: (int) $this->config->get('ssr.timeout_ms', 500),
                 hostHeader: (string) $this->config->get('ssr.host_header', 'phue-ssr')
             );
+        });
+
+        $this->container->singleton(SsrEngine::class, function ($c): SsrEngine {
+            if (!$this->config->get('ssr.enabled', true)) {
+                return new NullSsrEngine();
+            }
 
             return new BunSsrEngine(
-                client: $client,
+                client: $c->get(UnixSsrClient::class),
                 maxPayloadKb: (int) $this->config->get('ssr.max_payload_kb', 512)
             );
         });
