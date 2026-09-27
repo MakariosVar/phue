@@ -204,6 +204,11 @@ export default {
      * `:invalid` / Bootstrap feedback work without extra wiring. Only validity
      * this component set is ever cleared, so a caller that manages its own
      * setCustomValidity keeps it.
+     *
+     * This walks `serverErrors` and NOT `errorList`/`mergedErrors`: the native
+     * errors live in the same merged map, and feeding them back here would turn
+     * a one-off native failure into sticky custom validity that can never be
+     * cleared by fixing the field.
      */
     applyServerErrors() {
       if (!this.$el) {
@@ -218,14 +223,15 @@ export default {
         }
       });
       const next = {};
-      this.errorList.forEach((item) => {
-        const el = this.fieldByName(item.field);
+      const server = this.serverErrors;
+      Object.keys(server).forEach((field) => {
+        const el = this.fieldByName(field);
         if (!el) {
           return;
         }
-        el.setCustomValidity(item.message);
+        el.setCustomValidity(server[field]);
         el.setAttribute('aria-invalid', 'true');
-        next[item.field] = item.message;
+        next[field] = server[field];
       });
       this.customValidity = next;
     },
@@ -265,9 +271,6 @@ export default {
         ok = false;
         invalid.push(el);
         el.setAttribute('aria-invalid', 'true');
-        if (this.customValidity[el.name]) {
-          return;
-        }
         collected[el.name] = el.validationMessage || 'This field is invalid.';
       });
       this.nativeErrors = collected;
