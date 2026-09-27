@@ -15,6 +15,9 @@ return [
         'position'     => 'actions_prefix', // 'actions_prefix' | 'actions_suffix' | 'standalone'
         'ariaLabel'    => 'Toggle theme',
     ],
+    'seo' => [
+        'metaDescription' => env('META_DESCRIPTION', 'Almost a framework')
+    ],
     'modules' => [
         \Phue\Modules\Auth\AuthModule::class,
         \Phue\Modules\Schii\SchiiModule::class, // Comment this on production

@@ -7,10 +7,10 @@
     </p>
     <ph-card>
         <template #header>
-            <h4><strong>How components are used</strong></h4>
+            <h3><strong>How components are used</strong></h3>
         </template>
         <template #default>
-            <h5 class="fw-bold">No imports, no registration</h5>
+            <h4 class="fw-bold">No imports, no registration</h4>
             <p>
                 Pages are .phue templates. When the framework compiles a page it scans the template
                 with PhueComponentLoader (src/Core/UI/ComponentDiscoverer.php) and auto-imports every
@@ -64,7 +64,7 @@
             </p>
 
             <ph-card class="mb-3">
-                <h5 class="fw-bold">v-model is wired per component</h5>
+                <h4 class="fw-bold">v-model is wired per component</h4>
                 <ph-data-table
                     :columns="[
                         {key: 'form', label: 'Form'},
@@ -79,7 +79,7 @@
                 </ph-data-table>
             </ph-card>
             <ph-card class="mb-3">
-                <h5 class="fw-bold">Shared conventions</h5>
+                <h4 class="fw-bold">Shared conventions</h4>
                 <ph-data-table
                     :columns="[
                         {key: 'token', label: 'Token'},

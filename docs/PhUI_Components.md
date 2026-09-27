@@ -388,6 +388,7 @@ Boolean checkbox with optional indeterminate visual state.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `id` | `String` | `''` | Explicit `id` for the inner input, so an external `<label for>` can target it. Auto-generated via `useId()` when omitted |
 | `name` | `String` | `''` | Forwarded to the inner control, so `<ph-form>` can validate and submit it |
 | `modelValue` | `Boolean` | `false` | |
 | `label` | `String` | `''` | Falls back to default slot |
@@ -408,6 +409,7 @@ group's `modelValue` drives `checked`.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
+| `id` | `String` | `''` | Explicit `id` for the inner input, so an external `<label for>` can target it. Auto-generated via `useId()` when omitted |
 | `modelValue` | `String \| Number \| Boolean` | `null` | |
 | `value` | `String \| Number \| Boolean` | **required** | Emitted value; `checked` when `modelValue === value` |
 | `name` | `String` | `''` | Grouping |
@@ -604,6 +606,8 @@ Segmented button group (radio-based) with icons and variants.
 | `disabled` | `Boolean` | `false` | |
 | `name` | `String` | `'ph-segmented'` | Radio group name |
 | `ariaLabel` | `String` | `'Segmented control'` | |
+
+The control is a real radio group: each option is a native `<input type="radio">`, and the visible button is its `<label>`. State lives on the input, so no `aria-*` state is duplicated onto the label.
 
 Emits: `update:modelValue`, `change`. No slots.
 

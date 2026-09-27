@@ -25,6 +25,7 @@
       ref="input"
       type="file"
       class="d-none"
+      :aria-label="label || 'Choose a file'"
       :name="name || null"
       :multiple="multiple"
       :accept="accept || null"

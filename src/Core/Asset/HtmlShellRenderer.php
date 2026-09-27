@@ -36,6 +36,7 @@ class HtmlShellRenderer
      * @param bool $wrapInAppContainer Wrap content in div#app (default: true).
      * @param string|null $headScript Script to inject at the top of <head>.
      * @param array $navState State object for PhNavigation injected into window.__NAV_STATE__.
+     * @param string|null $metaDescription Meta description for the page.
      * @return string Complete HTML document markup.
      */
     public function render(
@@ -46,10 +47,12 @@ class HtmlShellRenderer
         ?string $inlineScript = null,
         bool $wrapInAppContainer = true,
         ?string $headScript = null,
-        array $navState = []
+        array $navState = [],
+        ?string $metaDescription = null
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
+        $safeMetaDescription = $this->escape($metaDescription ?? '');
 
         $headScriptMarkup =
             $headScript !== null && trim($headScript) !== ""
@@ -127,6 +130,7 @@ class HtmlShellRenderer
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="description" content="{$safeMetaDescription}">
             <title>{$safeTitle}</title>
             {$headScriptMarkup}{$combinedStyles}
         </head>

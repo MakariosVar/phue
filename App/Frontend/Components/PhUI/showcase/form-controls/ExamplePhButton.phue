@@ -15,7 +15,7 @@
       <ph-card v-if="showDemo">
         <!-- Example 1: Solid Variants -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Solid Variants</h6>
+          <h5 class="text-body-secondary small mb-2">Solid Variants</h5>
           <div class="d-flex flex-wrap gap-2">
             <ph-button variant="primary" @click="onClick('primary')">Primary</ph-button>
             <ph-button variant="secondary" @click="onClick('secondary')">Secondary</ph-button>
@@ -31,7 +31,7 @@
 
         <!-- Example 2: Outline Variants -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Outline Variants</h6>
+          <h5 class="text-body-secondary small mb-2">Outline Variants</h5>
           <div class="d-flex flex-wrap gap-2">
             <ph-button variant="outline-primary" @click="onClick('outline-primary')">Outline Primary</ph-button>
             <ph-button variant="outline-secondary" @click="onClick('outline-secondary')">Outline Secondary</ph-button>
@@ -46,7 +46,7 @@
 
         <!-- Example 3: Sizes -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Sizes</h6>
+          <h5 class="text-body-secondary small mb-2">Sizes</h5>
           <div class="d-flex flex-wrap gap-2 align-items-center">
             <ph-button size="sm" variant="primary" @click="onClick('size-sm')">Small</ph-button>
             <ph-button size="md" variant="primary" @click="onClick('size-md')">Medium</ph-button>
@@ -56,13 +56,13 @@
 
         <!-- Example 4: Block / Full width -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Block (full width)</h6>
+          <h5 class="text-body-secondary small mb-2">Block (full width)</h5>
           <ph-button variant="primary" block @click="onClick('block')">Full width button</ph-button>
         </div>
 
         <!-- Example 5: Loading state -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Loading state</h6>
+          <h5 class="text-body-secondary small mb-2">Loading state</h5>
           <ph-button variant="primary" :loading="loading" @click="loading = !loading; onClick('primary-loading');">
             {{ loading ? 'Loading...' : 'Click to load' }}
           </ph-button>
@@ -70,7 +70,7 @@
 
         <!-- Example 6: Disabled state -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">Disabled</h6>
+          <h5 class="text-body-secondary small mb-2">Disabled</h5>
           <div class="d-flex flex-wrap gap-2">
             <ph-button variant="primary" disabled>Disabled Primary</ph-button>
             <ph-button variant="outline-primary" disabled>Disabled Outline</ph-button>
@@ -80,7 +80,7 @@
 
         <!-- Example 7: With icons -->
         <div class="mb-3">
-          <h6 class="text-body-secondary small mb-2">With icons</h6>
+          <h5 class="text-body-secondary small mb-2">With icons</h5>
           <div class="d-flex flex-wrap gap-2">
             <ph-button variant="primary" @click="onClick('Download')">
               <ph-icon name="download" size="sm" class="me-1" />

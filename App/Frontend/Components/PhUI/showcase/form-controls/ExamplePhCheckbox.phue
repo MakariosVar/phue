@@ -59,6 +59,12 @@ export default {
 <ph-checkbox v-model="blocked" disabled>I read the terms</ph-checkbox>`,
       propsData: [
         {
+          name: "id",
+          type: "String",
+          default: `''`,
+          notes: "Explicit <code>id</code> for the inner input, so an external <code>&lt;label for&gt;</code> can target it. Auto-generated via <code>useId()</code> when omitted",
+        },
+        {
           name: "name",
           type: "String",
           default: "''",

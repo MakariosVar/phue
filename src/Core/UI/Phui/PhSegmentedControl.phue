@@ -26,7 +26,6 @@
           size === 'sm' ? 'btn-sm' : size === 'lg' ? 'btn-lg' : '',
           block ? 'w-100' : ''
         ]"
-        :aria-pressed="modelValue == option.value"
       >
         <ph-icon v-if="option.icon" :name="option.icon" size="sm" class="me-1" />
         {{ option.label }}

@@ -51,6 +51,12 @@ export default {
 <ph-radio v-model="plan" disabled name="plan" value="enterprise" label="Enterprise" />`,
       propsData: [
         {
+          name: "id",
+          type: "String",
+          default: `''`,
+          notes: "Explicit <code>id</code> for the inner input, so an external <code>&lt;label for&gt;</code> can target it. Auto-generated via <code>useId()</code> when omitted",
+        },
+        {
           name: "modelValue",
           type: "String | Number | Boolean",
           default: `null`,

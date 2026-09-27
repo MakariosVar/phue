@@ -48,7 +48,8 @@ class ComponentRenderer
         private mixed $userResolver = null,
         private ?SsrEngine $ssrEngine = null,
         private ?ComponentLoaderRegistry $loaderRegistry = null,
-        private array $themeConfig = []
+        private array $themeConfig = [],
+        private array $metaConfig = []
     ) {}
 
     /**
@@ -272,7 +273,8 @@ JS,
             inlineScript: $view->getInlineScript(),
             wrapInAppContainer: false,
             headScript: $themeInitScript,
-            navState: $navState
+            navState: $navState,
+            metaDescription: $this->metaConfig['metaDescription'] ?? null
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);

@@ -1,6 +1,6 @@
 <template>
   <div ref="root" data-phui="select3" class="position-relative">
-    <label v-if="label" :for="controlId" class="form-label">
+    <label v-if="label" :id="labelId" class="form-label">
       {{ label }}
       <span v-if="required" class="text-danger">*</span>
     </label>
@@ -11,6 +11,8 @@
       class="form-control d-flex flex-wrap align-items-center gap-1"
       :class="{ 'is-invalid': !!error, 'bg-body-secondary opacity-75': disabled }"
       role="combobox"
+      :aria-label="label ? null : (placeholder || null)"
+      :aria-labelledby="label ? labelId : null"
       aria-haspopup="listbox"
       :aria-expanded="open ? 'true' : 'false'"
       :aria-controls="listId"
@@ -184,6 +186,9 @@ export default {
     },
     listId() {
       return `${this.controlId}-list`;
+    },
+    labelId() {
+      return `${this.controlId}-label`;
     },
     normalizedOptions() {
       return this.options.map((opt) => {

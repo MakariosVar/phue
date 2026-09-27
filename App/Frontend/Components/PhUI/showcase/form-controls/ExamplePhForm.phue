@@ -133,10 +133,10 @@
 
         <hr />
 
-        <h6>Last <code>submit</code> payload</h6>
+        <h5>Last <code>submit</code> payload</h5>
         <pre class="bg-body-tertiary p-2 rounded small mb-0">{{ lastPayload }}</pre>
 
-        <h6 class="mt-3">Last <code>invalid</code> payload</h6>
+        <h5 class="mt-3">Last <code>invalid</code> payload</h5>
         <pre class="bg-body-tertiary p-2 rounded small mb-0">{{ lastInvalidText }}</pre>
       </ph-card>
     </template>

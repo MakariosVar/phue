@@ -316,7 +316,8 @@ class Application
                 userResolver: $userResolver,
                 ssrEngine: $c->get(SsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
-                themeConfig: $this->config->get('app.themeToggle', [])
+                themeConfig: $this->config->get('app.themeToggle', []),
+                metaConfig: $this->config->get('app.seo', [])
             );
         });
 

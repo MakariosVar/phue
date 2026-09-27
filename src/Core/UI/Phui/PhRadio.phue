@@ -1,6 +1,7 @@
 <template>
   <div class="form-check">
     <input
+      :id="inputId"
       type="radio"
       :name="name"
       :value="value"
@@ -9,16 +10,25 @@
       class="form-check-input"
       @change="$emit('update:modelValue', value)"
     />
-    <label v-if="label || $slots.default" class="form-check-label">
+    <label v-if="label || $slots.default" :for="inputId" class="form-check-label">
       <slot>{{ label }}</slot>
     </label>
   </div>
 </template>
 
 <script>
+import { useId } from "vue";
+
 export default {
   name: 'PhRadio',
+  setup() {
+    return { uid: useId() };
+  },
   props: {
+    id: {
+      type: String,
+      default: ''
+    },
     modelValue: {
       type: [String, Number, Boolean],
       default: null
@@ -42,6 +52,9 @@ export default {
   },
   emits: ['update:modelValue'],
   computed: {
+    inputId() {
+      return this.id || `ph-radio-${this.uid}`;
+    },
     isChecked() {
       return this.modelValue === this.value;
     }
