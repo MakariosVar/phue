@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\Ssr\UnixSsrClient;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * SsrBaselineTest — locks the SSR milestone reached at the end of Phase 3:
@@ -31,6 +32,8 @@ use PHPUnit\Framework\TestCase;
 #[Group('integration')]
 final class SsrBaselineTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

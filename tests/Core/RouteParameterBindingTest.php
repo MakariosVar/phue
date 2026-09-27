@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract tests for route path-parameter binding into controller actions.
@@ -19,6 +20,8 @@ use PHPUnit\Framework\TestCase;
  */
 class RouteParameterBindingTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

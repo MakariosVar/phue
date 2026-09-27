@@ -11,6 +11,7 @@ use Phue\Core\Container;
 use Phue\Core\ResettableInterface;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract tests for handler argument binding in Application::dispatchToRouter().
@@ -22,6 +23,8 @@ use Phue\Core\Response;
 #[Group('integration')]
 final class RouterHandlerBindingTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

@@ -9,6 +9,7 @@ use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * End-to-end contract tests for the no-build Vue demo page: the WebController
@@ -20,6 +21,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class AssetDemoTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

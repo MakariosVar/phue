@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * End-to-end contract tests for WebController routes.
@@ -20,6 +21,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class WebControllerTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

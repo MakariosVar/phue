@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\Ssr\UnixSsrClient;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * SsrRenderedPagesTest — the Phase 4 top promise: the server sends fully
@@ -35,6 +36,8 @@ use PHPUnit\Framework\TestCase;
 #[Group('integration')]
 final class SsrRenderedPagesTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

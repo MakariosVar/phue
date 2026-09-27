@@ -11,6 +11,7 @@ use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Middleware;
 use Phue\Core\Routing\Attribute\Route;
 use Phue\Core\Routing\Router;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 
 /**
@@ -21,6 +22,8 @@ use Phue\Core\Routing\Router;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class ApplicationTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

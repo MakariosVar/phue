@@ -12,6 +12,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Psr\SimpleCache\CacheInterface;
 use PHPUnit\Framework\TestCase;
 use Phue\Tests\Support\TestComponentLoader;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract guards for a components-rooted loader wired into the
@@ -26,6 +27,8 @@ use Phue\Tests\Support\TestComponentLoader;
  */
 final class AppComponentsLoaderTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

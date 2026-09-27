@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Verifies that a real app page (Docs.phue with styles) actually
@@ -20,6 +21,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class AppStylesheetE2ETest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

@@ -9,6 +9,7 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use App\Controllers\HomeController;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * End-to-End Integration Test for the Phue Demo Web Application.
@@ -19,6 +20,8 @@ use App\Controllers\HomeController;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class DemoAppIntegrationTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void
