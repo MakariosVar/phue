@@ -423,7 +423,7 @@ class Application
         $dbConfig = $this->config->get("database.connections.{$defaultConnection}");
 
         if (is_array($dbConfig)) {
-            $this->container->scoped(Connection::class, fn(): Connection => new Connection($dbConfig));
+            $this->container->singleton(Connection::class, fn(): Connection => new Connection($dbConfig));
             $this->container->alias('db', Connection::class);
 
             BaseActiveRecord::setConnectionResolver(fn(): Connection => $this->container->get(Connection::class));
@@ -488,6 +488,19 @@ class Application
     public function handle(?Request $request = null): Response
     {
         $request ??= Request::capture();
+
+        // 1. Kernel Lifecycle Boundary: Resolve or adopt scope
+        $existingScope = $this->container->getScope();
+        $isLocallyCreatedScope = false;
+
+        if ($existingScope === null) {
+            $scope = $this->container->createScope();
+            $this->container->setScope($scope);
+            $isLocallyCreatedScope = true;
+        } else {
+            $scope = $existingScope;
+        }
+
         $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
 
         // Reset per-request script tracking so SPA responses only include current page scripts
@@ -533,7 +546,29 @@ class Application
         } catch (Throwable $e) {
             $response = $this->renderExceptionResponse($e, $request);
         } finally {
-            $this->container->flushScope();
+            // Rollback for open transactions
+            if ($this->container->has(Connection::class)) {
+                try {
+                    /** @var Connection $conn */
+                    $conn = $this->container->get(Connection::class);
+                    if ($conn->inTransaction()) {
+                        $conn->rollBack();
+                    }
+                } catch (\Throwable) {
+                    // Ignore connection errors during cleanup
+                }
+            }
+
+            // Flush request-scoped instances for the active scope
+            $this->container->flushScope($scope);
+
+            // Clear the fallback bucket (__none__) if state was created outside an explicit scope context
+            $this->container->flushScope(null);
+
+            // Detach scope context ONLY if it was created locally by handle()
+            if ($isLocallyCreatedScope) {
+                $this->container->setScope(null);
+            }
         }
 
         /** @var SecurityMiddleware $security */
@@ -541,7 +576,6 @@ class Application
 
         return $security->applyHeaders($response, $request);
     }
-
     /**
      * Dispatch request to router, wrap route-level middlewares, and resolve handler execution.
      *
