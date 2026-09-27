@@ -8,6 +8,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueTemplateParser;
 use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * PhCodeTest — contract locks for the built-in PhCode component.
@@ -62,7 +63,7 @@ final class PhCodeTest extends TestCase
 
         $this->template = $structure['template'] ?? '';
         $this->script = $structure['script'] ?? '';
-        $this->module = PhueComponentLoader::buildModule($this->template, $this->script);
+        $this->module = TestComponentLoader::moduleFor($this->template, $this->script);
 
         $this->assertNotSame('', $this->template, 'PhCode must expose a <template> block.');
         $this->assertNotSame('', $this->script, 'PhCode must expose a <script> block.');
@@ -518,7 +519,7 @@ final class PhCodeTest extends TestCase
 
     public function testComponentLoadsThroughThePhuiLoader(): void
     {
-        $loader = new PhueComponentLoader(dirname(self::PHCODE));
+        $loader = TestComponentLoader::make(dirname(self::PHCODE));
         $component = $loader->load('PhCode');
 
         $this->assertSame('Code Block', $component->title);

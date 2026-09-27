@@ -11,6 +11,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\View;
 use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for extracted per-component ESM module scripts
@@ -50,7 +51,7 @@ JS;
         mkdir($this->componentsDir, 0777, true);
 
         $this->registry = new AssetRegistry();
-        $this->loader = new PhueComponentLoader($this->componentsDir);
+        $this->loader = TestComponentLoader::make($this->componentsDir);
         $this->renderer = new ComponentRenderer(
             new HtmlShellRenderer($this->registry),
             $this->registry,
@@ -106,7 +107,7 @@ PHUE;
 
     public function testModuleHashIsDerivedFromModuleContent(): void
     {
-        $expectedModule = PhueComponentLoader::buildModule('<div id="catalog">Products</div>', trim(self::SCRIPT));
+        $expectedModule = TestComponentLoader::moduleFor('<div id="catalog">Products</div>', trim(self::SCRIPT));
         $expectedHash = substr(sha1($expectedModule), 0, 8);
 
         $content = $this->renderer->render('Scripted')->getContent();
@@ -156,7 +157,7 @@ PHUE);
         $this->writeScripted("console.log('new logic');" . "\n" . self::SCRIPT);
 
         // Create new loader to clear in-memory cache (stat cache cleared by clearstatcache in loader)
-        $this->loader = new PhueComponentLoader($this->componentsDir);
+        $this->loader = TestComponentLoader::make($this->componentsDir);
         $this->registry = new AssetRegistry();
         $this->renderer = new ComponentRenderer(
             new HtmlShellRenderer($this->registry),
@@ -176,7 +177,7 @@ PHUE);
 
     public function testModuleForReturnsCombinedTemplateAndScript(): void
     {
-        $expectedModule = PhueComponentLoader::buildModule('<div id="catalog">Products</div>', trim(self::SCRIPT));
+        $expectedModule = TestComponentLoader::moduleFor('<div id="catalog">Products</div>', trim(self::SCRIPT));
         $hash = substr(sha1($expectedModule), 0, 8);
 
         $module = $this->loader->moduleFor('Scripted', $hash);
@@ -216,7 +217,7 @@ PHUE);
 <script>{$script}</script>
 PHUE);
 
-        $expectedModule = PhueComponentLoader::buildModule('<div>NoEval</div>', $script);
+        $expectedModule = TestComponentLoader::moduleFor('<div>NoEval</div>', $script);
         $hash = substr(sha1($expectedModule), 0, 8);
 
         ob_start();
@@ -237,7 +238,7 @@ export default { name: 'StateFree' };
 </script>
 PHUE);
 
-        $expectedModule = PhueComponentLoader::buildModule('<div>StateFree</div>', "export default { name: 'StateFree' };");
+        $expectedModule = TestComponentLoader::moduleFor('<div>StateFree</div>', "export default { name: 'StateFree' };");
         $hash = substr(sha1($expectedModule), 0, 8);
 
         $module = $this->loader->moduleFor('Scripted', $hash);

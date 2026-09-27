@@ -9,6 +9,7 @@ use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * ComponentDiscovererTest — locks the auto-discovery contract:
@@ -94,8 +95,8 @@ PHUE);
 PHUE);
 
         $this->registry = new ComponentLoaderRegistry();
-        $this->pages = new PhueComponentLoader($this->viewsDir);
-        $this->comps = new PhueComponentLoader($this->compsDir);
+        $this->pages = TestComponentLoader::make($this->viewsDir);
+        $this->comps = TestComponentLoader::make($this->compsDir);
         $this->pages->setRegistry($this->registry);
         $this->comps->setRegistry($this->registry);
         $this->registry->addLoader($this->pages);
@@ -146,34 +147,71 @@ PHUE);
     }
 
     /**
-     * A component that references itself (directly or indirectly) must not
-     * blow the stack: the discovered graph terminates and the module builder
-     * drops the cyclic self-child from the imports (build-path guard).
+     * A component that references itself (directly or indirectly) is not
+     * compilable: a module that dropped the cyclic self-child would import a
+     * tag it never registered, and the page would render with a silent hole.
+     * The contract is therefore fail-loud - no module, no URL.
+     *
+     * These run inline because the build-path guard is now upstream of the
+     * recursion. If that guard is ever moved back behind the resolution pass,
+     * this file will SIGSEGV and kill the run; the crash itself is guarded by
+     * ComponentCompilationCostTest::testACircularComponentReferenceIsReportedInsteadOfCrashing,
+     * which runs the same shape in a subprocess.
      */
-    public function testSelfReferenceTerminates(): void
+    public function testSelfReferenceIsRejectedLoudlyInsteadOfSilentlyTruncated(): void
     {
-        $graph = $this->discoverer->resolveTransitiveDependencies('SelfRef');
-        $this->assertSame(['SelfRef'], array_keys($graph));
-
-        $module = $this->comps->buildFor('SelfRef');
-        $this->assertNotNull($module, 'Self-referential module must still build.');
-        $this->assertStringNotContainsString(
-            '/assets/phue/SelfRef.',
-            $module,
-            'The cyclic self-child must be dropped from the module imports (build guard terminates).'
+        $this->assertNull(
+            $this->comps->buildFor('SelfRef'),
+            'A self-referential component has no valid module.'
         );
-
-        $this->assertNotNull($this->registry->moduleUrl('SelfRef'));
+        $this->assertNull(
+            $this->registry->moduleUrl('SelfRef'),
+            'Fail-loud: no URL may be minted for a component that cannot be built.'
+        );
+        $this->assertNull(
+            $this->registry->moduleFor('SelfRef', str_repeat('0', 8)),
+            'Nothing may be served for a component that could not be built.'
+        );
+        $this->assertSame(
+            [],
+            $this->discoverer->resolveTransitiveDependencies('SelfRef'),
+            'A graph rooted at a cycle carries no trustworthy hashes, so it is empty.'
+        );
     }
 
-    public function testIndirectCycleTerminatesAcrossComponents(): void
+    public function testIndirectCycleIsRejectedLoudlyAcrossComponents(): void
     {
-        $graph = $this->discoverer->resolveTransitiveDependencies('PhNode');
-        $this->assertSame(['PhNode', 'PhLeaf'], array_keys($graph));
+        $this->assertNull($this->registry->moduleUrl('PhNode'));
+        $this->assertNull($this->registry->moduleUrl('PhLeaf'));
+        $this->assertNull($this->comps->buildFor('PhNode'));
+        $this->assertNull($this->comps->buildFor('PhLeaf'));
+        $this->assertSame([], $this->discoverer->resolveTransitiveDependencies('PhNode'));
+    }
 
-        $this->assertNotNull($this->registry->moduleUrl('PhNode'));
-        $this->assertNotNull($this->registry->moduleUrl('PhLeaf'));
-        $this->assertNotNull($this->comps->buildFor('PhNode'));
+    public function testACycleDoesNotContaminateUnrelatedComponents(): void
+    {
+        // Fail-loud must stay contained: a broken subtree may not poison the
+        // components that have nothing to do with it.
+        $this->registry->moduleUrl('PhNode');
+
+        $this->assertNotNull(
+            $this->registry->moduleUrl('Showcase'),
+            'A page that never touches the cycle must still build.'
+        );
+        $this->assertNotNull($this->comps->buildFor('PhButton'));
+        $this->assertNotNull($this->comps->buildFor('MyWidget'));
+        $this->assertNotNull($this->comps->buildFor('PhBox'));
+    }
+
+    public function testComponentResolutionSurvivesACycleInTheRegistry(): void
+    {
+        // load() parses and evaluates the <php> block only; it never builds a
+        // module. So the cycle must not break the PHP side of a component -
+        // the failure is confined to the module/asset stage, where it can be
+        // reported against the component that actually caused it.
+        $component = $this->comps->load('SelfRef');
+
+        $this->assertSame('Phue App', $component->title);
     }
 
     public function testUnknownRootYieldsEmptyGraph(): void

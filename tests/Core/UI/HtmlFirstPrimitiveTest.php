@@ -11,6 +11,7 @@ use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\View;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the HTML-first SSR primitive:
@@ -44,7 +45,7 @@ final class HtmlFirstPrimitiveTest extends TestCase
         $this->renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
-            new PhueComponentLoader($this->viewsDir)
+            TestComponentLoader::make($this->viewsDir)
         );
     }
 
@@ -78,7 +79,7 @@ return [
 </template>
 PHUE);
 
-        $loader = new PhueComponentLoader($this->viewsDir);
+        $loader = TestComponentLoader::make($this->viewsDir);
         $component = $loader->load('HtmlFirst');
 
         $this->assertTrue($component->view->hasHtml());
@@ -97,7 +98,7 @@ return ['title' => 'Plain', 'state' => ['n' => 1]];
 </template>
 PHUE);
 
-        $loader = new PhueComponentLoader($this->viewsDir);
+        $loader = TestComponentLoader::make($this->viewsDir);
         $component = $loader->load('Plain');
 
         $this->assertFalse($component->view->hasHtml());

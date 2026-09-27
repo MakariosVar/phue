@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Tests\Core\Stubs\PhueComponentRuntime;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * PhFormTest — real behaviour of the shipped <ph-form> component.
@@ -64,7 +65,7 @@ final class PhFormTest extends TestCase
             return;
         }
 
-        $module = (new PhueComponentLoader(self::PHUI_DIR))->buildFor('PhForm');
+        $module = (TestComponentLoader::make(self::PHUI_DIR))->buildFor('PhForm');
         if ($module === null) {
             self::$skipReason = 'PhForm did not compile to a JS module.';
 
@@ -351,7 +352,7 @@ final class PhFormTest extends TestCase
      */
     public function testTheTemplateHidesTheSummaryInNativeMode(): void
     {
-        $module = (new PhueComponentLoader(self::PHUI_DIR))->buildFor('PhForm');
+        $module = (TestComponentLoader::make(self::PHUI_DIR))->buildFor('PhForm');
         self::assertIsString($module);
 
         // The compiled condition, verbatim from the real template.
@@ -374,7 +375,7 @@ final class PhFormTest extends TestCase
      */
     public function testFormControlsForwardNameAndRequiredToTheirInnerControl(): void
     {
-        $loader = new PhueComponentLoader(self::PHUI_DIR);
+        $loader = TestComponentLoader::make(self::PHUI_DIR);
 
         // name: every control the form has to be able to address. The compiled
         // render function emits it as a prop descriptor (`name: _ctx.name`), so
@@ -427,7 +428,7 @@ final class PhFormTest extends TestCase
         // Guards the hermetic setup: the harness only works because the compiled
         // module has no external imports left, so a future compiler change that
         // introduces one is caught here rather than as a mystery resolution error.
-        $module = (new PhueComponentLoader(self::PHUI_DIR))->buildFor('PhForm');
+        $module = (TestComponentLoader::make(self::PHUI_DIR))->buildFor('PhForm');
         self::assertIsString($module);
 
         $stripped = PhueComponentRuntime::stripRuntimeImport((string) $module);

@@ -9,6 +9,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
 use Phue\Modules\Auth\IdentityInterface;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Integration contract for the real App/Frontend/AppLayout.phue layout.
@@ -37,10 +38,10 @@ final class AppLayoutTest extends TestCase
         $root = realpath(__DIR__ . '/../..') ?: '..';
 
         $this->registry = new ComponentLoaderRegistry();
-        $this->phuiLoader = new PhueComponentLoader($root . '/src/Core/UI/Phui');
+        $this->phuiLoader = TestComponentLoader::make($root . '/src/Core/UI/Phui');
         $this->registry->addLoader($this->phuiLoader);
         $this->partialRenderer = new PhuePartialRenderer($this->registry);
-        $this->loader = new PhueComponentLoader($root . '/App/Frontend');
+        $this->loader = TestComponentLoader::make($root . '/App/Frontend');
     }
 
     private function renderLayout(array $params): string

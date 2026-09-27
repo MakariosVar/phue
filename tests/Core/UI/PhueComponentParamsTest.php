@@ -9,6 +9,7 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contracts for passing controller params into a component's <php> block:
@@ -43,7 +44,7 @@ return [
 <template><div id="body">{{ greeting }}</div></template>
 PHUE);
 
-        $this->loader = new PhueComponentLoader($this->componentsDir);
+        $this->loader = TestComponentLoader::make($this->componentsDir);
     }
 
     protected function tearDown(): void

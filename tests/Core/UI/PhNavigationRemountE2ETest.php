@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueTemplateParser;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * PhNavigationRemountE2ETest — the nav must survive being re-mounted.
@@ -173,7 +174,7 @@ final class PhNavigationRemountE2ETest extends TestCase
 
         $parser = new PhueTemplateParser();
         $structure = $parser->parseStructure($file);
-        $module = PhueComponentLoader::buildModule($structure['template'], $structure['script']);
+        $module = TestComponentLoader::moduleFor($structure['template'], $structure['script']);
 
         $module = preg_replace_callback(
             '~/assets/phue/([A-Za-z0-9_]+)\.[a-f0-9]{8}\.phue\.js~',

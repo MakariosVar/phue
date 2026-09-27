@@ -8,6 +8,7 @@ use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhuePartialRenderer;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Tests for the PhMarkdown SSR component (hybrid partial pattern).
@@ -32,7 +33,7 @@ final class PhMarkdownTest extends TestCase
 
         // Load the real PhMarkdown component from the PhUI kit directory
         $basePath = dirname(__DIR__, 3);
-        $this->loader = new PhueComponentLoader($basePath . '/src/Core/UI/Phui');
+        $this->loader = TestComponentLoader::make($basePath . '/src/Core/UI/Phui');
 
         $this->tmpFile = null;
     }

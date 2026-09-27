@@ -9,6 +9,7 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the Layout Engine seam in ComponentRenderer.
@@ -60,7 +61,7 @@ final class LayoutEngineTest extends TestCase
         return new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
-            new PhueComponentLoader($this->viewsDir),
+            TestComponentLoader::make($this->viewsDir),
             $layoutName,
             $uriResolver,
         );
@@ -193,7 +194,7 @@ PHUE);
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
-            new PhueComponentLoader($this->viewsDir),
+            TestComponentLoader::make($this->viewsDir),
         );
 
         $html = $renderer->render('Page')->getContent();

@@ -10,6 +10,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * PhueComponentDependencyTest — locks the auto-import module contract:
@@ -84,8 +85,8 @@ PHUE);
 PHUE);
 
         $this->registry = new ComponentLoaderRegistry();
-        $this->pages = new PhueComponentLoader($this->viewsDir);
-        $this->comps = new PhueComponentLoader($this->compsDir);
+        $this->pages = TestComponentLoader::make($this->viewsDir);
+        $this->comps = TestComponentLoader::make($this->compsDir);
         $this->pages->setRegistry($this->registry);
         $this->comps->setRegistry($this->registry);
         $this->registry->addLoader($this->pages);

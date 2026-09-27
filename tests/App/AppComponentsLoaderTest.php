@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\UI\PhueComponentLoader;
 use Psr\SimpleCache\CacheInterface;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract guards for a components-rooted loader wired into the
@@ -42,7 +43,7 @@ final class AppComponentsLoaderTest extends TestCase
         $cache = $container->get(CacheInterface::class);
 
         // Stub components loader rooted at /tests/App/Stubs/Components.
-        $components = new PhueComponentLoader(
+        $components = TestComponentLoader::make(
             __DIR__ . '/Stubs/Components',
             persistentCache: $cache,
             viewsCacheDir: '/app/storage/cache/views'
@@ -51,7 +52,7 @@ final class AppComponentsLoaderTest extends TestCase
         $loaderRegistry->addLoader($components);
 
         // Stub pages loader rooted at /tests/App/Stubs/Pages.
-        $pages = new PhueComponentLoader(
+        $pages = TestComponentLoader::make(
             __DIR__ . '/Stubs/Pages',
             persistentCache: $cache,
             viewsCacheDir: '/app/storage/cache/views'

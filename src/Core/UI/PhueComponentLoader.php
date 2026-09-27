@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\UI;
 
 use Exception;
+use LogicException;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Psr\SimpleCache\CacheInterface;
 use RecursiveDirectoryIterator;
@@ -34,6 +35,22 @@ class PhueComponentLoader
      * @var array<string, array{mtime: int, size: int, structure: array{template: string, script: ?string, phpCode: ?string, filePath?: string}}>
      */
     private array $cache = [];
+
+    /**
+     * L1 in-memory memoization array for compiled SSR modules.
+     * Mapped by component name -> array{key: string, code: string}.
+     *
+     * @var array<string, array{key: string, code: string}>
+     */
+    private array $ssrMemo = [];
+
+    /**
+     * L1 in-memory memoization array for compiled Client modules.
+     * Mapped by component name -> array{key: string, code: string}.
+     *
+     * @var array<string, array{key: string, code: string}>
+     */
+    private array $clientMemo = [];
 
     /**
      * Structural template parser instance.
@@ -84,9 +101,10 @@ class PhueComponentLoader
      * @param PhueTemplateParser|null $parser          Optional parser instance.
      * @param CacheInterface|null     $persistentCache Optional PSR-16 cache implementation.
      * @param string|null             $viewsCacheDir   Optional compiled PHP views cache directory for OPCache optimization.
-     * @param TemplateCompilerBridge|null $compilerBridge Optional template compiler bridge instance.
+     * @param TemplateCompilerBridge|null $compilerBridge Required template compiler bridge instance.
      *
      * @throws RuntimeException If $componentsDir path is invalid or unreadable.
+     * @throws LogicException   If $compilerBridge parameter is not provided.
      */
     public function __construct(
         string $componentsDir,
@@ -100,10 +118,27 @@ class PhueComponentLoader
             throw new RuntimeException("Invalid component directory path: {$componentsDir}");
         }
 
+        if ($compilerBridge === null) {
+            throw new LogicException("No TemplateCompilerBridge injected into PhueComponentLoader for dir '{$componentsDir}'. A shared compiler bridge is required.");
+        }
+
         $this->componentsDir = $realBase;
         $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
-        $this->compilerBridge = $compilerBridge ?? new TemplateCompilerBridge();
+        $this->compilerBridge = $compilerBridge;
+    }
+
+    /**
+     * Flushes L1 in-memory structure and compiled module memoization caches.
+     *
+     * @return void
+     */
+    public function clearMemo(): void
+    {
+        $this->cache = [];
+        $this->ssrMemo = [];
+        $this->clientMemo = [];
+        $this->childIndex = null;
     }
 
     /**
@@ -220,7 +255,7 @@ class PhueComponentLoader
     {
         try {
             $structure = $this->getOrFetchStructure($name);
-            $module = self::buildModule($structure['template'], $structure['script'] ?? null);
+            $module = $this->buildModuleInstance($structure['template'], $structure['script'] ?? null);
 
             return substr(sha1($module), 0, 8);
         } catch (Exception) {
@@ -229,7 +264,39 @@ class PhueComponentLoader
     }
 
     /**
+     * Computes SHA-1 hash prefix for SSR compiled module without double compilation.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null.
+     */
+    public function ssrModuleHash(string $name): ?string
+    {
+        $ssrSource = $this->buildForSsr($name);
+        if ($ssrSource === null) {
+            return null;
+        }
+
+        return substr(sha1($ssrSource), 0, 8);
+    }
+
+    /**
+     * Computes SHA-1 hash prefix for Client compiled module without double compilation.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return string|null 8-character sha1 hash prefix or null.
+     */
+    public function clientModuleHash(string $name): ?string
+    {
+        return $this->moduleHash($name);
+    }
+
+    
+
+    /**
      * Builds the complete, dependency-aware JS SFC module for a given component name.
+     * Uses L1 memoization keyed by composite file stat and transitive children hash fingerprints.
      *
      * @param string $name Component logical name.
      *
@@ -243,55 +310,87 @@ class PhueComponentLoader
             throw new RuntimeException("Circular component dependency detected in build path: {$chain}");
         }
 
-        $this->buildingStack[$name] = true;
-
         try {
             $structure = $this->getOrFetchStructure($name);
-        } catch (Exception) {
-            unset($this->buildingStack[$name]);
+        } catch (\Throwable) {
             return null;
         }
 
+        $filePath = $structure['filePath'] ?? '';
+        $mtime = 0;
+        $size = 0;
+
+        if ($filePath !== '' && isset($this->cache[$filePath])) {
+            $mtime = $this->cache[$filePath]['mtime'];
+            $size = $this->cache[$filePath]['size'];
+        }
+
         $children = [];
+        $resolvedChildHashes = [];
+
         if ($this->registry !== null) {
             $discoverer = new ComponentDiscoverer($this->registry);
             $children = $discoverer->scanTemplate($structure['template']);
+
+            $this->buildingStack[$name] = true;
+            try {
+                foreach ($children as $child) {
+                    $hash = $this->registry->moduleHash($child);
+                    if ($hash === null) {
+                        return null;
+                    }
+                    $resolvedChildHashes[$child] = $hash;
+                }
+            } finally {
+                unset($this->buildingStack[$name]);
+            }
+        }
+
+        // Composite fingerprint: component stat + transitive children hashes
+        $fingerprint = "{$mtime}_{$size}_" . implode('_', $resolvedChildHashes);
+
+        // L1 memoization lookup
+        if (isset($this->clientMemo[$name]) && $this->clientMemo[$name]['key'] === $fingerprint) {
+            return $this->clientMemo[$name]['code'];
         }
 
         $imports = [];
         $childNames = [];
 
-        try {
-            foreach ($children as $child) {
-                $servableHash = $this->registry !== null
-                    ? $this->registry->moduleHash($child)
-                    : $this->moduleHash($child);
-
-                if ($servableHash !== null) {
-                    $rawImportName = "__phueRaw_{$child}";
-                    $renderImportName = "__phueRender_{$child}";
-
-                    $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
-                    $imports[] = "const {$child} = { ...({$rawImportName} || {}), render: {$renderImportName} };";
-
-                    $childNames[] = $child;
-                }
+        foreach ($children as $child) {
+            $servableHash = $resolvedChildHashes[$child] ?? null;
+            if ($servableHash === null) {
+                return null;
             }
-        } finally {
-            unset($this->buildingStack[$name]);
+
+            $rawImportName = "__phueRaw_{$child}";
+            $renderImportName = "__phueRender_{$child}";
+
+            $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
+            $imports[] = "const {$child} = { ...({$rawImportName} || {}), render: {$renderImportName} };";
+
+            $childNames[] = $child;
         }
 
         $importStatements = !empty($imports) ? implode("\n", $imports) . "\n" : '';
         $componentsObj = !empty($childNames) ? implode(', ', $childNames) : '';
 
-        $renderFnCode = $this->compilerBridge->compile($structure['template'], ssr: false);
+        try {
+            $renderFnCode = $this->compilerBridge->compile($structure['template'], ssr: false);
+        } catch (\Throwable) {
+            return null;
+        }
+
         $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
             $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
-            return "{$importStatements}{$renderFnCode}\n"
+            $code = "{$importStatements}{$renderFnCode}\n"
                  . "export const __phueRender = render;\n"
                  . "export default { render: __phueRender{$componentsProp} };\n";
+
+            $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+            return $code;
         }
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
@@ -337,13 +436,17 @@ class PhueComponentLoader
             );
         }
 
-        return "{$importStatements}{$renderFnCode}\n"
+        $code = "{$importStatements}{$renderFnCode}\n"
              . "export const __phueRender = render;\n"
              . "{$proxyBlock}{$scriptContent}";
+
+        $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+        return $code;
     }
 
     /**
      * Builds SSR-only JS module for Sidecar V8 execution.
+     * Uses L1 memoization keyed by file stat fingerprint.
      *
      * @param string $name
      * @return string|null
@@ -356,13 +459,32 @@ class PhueComponentLoader
             return null;
         }
 
+        $filePath = $structure['filePath'] ?? '';
+        $mtime = 0;
+        $size = 0;
+
+        if ($filePath !== '' && isset($this->cache[$filePath])) {
+            $mtime = $this->cache[$filePath]['mtime'];
+            $size = $this->cache[$filePath]['size'];
+        }
+
+        $fingerprint = "{$mtime}_{$size}";
+
+        // L1 memoization lookup
+        if (isset($this->ssrMemo[$name]) && $this->ssrMemo[$name]['key'] === $fingerprint) {
+            return $this->ssrMemo[$name]['code'];
+        }
+
         $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
         $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
-            return "{$ssrRenderFnCode}\n"
-                    . "export const __phueSsrRender = ssrRender;\n"
-                    . "export default { ssrRender: __phueSsrRender };\n";
+            $code = "{$ssrRenderFnCode}\n"
+                  . "export const __phueSsrRender = ssrRender;\n"
+                  . "export default { ssrRender: __phueSsrRender };\n";
+
+            $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+            return $code;
         }
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
@@ -397,22 +519,24 @@ class PhueComponentLoader
             $proxyBlock = implode("\n", $proxies) . "\n";
         }
 
-        return "{$ssrRenderFnCode}\n"
-                . "export const __phueSsrRender = ssrRender;\n"
-                . "{$proxyBlock}{$scriptContent}";
+        $code = "{$ssrRenderFnCode}\n"
+              . "export const __phueSsrRender = ssrRender;\n"
+              . "{$proxyBlock}{$scriptContent}";
+
+        $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code];
+        return $code;
     }
 
     /**
-     * Builds a module string given a template and script.
+     * Internal helper to build a module string given a template and script using the injected compiler bridge.
      *
      * @param string      $template
      * @param string|null $script
      * @return string
      */
-    public static function buildModule(string $template, ?string $script): string
+    public function buildModuleInstance(string $template, ?string $script): string
     {
-        $compiler = new TemplateCompilerBridge();
-        $renderFnCode = $compiler->compile($template, ssr: false);
+        $renderFnCode = $this->compilerBridge->compile($template, ssr: false);
 
         $scriptContent = trim($script ?? '');
 

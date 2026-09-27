@@ -8,6 +8,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\Ssr\UnixSsrClient;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the PhNavigation SSR partial (HTML-first).
@@ -38,7 +39,7 @@ final class NavPartialTest extends TestCase
     {
         parent::setUp();
 
-        $this->loader = new PhueComponentLoader(self::PHUI_DIR);
+        $this->loader = TestComponentLoader::make(self::PHUI_DIR);
 
         if (!file_exists('/tmp/phue-ssr.sock')) {
             self::markTestSkipped(

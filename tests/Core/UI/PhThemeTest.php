@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the PhTheme theme toggle UI component.
@@ -31,7 +32,7 @@ final class PhThemeTest extends TestCase
     {
         parent::setUp();
 
-        $this->loader = new PhueComponentLoader(self::PHUI_DIR);
+        $this->loader = TestComponentLoader::make(self::PHUI_DIR);
     }
 
     private function module(): string

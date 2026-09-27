@@ -8,6 +8,7 @@ use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueComponent;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Regression guard for the ComponentLoaderRegistry and PhueComponentLoader.
@@ -40,7 +41,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testLoadReturnsFirstLoaderComponent(): void
     {
         $this->writePhue('PhButton', '<template><button /></template><script>export default {}</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -60,7 +61,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testLoadSkipsFailedLoaderAndReturnsFromNext(): void
     {
         $this->writePhue('PhButton', '<template><button /></template><script>export default {}</script>');
-        $goodLoader = new PhueComponentLoader($this->componentsDir);
+        $goodLoader = TestComponentLoader::make($this->componentsDir);
 
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => throw new \RuntimeException('boom'));
@@ -75,7 +76,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     {
         $script = 'export default { name: "PhButton" }';
         $this->writePhue('PhButton', '<template><button /></template><script>' . $script . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -99,7 +100,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     {
         $script = 'export default { name: "PhButton" }';
         $this->writePhue('PhButton', '<template><button /></template><script>' . $script . '</script>');
-        $goodLoader = new PhueComponentLoader($this->componentsDir);
+        $goodLoader = TestComponentLoader::make($this->componentsDir);
 
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => throw new \RuntimeException('boom'));
@@ -112,7 +113,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     {
         $script = 'export default { name: "PhButton" }';
         $this->writePhue('PhButton', '<template><button /></template><script>' . $script . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -125,7 +126,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testScriptForReturnsNullWhenHashMismatch(): void
     {
         $this->writePhue('PhButton', '<template><button /></template><script>export default {}</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -145,7 +146,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     {
         $script = 'export default { name: "PhButton" }';
         $this->writePhue('PhButton', '<template><button /></template><script>' . $script . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertSame($script, $loader->contentFor('PhButton'));
     }
@@ -153,14 +154,14 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testContentForReturnsNullWhenNoScript(): void
     {
         $this->writePhue('PhNoScript', '<template><div /></template>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertNull($loader->contentFor('PhNoScript'));
     }
 
     public function testContentForReturnsNullWhenNotFound(): void
     {
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertNull($loader->contentFor('NoSuchComponent'));
     }
@@ -174,8 +175,8 @@ final class ComponentLoaderRegistryTest extends TestCase
         mkdir($secondDir, 0777, true);
         $this->writePhue('PhInput', '<template><input /></template><script>export default {}</script>', $secondDir);
 
-        $firstLoader = new PhueComponentLoader($firstDir);
-        $secondLoader = new PhueComponentLoader($secondDir);
+        $firstLoader = TestComponentLoader::make($firstDir);
+        $secondLoader = TestComponentLoader::make($secondDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $firstLoader);
         $registry->addLoader(fn () => $secondLoader);
@@ -198,7 +199,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testModuleUrlReturnsHashedModuleUrl(): void
     {
         $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -208,7 +209,7 @@ final class ComponentLoaderRegistryTest extends TestCase
         $this->assertStringStartsWith('/assets/phue/PhButton.', $url);
         $this->assertStringEndsWith('.phue.js', $url);
 
-        $expectedHash = substr(sha1(PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT)), 0, 8);
+        $expectedHash = substr(sha1(TestComponentLoader::moduleFor(self::BTN_TEMPLATE, self::BTN_SCRIPT)), 0, 8);
         $this->assertStringContainsString($expectedHash, $url);
     }
 
@@ -222,7 +223,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testModuleUrlSkipsFailedLoader(): void
     {
         $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
-        $goodLoader = new PhueComponentLoader($this->componentsDir);
+        $goodLoader = TestComponentLoader::make($this->componentsDir);
 
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => throw new \RuntimeException('boom'));
@@ -234,11 +235,11 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testModuleForReturnsModuleWhenHashMatches(): void
     {
         $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
-        $expected = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $expected = TestComponentLoader::moduleFor(self::BTN_TEMPLATE, self::BTN_SCRIPT);
         $hash = substr(sha1($expected), 0, 8);
 
         $this->assertSame($expected, $registry->moduleFor('PhButton', $hash));
@@ -247,7 +248,7 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testModuleForReturnsNullWhenHashMismatch(): void
     {
         $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $loader);
 
@@ -264,13 +265,13 @@ final class ComponentLoaderRegistryTest extends TestCase
     public function testModuleForSkipsFailedLoader(): void
     {
         $this->writePhue('PhButton', '<template>' . self::BTN_TEMPLATE . '</template><script>' . self::BTN_SCRIPT . '</script>');
-        $goodLoader = new PhueComponentLoader($this->componentsDir);
+        $goodLoader = TestComponentLoader::make($this->componentsDir);
 
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => throw new \RuntimeException('boom'));
         $registry->addLoader(fn () => $goodLoader);
 
-        $expected = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $expected = TestComponentLoader::moduleFor(self::BTN_TEMPLATE, self::BTN_SCRIPT);
         $hash = substr(sha1($expected), 0, 8);
 
         $this->assertSame($expected, $registry->moduleFor('PhButton', $hash));
@@ -284,16 +285,16 @@ final class ComponentLoaderRegistryTest extends TestCase
         mkdir($secondDir, 0777, true);
         $this->writePhue('PhInput', '<template><input /></template><script>export default { name: "PhInput" }</script>', $secondDir);
 
-        $firstLoader = new PhueComponentLoader($firstDir);
-        $secondLoader = new PhueComponentLoader($secondDir);
+        $firstLoader = TestComponentLoader::make($firstDir);
+        $secondLoader = TestComponentLoader::make($secondDir);
         $registry = new ComponentLoaderRegistry();
         $registry->addLoader(fn () => $firstLoader);
         $registry->addLoader(fn () => $secondLoader);
 
-        $expectedBtn = PhueComponentLoader::buildModule(self::BTN_TEMPLATE, self::BTN_SCRIPT);
+        $expectedBtn = TestComponentLoader::moduleFor(self::BTN_TEMPLATE, self::BTN_SCRIPT);
         $this->assertSame($expectedBtn, $registry->moduleFor('PhButton', substr(sha1($expectedBtn), 0, 8)));
 
-        $expectedInput = PhueComponentLoader::buildModule('<input />', 'export default { name: "PhInput" }');
+        $expectedInput = TestComponentLoader::moduleFor('<input />', 'export default { name: "PhInput" }');
         $this->assertSame($expectedInput, $registry->moduleFor('PhInput', substr(sha1($expectedInput), 0, 8)));
     }
 

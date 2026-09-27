@@ -12,6 +12,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the convention-based .phue component loader and its
@@ -70,7 +71,7 @@ final class PhueComponentLoaderTest extends TestCase
     public function testLoadsComponentByConventionName(): void
     {
         $this->writeComponent('Products', '<div>Products</div>', ['products' => []]);
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $component = $loader->load('Products');
 
@@ -81,7 +82,7 @@ final class PhueComponentLoaderTest extends TestCase
 
     public function testLoadThrowsForUnknownComponent(): void
     {
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->expectException(RuntimeException::class);
 
@@ -91,7 +92,7 @@ final class PhueComponentLoaderTest extends TestCase
     #[DataProvider('disallowedNamesProvider')]
     public function testLoadRejectsPathTraversalNames(string $name): void
     {
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->expectException(RuntimeException::class);
 
@@ -112,7 +113,7 @@ final class PhueComponentLoaderTest extends TestCase
     public function testEachLoadReturnsFreshInstanceFromCachedStructure(): void
     {
         $this->writeComponent('Cache', '<div>c</div>', ['greeting' => 'hi']);
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $first = $loader->load('Cache');
         $second = $loader->load('Cache');
@@ -127,7 +128,7 @@ final class PhueComponentLoaderTest extends TestCase
     public function testCacheRefreshesAfterFileModification(): void
     {
         $this->writeComponent('Live', '<div>v1</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $first = $loader->load('Live');
         $this->assertStringContainsString('v1', $first->view->getTemplate());
@@ -145,7 +146,7 @@ final class PhueComponentLoaderTest extends TestCase
     public function testCacheRefreshesAfterFileDeletionAndRecreation(): void
     {
         $this->writeComponent('Respawn', '<div>first</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
         $loader->load('Respawn');
 
         unlink($this->componentsDir . '/Respawn.phue');
@@ -164,7 +165,7 @@ final class PhueComponentLoaderTest extends TestCase
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($sharedRegistry),
             $sharedRegistry,
-            new PhueComponentLoader($this->componentsDir)
+            TestComponentLoader::make($this->componentsDir)
         );
 
         $byName = $renderer->render('Dup')->getContent();

@@ -9,6 +9,7 @@ use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Tests for the lazy recursive child-directory lookup in PhueComponentLoader.
@@ -80,7 +81,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testFlatComponentStillLoads(): void
     {
         $this->writeComponentAt('Flat.phue', '<div>Flat content</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertTrue($loader->hasComponent('Flat'));
 
@@ -93,7 +94,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testNestedComponentFoundByBasename(): void
     {
         $this->writeComponentAt('Docs/Nested.phue', '<div>Nested content</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         // Tag-derived PascalCase name (no slash) must resolve into the child dir
         $this->assertTrue($loader->hasComponent('Nested'));
@@ -116,7 +117,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
             "<php>return ['title' => 'Stateful', 'state' => ['message' => \$message ?? 'none']];</php>\n"
             . "<template><div>{{message}}</div></template>"
         );
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $component = $loader->load('Stateful', ['message' => 'hello world']);
 
@@ -132,7 +133,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
             [],
             'export default { name: "Scripted" };'
         );
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $script = $loader->contentFor('Scripted');
 
@@ -144,7 +145,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     {
         $script = 'export default { name: "Hashed" };';
         $this->writeComponentAt('Docs/Hashed.phue', '<div>Hashed</div>', [], $script);
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $hash = substr(sha1($script), 0, 8);
 
@@ -156,7 +157,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     {
         $this->writeComponentAt('Docs/Dupe.phue', '<div>Docs dupe</div>');
         $this->writeComponentAt('Sub/Deep/Dupe.phue', '<div>Deep dupe</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $structure = $loader->getStructure('Dupe');
 
@@ -169,7 +170,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testDirectSlashNameStillResolves(): void
     {
         $this->writeComponentAt('Docs/Nested.phue', '<div>Nested content</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertTrue($loader->hasComponent('Docs/Nested'));
 
@@ -180,7 +181,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testDotDotTraversalStillBlocked(): void
     {
         $this->writeComponentAt('Docs/Nested.phue', '<div>Nested</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertFalse($loader->hasComponent('../outside'));
         $this->assertFalse($loader->hasComponent('Docs/../../outside'));
@@ -190,7 +191,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testUnknownComponentNotFound(): void
     {
         $this->writeComponentAt('Docs/Nested.phue', '<div>Nested</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         $this->assertFalse($loader->hasComponent('Missing'));
         $this->assertNull($loader->getStructure('Missing'));
@@ -199,7 +200,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
     public function testStaleIndexRebuildsOnMiss(): void
     {
         $this->writeComponentAt('Docs/Early.phue', '<div>Early</div>');
-        $loader = new PhueComponentLoader($this->componentsDir);
+        $loader = TestComponentLoader::make($this->componentsDir);
 
         // Warm up: builds (and rebuilds) the child index through a miss
         $this->assertFalse($loader->hasComponent('Missing'));
@@ -218,7 +219,7 @@ final class PhueComponentLoaderChildDirsTest extends TestCase
         $this->writeComponentAt('Flat.phue', '<div>Flat</div>');
 
         $registry = new ComponentLoaderRegistry();
-        $registry->addLoader(new PhueComponentLoader($this->componentsDir));
+        $registry->addLoader(TestComponentLoader::make($this->componentsDir));
 
         $discoverer = new ComponentDiscoverer($registry);
 

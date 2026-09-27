@@ -9,6 +9,7 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\UI\ComponentRenderer;
 use Phue\Core\UI\PhueComponentLoader;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * End-to-end contract for the 'styles' metadata:
@@ -42,7 +43,7 @@ final class ViewStylesTest extends TestCase
     {
         file_put_contents($this->tmpDir . '/StylePage.phue', $this->buildPhueFile());
 
-        $loader = new PhueComponentLoader($this->tmpDir);
+        $loader = TestComponentLoader::make($this->tmpDir);
         $component = $loader->load('StylePage');
 
         $this->assertContains('/assets/app/styles/main.css', $component->view->getStyles());
@@ -54,7 +55,7 @@ final class ViewStylesTest extends TestCase
         file_put_contents($this->tmpDir . '/StyledPage.phue', $this->buildPhueFile());
 
         $registry = new AssetRegistry();
-        $loader = new PhueComponentLoader($this->tmpDir);
+        $loader = TestComponentLoader::make($this->tmpDir);
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
@@ -73,7 +74,7 @@ final class ViewStylesTest extends TestCase
         file_put_contents($this->tmpDir . '/PlainPage.phue', $this->buildPlainPhueFile());
 
         $registry = new AssetRegistry();
-        $loader = new PhueComponentLoader($this->tmpDir);
+        $loader = TestComponentLoader::make($this->tmpDir);
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
@@ -102,7 +103,7 @@ final class ViewStylesTest extends TestCase
         file_put_contents($this->tmpDir . '/StyledPage.phue', $this->buildPhueFile());
 
         $registry = new AssetRegistry();
-        $loader = new PhueComponentLoader($this->tmpDir);
+        $loader = TestComponentLoader::make($this->tmpDir);
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,
@@ -127,7 +128,7 @@ final class ViewStylesTest extends TestCase
         file_put_contents($this->tmpDir . '/StyledPage.phue', $this->buildPhueFile());
 
         $registry = new AssetRegistry();
-        $loader = new PhueComponentLoader($this->tmpDir);
+        $loader = TestComponentLoader::make($this->tmpDir);
         $renderer = new ComponentRenderer(
             new HtmlShellRenderer($registry),
             $registry,

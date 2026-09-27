@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueTemplateParser;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * PhCodeHighlightE2ETest — end-to-end proof that PhCode actually highlights.
@@ -70,7 +71,7 @@ final class PhCodeHighlightE2ETest extends TestCase
             $structure = $parser->parseStructure($file);
             file_put_contents(
                 $this->workDir . '/' . $name . '.mjs',
-                PhueComponentLoader::buildModule($structure['template'], $structure['script']),
+                TestComponentLoader::moduleFor($structure['template'], $structure['script']),
             );
         }
 

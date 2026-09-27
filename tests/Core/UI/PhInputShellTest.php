@@ -8,6 +8,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueTemplateParser;
 use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\TestComponentLoader;
 
 /**
  * Contract tests for the PhInputShell primitive.
@@ -43,7 +44,7 @@ final class PhInputShellTest extends TestCase
     {
         parent::setUp();
 
-        $this->loader = new PhueComponentLoader(self::PHUI_DIR);
+        $this->loader = TestComponentLoader::make(self::PHUI_DIR);
     }
 
     private function module(string $name): string
