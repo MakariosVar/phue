@@ -93,6 +93,9 @@ final class RbacManager
     /**
      * Evaluates permission access for a given user identifier or explicit role collection.
      *
+     * If explicit roles are supplied (e.g., from the authenticated user identity/database),
+     * they are evaluated directly. Otherwise, statically seeded assignments are used as fallback.
+     *
      * @param int|string $userContext User ID identifier.
      * @param string $permission Target permission identifier to check.
      * @param array<int, string> $explicitRoles Optional explicit roles array passed directly from identity.
@@ -100,6 +103,8 @@ final class RbacManager
      */
     public function checkAccess(int|string $userContext, string $permission, array $explicitRoles = []): bool
     {
+        // Επιλογή (β): Χρήση $explicitRoles απευθείας όταν παρέχονται (DB roles),
+        // με fallback στους static server assignments ($this->assignments).
         $userRoles = !empty($explicitRoles)
             ? $explicitRoles
             : ($this->assignments[$userContext] ?? []);
