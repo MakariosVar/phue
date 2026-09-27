@@ -23,6 +23,12 @@ use Phue\Modules\Schii\Attribute\UI;
 )]
 class User extends BaseUser
 {
+    /**
+     * The attributes that should be hidden for serialization.
+     * @var array<int, string>
+     */
+    protected array $hidden = ['password_hash', 'auth_key'];
+
     #[Field(
         type: 'integer',
         primaryKey: true,
@@ -64,7 +70,7 @@ class User extends BaseUser
     #[Field(
         type: 'json',
         label: 'Roles',
-        writable: true,
+        writable: false,
         searchable: false,
         filterable: false,
         sortable: false,
