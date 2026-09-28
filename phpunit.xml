@@ -41,6 +41,14 @@
             <directory suffix="Test.php">tests/ErrorPages</directory>
             <directory suffix="Test.php">tests/Production</directory>
         </testsuite>
+        <!--
+            Cross-cutting contracts about the test suite itself: the known-vulnerability
+            ratchet, namespace/PSR-4 hygiene, the independence guard. These read other
+            test files, so they must not live inside a module suite.
+        -->
+        <testsuite name="suite">
+            <directory suffix="Test.php">tests/Suite</directory>
+        </testsuite>
     </testsuites>
 
     <source>

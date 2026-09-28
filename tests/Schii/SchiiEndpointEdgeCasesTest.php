@@ -18,9 +18,21 @@ use Phue\Modules\Schii\Schema\SchemaRegistry;
  * Hardening / edge-case suite for the Schii REST ModelEndpoint.
  *
  * These tests encode the SECURE, strictly-typed behaviour the endpoint must
- * guarantee. Tests marked with "BROKEN" document current vulnerabilities that
- * must be fixed in the source; the rest lock in already-correct behaviour as
- * regression guards.
+ * guarantee. Every test in this file is green: each one previously documented a
+ * vulnerability that has since been fixed in the source.
+ *
+ * Two guards carry this file, and the difference matters:
+ *
+ *  - These tests assert SECURE behaviour. They must stay green. A red one means
+ *    a regression was reintroduced.
+ *  - The parts of the contract the source still does NOT honour live in
+ *    tests/Suite/KnownVulnerabilityTest.php, tagged #[Group('known-vulnerabilities')].
+ *    Those assert the CURRENT (insecure) behaviour so they pass, and their
+ *    names say so. The ratchet in that file fails if the group grows.
+ *
+ * A test must never be green for the wrong reason. Where a rule is satisfied
+ * incidentally rather than deliberately, the section banner says which
+ * mechanism actually enforces it.
  */
 #[UI(label: 'Edge Products', icon: 'shield', layout: 'grid')]
 class EdgeProduct extends BaseActiveRecord
@@ -36,6 +48,12 @@ class EdgeProduct extends BaseActiveRecord
     #[Field(type: 'select', filterable: true, options: ['active', 'inactive'])]
     public string $status = 'active';
 
+    /**
+     * Declared for realism only — the endpoint never calls this.
+     * Kept so the fixture models a fully-annotated model; see the file banner.
+     *
+     * @return array<string, array<int, string>>
+     */
     public function rules(): array
     {
         return [
@@ -90,7 +108,9 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // LIKE wildcard injection (BROKEN on current source)
+    // LIKE wildcard injection — FIXED.
+    // Enforced by LIKE escaping in QueryBuilder (addcslashes + ESCAPE '\'),
+    // not by the endpoint. Regression guard.
     // ------------------------------------------------------------------
 
     public function testSearchWithLiteralPercentDoesNotMatchEverything(): void
@@ -139,7 +159,9 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Mass assignment protection (BROKEN on current source)
+    // Mass assignment / primary key protection — FIXED.
+    // Enforced by ModelEndpoint::extractInputData(), which intersects the payload
+    // with writable&&!readonly schema fields and then unsets the primary key.
     // ------------------------------------------------------------------
 
     public function testStoreIgnoresClientSuppliedPrimaryKey(): void
@@ -219,7 +241,12 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // rules() validation enforcement (BROKEN on current source)
+    // Numeric validation — but NOT via Model::rules().
+    //
+    // This passes because ModelEndpoint::validateData() implicitly appends the
+    // `numeric` rule when it sees #[Field(type: 'number'|'int'|'float')]. The
+    // model's own rules() method is never invoked anywhere in src/ — it is dead
+    // API. See KnownVulnerabilityTest::testModelRulesMethodIsNeverInvoked().
     // ------------------------------------------------------------------
 
     public function testStoreRejectsNonNumericPrice(): void
@@ -239,7 +266,8 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Unknown entity routing (BROKEN on current source: exception instead of 404)
+    // Unknown entity routing — FIXED.
+    // index() resolves the entity against the SchemaRegistry and returns 404.
     // ------------------------------------------------------------------
 
     public function testUnregisteredEntityReturns404NotFound(): void
@@ -258,7 +286,7 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Regression guards (current behaviour is already correct)
+    // Regression guards (behaviour that was already correct)
     // ------------------------------------------------------------------
 
     public function testStoreMissingRequiredFieldReturns422(): void

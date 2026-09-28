@@ -7,9 +7,13 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 
 /**
- * Stub User Model for Active Record testing.
+ * Bare stub model for Active Record persistence tests — no relations.
+ *
+ * Named distinctly from the other User fixtures in the suite: PHP symbols are
+ * global once loaded, and a shared short name is a cross-file collision waiting
+ * for a directory move. Guarded by tests/Suite/TestLayoutTest.php.
  */
-class User extends BaseActiveRecord
+class UserStub extends BaseActiveRecord
 {
     protected string $table = 'users';
 }
@@ -56,7 +60,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testCreatesAndSavesModel(): void
     {
-        $user = new User([
+        $user = new UserStub([
             'name'   => 'Makarios',
             'email'  => 'makarios@example.com',
             'status' => 'active',
@@ -65,8 +69,8 @@ class BaseActiveRecordTest extends TestCase
         $this->assertTrue($user->save());
         $this->assertSame(1, $user->id);
 
-        $found = User::find(1);
-        $this->assertInstanceOf(User::class, $found);
+        $found = UserStub::find(1);
+        $this->assertInstanceOf(UserStub::class, $found);
         $this->assertSame('Makarios', $found->name);
     }
 
@@ -75,18 +79,18 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testStaticQueryForwardingReturnsModelInstances(): void
     {
-        User::create(['name' => 'Alice', 'email' => 'alice@example.com', 'status' => 'active']);
-        User::create(['name' => 'Bob', 'email' => 'bob@example.com', 'status' => 'pending']);
+        UserStub::create(['name' => 'Alice', 'email' => 'alice@example.com', 'status' => 'active']);
+        UserStub::create(['name' => 'Bob', 'email' => 'bob@example.com', 'status' => 'pending']);
 
         // Static where() forwarding
-        $activeUsers = User::where('status', 'active')->get();
+        $activeUsers = UserStub::where('status', 'active')->get();
 
         $this->assertCount(1, $activeUsers);
-        $this->assertInstanceOf(User::class, $activeUsers[0]);
+        $this->assertInstanceOf(UserStub::class, $activeUsers[0]);
         $this->assertSame('Alice', $activeUsers[0]->name);
 
-        $pendingUser = User::where('status', 'pending')->first();
-        $this->assertInstanceOf(User::class, $pendingUser);
+        $pendingUser = UserStub::where('status', 'pending')->first();
+        $this->assertInstanceOf(UserStub::class, $pendingUser);
         $this->assertSame('Bob', $pendingUser->name);
     }
 
@@ -95,7 +99,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testUpdatesOnlyDirtyAttributes(): void
     {
-        $user = User::create(['name' => 'Charlie', 'email' => 'charlie@example.com', 'status' => 'active']);
+        $user = UserStub::create(['name' => 'Charlie', 'email' => 'charlie@example.com', 'status' => 'active']);
 
         $this->assertEmpty($user->getDirty());
 
@@ -105,7 +109,7 @@ class BaseActiveRecordTest extends TestCase
         $this->assertTrue($user->save());
         $this->assertEmpty($user->getDirty());
 
-        $refreshed = User::find($user->id);
+        $refreshed = UserStub::find($user->id);
         $this->assertSame('Charlie Updated', $refreshed->name);
     }
 
@@ -114,10 +118,10 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testDeletesModel(): void
     {
-        $user = User::create(['name' => 'Dave', 'email' => 'dave@example.com', 'status' => 'active']);
+        $user = UserStub::create(['name' => 'Dave', 'email' => 'dave@example.com', 'status' => 'active']);
 
         $this->assertTrue($user->delete());
-        $this->assertNull(User::find($user->id));
+        $this->assertNull(UserStub::find($user->id));
     }
 
     /**
@@ -125,7 +129,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testDeleteReturnsFalseForNonPersistedModel(): void
     {
-        $user = new User(['name' => 'Ghost', 'email' => 'ghost@example.com']);
+        $user = new UserStub(['name' => 'Ghost', 'email' => 'ghost@example.com']);
 
         $this->assertFalse($user->delete());
     }
@@ -135,7 +139,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testSaveReturnsTrueWhenNoDirtyAttributes(): void
     {
-        $user = User::create(['name' => 'Clean', 'email' => 'clean@example.com', 'status' => 'active']);
+        $user = UserStub::create(['name' => 'Clean', 'email' => 'clean@example.com', 'status' => 'active']);
 
         $this->assertEmpty($user->getDirty());
         $this->assertTrue($user->save());
@@ -146,12 +150,12 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testAllReturnsAllRecords(): void
     {
-        User::create(['name' => 'Alice', 'email' => 'a@test.com', 'status' => 'active']);
-        User::create(['name' => 'Bob', 'email' => 'b@test.com', 'status' => 'active']);
+        UserStub::create(['name' => 'Alice', 'email' => 'a@test.com', 'status' => 'active']);
+        UserStub::create(['name' => 'Bob', 'email' => 'b@test.com', 'status' => 'active']);
 
-        $all = User::all();
+        $all = UserStub::all();
         $this->assertCount(2, $all);
-        $this->assertInstanceOf(User::class, $all[0]);
+        $this->assertInstanceOf(UserStub::class, $all[0]);
     }
 
     /**
@@ -159,7 +163,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testToArrayAndJsonSerialize(): void
     {
-        $user = new User(['name' => 'Test', 'email' => 'test@test.com', 'status' => 'active']);
+        $user = new UserStub(['name' => 'Test', 'email' => 'test@test.com', 'status' => 'active']);
 
         $array = $user->toArray();
         $this->assertSame('Test', $array['name']);
@@ -175,7 +179,7 @@ class BaseActiveRecordTest extends TestCase
     public function testNewFromBuilderHydratesCorrectly(): void
     {
         $row = ['id' => 42, 'name' => 'Hydrated', 'email' => 'h@test.com', 'status' => 'active'];
-        $user = User::newFromBuilder($row);
+        $user = UserStub::newFromBuilder($row);
 
         $this->assertSame(42, $user->id);
         $this->assertSame('Hydrated', $user->name);
@@ -191,7 +195,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testIssetAndUnsetMagicMethods(): void
     {
-        $user = new User(['name' => 'Test', 'email' => 'test@test.com']);
+        $user = new UserStub(['name' => 'Test', 'email' => 'test@test.com']);
 
         $this->assertTrue(isset($user->name));
         $this->assertFalse(isset($user->nonexistent));
@@ -206,7 +210,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testGetReturnsNullForNonExistentAttribute(): void
     {
-        $user = new User();
+        $user = new UserStub();
         $this->assertNull($user->nonexistent_field);
     }
 
@@ -215,7 +219,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testFillWithEmptyArrayIsNoop(): void
     {
-        $user = new User(['name' => 'Test']);
+        $user = new UserStub(['name' => 'Test']);
         $user->fill([]);
 
         $this->assertSame('Test', $user->name);
@@ -226,7 +230,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testCustomPrimaryKeyViaSubclass(): void
     {
-        $model = new class extends User {
+        $model = new class extends UserStub {
             protected string $primaryKey = 'user_id';
         };
 
@@ -266,7 +270,7 @@ class BaseActiveRecordTest extends TestCase
         $reflection->setStaticPropertyValue('dbConnection', null);
 
         try {
-            User::getConnection();
+            UserStub::getConnection();
             $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('No database connection set', $e->getMessage());
@@ -283,7 +287,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testCreateReturnsPersistedModelWithId(): void
     {
-        $user = User::create(['name' => 'Created', 'email' => 'created@test.com', 'status' => 'active']);
+        $user = UserStub::create(['name' => 'Created', 'email' => 'created@test.com', 'status' => 'active']);
 
         $this->assertGreaterThan(0, $user->id);
         $this->assertSame('Created', $user->name);
@@ -297,7 +301,7 @@ class BaseActiveRecordTest extends TestCase
      */
     public function testQueryReturnsActiveQuery(): void
     {
-        $query = User::query();
+        $query = UserStub::query();
         $this->assertInstanceOf(\Phue\Core\Database\ActiveRecord\ActiveQuery::class, $query);
     }
 }

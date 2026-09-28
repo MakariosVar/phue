@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Phue\Tests\Schii\Generator;
+namespace Phue\Tests\Schii\Controller;
 
 use Phue\Core\Application;
 use Phue\Core\Request;
