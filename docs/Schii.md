@@ -307,7 +307,8 @@ visitor is redirected to `/login` (302) instead of rendering the console. The
 console page (`src/Modules/Schii/Frontend/Schii.phue`) is a **Vue 3 no-build
 app**:
 
-- Boots from `/assets/vendor/vue3/vue.esm-browser.js` and reads
+- Resolves `vue` through the shell's import map, which points at the production
+  build (`/assets/vendor/vue3/vue.runtime.esm-browser.prod.js`), and reads
   `window.__INITIAL_STATE__`.
 - On mount it queries `GET {apiPrefix}/schema` — **server-authoritative entity
   discovery**: the page carries no hardcoded entity list.

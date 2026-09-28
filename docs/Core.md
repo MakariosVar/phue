@@ -39,7 +39,7 @@ on top of these primitives.
 | `HealthChecker` | `Health/HealthChecker.php` | DB / Redis / memory / disk probes for K8s & ALB |
 | `HealthController` | `Health/HealthController.php` | Auto-registered health endpoint |
 | `ComponentRenderer` | `UI/ComponentRenderer.php` | HTML-first rendering lifecycle: component → layout → shell |
-| `HtmlShellRenderer` | `Asset/HtmlShellRenderer.php` | Outer HTML5 shell with styles, scripts, state |
+| `HtmlShellRenderer` | `Asset/HtmlShellRenderer.php` | Outer HTML5 shell with styles, scripts, font preloads, import map, module preloads, state |
 | `AssetRegistry` | `Asset/AssetRegistry.php` | Asset registration + request-scoped lazy styles/scripts |
 | `ComponentLoaderRegistry` | `Frontend/ComponentLoaderRegistry.php` | Composite, fail-safe `.phue` component resolution |
 | `PhueComponentLoader` | `UI/PhueComponentLoader.php` | Loads & caches `.phue` components from a directory |
@@ -91,7 +91,7 @@ The constructor does, in order:
 | `SsrEngine` (alias `ssr.engine`) | singleton | `BunSsrEngine` when `ssr.enabled`, else `NullSsrEngine` |
 | `ComponentLoaderRegistry` | singleton | Composite loader — priority: App/Frontend → PhUI |
 | `ComponentDiscoverer`, `PhuePartialRenderer`, `ComponentRenderer` | singleton | Rendering pipeline |
-| `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts) |
+| `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts, font preloads) |
 
 ### Database connection is a singleton
 
@@ -122,20 +122,49 @@ Two global middlewares are registered by default, in this order:
 
 ### 2.2.1 AssetRegistry: Request-Scoped Styles & Scripts
 
-The `AssetRegistry` manages two pools for both scripts and styles:
+The `AssetRegistry` manages three pools — two for scripts/styles, one for font preloads:
 
 | Pool | Behavior | Cleared by `beginRequest()` |
 |------|----------|-----------------------------|
-| **Global** | `addStyle($url)`, `addGlobalScript($url, $isModule)` — registered once, survives across requests | No |
+| **Global** | `addStyle($url)`, `addGlobalScript($url, $isModule, $defer)` — registered once, survives across requests | No |
 | **Request** | `addRequestStyle($url)`, `addRequestScript($url, $isModule)` — per-request lazy registration | **Yes** |
+| **Fonts** | `addFont($url)` — preload hints, survive across requests | No |
 
-`Application::handle()` calls `AssetRegistry::beginRequest()` at the start of every request, so request-scoped assets from a previous page never leak into the next one (critical for Swoole/RoadRunner persistent processes).
+`Application::handle()` calls `AssetRegistry::beginRequest()` at the start of every request, so request-scoped assets from a previous page never leak into the next one (critical for Swoole/RoadRunner persistent processes). `beginRequest()` clears **only** `requestScripts` + `requestStyles` — the styles/scripts/font pools are process-lifetime, so anything added per-request into them leaks for the whole worker. Register them during bootstrap.
 
-**Deduplication:** `addRequestStyle($url)` silently skips if the URL already exists in **either** the global or request pool. This prevents duplicate `<link>` tags when multiple components declare the same stylesheet.
+**Deduplication:** `addRequestStyle($url)` silently skips if the URL already exists in **either** the global or request pool. This prevents duplicate `<link>` tags when multiple components declare the same stylesheet. `addFont()` dedupes on the full URL, **query string included**.
 
-**Rendering:** `HtmlShellRenderer` calls `AssetRegistry::getStyles()` (global + request merged) and emits `<link rel="stylesheet" href="...">` tags in the `<head>`.
+**Rendering:** `HtmlShellRenderer` calls `AssetRegistry::getStyles()` (global + request merged) and emits `<link rel="stylesheet" href="...">` tags in the `<head>`. Global scripts carry `type="module"` when `$isModule` and `defer` when `$defer`; `getFonts()` emits `<link rel="preload" as="font" type="font/woff2" crossorigin>` in the `<head>`. Both attributes are emitted independently, but `defer` is a no-op on a `type="module"` script — module scripts are deferred by definition, so `$defer` only matters for classic scripts.
 
-### 2.2.2 View Styles Metadata (`'styles'` in `.phue` `<php>` block)
+> **Preload URLs must be byte-identical to the ones the CSS requests.** A font preload is keyed by its full URL. If a stylesheet asks for `fonts/x.woff2?e34853135f9e39acf64315236852cd5a` and you preload the bare path, the browser treats them as two different cache keys and downloads the font **twice** — with no error, no 404, and no audit warning. The only symptom is a duplicated entry in the network waterfall. When a vendor upgrade changes the cache-busting hash, the preload silently stops doing anything.
+
+### 2.2.2 HTML Shell `<head>` Layout & Module Preloads
+
+`HtmlShellRenderer::render()` assembles the document in this fixed order:
+
+```
+<head>
+  meta / title
+  font preloads          (AssetRegistry::getFonts())
+  import map             (<script type="importmap">)
+  module preloads        ($modulePreloads → <link rel="modulepreload" as="script">)
+  theme init script
+  stylesheets            (AssetRegistry::getStyles())
+<body>
+  component markup
+  __INITIAL_STATE__ → __NAV_STATE__ → scripts → inline scripts
+```
+
+The import map and the module preloads are emitted **before** any `<script type="module">` and inside `<head>`, because a bare specifier (`import { ref } from 'vue'`) can only be resolved by a map the browser has already parsed. Moving the import map out of `<body>` is therefore a hard requirement of the no-build architecture, not a cosmetic choice.
+
+**`$modulePreloads`** (`array<string>`) is the transitive dependency graph of the rendered component, resolved by `ComponentRenderer` via `ComponentLoaderRegistry::moduleUrl()` and passed per render — it is *not* a registry pool. Two paths use it:
+
+- **Full page load** → rendered as `<link rel="modulepreload">` in `<head>`.
+- **SPA navigation** → shipped in the JSON payload under the `modulePreload` key; `phue-explorer.js` appends a matching `<link>` per entry before executing the incoming page scripts, so the dependency graph is already in the HTTP cache when the modules are requested. Entries are deduped against existing `link[rel="modulepreload"]` so a re-navigation does not re-add them.
+
+`ImportMapManager` maps `vue` to the **production** build (`vue.runtime.esm-browser.prod.js`). The `__DEV__` branches, devtools hooks and HMR wiring of the dev build are ~31.5 KiB of extra transfer on the critical path for zero runtime value. A stale import map entry puts the browser and the SSR sidecar on different Vue builds, which surfaces as a hydration mismatch rather than an error.
+
+### 2.2.3 View Styles Metadata (`'styles'` in `.phue` `<php>` block)
 
 A `.phue` component (or page) can declare its own stylesheet dependencies in the `<php>` block return array:
 
@@ -156,7 +185,7 @@ return [
 
 > **BC note:** `$styles` was appended as the **last** constructor parameter in `View` (after `$html`), so the pre-styles positional signature `new View($tpl, $state, $scripts, $inlineScript, $html)` remains 100% compatible.
 
-### 2.2.3 `App/Assets/` — User-space asset directory
+### 2.2.4 `App/Assets/` — User-space asset directory
 
 Place your project's CSS/JS in `App/Assets/` (e.g. `App/Assets/styles/main.css`). In `public/index.php`, the source is registered:
 
