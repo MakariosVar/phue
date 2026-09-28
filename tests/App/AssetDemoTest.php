@@ -127,11 +127,86 @@ final class AssetDemoTest extends TestCase
 
     public function testVendorVueModuleIsServed(): void
     {
-        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue3/vue.runtime.esm-browser.js'));
+        // The import map resolves 'vue' to the PRODUCTION build: the dev build
+        // carries the __DEV__ branches, devtools hooks and HMR wiring, which is
+        // 391 KB of source and 31.5 KiB of extra transfer on the critical path.
+        $response = $this->app->handle(new Request('GET', '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js'));
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
         $this->assertStringNotContainsString('Unable to read', $response->getContent());
+    }
+
+    /**
+     * A font preload is keyed by its FULL url, query string included.
+     *
+     * bootstrap-icons.min.css asks for
+     *   fonts/bootstrap-icons.woff2?e34853135f9e39acf64315236852cd5a
+     * so preloading the bare path preloads a DIFFERENT cache key. The browser
+     * then fetches the font twice — 134 KB instead of 67 KB — and reports
+     * nothing wrong. The only symptom is a 2x entry in the network waterfall,
+     * which no audit flags.
+     *
+     * That makes the registration silently wrong the moment a vendor upgrade
+     * changes the cache-busting hash, so the invariant is asserted here rather
+     * than left as a comment. The URL is derived from the stylesheet itself, so
+     * this test fails the day the vendored CSS changes underneath us.
+     */
+    public function testPreloadedFontUrlMatchesTheOneTheStylesheetRequests(): void
+    {
+        $cssPath = '/app/storage/assets/vendor/bootstrap-icons/bootstrap-icons.min.css';
+        $css = (string) file_get_contents($cssPath);
+
+        $this->assertSame(
+            1,
+            preg_match('/url\("(fonts\/bootstrap-icons\.woff2[^"]*)"\)/', $css, $m),
+            'could not read the woff2 url out of the vendored stylesheet'
+        );
+
+        $requested = '/assets/vendor/bootstrap-icons/' . $m[1];
+
+        $registered = $this->app->getContainer()->get(AssetRegistry::class)->getFonts();
+
+        $this->assertContains(
+            $requested,
+            $registered,
+            'the preload href must be byte-identical to the url the stylesheet '
+            . 'requests, otherwise the font is downloaded twice with no error'
+        );
+    }
+
+    public function testPreloadedFontIsActuallyServed(): void
+    {
+        $fonts = $this->app->getContainer()->get(AssetRegistry::class)->getFonts();
+
+        $this->assertNotEmpty($fonts, 'the icon font should be registered for preload');
+
+        foreach ($fonts as $font) {
+            $path = parse_url($font, PHP_URL_PATH);
+            $this->assertIsString($path);
+
+            $response = $this->app->handle(new Request('GET', (string) $path));
+
+            $this->assertSame(
+                200,
+                $response->getStatusCode(),
+                "preloaded font {$font} is not served — the preload would 404 and the browser would download it twice anyway"
+            );
+        }
+    }
+
+    public function testImportMapPointsVueAtTheProductionBuild(): void
+    {
+        // Guards the switch: a stale import map entry silently puts the browser
+        // and the SSR sidecar on different Vue builds, which shows up as a
+        // hydration mismatch rather than an error.
+        $body = $this->app->handle(new Request('GET', '/'))->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '#"vue"\s*:\s*"[^"]*vue3/vue\.runtime\.esm-browser\.prod\.js"#',
+            $body,
+            'the import map must map "vue" to the production build'
+        );
     }
 
     public function testAppSourceIsNotReachableUnderVendorPrefix(): void
