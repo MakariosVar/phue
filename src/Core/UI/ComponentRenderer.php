@@ -236,6 +236,17 @@ class ComponentRenderer
             'themeConfig' => $this->themeConfig
         ];
 
+        // 1β: Generate modulepreload URLs for the full dependency graph
+        $modulePreloads = [];
+        if ($this->loaderRegistry !== null && !empty($deps)) {
+            foreach (array_keys($deps) as $depName) {
+                $url = $this->loaderRegistry->moduleUrl($depName);
+                if ($url !== null) {
+                    $modulePreloads[] = $url;
+                }
+            }
+        }
+
         if ($isSpaRequest) {
             $requestScripts = $this->assetRegistry->getRequestScripts();
             $flatScriptUrls = array_map(
@@ -249,6 +260,7 @@ class ComponentRenderer
                 'state'    => $view->getState(),
                 'scripts'  => array_values(array_filter($flatScriptUrls)),
                 'navState' => $navState,
+                'modulePreload' => $modulePreloads
             ]);
         }
 
@@ -271,16 +283,7 @@ JS,
             addslashes($defaultTheme)
         );
 
-        // 1β: Generate modulepreload URLs for the full dependency graph
-        $modulePreloads = [];
-        if ($this->loaderRegistry !== null && !empty($deps)) {
-            foreach (array_keys($deps) as $depName) {
-                $url = $this->loaderRegistry->moduleUrl($depName);
-                if ($url !== null) {
-                    $modulePreloads[] = $url;
-                }
-            }
-        }
+        
 
         $html = $this->shellRenderer->render(
             title: $title,

@@ -65,6 +65,7 @@
    * Initial page mount handler for full page loads
    */
   document.addEventListener('DOMContentLoaded', () => {
+    if(document.getElementById('app')?.__vue_app__) return;
     const scripts = document.querySelectorAll('script[type="module"][src*="/assets/phue/"]');
     scripts.forEach((script) => {
       const src = script.getAttribute('src');
@@ -128,6 +129,13 @@
 
       // 6. Execute newly loaded page script modules
       if (Array.isArray(payload.scripts)) {
+        (payload.modulePreload || []).forEach((url) => {
+          if (document.querySelector(`link[rel="modulepreload"][href="${url}"]`)) return;
+          const l = document.createElement('link');
+          l.rel = 'modulepreload';
+          l.href = url;
+          document.head.appendChild(l);
+        });
         for (const scriptUrl of payload.scripts) {
           // Stop execution if navigation was aborted mid-script loading
           if (controller.signal.aborted) return;
