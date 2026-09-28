@@ -188,7 +188,22 @@ class ApplicationTest extends TestCase
         // Test dot-notation get & has
         $this->assertTrue($config->has('app.name'));
         $this->assertEquals('Phue App', $config->get('app.name'));
-        $this->assertTrue($config->get('app.debug'));
+
+        // Assert the TYPE of app.debug, never its value. The value is resolved
+        // from APP_DEBUG in the developer's .env, and this test boots the real
+        // application base path — so asserting "true" here means the test
+        // passes on a machine with debug on and fails on one with debug off.
+        // That is not a test of Config; it is a test of someone's shell.
+        //
+        // What the dot-notation contract actually promises is that a nested key
+        // resolves to the value the config file declared, whatever that value
+        // happens to be in this environment.
+        $this->assertIsBool($config->get('app.debug'));
+        $this->assertSame(
+            $config->get('app.debug'),
+            $config->get('app')['debug'] ?? null,
+            'app.debug and app[debug] must resolve identically.'
+        );
 
         // The default connection is environment-driven (.env), so assert it
         // resolves to a declared connection rather than a hardcoded driver.

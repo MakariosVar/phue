@@ -127,8 +127,89 @@ class RouteParameterBindingTest extends TestCase
         $body = json_decode($response->getContent(), true);
 
         $this->assertSame(400, $response->getStatusCode());
-        $this->assertStringContainsString("must be an integer", $body['error'] ?? '');
+        $this->assertSame('Bad Request', $body['error'] ?? null);
         $this->assertSame('nosniff', $response->getHeader('X-Content-Type-Options'));
         $this->assertSame('SAMEORIGIN', $response->getHeader('X-Frame-Options'));
+    }
+
+    /**
+     * The 400 body must not carry the binding failure's message in production.
+     *
+     * This used to assert the opposite — that "must be an integer" IS in the
+     * response — which only held because the developer's .env had APP_DEBUG=true.
+     * Asserting a debug-only leak as if it were the contract is worse than not
+     * testing it: it makes the suite unrunnable with debug off, and it names the
+     * dangerous behaviour as the expected one.
+     *
+     * Application::handle() returns 'Bad Request' unless debug is on, so the
+     * security property to pin is the ABSENCE of the internal message.
+     */
+    public function testInvalidIntegerErrorDoesNotLeakInternalMessageInProduction(): void
+    {
+        $this->app->getRouter()->get('/binding/leak/{id}', function (int $id): Response {
+            return Response::json(['id' => $id]);
+        });
+
+        $response = $this->app->handle(
+            new Request('GET', '/binding/leak/abc', [], [], ['Accept' => 'application/json'])
+        );
+        $body = json_decode($response->getContent(), true);
+
+        $this->assertFalse(
+            $this->app->getConfig()->get('app.debug'),
+            'This test asserts the production error path. It is meaningless with APP_DEBUG=true; '
+            . 'see testInvalidIntegerMessageIsVerboseOnlyInDebug().'
+        );
+
+        $this->assertStringNotContainsString('must be an integer', (string) ($body['error'] ?? ''));
+        $this->assertStringNotContainsString('binding/leak', (string) ($body['error'] ?? ''));
+        $this->assertStringNotContainsString('/app', (string) ($body['error'] ?? ''));
+    }
+
+    /**
+     * In debug the message is intentionally verbose, so developers can see which
+     * parameter failed. This pins that as an explicit, opt-in behaviour rather
+     * than an accident of the developer's environment.
+     */
+    public function testInvalidIntegerMessageIsVerboseOnlyInDebug(): void
+    {
+        $this->withDebug(true, function (): void {
+            $this->app->getRouter()->get('/binding/verbose/{id}', function (int $id): Response {
+                return Response::json(['id' => $id]);
+            });
+
+            $response = $this->app->handle(
+                new Request('GET', '/binding/verbose/abc', [], [], ['Accept' => 'application/json'])
+            );
+            $body = json_decode($response->getContent(), true);
+
+            $this->assertSame(400, $response->getStatusCode());
+            $this->assertStringContainsString('must be an integer', (string) ($body['error'] ?? ''));
+        });
+    }
+
+    /**
+     * Runs a callback with Application::$debug forced to a value.
+     *
+     * Application reads app.debug once, in the constructor, and Env::load() is
+     * guarded by a static $loaded flag — so a test cannot get a debug-mode and a
+     * production-mode Application out of the same process by pointing at a
+     * different base path. Reflection is the only handle available.
+     *
+     * That limitation is itself worth fixing in the source; until then this is
+     * the honest way to test both branches.
+     */
+    private function withDebug(bool $debug, callable $callback): void
+    {
+        $property = new \ReflectionProperty(Application::class, 'debug');
+        $original = $property->getValue($this->app);
+
+        $property->setValue($this->app, $debug);
+
+        try {
+            $callback();
+        } finally {
+            $property->setValue($this->app, $original);
+        }
     }
 }
