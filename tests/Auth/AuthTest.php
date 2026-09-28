@@ -81,6 +81,15 @@ class AuthTest extends TestCase
         $this->assertFalse($rbac->checkAccess(10, 'system.root'));
     }
 
+    /**
+     * Unit-level check of the middleware's own branching.
+     *
+     * The framework-level contract — that this middleware is reachable through
+     * Application's pipeline at all — lives in AccessControlMiddlewareWiringTest.
+     * That split is deliberate: this test calls the method directly and so would
+     * pass even if the class were impossible to register, which is exactly how
+     * a missing __invoke() survived in the first place.
+     */
     public function testAccessControlMiddlewareEnforcesPermissions(): void
     {
         $rbac = new RbacManager();
@@ -101,16 +110,39 @@ class AuthTest extends TestCase
         $next = fn(Request $req) => Response::json(['status' => 'ok'], 200);
 
         // 1. Unauthenticated Request -> 401
-        $res401 = $unauthMiddleware->handle($request, $next);
+        $res401 = ($unauthMiddleware)($request, $next);
         $this->assertEquals(401, $res401->getStatusCode());
 
         // 2. Insufficient Permission -> 403
-        $res403 = $forbiddenMiddleware->handle($request, $next);
+        $res403 = ($forbiddenMiddleware)($request, $next);
         $this->assertEquals(403, $res403->getStatusCode());
 
         // 3. Authorized Request -> 200
-        $res200 = $middleware->handle($request, $next);
+        $res200 = ($middleware)($request, $next);
         $this->assertEquals(200, $res200->getStatusCode());
+    }
+
+    /**
+     * The middleware must be invokable, because that is the only shape
+     * Application's pipeline knows how to call.
+     */
+    public function testAccessControlMiddlewareIsInvokable(): void
+    {
+        $middleware = new AccessControlMiddleware(
+            new AuthManager([]),
+            new RbacManager(),
+            'profile.view'
+        );
+
+        $this->assertTrue(
+            is_callable($middleware),
+            'AccessControlMiddleware must satisfy `callable|string` so use() accepts it.'
+        );
+        $this->assertTrue(
+            method_exists($middleware, '__invoke'),
+            'Application resolves invokable objects with ReflectionMethod($h, "__invoke") '
+            . 'and has no catch on that path — a missing __invoke() is an uncaught ReflectionException.'
+        );
     }
 
     // --- AuthManager Extended Tests ---
