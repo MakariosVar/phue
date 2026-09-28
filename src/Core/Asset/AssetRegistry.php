@@ -25,9 +25,12 @@ class AssetRegistry
      *
      * These scripts are rendered for every HTML shell produced by the registry.
      *
-     * @var array<int, array{url: string, isModule: bool}>
+     * @var array<int, array{url: string, isModule: bool, defer?: bool}>
      */
     private array $globalScripts = [];
+
+    /** @var array<string> Font URLs to preload */
+    private array $fonts = [];
 
     /**
      * JavaScript specifications registered for the current request.
@@ -162,9 +165,10 @@ class AssetRegistry
      *
      * @param string $url
      * @param bool $isModule Set to true if the script should be rendered with type="module"
+     * @param bool $defer Set to true if the script should be rendered with defer
      * @return self
      */
-    public function addGlobalScript(string $url, bool $isModule = false): self
+    public function addGlobalScript(string $url, bool $isModule = false, bool $defer = false): self
     {
         foreach ($this->globalScripts as $script) {
             if ($script['url'] === $url) {
@@ -175,9 +179,35 @@ class AssetRegistry
         $this->globalScripts[] = [
             'url' => $url,
             'isModule' => $isModule,
+            'defer' => $defer,
         ];
 
         return $this;
+    }
+
+    /**
+     * Add a font URL to the HTML rendering queue.
+     *
+     * @param string $url
+     * @return self
+     */
+    public function addFont(string $url): self
+    {
+        if (!in_array($url, $this->fonts, true)) {
+            $this->fonts[] = $url;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Get the list of font URLs to preload.
+     *
+     * @return array<string>
+     */
+    public function getFonts(): array
+    {
+        return $this->fonts;
     }
 
     /**
@@ -220,6 +250,7 @@ class AssetRegistry
     /**
      * Resolve a requested URI to a physical file path if it matches a registered source prefix.
      * Protects against Path Traversal (including Sibling Dir Exploits) & Null Byte ValueErrors.
+     * Performs fallback search for unhashed font requests (Option A).
      *
      * @param string $uri
      * @return string|null Resolved real absolute path or null if not found
@@ -241,15 +272,38 @@ class AssetRegistry
                     $realTarget = realpath($targetPath);
                     $realBase = realpath($baseDir);
 
-                    if ($realTarget === false || $realBase === false) {
+                    if ($realBase === false) {
                         continue;
                     }
 
-                    $isExactMatch = ($realTarget === $realBase);
-                    $isUnderneath = str_starts_with($realTarget, $realBase . DIRECTORY_SEPARATOR);
+                    if ($realTarget !== false) {
+                        $isExactMatch = ($realTarget === $realBase);
+                        $isUnderneath = str_starts_with($realTarget, $realBase . DIRECTORY_SEPARATOR);
 
-                    if (($isExactMatch || $isUnderneath) && is_file($realTarget)) {
-                        return $realTarget;
+                        if (($isExactMatch || $isUnderneath) && is_file($realTarget)) {
+                            return $realTarget;
+                        }
+                    }
+
+                    // Option A: Dynamic fallback resolution for unhashed font files in vendor directories
+                    $extension = pathinfo($relativePath, PATHINFO_EXTENSION);
+                    if (in_array(strtolower($extension), ['woff2', 'woff', 'ttf', 'eot'], true)) {
+                        $dirName = dirname($targetPath);
+                        $fileName = pathinfo($relativePath, PATHINFO_FILENAME);
+
+                        if (is_dir($dirName)) {
+                            $candidates = glob($dirName . DIRECTORY_SEPARATOR . $fileName . '*.' . $extension);
+                            if (!empty($candidates)) {
+                                $candidateTarget = realpath($candidates[0]);
+                                if (
+                                    $candidateTarget !== false &&
+                                    str_starts_with($candidateTarget, $realBase . DIRECTORY_SEPARATOR) &&
+                                    is_file($candidateTarget)
+                                ) {
+                                    return $candidateTarget;
+                                }
+                            }
+                        }
                     }
                 } catch (ValueError) {
                     return null;

@@ -31,7 +31,7 @@ class ImportMapManager
     public function getImportMap(): array
     {
         $imports = [
-            'vue' => '/assets/vendor/vue3/vue.runtime.esm-browser.js',
+            'vue' => '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js',
         ];
 
         if (!file_exists($this->manifestPath)) {

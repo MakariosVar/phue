@@ -37,6 +37,7 @@ class HtmlShellRenderer
      * @param string|null $headScript Script to inject at the top of <head>.
      * @param array $navState State object for PhNavigation injected into window.__NAV_STATE__.
      * @param string|null $metaDescription Meta description for the page.
+     * @param array<int, string> $modulePreloads Array of module URLs to generate <link rel="modulepreload"> tags.
      * @return string Complete HTML document markup.
      */
     public function render(
@@ -48,11 +49,27 @@ class HtmlShellRenderer
         bool $wrapInAppContainer = true,
         ?string $headScript = null,
         array $navState = [],
-        ?string $metaDescription = null
+        ?string $metaDescription = null,
+        array $modulePreloads = []
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
         $safeMetaDescription = $this->escape($metaDescription ?? '');
+
+        $modulePreloadMarkup = implode(
+            "\n    ",
+            array_map(
+                fn(string $url) => sprintf(
+                    '<link rel="modulepreload" as="script" href="%s">',
+                    $this->escape($url)
+                ),
+                array_values(array_unique(array_filter($modulePreloads)))
+            )
+        );
+
+        if ($modulePreloadMarkup !== '') {
+            $modulePreloadMarkup .= "\n    ";
+        }
 
         $headScriptMarkup =
             $headScript !== null && trim($headScript) !== ""
@@ -82,10 +99,22 @@ class HtmlShellRenderer
             array_map(
                 function (array $script): string {
                     $safeUrl = $this->escape($script['url']);
-                    $typeAttr = $script['isModule'] ? ' type="module"' : '';
-                    return sprintf('<script%s src="%s"></script>', $typeAttr, $safeUrl);
+                    $typeAttr = ($script['isModule'] ?? false) ? ' type="module"' : '';
+                    $deferAttr = ($script['defer'] ?? false) ? ' defer' : '';
+                    return sprintf('<script%s%s src="%s"></script>', $typeAttr, $deferAttr, $safeUrl);
                 },
                 $this->registry->getScripts()
+            )
+        );
+
+        $fontsMarkup = implode(
+            "\n    ",
+            array_map(
+                fn(string $url) => sprintf(
+                    '<link rel="preload" href="%s" as="font" type="font/woff2" crossorigin>',
+                    $this->escape($url)
+                ),
+                $this->registry->getFonts()
             )
         );
 
@@ -132,11 +161,11 @@ class HtmlShellRenderer
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta name="description" content="{$safeMetaDescription}">
             <title>{$safeTitle}</title>
-            {$headScriptMarkup}{$combinedStyles}
+            {$fontsMarkup}
+            {$importMapMarkup}{$modulePreloadMarkup}{$headScriptMarkup}{$combinedStyles}
         </head>
         <body>
             {$bodyContent}
-            {$importMapMarkup}
             {$stateMarkup}{$navStateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
         </html>
         HTML;

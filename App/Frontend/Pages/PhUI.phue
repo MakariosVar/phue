@@ -133,7 +133,7 @@ return [
                         }"
                         :aria-current="activeSection === nav.id ? 'true' : null"
                         :aria-expanded="expandedSections[nav.id] ? 'true' : 'false'"
-                        @click.stop="toggleSection(nav.id)"
+                        @click.stop="expandedSections[nav.id] ? toggleSection(nav.id) : scrollTo(nav.id)"
                     >
                         <span style="flex: 1;">{{ nav.label }}</span>
                         <span
@@ -177,7 +177,6 @@ return [
             ref="mainEl"
             class="flex-grow-1 p-4 overflow-y-auto"
             style="min-width: 0; min-height: 0;"
-            @scroll.passive="requestSpySync"
         >
             <div ref="contentEl">
                 <!-- Overview -->
@@ -382,19 +381,36 @@ export default function mountApp(injectedContext = null) {
                 return ids;
             });
 
-            let elementCache = null;
+            // --- OPTIMIZED SPY CACHE (Eliminates Layout Thrashing) ---
+            let targetsCache = null;
+
             function invalidateElementCache() {
-                elementCache = null;
+                targetsCache = null;
             }
 
-            function targetElements() {
-                if (elementCache === null) {
-                    elementCache = new Map();
+            /**
+             * Batches all DOM reads in a single layout pass to prevent reflow during scrolling.
+             */
+            function getTargetPositions() {
+                const main = mainEl.value;
+                if (!main) return [];
+
+                if (targetsCache === null) {
+                    const mainTop = main.getBoundingClientRect().top;
+                    const mainScrollTop = main.scrollTop;
+                    const list = [];
+
+                    // Single BATCH DOM READ pass
                     for (const id of orderedSpyIds.value) {
-                        elementCache.set(id, document.getElementById(id));
+                        const el = document.getElementById(id);
+                        if (el) {
+                            const relativeTop = el.getBoundingClientRect().top - mainTop + mainScrollTop;
+                            list.push({ id, top: relativeTop });
+                        }
                     }
+                    targetsCache = list;
                 }
-                return elementCache;
+                return targetsCache;
             }
 
             /** Returns the nav group id owning the given target id, or null. */
@@ -411,7 +427,7 @@ export default function mountApp(injectedContext = null) {
              * sub-navlist always shows the entry the reader is currently looking at.
              */
             function setActiveSection(id, expand = true) {
-                if (!id) return;
+                if (!id || state.activeSection === id) return;
                 state.activeSection = id;
                 if (!expand) return;
                 const group = parentGroupOf(id);
@@ -452,51 +468,94 @@ export default function mountApp(injectedContext = null) {
             }
 
             /**
-             * Scroll spy: the active target is the last one whose top has crossed the
-             * activation line. Because orderedSpyIds follows document order, the first
-             * target still below that line ends the scan.
+             * Scroll spy driven by IntersectionObserver, with no scroll handler.
+             *
+             * The old version read main.scrollTop / clientHeight / scrollHeight on
+             * every scroll frame, right after setActiveSection had mutated a class
+             * and invalidated layout — so each frame forced a synchronous reflow
+             * (Lighthouse: 84 ms of forced reflow in this module alone).
+             *
+             * The observer is used ONLY as a change trigger. It fires when a
+             * target crosses the activation line — rootMargin insets the root by
+             * SPY_ACTIVATION_OFFSET, so "isIntersecting" literally means "this
+             * target has reached the line" — and inside that callback the layout
+             * is already clean, so the batched position read below is free.
+             *
+             * A previous attempt cached each target's top from the entry itself
+             * and compared those values. That was wrong twice over: entries only
+             * arrive for targets whose intersection CHANGED, so a tall section
+             * kept the top it had when it entered, and the whole map stayed empty
+             * until the first callback. Positions come from getTargetPositions(),
+             * the same source the proven scroll path used, with the cache dropped
+             * before each read so it can never be stale.
+             */
+            let spyObserver = null;
+
+            function observeSpyTargets() {
+                spyObserver?.disconnect();
+                spyObserver = null;
+
+                const main = mainEl.value;
+                if (!main || typeof IntersectionObserver === 'undefined') return;
+
+                spyObserver = new IntersectionObserver(() => {
+                    invalidateElementCache();
+                    syncActiveFromScroll();
+                }, {
+                    root: main,
+                    rootMargin: `-${SPY_ACTIVATION_OFFSET}px 0px 0px 0px`,
+                    threshold: 0
+                });
+
+                for (const id of orderedSpyIds.value) {
+                    const el = document.getElementById(id);
+                    if (el) spyObserver.observe(el);
+                }
+
+                invalidateElementCache();
+                syncActiveFromScroll();
+            }
+
+            /**
+             * Picks the target the reader is on, from the cached positions.
+             * Identical rules to the original scroll handler: at the bottom of the
+             * scroller the last target wins, otherwise the last one whose top has
+             * passed the activation line.
              */
             function syncActiveFromScroll() {
                 const main = mainEl.value;
                 if (!main) return;
-                const ids = orderedSpyIds.value;
-                if (!ids.length) return;
 
-                const elements = targetElements();
-                const activationLine = main.getBoundingClientRect().top + SPY_ACTIVATION_OFFSET;
-                const atBottom = main.scrollTop + main.clientHeight >= main.scrollHeight - 2;
+                const positions = getTargetPositions();
+                if (!positions.length) return;
+
+                const scrollTop = main.scrollTop;
+                const atBottom = scrollTop + main.clientHeight >= main.scrollHeight - 2;
 
                 let current = null;
-                let firstExisting = null;
-
-                for (const id of ids) {
-                    const el = elements.get(id);
-                    if (!el) continue;
-                    if (firstExisting === null) firstExisting = id;
-                    if (el.getBoundingClientRect().top <= activationLine) {
-                        current = id;
-                        continue;
-                    }
-                    break;
-                }
 
                 if (atBottom) {
-                    for (let i = ids.length - 1; i >= 0; i--) {
-                        if (elements.get(ids[i])) {
-                            current = ids[i];
+                    current = positions[positions.length - 1].id;
+                } else {
+                    for (const item of positions) {
+                        if (item.top <= scrollTop + SPY_ACTIVATION_OFFSET) {
+                            current = item.id;
+                        } else {
                             break;
                         }
                     }
                 }
 
-                setActiveSection(current || firstExisting);
+                setActiveSection(current || positions[0].id);
             }
 
+            /** Fallback for engines without IntersectionObserver: poll on scroll. */
             let spyFrame = 0;
             function requestSpySync() {
-                if (spyFrame) return;
+                if (spyFrame || spyObserver) return;
                 spyFrame = requestAnimationFrame(() => {
                     spyFrame = 0;
+                    invalidateElementCache();
                     syncActiveFromScroll();
                 });
             }
@@ -516,7 +575,14 @@ export default function mountApp(injectedContext = null) {
             function onResize() {
                 invalidateElementCache();
                 measureShell();
-                requestSpySync();
+                if (spyObserver) {
+                    // Positions are relative to the scroller's scrollTop, so a
+                    // resize invalidates them; the observer re-fires on layout.
+                    invalidateElementCache();
+                    syncActiveFromScroll();
+                } else {
+                    requestSpySync();
+                }
             }
 
             function syncExpandedSections() {
@@ -573,6 +639,7 @@ export default function mountApp(injectedContext = null) {
                     // We MUST wait until after mount to populate data, or Vue will throw a mismatch!
                     onMounted(() => {
                         hydrateNavData();
+                        nextTick(() => observeSpyTargets());
                     });
                 }
             }
@@ -580,6 +647,11 @@ export default function mountApp(injectedContext = null) {
             watch(() => state.searchQuery, () => {
                 invalidateElementCache();
                 syncExpandedSections();
+            });
+
+            watch(() => state.navItems.length, () => {
+                invalidateElementCache();
+                nextTick(() => observeSpyTargets());
             });
 
             let topbarObserver = null;
@@ -600,17 +672,18 @@ export default function mountApp(injectedContext = null) {
                 if (contentEl.value && typeof ResizeObserver !== 'undefined') {
                     contentObserver = new ResizeObserver(() => {
                         invalidateElementCache();
-                        requestSpySync();
+                        if (spyObserver) syncActiveFromScroll();
+                        else requestSpySync();
                     });
                     contentObserver.observe(contentEl.value);
                 }
+
+                observeSpyTargets();
 
                 const hash = window.location.hash.replace(/^#/, '');
                 if (hash && document.getElementById(hash)) {
                     setActiveSection(hash);
                     nextTick(() => scrollTargetIntoView(hash));
-                } else {
-                    requestSpySync();
                 }
             });
 
@@ -618,6 +691,7 @@ export default function mountApp(injectedContext = null) {
                 window.removeEventListener('resize', onResize);
                 topbarObserver?.disconnect();
                 contentObserver?.disconnect();
+                spyObserver?.disconnect();
                 if (spyFrame) cancelAnimationFrame(spyFrame);
             });
 
@@ -630,8 +704,7 @@ export default function mountApp(injectedContext = null) {
                 filteredNavItems,
                 expandedSections,
                 toggleSection,
-                scrollTo,
-                requestSpySync
+                scrollTo
             };
         }
     });

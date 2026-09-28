@@ -346,9 +346,10 @@ class Application
             // Register global default assets directly onto AssetRegistry
             $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
             $registry->addStyle('/assets/vendor/bootstrap-icons/bootstrap-icons.min.css');
+            $registry->addFont('/assets/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2?e34853135f9e39acf64315236852cd5a');
 
             // Register Bootstrap JS bundle globally for interactive elements (Dropdowns, Modals, Tooltips)
-            $registry->addGlobalScript('/assets/vendor/bootstrap/bootstrap.bundle.min.js');
+            $registry->addGlobalScript('/assets/vendor/bootstrap/bootstrap.bundle.min.js', false, true);
 
             // Fix Trap A: Add phue-explorer.js as a global script so it survives beginRequest() reset
             $registry->addGlobalScript('/assets/js/phue-explorer.js', isModule: true);

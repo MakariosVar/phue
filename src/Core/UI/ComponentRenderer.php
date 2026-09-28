@@ -36,6 +36,7 @@ class ComponentRenderer
      * @param SsrEngine|null $ssrEngine Optional Vue SSR engine.
      * @param ComponentLoaderRegistry|null $loaderRegistry Optional loader registry.
      * @param array $themeConfig Theme configuration options.
+     * @param array $metaConfig Meta tags configuration options.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -152,13 +153,18 @@ class ComponentRenderer
     {
         $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
 
+        // 1a: Compute transitive dependency graph upfront for both SSR and Client modulepreloads
+        $deps = [];
+        if ($this->loaderRegistry !== null && $componentName !== null) {
+            $discoverer = new ComponentDiscoverer($this->loaderRegistry);
+            $deps = $discoverer->resolveTransitiveDependencies($componentName);
+        }
+
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
             $state = $view->getState();
             $context = ['name' => $title, 'uri' => $uri];
 
-            if ($this->loaderRegistry !== null && $componentName !== null) {
-                $discoverer = new ComponentDiscoverer($this->loaderRegistry);
-                $deps = $discoverer->resolveTransitiveDependencies($componentName);
+            if (!empty($deps)) {
                 $components = [];
 
                 foreach ($deps as $depName => $depHash) {
@@ -265,6 +271,17 @@ JS,
             addslashes($defaultTheme)
         );
 
+        // 1β: Generate modulepreload URLs for the full dependency graph
+        $modulePreloads = [];
+        if ($this->loaderRegistry !== null && !empty($deps)) {
+            foreach (array_keys($deps) as $depName) {
+                $url = $this->loaderRegistry->moduleUrl($depName);
+                if ($url !== null) {
+                    $modulePreloads[] = $url;
+                }
+            }
+        }
+
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',
@@ -274,7 +291,8 @@ JS,
             wrapInAppContainer: false,
             headScript: $themeInitScript,
             navState: $navState,
-            metaDescription: $this->metaConfig['metaDescription'] ?? null
+            metaDescription: $this->metaConfig['metaDescription'] ?? null,
+            modulePreloads: $modulePreloads
         );
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
