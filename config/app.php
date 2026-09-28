@@ -5,9 +5,10 @@ use function Phue\Core\env;
 return [
     'name'    => env('APP_NAME', 'Phue App'),
     'env'     => env('APP_ENV', 'development'),
-    'debug'   => env('APP_DEBUG', true),
-    'devTool' => env('APP_DEV_TOOL', true),
+    'debug'   => env('APP_DEBUG', false),
+    'devTool' => env('APP_DEV_TOOL', false),
     'trustedProxies' => [],
+    'routeCache' => env('APP_ROUTE_CACHE', false),
     'themeToggle' => [
         'enabled'      => true,
         'storageKey'   => 'phue-theme',

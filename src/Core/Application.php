@@ -135,7 +135,9 @@ class Application
     {
         // Route Caching Integration
         $routeCacheFile = $this->basePath . '/storage/cache/routes.php';
-        $shouldCacheRoutes = (bool) $this->config->get('app.routeCache', !$this->debug);
+
+        // Opt-in route caching: Default is false to be safe and independent of debug state
+        $shouldCacheRoutes = (bool) $this->config->get('app.routeCache', false);
 
         $loader = new AttributeRouteLoader();
         $cachedRoutes = $shouldCacheRoutes ? $loader->loadCached($routeCacheFile) : null;
@@ -549,7 +551,7 @@ class Application
                     if ($conn->inTransaction()) {
                         $conn->rollBack();
                     }
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     // Ignore connection errors during cleanup
                 }
             }

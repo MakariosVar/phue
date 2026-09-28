@@ -23,13 +23,13 @@ final class AccessControlMiddleware
     ) {}
 
     /**
-     * Handles authentication and permission checks natively.
+     * Handles authentication and permission checks natively via invokable interface.
      *
      * @param Request $request
      * @param callable(Request): Response $next
      * @return Response
      */
-    public function handle(Request $request, callable $next): Response
+    public function __invoke(Request $request, callable $next): Response
     {
         $user = $this->auth->getUser();
 
