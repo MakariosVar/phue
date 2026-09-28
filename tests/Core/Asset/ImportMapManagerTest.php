@@ -37,6 +37,50 @@ final class ImportMapManagerTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * Asserts a public asset URL resolves to a real file in the vendor tree.
+     *
+     * These tests used to hardcode "vue.runtime.esm-browser.js", which meant a
+     * rename of the vendored bundle broke three tests in two files while the
+     * framework kept working. A string comparison cannot tell the difference
+     * between "the map names the right file" and "the map names a file that
+     * does not exist" — and the second one is a blank page in production.
+     *
+     * The mapping is the one the server registers: AssetRegistry holds
+     * "/assets/vendor" as a static source prefix, and the directory behind it is
+     * storage/assets/vendor (SwooleServeCommand spells the same path out).
+     * Anything outside that prefix is not resolvable this way, so it is
+     * rejected rather than silently mapped somewhere plausible.
+     */
+    private function assertAssetResolves(string $url): void
+    {
+        $this->assertStringStartsWith(
+            self::VENDOR_URL_PREFIX . '/',
+            $url,
+            sprintf('Only paths under %s are served from the vendor tree.', self::VENDOR_URL_PREFIX)
+        );
+
+        $relative = ltrim(substr($url, strlen(self::VENDOR_URL_PREFIX)), '/');
+        $onDisk = self::vendorRoot() . '/' . $relative;
+
+        $this->assertFileExists(
+            $onDisk,
+            sprintf(
+                'Import map points at %s, which does not exist at %s. Every entry must be a file '
+                . 'the asset server can actually serve, or the browser gets a 404 and a blank page.',
+                $url,
+                $onDisk
+            )
+        );
+    }
+
+    private const VENDOR_URL_PREFIX = '/assets/vendor';
+
+    private static function vendorRoot(): string
+    {
+        return dirname(__DIR__, 3) . '/storage/assets/vendor';
+    }
+
     private function manager(array $manifest): ImportMapManager
     {
         if (file_put_contents(
@@ -53,10 +97,10 @@ final class ImportMapManagerTest extends TestCase
     {
         $manager = new ImportMapManager($this->dir);
 
-        $this->assertSame(
-            ['imports' => ['vue' => '/assets/vendor/vue3/vue.runtime.esm-browser.js']],
-            $manager->getImportMap()
-        );
+        $imports = $manager->getImportMap()['imports'];
+
+        $this->assertSame(['vue'], array_keys($imports), 'Vue is the only default import.');
+        $this->assertAssetResolves($imports['vue']);
     }
 
     public function testMergesInstalledPackagesWithVueCore(): void
@@ -70,9 +114,43 @@ final class ImportMapManagerTest extends TestCase
 
         $imports = $manager->getImportMap()['imports'];
 
-        $this->assertSame('/assets/vendor/vue3/vue.runtime.esm-browser.js', $imports['vue']);
         $this->assertSame('/assets/vendor/chart.js/index.js', $imports['chart.js']);
         $this->assertSame('/assets/vendor/date-fns/index.js', $imports['date-fns']);
+
+        // The Vue core entry is merged in from the manifest path, so it must
+        // survive the merge pointing at a real file.
+        $this->assertArrayHasKey('vue', $imports);
+        $this->assertAssetResolves($imports['vue']);
+    }
+
+    /**
+     * Guards the specific regression that broke this file: the vendored Vue
+     * bundle is renamed as part of a build, and the framework default follows
+     * it. A hardcoded expectation would have caught nothing useful — it only
+     * proves someone remembered to edit three strings.
+     */
+    public function testVueCoreEntryTracksTheVendoredBundleOnDisk(): void
+    {
+        $manager = new ImportMapManager($this->dir);
+        $url = $manager->getImportMap()['imports']['vue'];
+
+        $onDisk = self::vendorRoot() . '/vue3';
+
+        $this->assertDirectoryExists($onDisk, 'The vendored vue3 package is not installed.');
+
+        $bundles = glob($onDisk . '/*.js') ?: [];
+
+        $this->assertCount(
+            1,
+            $bundles,
+            'Expected exactly one vendored Vue bundle, found: ' . implode(', ', $bundles)
+        );
+
+        $this->assertSame(
+            '/assets/vendor/vue3/' . basename($bundles[0]),
+            $url,
+            'The import map default must name the bundle that is actually installed.'
+        );
     }
 
     public function testScopedPackageMapsToScaffoldedVendorPath(): void

@@ -21,18 +21,53 @@ final class VersionLockTest extends TestCase
 {
     private const APP_ROOT = '/app';
 
-    private const MANIFEST = 'storage/assets/vendor/vue3/vue.runtime.esm-browser.js';
+    /** Installed location of the vendored client bundle, relative to APP_ROOT. */
+    private const VENDOR_VUE_DIR = 'storage/assets/vendor/vue3';
 
     private const SIDE_PACKAGE = 'ssr/package.json';
+
+    /**
+     * The vendored Vue ESM bundle, discovered rather than hardcoded.
+     *
+     * The bundle's filename is a build artifact — it changed from
+     * "vue.runtime.esm-browser.js" to "vue.runtime.esm-browser.prod.js" when the
+     * production vendor was adopted, and this test failed on that rename even
+     * though the version lock it exists to protect was untouched.
+     *
+     * Discovery is from the install directory, not from ImportMapManager, so
+     * this stays an independent check rather than a tautology.
+     */
+    private static function vendoredClientBundle(): string
+    {
+        $dir = self::APP_ROOT . '/' . self::VENDOR_VUE_DIR;
+
+        $bundles = glob($dir . '/*.js') ?: [];
+
+        self::assertNotEmpty(
+            $bundles,
+            sprintf('No vendored Vue bundle found in %s. Run the npm install step.', $dir)
+        );
+
+        self::assertCount(
+            1,
+            $bundles,
+            'Expected exactly one vendored Vue ESM bundle, found: ' . implode(', ', $bundles)
+            . '. The SSR version lock reads this file; two bundles make the lock ambiguous.'
+        );
+
+        return $bundles[0];
+    }
 
     /**
      * @return string The 3.x.y version declared by the vendored client bundle.
      */
     public function testVendoredBundleReportsAVueVersion(): string
     {
-        $content = file_get_contents(self::APP_ROOT . '/' . self::MANIFEST);
+        $path = self::vendoredClientBundle();
 
-        $this->assertIsString($content, sprintf('Client bundle not found: %s', self::MANIFEST));
+        $content = file_get_contents($path);
+
+        $this->assertIsString($content, sprintf('Client bundle not readable: %s', $path));
 
         $this->assertMatchesRegularExpression(
             '/3\.\d+\.\d+/',

@@ -271,10 +271,30 @@ final class HtmlShellRendererTest extends TestCase
             '<script type="importmap">',
             $html
         );
-        $this->assertStringContainsString(
-            '"vue": "/assets/vendor/vue3/vue.runtime.esm-browser.js"',
-            $html
+
+        // The Vue entry is asserted structurally, not by literal filename. The
+        // bundle is a build artifact whose name changes between the dev and
+        // production vendors; hardcoding it made this test break on a rename
+        // while saying nothing about whether the map is correct.
+        $this->assertMatchesRegularExpression(
+            '#"vue":\s*"/assets/vendor/vue3/[^"]+\.js"#',
+            $html,
+            'The import map must name a vendored Vue ESM bundle under /assets/vendor/vue3/.'
         );
+
+        // And it must be the bundle that is actually installed, or the browser
+        // requests a file the asset server cannot serve.
+        $this->assertSame(
+            1,
+            preg_match('#"vue":\s*"([^"]+)"#', $html, $matches),
+            'The import map must contain exactly one resolvable "vue" entry.'
+        );
+
+        $bundles = glob(dirname(__DIR__, 3) . '/storage/assets/vendor/vue3/*.js') ?: [];
+
+        $this->assertCount(1, $bundles, 'Expected exactly one vendored Vue bundle on disk.');
+
+        $this->assertSame('/assets/vendor/vue3/' . basename($bundles[0]), $matches[1]);
     }
 
     public function testInjectedManagerAppendsInstalledPackagesToImportMap(): void
