@@ -173,43 +173,59 @@ class RouteParameterBindingTest extends TestCase
      */
     public function testInvalidIntegerMessageIsVerboseOnlyInDebug(): void
     {
-        $this->withDebug(true, function (): void {
-            $this->app->getRouter()->get('/binding/verbose/{id}', function (int $id): Response {
-                return Response::json(['id' => $id]);
-            });
+        // Two Application instances with different debug states, in one process.
+        // This is exactly what the constructor's ?bool $debug argument exists
+        // for — before it, $debug was read once from config and Env::load() was
+        // guarded per-process, so the verbose branch was unreachable in tests.
+        $app = new Application('/app', debug: true);
 
-            $response = $this->app->handle(
-                new Request('GET', '/binding/verbose/abc', [], [], ['Accept' => 'application/json'])
-            );
-            $body = json_decode($response->getContent(), true);
+        $this->assertTrue($app->isDebug(), 'The explicit debug argument must win over config.');
 
-            $this->assertSame(400, $response->getStatusCode());
-            $this->assertStringContainsString('must be an integer', (string) ($body['error'] ?? ''));
+        $app->getRouter()->get('/binding/verbose/{id}', function (int $id): Response {
+            return Response::json(['id' => $id]);
         });
+
+        $response = $app->handle(
+            new Request('GET', '/binding/verbose/abc', [], [], ['Accept' => 'application/json'])
+        );
+        $body = json_decode($response->getContent(), true);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertStringContainsString('must be an integer', (string) ($body['error'] ?? ''));
     }
 
     /**
-     * Runs a callback with Application::$debug forced to a value.
+     * The same request, the same process, the opposite debug state.
      *
-     * Application reads app.debug once, in the constructor, and Env::load() is
-     * guarded by a static $loaded flag — so a test cannot get a debug-mode and a
-     * production-mode Application out of the same process by pointing at a
-     * different base path. Reflection is the only handle available.
-     *
-     * That limitation is itself worth fixing in the source; until then this is
-     * the honest way to test both branches.
+     * One test with two Applications is worth more than two tests each with
+     * their own: it proves the flag is per-instance rather than per-process,
+     * which is the property that was actually broken.
      */
-    private function withDebug(bool $debug, callable $callback): void
+    public function testDebugStateIsPerInstanceNotPerProcess(): void
     {
-        $property = new \ReflectionProperty(Application::class, 'debug');
-        $original = $property->getValue($this->app);
+        $production = new Application('/app', debug: false);
+        $debug = new Application('/app', debug: true);
 
-        $property->setValue($this->app, $debug);
+        $this->assertFalse($production->isDebug());
+        $this->assertTrue($debug->isDebug());
 
-        try {
-            $callback();
-        } finally {
-            $property->setValue($this->app, $original);
+        foreach ([$production, $debug] as $app) {
+            $app->getRouter()->get('/pairing/{id}', function (int $id): Response {
+                return Response::json(['id' => $id]);
+            });
         }
+
+        $errorOf = function (Application $app): string {
+            $response = $app->handle(
+                new Request('GET', '/pairing/abc', [], [], ['Accept' => 'application/json'])
+            );
+
+            $this->assertSame(400, $response->getStatusCode());
+
+            return (string) (json_decode($response->getContent(), true)['error'] ?? '');
+        };
+
+        $this->assertSame('Bad Request', $errorOf($production));
+        $this->assertStringContainsString('must be an integer', $errorOf($debug));
     }
 }
