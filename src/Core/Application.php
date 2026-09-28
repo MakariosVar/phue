@@ -133,25 +133,63 @@ class Application
      */
     private function cacheRoutes(): void
     {
-        // Route Caching Integration
         $routeCacheFile = $this->basePath . '/storage/cache/routes.php';
-
-        // Opt-in route caching: Default is false to be safe and independent of debug state
         $shouldCacheRoutes = (bool) $this->config->get('app.routeCache', false);
+        $modules = (array) $this->config->get('app.modules', []);
 
         $loader = new AttributeRouteLoader();
-        $cachedRoutes = $shouldCacheRoutes ? $loader->loadCached($routeCacheFile) : null;
 
-        if ($cachedRoutes !== null) {
-            $this->router->registerCachedRoutes($cachedRoutes);
-        } else {
-            $this->router->registerController(AssetsController::class);
-            $this->router->registerController(\Phue\Core\Health\HealthController::class);
+        // The routes the framework must always expose, derived from the
+        // controllers themselves rather than written down as string literals.
+        //
+        // This matters: an earlier version hardcoded '/health', but the framework
+        // actually registers /health/live and /health/ready. The literal matched
+        // nothing, so every valid cache was rejected and route caching was
+        // silently disabled everywhere — invisibly, because a rejected cache
+        // falls back to a scan, which is correct and merely slow.
+        //
+        // Deriving the paths means a renamed route attribute cannot desync the
+        // validator from reality.
+        $requiredPaths = [];
 
-            if ($shouldCacheRoutes) {
-                $loader->saveCache($routeCacheFile, $this->router->getCompiledRoutes());
+        foreach ([AssetsController::class, \Phue\Core\Health\HealthController::class] as $coreController) {
+            foreach ($loader->load($coreController) as $coreRoute) {
+                if (isset($coreRoute['path'])) {
+                    $requiredPaths[] = $coreRoute['path'];
+                }
             }
         }
+
+        if (!$shouldCacheRoutes) {
+            $this->registerCoreControllers();
+
+            return;
+        }
+
+        $fingerprint = $loader->fingerprint($this->basePath, $modules);
+        $cachedRoutes = $loader->loadCached($routeCacheFile, $fingerprint, $requiredPaths);
+
+        if ($cachedRoutes !== null) {
+            // Cached routes are a complete replacement: registerCachedRoutes()
+            // assigns the whole table. The core controllers must therefore be
+            // part of the cached set, which is what requiredPaths above
+            // guarantees, and they are not registered again here.
+            $this->router->registerCachedRoutes($cachedRoutes);
+
+            return;
+        }
+
+        $this->registerCoreControllers();
+        $loader->saveCache($routeCacheFile, $this->router->getCompiledRoutes(), $fingerprint);
+    }
+
+    /**
+     * Registers the framework's own HTTP surface.
+     */
+    private function registerCoreControllers(): void
+    {
+        $this->router->registerController(AssetsController::class);
+        $this->router->registerController(\Phue\Core\Health\HealthController::class);
     }
 
     /**
