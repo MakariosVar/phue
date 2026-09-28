@@ -82,14 +82,15 @@ class Application
     /**
      * Application debug mode state.
      */
-    private bool $debug = false;
+    private bool $debug;
 
     /**
      * Initialize application with root directory path, load .env file, load configs, and bootstrap infrastructure.
      *
      * @param string $basePath Application root directory path.
+     * @param ?bool $debug Debug mode flag.
      */
-    public function __construct(string $basePath)
+    public function __construct(string $basePath, ?bool $debug = null)
     {
         $this->basePath = rtrim($basePath, '/\\');
 
@@ -100,7 +101,9 @@ class Application
         $this->config = new Config($this->basePath . '/config');
         $this->router = new Router();
         $this->events = new EventDispatcher();
-        $this->debug = (bool) $this->config->get('app.debug', false);
+
+        // Explicit argument takes priority over config
+        $this->debug = $debug ?? (bool) $this->config->get('app.debug', false);
 
         // Register core framework singletons into DI container
         $this->registerCoreBindings();
@@ -113,6 +116,14 @@ class Application
 
         // Cache application routes
         $this->cacheRoutes();
+    }
+
+    /**
+     * Retrieve the current debug state.
+     */
+    public function isDebug(): bool
+    {
+        return $this->debug;
     }
 
     /**
@@ -325,8 +336,8 @@ class Application
         $this->container->singleton(AssetRegistry::class, function (): AssetRegistry {
             $registry = new AssetRegistry();
 
-            // Fix Trap B: Register /assets/vendor static source globally for non-Swoole environments
-            $vendorPath = __DIR__ . '/../../assets/vendor';
+            // Register /assets/vendor static source globally if present
+            $vendorPath = $this->basePath . '/storage/assets/vendor';
             if (is_dir($vendorPath)) {
                 $registry->registerSource('/assets/vendor', $vendorPath);
             }
@@ -348,10 +359,10 @@ class Application
             $registry->addStyle('/assets/vendor/bootstrap-icons/bootstrap-icons.min.css');
             $registry->addFont('/assets/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2?e34853135f9e39acf64315236852cd5a');
 
-            // Register Bootstrap JS bundle globally for interactive elements (Dropdowns, Modals, Tooltips)
+            // Register Bootstrap JS bundle globally for interactive elements
             $registry->addGlobalScript('/assets/vendor/bootstrap/bootstrap.bundle.min.js', false, true);
 
-            // Fix Trap A: Add phue-explorer.js as a global script so it survives beginRequest() reset
+            // Add phue-explorer.js as a global script so it survives beginRequest() reset
             $registry->addGlobalScript('/assets/js/phue-explorer.js', isModule: true);
 
             // Composite asset resolver for Phue JS Modules (/assets/phue/{Name}.{hash}.phue.js)

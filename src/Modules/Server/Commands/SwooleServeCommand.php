@@ -106,7 +106,6 @@ final class SwooleServeCommand implements CommandInterface
         $registry = $app->getContainer()->get(\Phue\Core\Asset\AssetRegistry::class);
         $registry->registerSource('/assets', $app->getBasePath() . '/App/Frontend');
         $registry->registerSource('/assets/app', $app->getBasePath() . '/App/Assets');
-        $registry->registerSource('/assets/vendor', $app->getBasePath() . '/storage/assets/vendor');
 
         // 2. Scan and Register Controllers
         $app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
