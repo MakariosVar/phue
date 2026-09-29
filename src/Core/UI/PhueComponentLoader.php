@@ -7,10 +7,12 @@ namespace Phue\Core\UI;
 use Exception;
 use LogicException;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
+use Throwable;
 
 /**
  * Class PhueComponentLoader
@@ -103,6 +105,13 @@ class PhueComponentLoader
     private array $templateChildrenMemo = [];
 
     /**
+     * Optional PSR-3 logger instance for diagnostic warnings.
+     *
+     * @var LoggerInterface|null
+     */
+    private ?LoggerInterface $logger;
+
+    /**
      * PhueComponentLoader constructor.
      *
      * @param string                  $componentsDir   Absolute or relative path to component files directory.
@@ -110,6 +119,7 @@ class PhueComponentLoader
      * @param CacheInterface|null     $persistentCache Optional PSR-16 cache implementation.
      * @param string|null             $viewsCacheDir   Optional compiled PHP views cache directory for OPCache optimization.
      * @param TemplateCompilerBridge|null $compilerBridge Required template compiler bridge instance.
+     * @param LoggerInterface|null    $logger          Optional PSR-3 logger instance.
      *
      * @throws RuntimeException If $componentsDir path is invalid or unreadable.
      * @throws LogicException   If $compilerBridge parameter is not provided.
@@ -119,7 +129,8 @@ class PhueComponentLoader
         ?PhueTemplateParser $parser = null,
         ?CacheInterface $persistentCache = null,
         ?string $viewsCacheDir = null,
-        ?TemplateCompilerBridge $compilerBridge = null
+        ?TemplateCompilerBridge $compilerBridge = null,
+        ?LoggerInterface $logger = null
     ) {
         $realBase = realpath($componentsDir);
         if ($realBase === false || !is_dir($realBase)) {
@@ -134,6 +145,7 @@ class PhueComponentLoader
         $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
         $this->compilerBridge = $compilerBridge;
+        $this->logger = $logger;
     }
 
     /**
@@ -203,7 +215,12 @@ class PhueComponentLoader
     {
         try {
             return $this->getOrFetchStructure($name);
-        } catch (Exception) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to fetch component structure in getStructure()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
     }
@@ -237,7 +254,12 @@ class PhueComponentLoader
         try {
             $structure = $this->getOrFetchStructure($name);
             return $structure['script'] ?? null;
-        } catch (Exception) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to get content in contentFor()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
     }
@@ -279,7 +301,12 @@ class PhueComponentLoader
             $module = $this->buildModuleInstance($structure['template'], $structure['script'] ?? null);
 
             return substr(sha1($module), 0, 8);
-        } catch (Exception) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to compute raw module hash in rawModuleHash()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
     }
@@ -351,7 +378,12 @@ class PhueComponentLoader
 
         try {
             $structure = $this->getOrFetchStructure($name);
-        } catch (\Throwable) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to fetch structure in buildFor()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
 
@@ -386,12 +418,18 @@ class PhueComponentLoader
 
             $this->buildingStack[$name] = true;
             try {
+                $sentinel = str_repeat('0', 8);
                 foreach ($children as $child) {
                     $hash = $this->registry->moduleHash($child);
                     if ($hash === null) {
-                        return null;
+                        $this->logger?->warning("Could not resolve module hash for child component, fallback to sentinel", [
+                            'parent' => $name,
+                            'child' => $child,
+                        ]);
+                        $resolvedChildHashes[$child] = $sentinel;
+                    } else {
+                        $resolvedChildHashes[$child] = $hash;
                     }
-                    $resolvedChildHashes[$child] = $hash;
                 }
             } finally {
                 unset($this->buildingStack[$name]);
@@ -408,17 +446,19 @@ class PhueComponentLoader
 
         $imports = [];
         $childNames = [];
+        $sentinel = str_repeat('0', 8);
 
         foreach ($children as $child) {
             $servableHash = $resolvedChildHashes[$child] ?? null;
-            if ($servableHash === null) {
-                return null;
-            }
 
             $rawImportName = "__phueRaw_{$child}";
             $renderImportName = "__phueRender_{$child}";
 
-            $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '/assets/phue/{$child}.{$servableHash}.phue.js';";
+            $importPath = ($servableHash !== null && $servableHash !== $sentinel)
+                ? "/assets/phue/{$child}.{$servableHash}.phue.js"
+                : "/assets/phue/{$child}.phue.js";
+
+            $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '{$importPath}';";
             $imports[] = "const {$child} = { ...({$rawImportName} || {}), render: {$renderImportName} };";
 
             $childNames[] = $child;
@@ -429,7 +469,12 @@ class PhueComponentLoader
 
         try {
             $renderFnCode = $this->compilerBridge->compile($structure['template'], ssr: false);
-        } catch (\Throwable) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to compile template in buildFor()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
 
@@ -508,7 +553,12 @@ class PhueComponentLoader
     {
         try {
             $structure = $this->getOrFetchStructure($name);
-        } catch (Exception) {
+        } catch (Throwable $e) {
+            // Log warning before returning null
+            $this->logger?->warning("Failed to fetch structure in buildForSsr()", [
+                'name' => $name,
+                'exception' => $e,
+            ]);
             return null;
         }
 

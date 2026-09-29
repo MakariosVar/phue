@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\UI;
 
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Psr\Log\LoggerInterface;
 
 /**
  * Scans templates to discover and resolve known UI components using ComponentLoaderRegistry.
@@ -17,6 +18,11 @@ class ComponentDiscoverer
      * @var ComponentLoaderRegistry
      */
     private ComponentLoaderRegistry $registry;
+
+    /**
+     * @var LoggerInterface|null
+     */
+    private ?LoggerInterface $logger;
 
     /**
      * List of Vue built-in tags to ignore during scanning.
@@ -59,10 +65,12 @@ class ComponentDiscoverer
      * ComponentDiscoverer constructor.
      *
      * @param ComponentLoaderRegistry $registry
+     * @param LoggerInterface|null    $logger
      */
-    public function __construct(ComponentLoaderRegistry $registry)
+    public function __construct(ComponentLoaderRegistry $registry, ?LoggerInterface $logger = null)
     {
         $this->registry = $registry;
+        $this->logger = $logger;
     }
 
     /**
@@ -119,13 +127,17 @@ class ComponentDiscoverer
         $visited[$name] = true;
 
         $moduleUrl = $this->registry->moduleUrl($name);
-        if ($moduleUrl === null) {
-            return $graph;
-        }
 
-        // Extract asset hash
-        if (preg_match('/\.([a-f0-9]{8,40})\.phue\.js$/i', $moduleUrl, $matches)) {
-            $graph[$name] = $matches[1];
+        if ($moduleUrl !== null) {
+            // Extract asset hash when moduleUrl is present
+            if (preg_match('/\.([a-f0-9]{8,40})\.phue\.js$/i', $moduleUrl, $matches)) {
+                $graph[$name] = $matches[1];
+            }
+        } else {
+            // Log warning when moduleUrl is null instead of exiting immediately
+            $this->logger?->warning("Unable to resolve module URL for component during dependency resolution", [
+                'component' => $name,
+            ]);
         }
 
         $component = $this->registry->load($name);

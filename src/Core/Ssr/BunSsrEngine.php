@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Core\Ssr;
 
+use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
@@ -34,11 +35,13 @@ class BunSsrEngine implements SsrEngine
      * @param SsrClient $client Transport layer client instance.
      * @param int $maxPayloadKb Maximum allowed JSON payload size in KB before dispatch.
      * @param CacheInterface|null $cache Optional PSR-16 cache instance for tracking component hashes.
+     * @param LoggerInterface|null $logger Optional PSR-3 logger instance for diagnostic warnings and errors.
      */
     public function __construct(
         private SsrClient $client,
         private int $maxPayloadKb = 512,
-        private ?CacheInterface $cache = null
+        private ?CacheInterface $cache = null,
+        private ?LoggerInterface $logger = null
     ) {}
 
     /**
@@ -62,13 +65,23 @@ class BunSsrEngine implements SsrEngine
 
             // Only retry with full sources if the sidecar explicitly reported a cache-miss error
             if ($result['isCacheMiss']) {
+                $this->logger?->notice('SSR sidecar reported cache-miss; re-sending full component sources', [
+                    'template' => $template,
+                ]);
+
                 $retryResult = $this->dispatchRender($template, $state, $context, forceFullSource: true);
                 return $retryResult['html'];
             }
 
             return null;
 
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Log uncaught rendering exception
+            $this->logger?->error('SSR rendering exception encountered', [
+                'exception' => $e,
+                'template' => $template,
+            ]);
+
             // Fail-open: Return fallback null without wiping unrelated cached hashes
             return null;
         }
@@ -123,19 +136,35 @@ class BunSsrEngine implements SsrEngine
 
         $json = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        if ($json === false || strlen($json) > ($this->maxPayloadKb * 1024)) {
+        $maxBytes = $this->maxPayloadKb * 1024;
+        if ($json === false || strlen($json) > $maxBytes) {
+            $this->logger?->warning('SSR payload size exceeded limit', [
+                'bytes' => $json !== false ? strlen($json) : 0,
+                'max_bytes' => $maxBytes,
+                'template' => $template,
+            ]);
+
             return $failure;
         }
 
         $rawResponse = $this->client->send(method: 'POST', path: '/v1/render', payload: $json);
 
         if ($rawResponse === null) {
+            $this->logger?->warning('SSR transport failed', [
+                'template' => $template,
+            ]);
+
             return $failure;
         }
 
         $response = json_decode($rawResponse, true);
 
         if (!is_array($response)) {
+            $this->logger?->warning('SSR response body is not valid JSON', [
+                'body' => substr($rawResponse, 0, 256),
+                'template' => $template,
+            ]);
+
             return $failure;
         }
 

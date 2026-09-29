@@ -77,9 +77,13 @@ async function resolveModule(entry: ComponentEntry | string) {
     return mod;
 }
 
+const parsedPayloadKb = parseInt(process.env.SSR_MAX_PAYLOAD_KB || "2048", 10);
+const maxPayloadKb = Number.isFinite(parsedPayloadKb) && parsedPayloadKb > 0 ? parsedPayloadKb : 2048;
+const maxRequestBodySize = maxPayloadKb * 1024;
+
 Bun.serve({
     unix: SOCKET_PATH,
-    maxRequestBodySize: parseInt(process.env.SSR_MAX_PAYLOAD_KB || "512") * 1024, // 512 KB Limit
+    maxRequestBodySize,
 
     routes: {
         "/v1/health": () => {
@@ -87,6 +91,7 @@ Bun.serve({
                 ok: true,
                 vue: vuePkg.version,
                 bun: Bun.version,
+                maxRequestBodySize,
             });
         },
 

@@ -291,17 +291,40 @@ class Application
                 return new NullSsrEngine();
             }
 
+            $maxPayloadKb = (int) $this->config->get('ssr.max_payload_kb', 2048);
+            /** @var UnixSsrClient $client */
+            $client = $c->get(UnixSsrClient::class);
+
+            $health = $client->health();
+            if ($health !== null && isset($health['maxRequestBodySize'])) {
+                $sidecarMaxBytes = (int) $health['maxRequestBodySize'];
+                $expectedMaxBytes = $maxPayloadKb * 1024;
+
+                if ($sidecarMaxBytes !== $expectedMaxBytes) {
+                    /** @var LoggerInterface|null $logger */
+                    $logger = $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null;
+                    $logger?->warning('SSR max payload size mismatch between PHP and Bun sidecar', [
+                        'php_max_payload_bytes' => $expectedMaxBytes,
+                        'sidecar_max_request_body_size' => $sidecarMaxBytes,
+                    ]);
+                }
+            }
+
             return new BunSsrEngine(
-                client: $c->get(UnixSsrClient::class),
-                maxPayloadKb: (int) $this->config->get('ssr.max_payload_kb', 512),
+                client: $client,
+                maxPayloadKb: $maxPayloadKb,
                 cache: $c->get(CacheInterface::class)
             );
         });
         $this->container->alias('ssr.engine', SsrEngine::class);
 
         // Composite Component Loader Registry Singleton
-        $this->container->singleton(ComponentLoaderRegistry::class, function (): ComponentLoaderRegistry {
-            $registry = new ComponentLoaderRegistry();
+        $this->container->singleton(ComponentLoaderRegistry::class, function ($c): ComponentLoaderRegistry {
+            $logger = $c->has(LoggerInterface::class) 
+                ? $c->get(LoggerInterface::class) 
+                : null;
+
+            $registry = new ComponentLoaderRegistry($logger);
 
             // Priority 1: Main Application Loader (/App/Frontend)
             $registry->addLoader(function () use ($registry): ?PhueComponentLoader {

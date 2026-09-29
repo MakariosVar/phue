@@ -39,5 +39,5 @@ return [
     /**
      * Maximum payload threshold size allowed in Kilobytes before aborting rendering.
      */
-    'max_payload_kb' => (int) env('SSR_MAX_PAYLOAD_KB', 512),
+    'max_payload_kb' => (int) env('SSR_MAX_PAYLOAD_KB', 2048),
 ];

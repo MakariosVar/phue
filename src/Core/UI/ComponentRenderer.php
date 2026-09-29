@@ -10,7 +10,9 @@ use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Response;
 use Phue\Core\Ssr\SsrEngine;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Throwable;
 
 /**
  * Renders Phue components into HTTP responses.
@@ -37,6 +39,7 @@ class ComponentRenderer
      * @param ComponentLoaderRegistry|null $loaderRegistry Optional loader registry.
      * @param array $themeConfig Theme configuration options.
      * @param array $metaConfig Meta tags configuration options.
+     * @param LoggerInterface|null $logger Optional PSR-3 logger instance.
      */
     public function __construct(
         private HtmlShellRenderer $shellRenderer,
@@ -50,7 +53,8 @@ class ComponentRenderer
         private ?SsrEngine $ssrEngine = null,
         private ?ComponentLoaderRegistry $loaderRegistry = null,
         private array $themeConfig = [],
-        private array $metaConfig = []
+        private array $metaConfig = [],
+        private ?LoggerInterface $logger = null
     ) {}
 
     /**
@@ -125,10 +129,18 @@ class ComponentRenderer
 
             if ($scriptUrl === null) {
                 $hash = $this->loader?->moduleHash($name);
-                $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
+                if ($hash !== null) {
+                    $scriptUrl = "/assets/phue/{$name}.{$hash}.phue.js";
+                }
             }
 
-            $this->assetRegistry->addScript($scriptUrl, isModule: true);
+            if ($scriptUrl !== null) {
+                $this->assetRegistry->addScript($scriptUrl, isModule: true);
+            } else {
+                $this->logger?->error("Failed to generate module URL/hash for component hydration script", [
+                    'component' => $name,
+                ]);
+            }
 
             $moduleView = new View(
                 template: $view->getTemplate(),
@@ -283,8 +295,6 @@ JS,
             addslashes($defaultTheme)
         );
 
-        
-
         $html = $this->shellRenderer->render(
             title: $title,
             appId: 'app',
@@ -391,8 +401,12 @@ JS,
                 if ($navScriptUrl !== null) {
                     $this->assetRegistry->addScript($navScriptUrl, isModule: true);
                 }
-            } catch (\Throwable) {
-                // Fall back gracefully if PhNavigation template is absent or rendering fails
+            } catch (Throwable $e) {
+                // Log warning before falling back gracefully if PhNavigation template is absent or rendering fails
+                $this->logger?->warning('Failed to render PhNavigation component in ComponentRenderer', [
+                    'exception' => $e,
+                    'uri' => $uri,
+                ]);
                 $navHtml = '';
             }
         }
