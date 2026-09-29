@@ -45,7 +45,7 @@
 
 <script>
 export default {
-  name: "ExamplePhBadge",
+  name: "ExamplePhChip",
   data() {
     return {
       showCode: false,
