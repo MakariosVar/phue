@@ -6,8 +6,8 @@ namespace Phue\Core\Frontend;
 
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\PhueComponentLoader;
-use Throwable;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Class ComponentLoaderRegistry
@@ -39,6 +39,18 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Register a loader instance or a lazy factory callable that returns a loader.
+     *
+     * @param PhueComponentLoader|callable $loader
+     *
+     * @return void
+     */
+    public function addLoader(PhueComponentLoader|callable $loader): void
+    {
+        $this->loaders[] = $loader;
+    }
+
+    /**
      * Flushes per-request state across candidate loaders.
      *
      * @return void
@@ -55,30 +67,6 @@ class ComponentLoaderRegistry
             } catch (Throwable $e) {
                 $this->logLoaderError($e, __FUNCTION__);
             }
-        }
-    }
-
-    /**
-     * Register a loader instance or a lazy factory callable that returns a loader.
-     *
-     * @param PhueComponentLoader|callable $loader
-     *
-     * @return void
-     */
-    public function addLoader(PhueComponentLoader|callable $loader): void
-    {
-        $this->loaders[] = $loader;
-    }
-
-    /**
-     * Helper to log exceptions caught during candidate loader execution.
-     */
-    private function logLoaderError(Throwable $e, string $method): void
-    {
-        if ($this->logger !== null) {
-            $this->logger->warning(sprintf('ComponentLoaderRegistry error in %s: %s', $method, $e->getMessage()), [
-                'exception' => $e,
-            ]);
         }
     }
 
@@ -103,6 +91,31 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Checks if a component exists within any registered loader without triggering a build.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return bool
+     */
+    public function hasComponent(string $name): bool
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader !== null && $loader->hasComponent($name)) {
+                    return true;
+                }
+            } catch (Throwable $e) {
+                $this->logLoaderError($e, __FUNCTION__);
+                continue;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Iterates candidate loaders in priority order and returns the evaluated PhueComponent.
      *
      * @param string               $name   Component logical name.
@@ -118,6 +131,11 @@ class ComponentLoaderRegistry
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
                 if ($loader === null) {
+                    continue;
+                }
+
+                // Guard check before calling load() to suppress control-flow "not found" log noise
+                if (!$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -145,7 +163,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -177,7 +195,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -196,31 +214,6 @@ class ComponentLoaderRegistry
     }
 
     /**
-     * Checks if a component exists within any registered loader without triggering a build.
-     *
-     * @param string $name Component logical name.
-     *
-     * @return bool
-     */
-    public function hasComponent(string $name): bool
-    {
-        foreach ($this->loaders as $candidate) {
-            try {
-                $loader = is_callable($candidate) ? $candidate() : $candidate;
-
-                if ($loader !== null && $loader->hasComponent($name)) {
-                    return true;
-                }
-            } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
-                continue;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Iterates candidate loaders and returns the first script payload matching the given hash.
      *
      * @param string $name Component logical name.
@@ -235,7 +228,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -284,7 +277,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -316,7 +309,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -348,7 +341,7 @@ class ComponentLoaderRegistry
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
-                if ($loader === null) {
+                if ($loader === null || !$loader->hasComponent($name)) {
                     continue;
                 }
 
@@ -364,5 +357,17 @@ class ComponentLoaderRegistry
         }
 
         return null;
+    }
+
+    /**
+     * Helper to log exceptions caught during candidate loader execution.
+     */
+    private function logLoaderError(Throwable $e, string $method): void
+    {
+        if ($this->logger !== null) {
+            $this->logger->warning(sprintf('ComponentLoaderRegistry error in %s: %s', $method, $e->getMessage()), [
+                'exception' => $e,
+            ]);
+        }
     }
 }
