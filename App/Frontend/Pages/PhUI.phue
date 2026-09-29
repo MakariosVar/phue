@@ -275,8 +275,10 @@ return [
                             <span id="table">
                                 <example-ph-data-table />
                             </span>
-                        <!-- <ExamplePhDataTable />
-                            <ExamplePhBadge />
+                            <span id="badge">
+                                <example-ph-badge />
+                            </span>
+                        <!--
                             <ExamplePhAvatar />
                             <ExamplePhCard />
                             <ExamplePhChip />
