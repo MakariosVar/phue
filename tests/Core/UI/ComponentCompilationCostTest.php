@@ -366,6 +366,33 @@ final class ComponentCompilationCostTest extends TestCase
         );
     }
 
+    /**
+     * One unresolvable child aborts the whole build.
+     *
+     * This contract survived a proposal to invert it. The argument for
+     * inverting was real: a single typo in one .phue file was taking down every
+     * page that referenced it, which is a far larger blast radius than the
+     * problem it protected against. But the argument against it is stronger.
+     *
+     * A module that loads cleanly while silently omitting a child renders that
+     * child as a Vue comment placeholder, and nothing else about the response
+     * differs from a correct one. The page is up, the region is empty, and there
+     * is no signal in the HTML, the status code, or the browser console to say
+     * why. After a deploy that is not a bug report — it is a mystery you cannot
+     * reproduce. Failing the build turns the same situation into a 500 with a
+     * named component in the log, which is a five-minute fix.
+     *
+     * The narrow blast radius is the price, and it is a price the author of the
+     * broken file pays, not the users of every page that referenced it. The
+     * warning added at the abort point names both the parent and the orphaned
+     * child precisely so that cost is one grep away.
+     *
+     * What is NOT negotiable, for the same reason: a circular reference must
+     * never reach this path as a plain null. There is no valid module for a
+     * cycle, so a cycle has to be louder than a null — see
+     * CircularComponentReferenceException and the cycle contracts in
+     * ComponentDiscovererTest.
+     */
     public function testATransientChildOutageAbortsAtTheFirstFailure(): void
     {
         $this->registry->moduleUrl('Page');
@@ -381,12 +408,14 @@ final class ComponentCompilationCostTest extends TestCase
 
         $this->assertNull(
             $this->registry->moduleUrl('Page'),
-            'Fail-loud: one unresolvable child must abort the whole build, not degrade it.'
+            'Fail-loud: one unresolvable child must abort the whole build, not degrade it. A parent module with a '
+            . 'silently missing child is indistinguishable from a correct one after deploy.'
         );
         $this->assertSame(
             1,
             $this->bridge->compileCount(),
-            'The build must stop at the failure instead of walking the rest of the tree.'
+            'The build must stop at the failure instead of walking the rest of the tree. buildFor resolves children '
+            . 'before the parent, so the outage lands on BChip and BCard/Page are never compiled.'
         );
 
         $this->bridge->resetCounters();

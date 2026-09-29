@@ -73,20 +73,33 @@ final class SsrKnownHashesTest extends TestCase
     // Injection surface
     // ---------------------------------------------------------------
 
-    public function testEngineExposesAnOptionalPsr16CacheAsItsThirdConstructorArgument(): void
+    /**
+     * Asserts the constructor by NAME, not by position count.
+     *
+     * An earlier revision of this test pinned assertCount(3, $parameters) and
+     * broke the moment a fourth optional dependency was added — a constructor
+     * that gains a new nullable collaborator is a feature, not a regression,
+     * and the test must not stand in the way of one. What actually matters is
+     * that the SsrClient, the payload cap and the PSR-16 cache are wired in the
+     * order callers pass them by name, and that the cache stays optional.
+     */
+    public function testEngineExposesAnOptionalPsr16CacheNamedThird(): void
     {
         $parameters = (new \ReflectionClass(BunSsrEngine::class))->getConstructor()?->getParameters() ?? [];
 
-        $this->assertCount(3, $parameters, 'BunSsrEngine must accept (SsrClient, int maxPayloadKb, ?CacheInterface).');
+        $names = array_map(static fn(\ReflectionParameter $p) => $p->getName(), $parameters);
 
-        $cache = $parameters[2];
-
+        $this->assertSame('client', $names[0] ?? null, 'The transport is always the first argument.');
+        $this->assertSame('maxPayloadKb', $names[1] ?? null, 'The payload cap is the second argument.');
         $this->assertSame(
             'cache',
-            $cache->getName(),
+            $names[2] ?? null,
             'The third constructor argument must be named $cache to match TemplateCompilerBridge, the only other '
             . 'class in this codebase that takes an optional PSR-16 dependency.'
         );
+
+        $cache = $parameters[2];
+
         $this->assertTrue($cache->isDefaultValueAvailable(), 'The cache argument must be optional for backward compatibility.');
         $this->assertNull(
             $cache->getDefaultValue(),
@@ -104,6 +117,34 @@ final class SsrKnownHashesTest extends TestCase
             \Psr\SimpleCache\CacheInterface::class,
             $type->getName(),
             'The third argument must be typed as ?CacheInterface (PSR-16), not a concrete cache class.'
+        );
+    }
+
+    /**
+     * The engine's diagnostics are worth nothing if the application never
+     * hands it a logger. A nullable constructor argument is a wiring bug waiting
+     * to happen: the class logs perfectly in isolation and the production app is
+     * silent, which is exactly the failure this whole suite exists to prevent.
+     */
+    public function testApplicationWiresALoggerIntoTheSsrEngine(): void
+    {
+        $app = new \Phue\Core\Application(sys_get_temp_dir());
+
+        $container = $app->getContainer();
+
+        $this->assertTrue(
+            $container->has(\Psr\Log\LoggerInterface::class),
+            'The container must bind a PSR-3 logger, or there is nowhere for diagnostics to go.'
+        );
+
+        $reflection = new \ReflectionProperty(\Phue\Core\Ssr\BunSsrEngine::class, 'logger');
+        $logger = $reflection->getValue($container->get(\Phue\Core\Ssr\SsrEngine::class));
+
+        $this->assertInstanceOf(
+            \Psr\Log\LoggerInterface::class,
+            $logger,
+            'The container-built BunSsrEngine must carry a real logger. If this is null, every fail-open in the SSR '
+            . 'pipeline is invisible in production while looking perfectly wired in the source.'
         );
     }
 
