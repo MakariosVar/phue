@@ -7,6 +7,7 @@ namespace Phue\Core\UI;
 use Exception;
 use LogicException;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\UI\Exceptions\CircularComponentReferenceException;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use RecursiveDirectoryIterator;
@@ -216,7 +217,6 @@ class PhueComponentLoader
         try {
             return $this->getOrFetchStructure($name);
         } catch (Throwable $e) {
-            // Log warning before returning null
             $this->logger?->warning("Failed to fetch component structure in getStructure()", [
                 'name' => $name,
                 'exception' => $e,
@@ -255,7 +255,6 @@ class PhueComponentLoader
             $structure = $this->getOrFetchStructure($name);
             return $structure['script'] ?? null;
         } catch (Throwable $e) {
-            // Log warning before returning null
             $this->logger?->warning("Failed to get content in contentFor()", [
                 'name' => $name,
                 'exception' => $e,
@@ -302,7 +301,6 @@ class PhueComponentLoader
 
             return substr(sha1($module), 0, 8);
         } catch (Throwable $e) {
-            // Log warning before returning null
             $this->logger?->warning("Failed to compute raw module hash in rawModuleHash()", [
                 'name' => $name,
                 'exception' => $e,
@@ -343,9 +341,6 @@ class PhueComponentLoader
     /**
      * Computes or resolves Client module hash.
      *
-     * Relies on L1 memoization populated by buildFor(). Assumes that ComponentLoaderRegistry::beginRequest()
-     * or clearMemo() is executed between HTTP requests to invalidate stale transitive child hashes.
-     *
      * @param string $name Component logical name.
      *
      * @return string|null 8-character sha1 hash prefix or null.
@@ -362,24 +357,23 @@ class PhueComponentLoader
 
     /**
      * Builds the complete, dependency-aware JS SFC module for a given component name.
-     * Uses L1 memoization with pre-computed hash caching.
+     * Fail-loud: If any child component fails to resolve or compile, returns null
      *
      * @param string $name Component logical name.
      *
-     * @return string|null Compiled JavaScript module or null if component cannot be loaded.
-     * @throws RuntimeException If a circular dependency (cycle) is detected.
+     * @return string|null Compiled JavaScript module or null if component or dependencies cannot be loaded
+     * @throws CircularComponentReferenceException If a circular dependency (cycle) is detected
      */
     public function buildFor(string $name): ?string
     {
         if (isset($this->buildingStack[$name])) {
             $chain = implode(' -> ', array_keys($this->buildingStack)) . ' -> ' . $name;
-            throw new RuntimeException("Circular component dependency detected in build path: {$chain}");
+            throw new CircularComponentReferenceException("Circular component dependency detected in build path: {$chain}");
         }
 
         try {
             $structure = $this->getOrFetchStructure($name);
         } catch (Throwable $e) {
-            // Log warning before returning null
             $this->logger?->warning("Failed to fetch structure in buildFor()", [
                 'name' => $name,
                 'exception' => $e,
@@ -402,11 +396,10 @@ class PhueComponentLoader
         $resolvedChildHashes = [];
 
         if ($this->registry !== null) {
-            // Content-hash memoization for children discovery (skips regex scan if content hasn't changed)
             if ($contentHash !== '' && isset($this->templateChildrenMemo[$filePath]) && $this->templateChildrenMemo[$filePath]['hash'] === $contentHash) {
                 $children = $this->templateChildrenMemo[$filePath]['children'];
             } else {
-                $discoverer = new ComponentDiscoverer($this->registry);
+                $discoverer = new ComponentDiscoverer($this->registry, $this->logger);
                 $children = $discoverer->scanTemplate($structure['template']);
                 if ($contentHash !== '') {
                     $this->templateChildrenMemo[$filePath] = [
@@ -418,45 +411,42 @@ class PhueComponentLoader
 
             $this->buildingStack[$name] = true;
             try {
-                $sentinel = str_repeat('0', 8);
                 foreach ($children as $child) {
                     $hash = $this->registry->moduleHash($child);
+                    // Fail-loud: if child resolution fails, fail the whole parent build immediately
                     if ($hash === null) {
-                        $this->logger?->warning("Could not resolve module hash for child component, fallback to sentinel", [
+                        $this->logger?->warning("Could not resolve module hash for child component '{$child}', aborting parent build '{$name}'", [
                             'parent' => $name,
                             'child' => $child,
                         ]);
-                        $resolvedChildHashes[$child] = $sentinel;
-                    } else {
-                        $resolvedChildHashes[$child] = $hash;
+                        return null; // Fail-loud contract
                     }
+                    $resolvedChildHashes[$child] = $hash;
                 }
             } finally {
                 unset($this->buildingStack[$name]);
             }
         }
 
-        // Composite fingerprint: stat + content digest + transitive children hashes
         $fingerprint = "{$mtime}_{$size}_{$contentHash}_" . implode('_', $resolvedChildHashes);
 
-        // L1 memoization lookup
         if (isset($this->clientMemo[$name]) && $this->clientMemo[$name]['key'] === $fingerprint) {
             return $this->clientMemo[$name]['code'];
         }
 
         $imports = [];
         $childNames = [];
-        $sentinel = str_repeat('0', 8);
 
         foreach ($children as $child) {
             $servableHash = $resolvedChildHashes[$child] ?? null;
+            if ($servableHash === null) {
+                return null; // Fail-loud safety check
+            }
 
             $rawImportName = "__phueRaw_{$child}";
             $renderImportName = "__phueRender_{$child}";
 
-            $importPath = ($servableHash !== null && $servableHash !== $sentinel)
-                ? "/assets/phue/{$child}.{$servableHash}.phue.js"
-                : "/assets/phue/{$child}.phue.js";
+            $importPath = "/assets/phue/{$child}.{$servableHash}.phue.js";
 
             $imports[] = "import {$rawImportName}, { __phueRender as {$renderImportName} } from '{$importPath}';";
             $imports[] = "const {$child} = { ...({$rawImportName} || {}), render: {$renderImportName} };";
@@ -548,90 +538,109 @@ class PhueComponentLoader
      *
      * @param string $name
      * @return string|null
+     * @throws CircularComponentReferenceException If a circular dependency (cycle) is detected
      */
     public function buildForSsr(string $name): ?string
     {
+        if (isset($this->buildingStack[$name])) {
+            $chain = implode(' -> ', array_keys($this->buildingStack)) . ' -> ' . $name;
+            throw new CircularComponentReferenceException("Circular component dependency detected in SSR build path: {$chain}");
+        }
+
+        $this->buildingStack[$name] = true;
+
         try {
-            $structure = $this->getOrFetchStructure($name);
-        } catch (Throwable $e) {
-            // Log warning before returning null
-            $this->logger?->warning("Failed to fetch structure in buildForSsr()", [
-                'name' => $name,
-                'exception' => $e,
-            ]);
-            return null;
-        }
+            try {
+                $structure = $this->getOrFetchStructure($name);
+            } catch (Throwable $e) {
+                $this->logger?->warning("Failed to fetch structure in buildForSsr()", [
+                    'name' => $name,
+                    'exception' => $e,
+                ]);
+                return null;
+            }
 
-        $filePath = $structure['filePath'] ?? '';
-        $mtime = 0;
-        $size = 0;
-        $contentHash = '';
+            $filePath = $structure['filePath'] ?? '';
+            $mtime = 0;
+            $size = 0;
+            $contentHash = '';
 
-        if ($filePath !== '' && isset($this->cache[$filePath])) {
-            $mtime = $this->cache[$filePath]['mtime'];
-            $size = $this->cache[$filePath]['size'];
-            $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
-        }
+            if ($filePath !== '' && isset($this->cache[$filePath])) {
+                $mtime = $this->cache[$filePath]['mtime'];
+                $size = $this->cache[$filePath]['size'];
+                $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
+            }
 
-        $fingerprint = "{$mtime}_{$size}_{$contentHash}";
+            $fingerprint = "{$mtime}_{$size}_{$contentHash}";
 
-        // L1 memoization lookup
-        if (isset($this->ssrMemo[$name]) && $this->ssrMemo[$name]['key'] === $fingerprint) {
-            return $this->ssrMemo[$name]['code'];
-        }
+            if (isset($this->ssrMemo[$name]) && $this->ssrMemo[$name]['key'] === $fingerprint) {
+                return $this->ssrMemo[$name]['code'];
+            }
 
-        $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
-        $scriptContent = trim($structure['script'] ?? '');
+            try {
+                $ssrRenderFnCode = $this->compilerBridge->compile($structure['template'], ssr: true);
+            } catch (Throwable $e) {
+                $this->logger?->warning("Failed to compile SSR template in buildForSsr()", [
+                    'name' => $name,
+                    'exception' => $e,
+                ]);
+                return null;
+            }
 
-        if ($scriptContent === '') {
+            $scriptContent = trim($structure['script'] ?? '');
+
+            if ($scriptContent === '') {
+                $code = "{$ssrRenderFnCode}\n"
+                      . "export const __phueSsrRender = ssrRender;\n"
+                      . "export default { ssrRender: __phueSsrRender };\n";
+
+                $hash = substr(sha1($code), 0, 8);
+                $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
+                return $code;
+            }
+
+            $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
+            $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+
+            $proxyBlock = '';
+
+            if ($hasSsrApp || $hasApp) {
+                $scriptContent = preg_replace_callback(
+                    '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
+                    function ($matches) {
+                        $imports = $matches[1];
+                        $source  = $matches[2];
+
+                        $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
+                        $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
+
+                        return "import {{$imports}} from {$source};";
+                    },
+                    $scriptContent,
+                    1
+                );
+
+                $proxies = [];
+                if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
+                    $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
+                }
+                if (str_contains($scriptContent, '__phueOrigCreateApp')) {
+                    $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
+                }
+
+                $proxyBlock = implode("\n", $proxies) . "\n";
+            }
+
             $code = "{$ssrRenderFnCode}\n"
                   . "export const __phueSsrRender = ssrRender;\n"
-                  . "export default { ssrRender: __phueSsrRender };\n";
+                  . "{$proxyBlock}{$scriptContent}";
 
             $hash = substr(sha1($code), 0, 8);
             $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
             return $code;
+        } finally {
+            unset($this->buildingStack[$name]);
         }
-
-        $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
-        $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
-
-        $proxyBlock = '';
-
-        if ($hasSsrApp || $hasApp) {
-            $scriptContent = preg_replace_callback(
-                '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
-                function ($matches) {
-                    $imports = $matches[1];
-                    $source  = $matches[2];
-
-                    $imports = preg_replace('/\bcreateSSRApp\b/', 'createSSRApp as __phueOrigCreateSSRApp', $imports);
-                    $imports = preg_replace('/\bcreateApp\b/', 'createApp as __phueOrigCreateApp', $imports);
-
-                    return "import {{$imports}} from {$source};";
-                },
-                $scriptContent,
-                1
-            );
-
-            $proxies = [];
-            if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
-            }
-            if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
-            }
-
-            $proxyBlock = implode("\n", $proxies) . "\n";
-        }
-
-        $code = "{$ssrRenderFnCode}\n"
-              . "export const __phueSsrRender = ssrRender;\n"
-              . "{$proxyBlock}{$scriptContent}";
-
-        $hash = substr(sha1($code), 0, 8);
-        $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
-        return $code;
     }
 
     /**
@@ -643,7 +652,14 @@ class PhueComponentLoader
      */
     public function buildModuleInstance(string $template, ?string $script): string
     {
-        $renderFnCode = $this->compilerBridge->compile($template, ssr: false);
+        try {
+            $renderFnCode = $this->compilerBridge->compile($template, ssr: false);
+        } catch (Throwable $e) {
+            $this->logger?->warning("Failed to compile template in buildModuleInstance()", [
+                'exception' => $e,
+            ]);
+            return '';
+        }
 
         $scriptContent = trim($script ?? '');
 
@@ -779,7 +795,7 @@ class PhueComponentLoader
                 $basename = pathinfo($relativePath, PATHINFO_FILENAME);
                 $depth = substr_count($relativePath, '/');
 
-                $exactName = substr($relativePath, 0, -5); // strip '.phue'
+                $exactName = substr($relativePath, 0, -5);
 
                 $candidates[] = [
                     'exactName' => $exactName,
@@ -807,7 +823,6 @@ class PhueComponentLoader
 
     /**
      * Fetches component structure from disk or cache using O(1) index lookup.
-     * Rebuilds index automatically if target file was removed from disk.
      *
      * @param string $name
      * @param bool $isRetry
@@ -829,7 +844,6 @@ class PhueComponentLoader
         $targetPath = $this->componentsDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $index[$name]);
         $resolvedPath = realpath($targetPath);
 
-        // 1. Structural Recovery: File was removed from disk -> retry index build once
         if ($resolvedPath === false) {
             if (!$isRetry) {
                 $this->componentIndex = null;
@@ -838,7 +852,6 @@ class PhueComponentLoader
             throw new RuntimeException("Phue component file inaccessible: '{$name}'");
         }
 
-        // 2. Security Enforcement: Path traversal / containment violation -> immediate fail, ZERO retries
         if (!str_starts_with($resolvedPath, $this->componentsDir . DIRECTORY_SEPARATOR)) {
             throw new RuntimeException("Phue component file outside components directory: '{$name}'");
         }
@@ -852,7 +865,6 @@ class PhueComponentLoader
         $mtime = $stat['mtime'];
         $size = $stat['size'];
 
-        // L1 in-memory structure cache check (per-request)
         if (isset($this->cache[$resolvedPath])) {
             $cached = $this->cache[$resolvedPath];
             if ($cached['mtime'] === $mtime && $cached['size'] === $size) {
@@ -861,10 +873,8 @@ class PhueComponentLoader
             }
         }
 
-        // Calculate content hash ONCE per file per request boundary pass
         $contentHash = sha1_file($resolvedPath) ?: '';
 
-        // L2 persistent PSR-16 cache check (cross-process)
         $cacheKey = 'phue_structure_' . md5($resolvedPath);
         if ($this->persistentCache !== null) {
             $persistentData = $this->persistentCache->get($cacheKey);
