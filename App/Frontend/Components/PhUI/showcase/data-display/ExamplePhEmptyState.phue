@@ -1,0 +1,125 @@
+<template>
+  <example-factory
+    tag="<ph-empty-state />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Empty state placeholder with icon, title, message and optional action.</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <ph-empty-state
+            icon="inbox"
+            title="No messages"
+            message="You're all caught up!"
+            action-label="Compose"
+            @action="compose"
+          />
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits</strong>
+        <ul>
+          <li><code>action</code></li>
+        </ul>
+  
+        <strong>slots</strong>
+        <ul>
+          <li><code>icon</code></li>
+          <li><code>default</code> - title</li>
+          <li><code>action</code></li>
+        </ul>
+
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhEmptyState",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-empty-state
+  icon="inbox"
+  title="No messages"
+  message="You're all caught up!"
+  action-label="Compose"
+  @action="compose"
+/>`,
+      propsData: [
+        {
+          name: "title",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "message",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "icon",
+          type: "String",
+          default: "''",
+          notes: "Bootstrap icon name",
+        },
+        {
+          name: "iconSize",
+          type: "String | Number",
+          default: "'xl'",
+          notes: "",
+        },
+        {
+          name: "actionLabel",
+          type: "String",
+          default: "''",
+          notes: "Button label",
+        },
+        {
+          name: "actionVariant",
+          type: "String",
+          default: "'primary'",
+          notes: "Button variant",
+        },
+        {
+          name: "actionSize",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "''",
+          notes: "Color variant for background/border",
+        },
+        {
+          name: "flush",
+          type: "Boolean",
+          default: "false",
+          notes: "Remove border/radius",
+        }
+      ]
+    };
+  },
+};
+</script>
