@@ -238,10 +238,9 @@ return [
                             <span id="form-field">
                                 <example-ph-form-field />
                             </span>
-
-                            <!--
-                            <ExamplePhInputShell />
-                             -->
+                            <span id="input-shell">
+                                <example-ph-input-shell />
+                            </span>
                         </div>
                     </ph-card>
 

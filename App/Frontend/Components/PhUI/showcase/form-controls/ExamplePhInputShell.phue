@@ -1,0 +1,180 @@
+<template>
+  <example-factory
+    tag="<ph-input-shell />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Shared bordered shell for composite controls: the magnifier/prefix icon,
+        the field and the trailing clear button all live <b>inside one border box</b> and
+        light up as a single unit on focus. 
+      </p>
+      <p>
+        <b>Why it exists.</b> Bootstrap 5.3 declares
+        the focus ring as a <code>box-shadow</code> on <code>.form-control:focus</code> — on that element only — and ships
+        no <code>.input-group:focus-within</code> rule. So a row of siblings glued together with
+        input-group can never render one unified ring: the field glows in the middle
+        while the affixes and the button stay flat. This component inverts the structure
+        instead of fighting it — the shell owns <code>border</code>, <code>border-radius</code> and the ring,
+        and the slotted control is a borderless, transparent flex child. Affixes are
+        spaced by the shell's <code>gap</code>, not by per-slot padding.
+      </p>
+      <p>
+        Because Bootstrap 5.3 gives no unified ring for a glued-together <code>input-group</code>,
+        this component emits the ring as a <b>bound style</b> driven by <code>focusin</code>/<code>focusout</code>
+        (which are exactly <code>:focus-within</code> semantics, and work inside a slotted control),
+        reusing Bootstrap's own values — <code>#86b7fe</code> + <code>0 0 0 .25rem rgba(13,110,253,.25)</code>,
+        and the <code>--bs-danger-rgb</code> variant when invalid. It is bound style rather than a <code>&lt;style&gt;</code>
+        block so the ring is driven by one code path for both mouse and keyboard focus,
+        and so the invalid variant can be switched from the <code>invalid</code> prop.
+      </p>
+    
+    </template>
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-input-shell size="lg" :invalid="!!error">
+          <template #prefix>
+            <span class="d-inline-flex align-items-center" aria-hidden="true">
+              <ph-icon name="search" size="sm" variant="muted" />
+            </span>
+          </template>
+
+          <template #default="{ controlStyle }">
+            <input
+              type="search"
+              class="form-control"
+              :style="controlStyle"
+              :value="modelValue"
+              @input="modelValue = $event.target.value"
+            />
+          </template>
+
+          <template #suffix>
+            <button v-if="modelValue" type="button" class="btn btn-sm p-0 border-0"
+                    aria-label="Clear" @click="modelValue = ''">
+              <ph-icon name="x" size="sm" />
+            </button>
+          </template>
+        </ph-input-shell>
+      </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits:</strong>
+        <ul>
+          <li><code>focus</code></li>
+          <li><code>blur</code> (as <code>focusin</code>/<code>focusout</code>, so they fire for the affixes too).</li>
+        </ul>
+        <hr>
+        <strong>Slots:</strong>
+        <ph-data-table 
+          :columns="[
+              {key: 'slot', label: 'Slot'},
+              {key: 'scoped_props', label: 'Scoped Props'},
+              {key: 'notes', label: 'Notes'},
+          ]"
+          :items="[
+              {
+                slot: 'prefix',
+                scoped_props: '---',
+                notes: 'Leading affix (icons, static text)'
+              },
+              {
+                slot: 'default',
+                scoped_props: '<code>{ controlStyle, size, disabled, invalid }</code>',
+                notes: '<b>The control.</b> Bind <code>:style=\'controlStyle\'</code> — it neutralises <code>.form-control</code>\'s own box so the field does not draw a second border inside the shell'
+              },
+              {slot: 'suffix', scoped_props: '---', notes: 'Trailing affix (clear button, badges)'},
+          ]"
+        >
+            <template #cell(scoped_props)="{ value }"><span v-html="value"></span></template>
+            <template #cell(notes)="{ value }"><span v-html="value"></span></template>
+        </ph-data-table>
+        <p>
+          <b>Methods:</b> <code>focus()</code> — focuses the slotted control,
+          so consumers never need a template ref into slot content. Clicking
+          the shell's padding also redirects focus to the control, but a direct
+          hit on the control is left to the browser so the caret lands where the user clicked.
+        </p>
+        <p class="text-muted">
+          The slotted control keeps the <code>form-control</code> class on purpose:
+          <code>controlStyle</code> then overrides only the box-drawing declarations,
+          so the placeholder colour and disabled colour still come from Bootstrap.
+          It also sets <code>appearance: none</code>, without which <code>type="search"</code>
+          lets the browser draw its own clear affordance next to yours.
+        </p>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInputShell",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      error: false,
+      modelValue: '',
+      snippet: `<ph-input-shell size="lg" :invalid="!!error">
+  <template #prefix>
+    <span class="d-inline-flex align-items-center" aria-hidden="true">
+      <ph-icon name="search" size="sm" variant="muted" />
+    </span>
+  </template>
+
+  <template #default="{ controlStyle }">
+    <input
+      type="search"
+      class="form-control"
+      :style="controlStyle"
+      :value="modelValue"
+      @input="modelValue = $event.target.value"
+    />
+  </template>
+
+  <template #suffix>
+    <button v-if="modelValue" type="button" class="btn btn-sm p-0 border-0"
+            aria-label="Clear" @click="modelValue = ''">
+      <ph-icon name="x" size="sm" />
+    </button>
+  </template>
+</ph-input-shell>`,
+      propsData: [
+        {
+          name: "size",
+          type: "String",
+          default: `'md'`,
+          notes: "<code>'sm'</code> | <code>'md'</code> | <code>'lg'</code> --- drives padding, font-size and radius",
+        },
+        {
+          name: "invalid",
+          type: "Boolean",
+          default: 'false',
+          notes: "Error border + red focus ring",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: 'false',
+          notes: "Muted background, <code>not-allowed</code>, focus suppressed",
+        },
+      ],
+    };
+  },
+};
+</script>
