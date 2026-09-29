@@ -65,10 +65,8 @@ $navItems = [
     ],
 ];
 
-// ?section= is a location, not a section: it may name a component inside one
-// ('segmented-control'), because that is what the nav writes when a component
-// is picked. Resolve it to the section that has to be rendered, and keep the
-// original id so the client can put the highlight on the component itself.
+// ?section= is a location, not a section: it may name a component inside one.
+// Resolve it to the section to render, keeping the id for the client's highlight.
 $location = is_string($section ?? null) ? $section : '';
 $sectionId = null;
 
@@ -87,10 +85,8 @@ if ($location !== '') {
     }
 }
 
-// An unknown id must not render an empty page, and it must not be handed to
-// the client as an anchor either: there is no element for the scroll spy to
-// find, so it would silently resolve to the first target and leave the URL
-// claiming a location that does not exist. Both fall back together.
+// An unknown id must not render an empty page nor be handed to the client as an
+// anchor: there is no element for the spy to find, so both fall back together.
 if ($sectionId === null) {
     $sectionId = 'index';
     $location = 'index';
@@ -202,9 +198,8 @@ return [
             style="min-width: 0; min-height: 0;"
         >
             <div ref="contentEl">
-                <!-- One section in the DOM at a time. The server decides which
-                     one for crawlers and for a deep link; the nav decides for
-                     the reader. Both write activeSection, and nothing else. -->
+                <!-- One section in the DOM at a time: the server decides which one
+                     for crawlers and deep links, the nav decides for the reader. -->
                 <section v-if="activeSection === 'index'" id="index" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Overview</h2>
                     <phui-overview />
@@ -377,19 +372,14 @@ const SHELL_FALLBACK_HEIGHT = 'calc(100dvh - 4.75rem)';
 /** Never collapse the shell below this, no matter how small the viewport gets. */
 const SHELL_MIN_HEIGHT = 240;
 
-/** Distance from the scroller's top edge where a target becomes the "current" one. */
-const SPY_ACTIVATION_OFFSET = 32;
+/** Where the reader is looking, as a fraction of the scroller's height. */
+const SPY_READING_RATIO = 0.35;
 
 /** Breathing room kept above a target when scrolling it into view. */
 const SPY_TARGET_PADDING = 8;
 
-/**
- * The one URL parameter that says where the reader is.
- *
- * It holds a location id, which may be a section ('forms') or a component
- * inside one ('segmented-control'). The server resolves a component to its
- * parent section and renders that; the client only ever round-trips the id.
- */
+/** The one URL parameter that says where the reader is: a section id ('forms') or
+ *  a component inside one ('segmented-control'), which the server maps to its parent. */
 const SECTION_PARAM = 'section';
 
 /** Where the page opens when the URL says nothing. */
@@ -414,23 +404,12 @@ export default function mountApp(injectedContext = null) {
         setup() {
             const initState = getInitialState();
 
-            // What the server actually asked for, before the 'index' fallback.
-            // Kept separately so a plain visit to /phui is not treated as an
-            // explicit "show me Overview" request and yanked back to the top
-        // when the browser restores a scroll position on Back.
+            // The server's answer before the 'index' fallback, kept apart so a plain
+            // visit is not read as "show Overview" and yanked to the top on Back.
         const serverSection = initState.activeSection ?? '';
 
-            // Initialize state. We start navItems as empty to safely manage hydration.
-            //
-            // activeSection and activeAnchor answer different questions and must
-            // not share a variable. activeSection is "which section is in the
-            // DOM" — it is section-level only, and it is what the v-if on each
-            // <section> reads, so it is also what the server has to get right for
-            // crawlers. activeAnchor is "which component inside it is in view",
-            // and that is all the scroll spy is allowed to move. Folding the two
-            // together makes the spy close the very section the reader is in: a
-            // spy that reports 'button' fails an `activeSection === 'forms'`
-            // test, and the section unmounts under the cursor.
+            // activeSection = which section is in the DOM (the v-if reads it, so the
+            // server must get it right); activeAnchor = which component is in view.
             const state = reactive({
                 activeSection: initState.activeSection ?? DEFAULT_SECTION,
                 activeAnchor: initState.activeAnchor ?? '',
@@ -461,9 +440,7 @@ export default function mountApp(injectedContext = null) {
                 targetsCache = null;
             }
 
-            /**
-             * Batches all DOM reads in a single layout pass to prevent reflow during scrolling.
-             */
+            /** Batches all DOM reads into a single layout pass to prevent reflow. */
             function getTargetPositions() {
                 const main = mainEl.value;
                 if (!main) return [];
@@ -477,8 +454,9 @@ export default function mountApp(injectedContext = null) {
                     for (const id of orderedSpyIds.value) {
                         const el = document.getElementById(id);
                         if (el) {
-                            const relativeTop = el.getBoundingClientRect().top - mainTop + mainScrollTop;
-                            list.push({ id, top: relativeTop });
+                            const rect = el.getBoundingClientRect();
+                            const relativeTop = rect.top - mainTop + mainScrollTop;
+                            list.push({ id, top: relativeTop, bottom: relativeTop + rect.height });
                         }
                     }
                     targetsCache = list;
@@ -500,13 +478,8 @@ export default function mountApp(injectedContext = null) {
                 return state.navItems.some((nav) => nav.id === id);
             }
 
-            /**
-             * Opens a section and reveals it in the nav.
-             *
-             * Section-level only. Changing it swaps the <section> in the DOM, so
-             * callers that merely want to move the highlight inside the current
-             * section must use markAnchor() instead.
-             */
+            /** Opens a section and reveals it in the nav. Section-level only: it swaps
+             *  the DOM, so moving a highlight inside the current one is markAnchor(). */
             function setActiveSection(id, expand = true) {
                 if (!id || !isSectionId(id) || state.activeSection === id) return;
                 state.activeSection = id;
@@ -514,10 +487,7 @@ export default function mountApp(injectedContext = null) {
                 expandedSections[id] = true;
             }
 
-            /**
-             * Moves the highlight onto a component without disturbing which
-             * section is rendered. This is the only thing the scroll spy writes.
-             */
+            /** Moves the highlight onto a component. The only thing the spy writes. */
             function markAnchor(id) {
                 if (!id) return;
                 state.activeAnchor = id;
@@ -528,11 +498,8 @@ export default function mountApp(injectedContext = null) {
                     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             }
 
-            /**
-             * Scrolls the target to the top of the scroller. Deliberately does NOT use
-             * scrollIntoView(): that walks up and scrolls every scrollable ancestor,
-             * including the document, which would drag the whole layout.
-             */
+            /** Scrolls the target to the top of the scroller. Never scrollIntoView():
+             *  it scrolls every scrollable ancestor and would drag the whole layout. */
             function scrollTargetIntoView(id) {
                 const el = document.getElementById(id);
                 const main = mainEl.value;
@@ -578,17 +545,8 @@ export default function mountApp(injectedContext = null) {
                 expandedSections[id] = !expandedSections[id];
             }
 
-            // ---------------------------------------------------------------
-            // URL as the single source of truth for "where am I"
-            // ---------------------------------------------------------------
-            //
-            // There used to be two: the server's ?section= and the client-written
-            // #fragment. They disagreed — a reload dropped the anchor, a copy of
-            // the URL lost the section, and a component click changed one while
-            // leaving the other stale. One parameter fixes that, and it has to
-            // accept both kinds of id, because a component is a perfectly good
-            // destination: the server resolves it to its parent section and
-            // renders that.
+            // URL as the single source of truth for "where am I": one ?section= id
+            // replaced the server param and the client-written #fragment, which disagreed.
 
             /** The id in ?section=, or '' when absent. */
             function locationId() {
@@ -599,13 +557,8 @@ export default function mountApp(injectedContext = null) {
                 }
             }
 
-            /**
-             * Writes the current location into the URL.
-             *
-             * push for navigation, replace for the scroll spy. A spy that pushed
-             * would put an entry in history for every target the reader passed
-             * through, so Back would walk the scrollback one pixel at a time.
-             */
+            /** Writes the current location into the URL: push for navigation, replace
+             *  for the spy — pushing per target would walk the scrollback on Back. */
             function syncUrl(id, { push = false } = {}) {
                 if (!id || typeof history === 'undefined') return;
 
@@ -622,12 +575,13 @@ export default function mountApp(injectedContext = null) {
                 else history.replaceState({ [SECTION_PARAM]: id }, '', next);
             }
 
-            /**
-             * Applies a location id that arrived from outside the page: the server
-             * on first paint, or the Back button afterwards.
-             */
+            /** Applies a location id from outside the page: the server on first paint,
+             *  or the Back button afterwards. */
             function applyLocation(id) {
-                if (!id) return;
+                if (!id) {
+                    spyArmed = true;
+                    return;
+                }
 
                 if (isSectionId(id)) {
                     setActiveSection(id);
@@ -642,32 +596,17 @@ export default function mountApp(injectedContext = null) {
                     invalidateElementCache();
                     scrollTargetIntoView(id);
                     observeSpyTargets();
+                    spyArmed = true;
                 });
             }
 
-            /**
-             * Scroll spy driven by IntersectionObserver, with no scroll handler.
-             *
-             * The old version read main.scrollTop / clientHeight / scrollHeight on
-             * every scroll frame, right after setActiveSection had mutated a class
-             * and invalidated layout — so each frame forced a synchronous reflow
-             * (Lighthouse: 84 ms of forced reflow in this module alone).
-             *
-             * The observer is used ONLY as a change trigger. It fires when a
-             * target crosses the activation line — rootMargin insets the root by
-             * SPY_ACTIVATION_OFFSET, so "isIntersecting" literally means "this
-             * target has reached the line" — and inside that callback the layout
-             * is already clean, so the batched position read below is free.
-             *
-             * A previous attempt cached each target's top from the entry itself
-             * and compared those values. That was wrong twice over: entries only
-             * arrive for targets whose intersection CHANGED, so a tall section
-             * kept the top it had when it entered, and the whole map stayed empty
-             * until the first callback. Positions come from getTargetPositions(),
-             * the same source the proven scroll path used, with the cache dropped
-             * before each read so it can never be stale.
-             */
+            /** Scroll spy driven by IntersectionObserver, with no scroll handler (one
+             *  forced a reflow per frame); it is only a trigger for the position read. */
             let spyObserver = null;
+
+            // The spy is the URL's writer and applyLocation is its reader, so the
+            // spy must stay quiet until the location has been handed to the scroller.
+            let spyArmed = false;
 
             function observeSpyTargets() {
                 spyObserver?.disconnect();
@@ -676,12 +615,16 @@ export default function mountApp(injectedContext = null) {
                 const main = mainEl.value;
                 if (!main || typeof IntersectionObserver === 'undefined') return;
 
+                // A 1px band at the reading line makes the observer an edge trigger: it
+                // fires exactly when the line enters or leaves a target, nothing else.
+                const band = Math.max(1, Math.round(main.clientHeight * SPY_READING_RATIO));
+
                 spyObserver = new IntersectionObserver(() => {
                     invalidateElementCache();
                     syncActiveFromScroll();
                 }, {
                     root: main,
-                    rootMargin: `-${SPY_ACTIVATION_OFFSET}px 0px 0px 0px`,
+                    rootMargin: `-${band}px 0px -${Math.max(0, main.clientHeight - band - 1)}px 0px`,
                     threshold: 0
                 });
 
@@ -694,20 +637,11 @@ export default function mountApp(injectedContext = null) {
                 syncActiveFromScroll();
             }
 
-            /**
-             * Picks the component the reader is on, from the cached positions.
-             *
-             * Only ever writes activeAnchor. A section-level update from here is
-             * what broke the conditional render: the spy runs at mount with
-             * scrollTop === 0, concludes the reader is on the first target, and
-             * an unconditional setActiveSection() there unmounts whichever
-             * section the server had rendered.
-             *
-             * When the server opened a section that is not the first one, the
-             * first target IS that section, so the spy agrees with the server by
-             * construction and marks it — no special case needed.
-             */
+            /** Picks the target the reader is on. Only ever writes activeAnchor: a
+             *  section-level write here would unmount the section the server rendered. */
             function syncActiveFromScroll() {
+                if (!spyArmed) return;
+
                 const main = mainEl.value;
                 if (!main) return;
 
@@ -715,23 +649,38 @@ export default function mountApp(injectedContext = null) {
                 if (!positions.length) return;
 
                 const scrollTop = main.scrollTop;
-                const atBottom = scrollTop + main.clientHeight >= main.scrollHeight - 2;
 
+                // The scroller ran out of content first, so the last target can
+                // never reach the reading line: the end of the list wins.
+                if (scrollTop + main.clientHeight >= main.scrollHeight - 2) {
+                    markAnchor(positions[positions.length - 1].id);
+                    syncUrl(state.activeAnchor, { push: false });
+                    return;
+                }
+
+                // The reading line, in the same content space as the positions.
+                const line = scrollTop + Math.round(main.clientHeight * SPY_READING_RATIO);
+
+                // Active = the target the line is inside, not the one that merely reached
+                // it; a section contains its components, so the innermost one wins.
                 let current = null;
+                for (const item of positions) {
+                    if (item.top > line || item.bottom <= line) continue;
+                    if (!current || item.top > current.top) current = item;
+                }
 
-                if (atBottom) {
-                    current = positions[positions.length - 1].id;
-                } else {
-                    for (const item of positions) {
-                        if (item.top <= scrollTop + SPY_ACTIVATION_OFFSET) {
-                            current = item.id;
-                        } else {
+                // The line is in a margin or a gap between two examples: the last
+                // target that reached it is still what the reader just read.
+                if (!current) {
+                    for (let i = positions.length - 1; i >= 0; i--) {
+                        if (positions[i].top <= line) {
+                            current = positions[i];
                             break;
                         }
                     }
                 }
 
-                markAnchor(current || positions[0].id);
+                markAnchor((current || positions[0]).id);
                 syncUrl(state.activeAnchor, { push: false });
             }
 
@@ -746,10 +695,8 @@ export default function mountApp(injectedContext = null) {
                 });
             }
 
-            /**
-             * Pins the shell to exactly the space the layout leaves below the topbar,
-             * so the page never scrolls as a whole and the sidebar cannot move.
-             */
+            /** Pins the shell to the space the layout leaves below the topbar, so the
+             *  page never scrolls as a whole and the sidebar cannot move. */
             function measureShell() {
                 const shell = shellEl.value;
                 if (!shell) return;
@@ -840,11 +787,8 @@ export default function mountApp(injectedContext = null) {
                 nextTick(() => observeSpyTargets());
             });
 
-            // Swapping the section replaces every observed element inside it, so
-            // the observer has to be rebuilt against the new DOM. Without this the
-            // spy keeps reporting the anchors of the section that was just
-            // unmounted, and the sub-nav highlight drifts to a component that is
-            // no longer on the page.
+            // Swapping the section replaces every observed element inside it, so the
+            // observer has to be rebuilt against the new DOM.
             watch(() => state.activeSection, () => {
                 invalidateElementCache();
                 nextTick(() => observeSpyTargets());
@@ -853,15 +797,8 @@ export default function mountApp(injectedContext = null) {
             let topbarObserver = null;
             let contentObserver = null;
 
-            /**
-             * Back/forward across the entries scrollTo() pushed.
-             *
-             * Without this the URL and the page disagree the moment anyone
-             * presses Back: the address bar moves, the rendered section does not.
-             * applyLocation() is reused rather than duplicated, so a history
-             * entry and a nav click can never take different paths to the same
-             * destination.
-             */
+            /** Back/forward across the entries scrollTo() pushed. Reuses applyLocation()
+             *  so a history entry and a nav click can never take different paths. */
             function onPopState() {
                 applyLocation(locationId());
             }
@@ -890,15 +827,8 @@ export default function mountApp(injectedContext = null) {
 
                 observeSpyTargets();
 
-                // First paint honours the server's answer. It arrives either as
-                // ?section= (already in locationId(), the server put it there to
-                // render this) or as the injected state, and the two always
-                // agree because the same request produced both.
-                //
-                // This runs after observeSpyTargets() on purpose. The spy fires
-                // once on mount and concludes the reader is on the first target;
-                // because it only writes activeAnchor it cannot undo what is set
-                // here, whichever order they end up running in.
+                // First paint honours the server's answer: ?section= and the injected state
+                // always agree. applyLocation() disarms the spy until the scroll is handed over.
                 applyLocation(locationId() || serverSection);
             });
 
