@@ -1,0 +1,89 @@
+<template>
+  <example-factory
+    tag="<ph-avatar />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Image avatar with initials fallback. <code>name</code> produces initials:
+        first + last word initials, or the first two characters of a single-word name.
+        Falls back to <code>?</code> when empty.
+        </p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <div class="d-flex align-items-center gap-2 my-1">
+            <ph-avatar name="Mak Var" size="lg" shape="rounded" alt="Mak" />
+            <ph-avatar src="/uploads/u.png" name="Mak Var" alt="MV" />
+            <ph-avatar name="Mak Var" size="sm" shape="square" alt="Mak" />
+            <ph-avatar name="Mak Var" size="xs" alt="Mak" />
+          </div>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhAvatar",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-avatar name="Mak Var" size="lg" shape="rounded" alt="Mak" />
+<ph-avatar src="/uploads/u.png" name="Mak Var" alt="MV" />
+<ph-avatar name="Mak Var" size="sm" shape="square" alt="Mak" />
+<ph-avatar name="Mak Var" size="xs" alt="Mak" />`,
+      propsData: [
+      {
+        name: "src",
+        type: "String",
+        default: "''",
+        notes: "Image URL; on load error → initials",
+      },
+      {
+        name: "name",
+        type: "String",
+        default: "''",
+        notes: "Drives fallback initials",
+      },
+      {
+        name: "alt",
+        type: "String",
+        default: "'Avatar'",
+        notes: "",
+      },
+      {
+        name: "size",
+        type: "String",
+        default: "'md'",
+        notes: "xs | sm | md | lg | xl",
+      },
+      {
+        name: "shape",
+        type: "String",
+        default: "'circle'",
+        notes: "circle | square | rounded",
+      }
+    ]
+    };
+  },
+};
+</script>
