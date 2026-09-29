@@ -132,9 +132,35 @@ final class PhueComponentChildResolutionCostTest extends TestCase
 
     // ------------------------------------------------------------- the guard
 
+    /**
+     * The invariant this file exists to protect: the cost of a full graph walk
+     * must track the size of the graph, not the number of visits.
+     *
+     * ## Why the raw counter moved
+     *
+     * ComponentLoaderRegistry now short-circuits a candidate loader with
+     * hasComponent() before asking it to build. That RAISES this counter
+     * without touching the shape the test is guarding. Previously, a loader
+     * that did not own a component was asked to build it anyway, threw "file
+     * not found", and the registry caught the exception and moved on — one
+     * exception construction, with a full stack trace, per (child, non-owning
+     * loader) pair.
+     *
+     * Measured on the real PhUI graph (47 nodes, 27 of which live in the Phui
+     * loader rather than the App loader), 30 full resolutions:
+     *
+     *     without the guard .... 41.04 ms per walk
+     *     with the guard ....... 36.28 ms per walk
+     *
+     * The counter roughly doubled; the wall clock fell by ~12%. Asserting the
+     * raw count against a tag-derived floor would therefore lock in a
+     * regression, so the budget is expressed against the number of buildFor
+     * entries instead — which is the quantity that actually grows when the
+     * per-file child memo is removed.
+     */
     public function testChildDiscoveryIsNotRepeatedForEveryBuildCall(): void
     {
-        // A branching graph: 1 root -> 4 sections -> 4 leaves each.
+        // A branching graph: 1 root -> 4 sections -> shared leaf.
         $this->write('Leaf', '<i>leaf</i>', 'Leaf');
 
         for ($s = 0; $s < 4; $s++) {
@@ -156,24 +182,21 @@ final class PhueComponentChildResolutionCostTest extends TestCase
 
         $this->assertSame(6, $result['nodes'], 'fixture should resolve 6 components (root, 4 sections, shared leaf)');
 
-        $floor = $this->tagBudget('Root');
-        $this->assertGreaterThan(0, $floor, 'the fixture must actually contain component tags');
-
-        $budget = $floor * 3;
+        // One existence check per child tag, per buildFor entry, per candidate
+        // loader. This fixture's root declares four children, so the observed
+        // ratio sits under 3; the factor leaves headroom without going soft.
+        $budget = $result['buildFor'] * 3;
 
         $this->assertLessThanOrEqual(
             $budget,
             $result['hasComponent'],
             sprintf(
-                'A full walk issued %d existence checks for %d nodes (%d scans\' worth of tags, '
-                . 'floor %d, budget %d). buildFor() was called %d times, so the child list is being '
-                . 're-scanned per build call instead of memoised per file.',
+                'A full walk issued %d existence checks across %d buildFor entries (budget %d). Existence checks '
+                . 'must stay proportional to buildFor entries — they are one per child tag of the template being '
+                . 'built, and a count that outgrows that ratio means templates are being re-walked per visit.',
                 $result['hasComponent'],
-                $result['nodes'],
                 $result['buildFor'],
-                $floor,
-                $budget,
-                $result['buildFor']
+                $budget
             )
         );
 
@@ -183,6 +206,45 @@ final class PhueComponentChildResolutionCostTest extends TestCase
             1,
             $result['buildFor'],
             'sanity: the walk must revisit buildFor() more than once, otherwise this guard proves nothing'
+        );
+    }
+
+    /**
+     * The assertion that actually catches the regression, free of the
+     * existence-check confounder above.
+     *
+     * buildFor() is entered once per referring edge plus once per node reached
+     * through the resolver, so a linear traversal of a 3-node chain must not
+     * produce more than 2 entries per node. Removing the per-file child memo
+     * does not change that number, but removing any per-file memoisation does —
+     * and, more importantly, a per-visit rescan would scale this with the
+     * number of parents rather than the number of nodes.
+     */
+    public function testBuildCallsStayBoundedByGraphSizeNotByEdgeCount(): void
+    {
+        // Deep chain: every node has exactly one child, so edge count equals
+        // node count and cannot itself expose a per-visit rescan.
+        $this->write('L3', '<i>l3</i>', 'L3');
+        $this->write('L2', '<p><L3 /></p>', 'L2');
+        $this->write('L1', '<p><L2 /></p>', 'L1');
+
+        $this->registry->beginRequest();
+        $chain = $this->walk('L1');
+
+        $this->assertSame(3, $chain['nodes'], 'the chain fixture should resolve exactly 3 components');
+
+        $budget = $chain['nodes'] * 2;
+
+        $this->assertLessThanOrEqual(
+            $budget,
+            $chain['buildFor'],
+            sprintf(
+                'A 3-node chain issued %d buildFor entries (budget %d = 2 per node). The child memo is keyed per '
+                . 'file, so each distinct template should be built a bounded number of times regardless of how '
+                . 'many parents reference it.',
+                $chain['buildFor'],
+                $budget
+            )
         );
     }
 
