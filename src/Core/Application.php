@@ -261,7 +261,8 @@ class Application
                 parser: null,
                 persistentCache: $c->get(CacheInterface::class),
                 viewsCacheDir: $viewsCacheDir,
-                compilerBridge: $c->get(TemplateCompilerBridge::class)
+                compilerBridge: $c->get(TemplateCompilerBridge::class),
+                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null
             );
         });
 
@@ -272,7 +273,8 @@ class Application
                 parser: null,
                 persistentCache: $c->get(CacheInterface::class),
                 viewsCacheDir: $viewsCacheDir,
-                compilerBridge: $c->get(TemplateCompilerBridge::class)
+                compilerBridge: $c->get(TemplateCompilerBridge::class),
+                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null
             );
         });
 
@@ -296,13 +298,13 @@ class Application
             $client = $c->get(UnixSsrClient::class);
 
             $health = $client->health();
+            /** @var LoggerInterface|null $logger */
+            $logger = $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null;
             if ($health !== null && isset($health['maxRequestBodySize'])) {
                 $sidecarMaxBytes = (int) $health['maxRequestBodySize'];
                 $expectedMaxBytes = $maxPayloadKb * 1024;
 
                 if ($sidecarMaxBytes !== $expectedMaxBytes) {
-                    /** @var LoggerInterface|null $logger */
-                    $logger = $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null;
                     $logger?->warning('SSR max payload size mismatch between PHP and Bun sidecar', [
                         'php_max_payload_bytes' => $expectedMaxBytes,
                         'sidecar_max_request_body_size' => $sidecarMaxBytes,
@@ -313,15 +315,16 @@ class Application
             return new BunSsrEngine(
                 client: $client,
                 maxPayloadKb: $maxPayloadKb,
-                cache: $c->get(CacheInterface::class)
+                cache: $c->get(CacheInterface::class),
+                logger: $logger
             );
         });
         $this->container->alias('ssr.engine', SsrEngine::class);
 
         // Composite Component Loader Registry Singleton
         $this->container->singleton(ComponentLoaderRegistry::class, function ($c): ComponentLoaderRegistry {
-            $logger = $c->has(LoggerInterface::class) 
-                ? $c->get(LoggerInterface::class) 
+            $logger = $c->has(LoggerInterface::class)
+                ? $c->get(LoggerInterface::class)
                 : null;
 
             $registry = new ComponentLoaderRegistry($logger);
@@ -355,7 +358,10 @@ class Application
 
         // Component Discoverer Singleton
         $this->container->singleton(ComponentDiscoverer::class, function ($c): ComponentDiscoverer {
-            return new ComponentDiscoverer($c->get(ComponentLoaderRegistry::class));
+            return new ComponentDiscoverer(
+                registry: $c->get(ComponentLoaderRegistry::class),
+                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null
+            );
         });
 
         // Phue Partial Renderer Singleton
@@ -392,7 +398,8 @@ class Application
                 ssrEngine: $c->get(SsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
                 themeConfig: $this->config->get('app.themeToggle', []),
-                metaConfig: $this->config->get('app.seo', [])
+                metaConfig: $this->config->get('app.seo', []),
+                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null
             );
         });
 
