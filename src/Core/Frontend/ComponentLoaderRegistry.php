@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Core\Frontend;
 
+use Phue\Core\UI\Exceptions\CircularComponentReferenceException;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\PhueComponentLoader;
 use Psr\Log\LoggerInterface;
@@ -65,7 +66,7 @@ class ComponentLoaderRegistry
                     $loader->clearMemo();
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
             }
         }
     }
@@ -85,7 +86,7 @@ class ComponentLoaderRegistry
                     $loader->beginRequest();
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
             }
         }
     }
@@ -107,7 +108,7 @@ class ComponentLoaderRegistry
                     return true;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -141,7 +142,7 @@ class ComponentLoaderRegistry
 
                 return $loader->load($name, $params);
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -173,7 +174,7 @@ class ComponentLoaderRegistry
                     return "/assets/phue/{$name}.{$hash}.phue.js";
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -205,7 +206,7 @@ class ComponentLoaderRegistry
                     return $hash;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -238,7 +239,7 @@ class ComponentLoaderRegistry
                     return $script;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -286,7 +287,7 @@ class ComponentLoaderRegistry
                     return $hash;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -319,7 +320,7 @@ class ComponentLoaderRegistry
                     return $module;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -351,7 +352,7 @@ class ComponentLoaderRegistry
                     return $module;
                 }
             } catch (Throwable $e) {
-                $this->logLoaderError($e, __FUNCTION__);
+                $this->handleLoaderFailure($e, __FUNCTION__);
                 continue;
             }
         }
@@ -360,10 +361,24 @@ class ComponentLoaderRegistry
     }
 
     /**
-     * Helper to log exceptions caught during candidate loader execution.
+     * Handles exceptions caught during candidate loader execution.
+     *
+     * Unrecoverable errors, such as circular dependencies (CircularComponentReferenceException),
+     * are immediately re-thrown to prevent fatal build cycles from being silently suppressed.
+     * Transient or non-fatal loader exceptions are logged and ignored to allow fallback candidate resolution.
+     *
+     * @param Throwable $e      The caught exception.
+     * @param string    $method The calling registry method name.
+     *
+     * @return void
+     * @throws CircularComponentReferenceException If a fatal circular dependency is caught.
      */
-    private function logLoaderError(Throwable $e, string $method): void
+    private function handleLoaderFailure(Throwable $e, string $method): void
     {
+        if ($e instanceof CircularComponentReferenceException) {
+            throw $e;
+        }
+
         if ($this->logger !== null) {
             $this->logger->warning(sprintf('ComponentLoaderRegistry error in %s: %s', $method, $e->getMessage()), [
                 'exception' => $e,
