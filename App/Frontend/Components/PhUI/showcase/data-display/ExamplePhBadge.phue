@@ -1,6 +1,6 @@
 <template>
   <example-factory
-    tag="<ph-data-badge />"
+    tag="<ph-badge />"
     :showCode="showCode"
     :showDemo="showDemo"
     :showProps="showProps"
