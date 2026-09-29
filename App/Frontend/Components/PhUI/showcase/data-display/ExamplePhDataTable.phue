@@ -1,0 +1,118 @@
+<template>
+  <example-factory
+    tag="<ph-data-table />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Client-side sortable, paginatable table. Sorting toggles <code>asc</code>/<code>desc</code> on the last clicked column (arrow <code>▲</code>/<code>▼</code>, <code class="fs-5">↕</code> when inactive).</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <div class="row">
+            <div class="col-md-12 d-flex justify-content-end">
+              <ph-checkbox 
+                v-model="emptyState"
+                label="Empty State"
+              />
+            </div>
+          </div>
+          <ph-data-table
+            :columns="[
+              { key: 'name', label: 'Product', sortable: false },
+              { key: 'price', label: 'Price', sortable: true },
+            ]"
+            :items="emptyState ? [] : [
+              { name: 'Product 1', price: 10.99 },
+              { name: 'Product 2', price: 15.99 },
+              { name: 'Product 3', price: 20.99 },
+              { name: 'Product 4', price: 25.99 },
+              { name: 'Product 5', price: 35.99 },
+              { name: 'Product 6', price: 22.39 },
+            ]"
+            paginated
+            :page-size="3"
+          />
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <p class="text-muted">
+          Internal state: <code>sortKey</code>, <code>sortOrder</code>, <code>currentPage</code> (client-side; the component does not emit page changes).
+        </p>
+        <strong>Slots:</strong>
+        <ul>
+          <li><code>empty</code> (default "No data available")</li>
+          <li><code>cell(&lt;col.key&gt;)</code> — scoped <code>{ row, value }</code> for per-cell rendering</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhDataTable",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      emptyState: false,
+      snippet: `<ph-data-table
+  :columns="[
+    { key: 'name', label: 'Product', sortable: false },
+    { key: 'price', label: 'Price', sortable: true },
+  ]"
+  :items="emptyState ? [] : [
+    { name: 'Product 1', price: 10.99 },
+    { name: 'Product 2', price: 15.99 },
+    { name: 'Product 3', price: 20.99 },
+    { name: 'Product 4', price: 25.99 },
+    { name: 'Product 5', price: 35.99 },
+    { name: 'Product 6', price: 22.39 },
+  ]"
+  paginated
+  :page-size="3"
+/>`,
+      propsData: [
+        {
+          name: "columns",
+          type: "Array",
+          default: "<b>required</b>",
+          notes: "<code>{ key, label, sortable }</code>",
+        },
+        {
+          name: "items",
+          type: "Array",
+          default: "[]",
+          notes: "Row objects; keys correspond to <code>columns[].key</code>",
+        },
+        {
+          name: "paginated",
+          type: "Boolean",
+          default: "false",
+          notes: "Toggles the pager row",
+        },
+        {
+          name: "pageSize",
+          type: "Number",
+          default: "10",
+          notes: "<code><= 0</code> collapse to a single page",
+        },
+      ]
+    };
+  },
+};
+</script>

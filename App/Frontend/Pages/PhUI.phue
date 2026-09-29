@@ -268,23 +268,30 @@ return [
 
                 <!-- Data Display -->
                 <section v-if="activeSection === 'data'" id="data" class="mb-5">
-                    <h2 class="h4 fw-semibold mb-3">Data Display</h2>
-                    <div class="row g-4">
+                    <ph-card title='Data Display'>
+
+                        <h2 class="h4 fw-semibold mb-3">Data Display</h2>
+                        <div class="d-flex flex-column gap-2">
+                            <span id="table">
+                                <example-ph-data-table />
+                            </span>
                         <!-- <ExamplePhDataTable />
-                        <ExamplePhBadge />
-                        <ExamplePhAvatar />
-                        <ExamplePhCard />
-                        <ExamplePhChip />
-                        <ExamplePhEmptyState />
-                        <ExamplePhStat />
-                        <ExamplePhListGroup />
-                        <ExamplePhDescriptionList />
-                        <ExamplePhTimeline />
-                        <ExamplePhCode />
-                        <ExamplePhTreeView />
-                        <ExamplePhAccordion />
-                        <ExamplePhIcon /> -->
-                    </div>
+                            <ExamplePhBadge />
+                            <ExamplePhAvatar />
+                            <ExamplePhCard />
+                            <ExamplePhChip />
+                            <ExamplePhEmptyState />
+                            <ExamplePhStat />
+                            <ExamplePhListGroup />
+                            <ExamplePhDescriptionList />
+                            <ExamplePhTimeline />
+                            <ExamplePhCode />
+                            <ExamplePhTreeView />
+                            <ExamplePhAccordion />
+                            <ExamplePhIcon /> -->
+                        </div>
+                    </ph-card>
+                    
                 </section>
 
                 <!-- Feedback -->
