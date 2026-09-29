@@ -112,7 +112,9 @@ class UnixSsrClient implements SsrClient
             // Check HTTP status code (must be 200 OK)
             if (preg_match('#^HTTP/1\.[01]\s+(\d+)#i', $headers, $matches)) {
                 $statusCode = (int) $matches[1];
-                if ($statusCode !== 200) {
+                
+                // Allow non-200 responses if they contain a valid JSON error payload (e.g., 413, 400, 500)
+                if ($statusCode !== 200 && $statusCode !== 413 && $statusCode !== 400 && $statusCode !== 500) {
                     return null;
                 }
             }

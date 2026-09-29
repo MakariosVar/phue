@@ -293,7 +293,8 @@ class Application
 
             return new BunSsrEngine(
                 client: $c->get(UnixSsrClient::class),
-                maxPayloadKb: (int) $this->config->get('ssr.max_payload_kb', 512)
+                maxPayloadKb: (int) $this->config->get('ssr.max_payload_kb', 512),
+                cache: $c->get(CacheInterface::class)
             );
         });
         $this->container->alias('ssr.engine', SsrEngine::class);

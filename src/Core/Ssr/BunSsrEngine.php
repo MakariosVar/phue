@@ -4,39 +4,41 @@ declare(strict_types=1);
 
 namespace Phue\Core\Ssr;
 
+use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
 /**
  * Class BunSsrEngine
  *
  * High-level SSR engine communicating with a Bun JavaScript sidecar via an SsrClient interface.
- * Implements content-addressed hash tracking and strict fail-open error handling.
+ * Implements content-addressed hash tracking via PSR-16 caching and strict fail-open error handling.
  *
  * @package Phue\Core\Ssr
  */
 class BunSsrEngine implements SsrEngine
 {
     /**
-     * Maximum number of hashes retained in long-lived workers before cache eviction.
+     * Cache key prefix for tracking component hashes.
+     * Uses underscores to avoid reserved PSR-16 characters (such as ':') in FileCache implementations.
      */
-    private const MAX_KNOWN_HASHES = 1000;
+    private const CACHE_KEY_PREFIX = 'phue_ssr_hash_';
 
     /**
-     * In-memory registry tracking sidecar-cached component hashes.
-     *
-     * @var array<string, bool>
+     * Cache TTL in seconds (24 hours).
      */
-    private static array $knownHashes = [];
+    private const CACHE_TTL = 86400;
 
     /**
      * BunSsrEngine constructor.
      *
      * @param SsrClient $client Transport layer client instance.
      * @param int $maxPayloadKb Maximum allowed JSON payload size in KB before dispatch.
+     * @param CacheInterface|null $cache Optional PSR-16 cache instance for tracking component hashes.
      */
     public function __construct(
         private SsrClient $client,
-        private int $maxPayloadKb = 512
+        private int $maxPayloadKb = 512,
+        private ?CacheInterface $cache = null
     ) {}
 
     /**
@@ -51,25 +53,23 @@ class BunSsrEngine implements SsrEngine
     public function render(string $template, array $state = [], array $context = []): ?string
     {
         try {
-            // Unbounded array protection for Swoole workers
-            if (count(self::$knownHashes) > self::MAX_KNOWN_HASHES) {
-                self::$knownHashes = [];
-            }
-
             // Attempt initial rendering dispatch
             $result = $this->dispatchRender($template, $state, $context, forceFullSource: false);
 
-            if ($result !== null) {
-                return $result;
+            if ($result['html'] !== null) {
+                return $result['html'];
             }
 
-            // If initial dispatch failed, invalidate tracked hashes and execute immediate same-call retry with full sources
-            self::$knownHashes = [];
-            return $this->dispatchRender($template, $state, $context, forceFullSource: true);
+            // Only retry with full sources if the sidecar explicitly reported a cache-miss error
+            if ($result['isCacheMiss']) {
+                $retryResult = $this->dispatchRender($template, $state, $context, forceFullSource: true);
+                return $retryResult['html'];
+            }
+
+            return null;
 
         } catch (Throwable) {
-            // Fail-open: Reset tracking state and return fallback null
-            self::$knownHashes = [];
+            // Fail-open: Return fallback null without wiping unrelated cached hashes
             return null;
         }
     }
@@ -81,14 +81,16 @@ class BunSsrEngine implements SsrEngine
      * @param array<string, mixed> $state
      * @param array<string, mixed> $context
      * @param bool $forceFullSource When true, forces transmitting component source string 's' regardless of cache history.
-     * @return string|null Rendered HTML string or null.
+     * @return array{html: string|null, isCacheMiss: bool}
      */
     private function dispatchRender(
         string $template, 
         array $state, 
         array $context, 
         bool $forceFullSource
-    ): ?string {
+    ): array {
+        $failure = ['html' => null, 'isCacheMiss' => false];
+
         $envelope = [
             'v' => 1,
             'template' => $template,
@@ -105,7 +107,7 @@ class BunSsrEngine implements SsrEngine
                     $hash = substr(hash('sha256', $source), 0, 12);
                     $componentEntry = ['h' => $hash];
 
-                    if ($forceFullSource || !isset(self::$knownHashes[$hash])) {
+                    if ($forceFullSource || !$this->isHashKnown($hash)) {
                         $componentEntry['s'] = $source;
                         $pendingHashes[] = $hash;
                     }
@@ -122,29 +124,104 @@ class BunSsrEngine implements SsrEngine
         $json = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($json === false || strlen($json) > ($this->maxPayloadKb * 1024)) {
-            return null;
+            return $failure;
         }
 
         $rawResponse = $this->client->send(method: 'POST', path: '/v1/render', payload: $json);
 
         if ($rawResponse === null) {
-            return null;
+            return $failure;
         }
 
         $response = json_decode($rawResponse, true);
 
         if (!is_array($response)) {
-            return null;
+            return $failure;
         }
 
         if (isset($response['ok']) && $response['ok'] === true && isset($response['html']) && is_string($response['html'])) {
             foreach ($pendingHashes as $hash) {
-                self::$knownHashes[$hash] = true;
+                $this->rememberHash($hash);
             }
 
-            return $response['html'];
+            return ['html' => $response['html'], 'isCacheMiss' => false];
         }
 
-        return null;
+        // Inspect error payload to identify sidecar module cache-misses
+        $isCacheMiss = false;
+        if (isset($response['error']['message']) && is_string($response['error']['message'])) {
+            $message = strtolower($response['error']['message']);
+            if (
+                str_contains($message, 'not found in sidecar cache') || 
+                str_contains($message, 'cache miss') || 
+                str_contains($message, 'module not found') || 
+                str_contains($message, 'unknown component')
+            ) {
+                $isCacheMiss = true;
+                // Evict pending/sent hashes so full source is included on the retry call
+                foreach ($pendingHashes as $hash) {
+                    $this->forgetHash($hash);
+                }
+            }
+        }
+
+        return ['html' => null, 'isCacheMiss' => $isCacheMiss];
+    }
+
+    /**
+     * Check if component hash exists in PSR-16 cache.
+     *
+     * @param string $hash
+     * @return bool
+     */
+    private function isHashKnown(string $hash): bool
+    {
+        if ($this->cache === null) {
+            return false;
+        }
+
+        try {
+            return (bool) $this->cache->has(self::CACHE_KEY_PREFIX . $hash);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Store component hash in PSR-16 cache with TTL.
+     *
+     * @param string $hash
+     * @return void
+     */
+    private function rememberHash(string $hash): void
+    {
+        if ($this->cache === null) {
+            return;
+        }
+
+        try {
+            $this->cache->set(self::CACHE_KEY_PREFIX . $hash, true, self::CACHE_TTL);
+        } catch (Throwable) {
+            // Ignore cache storage errors to maintain fail-open design
+        }
+    }
+
+    /**
+     * Remove component hash from PSR-16 cache on sidecar cache-miss.
+     *
+     * @param string $hash
+     * @return void
+     */
+    private function forgetHash(string $hash): void
+    {
+        if ($this->cache === null) {
+            return;
+        }
+
+        try {
+            $this->cache->delete(self::CACHE_KEY_PREFIX . $hash);
+        } catch (Throwable) {
+            // Ignore cache deletion errors
+        }
     }
 }
