@@ -79,7 +79,7 @@ async function resolveModule(entry: ComponentEntry | string) {
 
 Bun.serve({
     unix: SOCKET_PATH,
-    maxRequestBodySize: 512 * 1024, // 512 KB Limit
+    maxRequestBodySize: parseInt(process.env.SSR_MAX_PAYLOAD_KB || "512") * 1024, // 512 KB Limit
 
     routes: {
         "/v1/health": () => {

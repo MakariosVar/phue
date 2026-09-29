@@ -70,11 +70,16 @@ run_start() {
     echo "⚡ Launching Phue HTTP & Bun SSR dev servers..."
 
     # CWD fix: run bun inside /app/ssr subshell
+    # Export root environment variables to prevent relying on hardcoded fallbacks like SOCKET_PATH
     # Added grep -v to filter out Vue warnings from Bun SSR logs
     docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" bash -c '
         trap "kill 0" EXIT SIGINT SIGTERM
         ./phue serve 2>&1 | sed "s/^/[PHUE SERVE] /" &
-        (cd /app/ssr && NODE_ENV=production bun server.ts) 2>&1 | grep --line-buffered -v "\[Vue warn\]" | sed "s/^/[BUN SSR]    /" &
+        (
+            cd /app/ssr && \
+            [ -f /app/.env ] && set -o allexport && source /app/.env && set +o allexport
+            NODE_ENV=production bun server.ts
+        ) 2>&1 | grep --line-buffered -v "\[Vue warn\]" | sed "s/^/[BUN SSR]    /" &
         wait -n
     '
 }
