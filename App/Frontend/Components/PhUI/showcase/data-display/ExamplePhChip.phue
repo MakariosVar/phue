@@ -9,7 +9,10 @@
     @toggleProps="showProps = !showProps"
   >
     <template #description>
-      <p>Small status label.</p>
+      <p>
+        Pill-shaped removable tag, built on <code>badge rounded-pill</code>.
+        Disabled chips are visually dimmed <code>(opacity-50)</code> and non-interactive <code>(pe-none)</code>.
+      </p>
     </template>
     <template #demo>
         <ph-card v-if="showDemo">
