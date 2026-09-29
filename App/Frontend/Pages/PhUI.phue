@@ -35,6 +35,7 @@ $navItems = [
             ['id' => 'badge', 'label' => 'Badge'],
             ['id' => 'chip', 'label' => 'Chip'],
             ['id' => 'avatar', 'label' => 'Avatar'],
+            ['id' => 'card', 'label' => 'Card'],
         ]
     ],
     [
@@ -286,8 +287,11 @@ return [
                             <span id="avatar">
                                 <example-ph-avatar />
                             </span>
+                            <span id="card">
+                                <example-ph-card />
+                            </span>
+
                         <!--
-                            <ExamplePhCard />
                             <ExamplePhEmptyState />
                             <ExamplePhStat />
                             <ExamplePhListGroup />
