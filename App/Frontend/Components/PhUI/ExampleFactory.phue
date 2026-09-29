@@ -6,25 +6,11 @@
         </h4>
         <div class="d-flex gap-2">
           <ph-button
-            @click="toggleDemo"
-            size="sm"
-            :variant="showDemo ? 'success' : 'outline-success'"
-          >
-            Demo
-          </ph-button>
-          <ph-button
             @click="toggleCode"
             size="sm"
             :variant="showCode ? 'secondary' : 'outline-secondary'"
           >
             Code
-          </ph-button>
-          <ph-button
-            @click="toggleProps"
-            size="sm"
-            :variant="showProps ? 'warning' : 'outline-warning'"
-          >
-            Props
           </ph-button>
         </div>
       </div>
