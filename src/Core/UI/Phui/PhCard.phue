@@ -1,5 +1,10 @@
 <template>
-  <div :class="['card', { 'border-0': !bordered, 'card-hoverable': hoverable }]">
+  <div
+    :class="['card', { 'border-0': !bordered }]"
+    :style="hoverStyle"
+    @mouseenter="hovered = true"
+    @mouseleave="hovered = false"
+  >
     <div v-if="$slots.header || title" class="card-header bg-transparent">
       <slot name="header">
         <h3 class="card-title mb-0">{{ title }}</h3>
@@ -36,6 +41,27 @@ export default {
     hoverable: {
       type: Boolean,
       default: false
+    }
+  },
+  data() {
+    return {
+      hovered: false
+    };
+  },
+  computed: {
+    hoverStyle() {
+      if (!this.hoverable) {
+        return null;
+      }
+      const style = {
+        cursor: 'pointer',
+        transition: 'box-shadow 0.15s ease, transform 0.15s ease'
+      };
+      if (this.hovered) {
+        style.boxShadow = 'var(--bs-box-shadow-sm)';
+        style.transform = 'translateY(-2px)';
+      }
+      return style;
     }
   }
 };
