@@ -24,9 +24,21 @@ class RouteParameterBindingTest extends TestCase
 
     private Application $app;
 
+    /**
+     * The production-error-path tests below depend on debug being off.
+     *
+     * Leaving this to /app/.env made the suite's green/red state a property of
+     * the developer's machine: a checkout with APP_DEBUG=true could not run it,
+     * which is how a security assertion quietly stops being run at all. The
+     * Application constructor's ?bool $debug argument exists for exactly this,
+     * and testInvalidIntegerMessageIsVerboseOnlyInDebug() already proves it
+     * overrides config. Pinning it here means the same assertion holds for
+     * every developer and in CI, and the debug-specific behaviour stays covered
+     * by its own explicit test rather than by ambient state.
+     */
     protected function setUp(): void
     {
-        $this->app = new Application('/app');
+        $this->app = new Application('/app', debug: false);
     }
 
     private function handle(string $method, string $uri): Response
@@ -156,9 +168,9 @@ class RouteParameterBindingTest extends TestCase
         $body = json_decode($response->getContent(), true);
 
         $this->assertFalse(
-            $this->app->getConfig()->get('app.debug'),
-            'This test asserts the production error path. It is meaningless with APP_DEBUG=true; '
-            . 'see testInvalidIntegerMessageIsVerboseOnlyInDebug().'
+            $this->app->isDebug(),
+            'This test asserts the production error path, so the application under test must be in production '
+            . 'mode. setUp() pins debug:false for exactly this reason — see the docblock there.'
         );
 
         $this->assertStringNotContainsString('must be an integer', (string) ($body['error'] ?? ''));
