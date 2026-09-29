@@ -511,14 +511,8 @@ export default function mountApp(injectedContext = null) {
                 });
             }
 
-            /**
-             * Navigates to a section or a component inside it.
-             *
-             * The two need different handling now that only one section is
-             * mounted: a section id swaps the DOM, so the section must open
-             * first and the scroll can only happen after Vue has rendered it. A
-             * component id is already on screen, so it just moves the highlight.
-             */
+            /** Navigates to a section or a component. A section id swaps the DOM, so
+             *  its scroll waits for nextTick; a component is already on screen. */
             function scrollTo(id) {
                 if (!id) return;
 
