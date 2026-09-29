@@ -1,0 +1,74 @@
+<template>
+  <example-factory
+    tag="<ph-form-field />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Layout wrapper around any control: label, slot,
+        and error-or-helper text. Adds <code>was-validated</code> to the wrapper when an error is present
+        (used by Bootstrap for feedback styling on the slotted control).
+      </p>
+    </template>
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-form-field label="Email"  :error="email ? '' : `Email is required.`" helper-text="We'll never share your email.">
+          <ph-input v-model="email" placeholder="you@example.com" required />
+        </ph-form-field>
+      </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="700px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhFormField",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      email: '',
+      snippet: `<ph-form-field label="Email"  :error="email ? '' : \`Email is required.\`" helper-text="We'll never share your email.">
+  <ph-input v-model="email" placeholder="you@example.com" required />
+</ph-form-field>`,
+      propsData: [
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "<code>form-label</code>",
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes: "<code>valid-feedback d-block</code>",
+        },
+        {
+          name: "helperText",
+          type: "String",
+          default: "''",
+          notes: "<code>form-text</code>; shown only when <code>error</code> is empty",
+        },
+      ]
+    };
+  },
+};
+</script>
