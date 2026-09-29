@@ -1,86 +1,105 @@
 <php>
+$navItems = [
+    [
+        'id' => 'index',
+        'label' => 'Overview',
+        'components' => []
+    ],
+    [
+        'id' => 'forms',
+        'label' => 'Form Controls',
+        'components' => [
+            ['id' => 'button', 'label' => 'Button'],
+            ['id' => 'input', 'label' => 'Input'],
+            ['id' => 'number-input', 'label' => 'Number Input'],
+            ['id' => 'select', 'label' => 'Select'],
+            ['id' => 'select3', 'label' => 'Select3'],
+            ['id' => 'textarea', 'label' => 'Textarea'],
+            ['id' => 'checkbox', 'label' => 'Checkbox'],
+            ['id' => 'radio', 'label' => 'Radio'],
+            ['id' => 'switch', 'label' => 'Switch'],
+            ['id' => 'search-input', 'label' => 'Search Input'],
+            ['id' => 'range', 'label' => 'Range'],
+            ['id' => 'file-input', 'label' => 'File Input'],
+            ['id' => 'date-picker', 'label' => 'Date Picker'],
+            ['id' => 'segmented-control', 'label' => 'Segmented Control'],
+            ['id' => 'form', 'label' => 'Form'],
+            ['id' => 'form-field', 'label' => 'Form Field'],
+        ]
+    ],
+    [
+        'id' => 'data',
+        'label' => 'Data Display',
+        'components' => [
+            ['id' => 'table', 'label' => 'Table'],
+            ['id' => 'badge', 'label' => 'Badge'],
+        ]
+    ],
+    [
+        'id' => 'feedback',
+        'label' => 'Feedback',
+        'components' => [
+            ['id' => 'alert', 'label' => 'Alert'],
+            ['id' => 'modal', 'label' => 'Modal'],
+            ['id' => 'progress-bar', 'label' => 'Progress Bar'],
+        ]
+    ],
+    [
+        'id' => 'navigation',
+        'label' => 'Navigation',
+        'components' => []
+    ],
+    [
+        'id' => 'content',
+        'label' => 'Content & Layout',
+        'components' => []
+    ],
+    [
+        'id' => 'ssr',
+        'label' => 'Server-Side',
+        'components' => []
+    ],
+];
+
+// ?section= is a location, not a section: it may name a component inside one
+// ('segmented-control'), because that is what the nav writes when a component
+// is picked. Resolve it to the section that has to be rendered, and keep the
+// original id so the client can put the highlight on the component itself.
+$location = is_string($section ?? null) ? $section : '';
+$sectionId = null;
+
+if ($location !== '') {
+    foreach ($navItems as $group) {
+        if ($group['id'] === $location) {
+            $sectionId = $group['id'];
+            break;
+        }
+        foreach ($group['components'] as $component) {
+            if ($component['id'] === $location) {
+                $sectionId = $group['id'];
+                break 2;
+            }
+        }
+    }
+}
+
+// An unknown id must not render an empty page, and it must not be handed to
+// the client as an anchor either: there is no element for the scroll spy to
+// find, so it would silently resolve to the first target and leave the URL
+// claiming a location that does not exist. Both fall back together.
+if ($sectionId === null) {
+    $sectionId = 'index';
+    $location = 'index';
+}
+
 return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
-        'activeSection' => 'index',
+        'activeSection' => $sectionId,
+        'activeAnchor' => $location,
         'searchQuery' => '',
         'shellHeight' => 'calc(100dvh - 4.75rem)',
-        'navItems' => [
-            [
-                'id' => 'index',
-                'label' => 'Overview',
-                'components' => []
-            ],
-            [
-                'id' => 'forms',
-                'label' => 'Form Controls',
-                'components' => [
-                    ['id' => 'button', 'label' => 'Button'],
-                    ['id' => 'input', 'label' => 'Input'],
-                    ['id' => 'number-input', 'label' => 'Number Input'],
-                    ['id' => 'select', 'label' => 'Select'],
-                    ['id' => 'select3', 'label' => 'Select3'],
-                    ['id' => 'textarea', 'label' => 'Textarea'],
-                    ['id' => 'checkbox', 'label' => 'Checkbox'],
-                    ['id' => 'radio', 'label' => 'Radio'],
-                    ['id' => 'switch', 'label' => 'Switch'],
-                    ['id' => 'search-input', 'label' => 'Search Input'],
-                    ['id' => 'range', 'label' => 'Range'],
-                    ['id' => 'file-input', 'label' => 'File Input'],
-                    ['id' => 'date-picker', 'label' => 'Date Picker'],
-                    ['id' => 'segmented-control', 'label' => 'Segmented Control'],
-                    ['id' => 'form', 'label' => 'Form'],
-                    ['id' => 'form-field', 'label' => 'Form Field']
-                ]
-            ],
-            [
-                'id' => 'data',
-                'label' => 'Data Display',
-                'components' => [
-                    [
-                        'id' => 'table',
-                        'label' => 'Table',
-                    ],
-                    [
-                        'id' => 'badge',
-                        'label' => 'Badge',
-                    ]
-                ]
-            ],
-            [
-                'id' => 'feedback',
-                'label' => 'Feedback',
-                'components' => [
-                    [
-                        'id' => 'alert',
-                        'label' => 'Alert',
-                    ],
-                    [
-                        'id' => 'modal',
-                        'label' => 'Modal',
-                    ],
-                    [
-                        'id' => 'progress-bar',
-                        'label' => 'Progress Bar',
-                    ]
-                ]
-            ],
-            [
-                'id' => 'navigation',
-                'label' => 'Navigation',
-                'components' => []
-            ],
-            [
-                'id' => 'content',
-                'label' => 'Content & Layout',
-                'components' => []
-            ],
-            [
-                'id' => 'ssr',
-                'label' => 'Server-Side',
-                'components' => []
-            ],
-        ],
+        'navItems' => $navItems,
     ],
 ];
 </php>
@@ -154,17 +173,16 @@ return [
                         :key="comp.id"
                         :href="'#' + comp.id"
                         class="phue-nav-sub-link d-flex align-items-center ms-4 p-1"
-                        :class="{ 'phue-nav-link--active': activeSection === comp.id }"
+                        :class="{ 'phue-nav-link--active': activeAnchor === comp.id }"
                         :style="{
-                            color: activeSection === comp.id ? 'var(--bs-primary)' : 'var(--bs-secondary-color)',
-                            fontWeight: activeSection === comp.id ? '600' : '400',
-                            background: activeSection === comp.id ? 'var(--bs-secondary-bg)' : 'transparent',
+                            color: activeAnchor === comp.id ? 'var(--bs-primary)' : 'var(--bs-secondary-color)',
+                            fontWeight: activeAnchor === comp.id ? '600' : '400',
+                            background: activeAnchor === comp.id ? 'var(--bs-secondary-bg)' : 'transparent',
                             borderRadius: '0.25rem',
-                            textDecoration: 'none',
                             transition: 'all 0.15s ease',
                             cursor: 'pointer'
                         }"
-                        :aria-current="activeSection === comp.id ? 'true' : null"
+                        :aria-current="activeAnchor === comp.id ? 'true' : null"
                         @click.prevent="scrollTo(comp.id)"
                     >
                         {{ comp.label }}
@@ -180,14 +198,16 @@ return [
             style="min-width: 0; min-height: 0;"
         >
             <div ref="contentEl">
-                <!-- Overview -->
-                <section id="index" class="mb-5">
+                <!-- One section in the DOM at a time. The server decides which
+                     one for crawlers and for a deep link; the nav decides for
+                     the reader. Both write activeSection, and nothing else. -->
+                <section v-if="activeSection === 'index'" id="index" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Overview</h2>
                     <phui-overview />
                 </section>
 
                 <!-- Form Controls -->
-                <section id="forms" class="mb-5">
+                <section v-if="activeSection === 'forms'" id="forms" class="mb-5">
                     <ph-card title='Form Controls'>
                         <div class="d-flex flex-column gap-2">
                             <span id="button">
@@ -247,7 +267,7 @@ return [
                 </section>
 
                 <!-- Data Display -->
-                <section id="data" class="mb-5">
+                <section v-if="activeSection === 'data'" id="data" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Data Display</h2>
                     <div class="row g-4">
                         <!-- <ExamplePhDataTable />
@@ -268,7 +288,7 @@ return [
                 </section>
 
                 <!-- Feedback -->
-                <section id="feedback" class="mb-5">
+                <section v-if="activeSection === 'feedback'" id="feedback" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Feedback</h2>
                     <div class="row g-4">
                         <!-- <ExamplePhAlert />
@@ -285,7 +305,7 @@ return [
                 </section>
 
                 <!-- Navigation -->
-                <section id="navigation" class="mb-5">
+                <section v-if="activeSection === 'navigation'" id="navigation" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Navigation</h2>
                     <div class="row g-4">
                         <!-- <ExamplePhBreadcrumb />
@@ -299,7 +319,7 @@ return [
                 </section>
 
                 <!-- Content & Layout -->
-                <section id="content" class="mb-5">
+                <section v-if="activeSection === 'content'" id="content" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Content & Layout</h2>
                     <div class="row g-4">
                         <!-- <ExamplePhText />
@@ -315,7 +335,7 @@ return [
                 </section>
 
                 <!-- Server-Side -->
-                <section id="ssr" class="mb-5">
+                <section v-if="activeSection === 'ssr'" id="ssr" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Server-Side</h2>
                     <div class="row g-4">
                         <!-- <ExamplePhNavigation />
@@ -341,6 +361,18 @@ const SPY_ACTIVATION_OFFSET = 32;
 /** Breathing room kept above a target when scrolling it into view. */
 const SPY_TARGET_PADDING = 8;
 
+/**
+ * The one URL parameter that says where the reader is.
+ *
+ * It holds a location id, which may be a section ('forms') or a component
+ * inside one ('segmented-control'). The server resolves a component to its
+ * parent section and renders that; the client only ever round-trips the id.
+ */
+const SECTION_PARAM = 'section';
+
+/** Where the page opens when the URL says nothing. */
+const DEFAULT_SECTION = 'index';
+
 export default function mountApp(injectedContext = null) {
     if (typeof window !== 'undefined' && window.__phueApp?.unmount) {
         window.__phueApp.unmount();
@@ -360,9 +392,26 @@ export default function mountApp(injectedContext = null) {
         setup() {
             const initState = getInitialState();
 
+            // What the server actually asked for, before the 'index' fallback.
+            // Kept separately so a plain visit to /phui is not treated as an
+            // explicit "show me Overview" request and yanked back to the top
+        // when the browser restores a scroll position on Back.
+        const serverSection = initState.activeSection ?? '';
+
             // Initialize state. We start navItems as empty to safely manage hydration.
+            //
+            // activeSection and activeAnchor answer different questions and must
+            // not share a variable. activeSection is "which section is in the
+            // DOM" — it is section-level only, and it is what the v-if on each
+            // <section> reads, so it is also what the server has to get right for
+            // crawlers. activeAnchor is "which component inside it is in view",
+            // and that is all the scroll spy is allowed to move. Folding the two
+            // together makes the spy close the very section the reader is in: a
+            // spy that reports 'button' fails an `activeSection === 'forms'`
+            // test, and the section unmounts under the cursor.
             const state = reactive({
-                activeSection: initState.activeSection ?? 'index',
+                activeSection: initState.activeSection ?? DEFAULT_SECTION,
+                activeAnchor: initState.activeAnchor ?? '',
                 searchQuery: initState.searchQuery ?? '',
                 navItems: [],
             });
@@ -424,16 +473,32 @@ export default function mountApp(injectedContext = null) {
                 return null;
             }
 
+            /** True when the id names a section rather than a component inside one. */
+            function isSectionId(id) {
+                return state.navItems.some((nav) => nav.id === id);
+            }
+
             /**
-             * Marks a target active and reveals the nav group that owns it, so the
-             * sub-navlist always shows the entry the reader is currently looking at.
+             * Opens a section and reveals it in the nav.
+             *
+             * Section-level only. Changing it swaps the <section> in the DOM, so
+             * callers that merely want to move the highlight inside the current
+             * section must use markAnchor() instead.
              */
             function setActiveSection(id, expand = true) {
-                if (!id || state.activeSection === id) return;
+                if (!id || !isSectionId(id) || state.activeSection === id) return;
                 state.activeSection = id;
                 if (!expand) return;
-                const group = parentGroupOf(id);
-                if (group) expandedSections[group] = true;
+                expandedSections[id] = true;
+            }
+
+            /**
+             * Moves the highlight onto a component without disturbing which
+             * section is rendered. This is the only thing the scroll spy writes.
+             */
+            function markAnchor(id) {
+                if (!id) return;
+                state.activeAnchor = id;
             }
 
             function prefersReducedMotion() {
@@ -457,16 +522,105 @@ export default function mountApp(injectedContext = null) {
                 });
             }
 
+            /**
+             * Navigates to a section or a component inside it.
+             *
+             * The two need different handling now that only one section is
+             * mounted: a section id swaps the DOM, so the section must open
+             * first and the scroll can only happen after Vue has rendered it. A
+             * component id is already on screen, so it just moves the highlight.
+             */
             function scrollTo(id) {
-                setActiveSection(id);
-                scrollTargetIntoView(id);
-                if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
-                    history.replaceState(null, '', `#${id}`);
+                if (!id) return;
+
+                if (isSectionId(id)) {
+                    setActiveSection(id);
+                    markAnchor(id);
+                    nextTick(() => scrollTargetIntoView(id));
+                } else {
+                    const group = parentGroupOf(id);
+                    if (group && group !== state.activeSection) {
+                        // The component lives in a section that is not mounted.
+                        setActiveSection(group);
+                        nextTick(() => scrollTargetIntoView(id));
+                    } else {
+                        markAnchor(id);
+                        scrollTargetIntoView(id);
+                    }
                 }
+
+                syncUrl(id, { push: true });
             }
 
             function toggleSection(id) {
                 expandedSections[id] = !expandedSections[id];
+            }
+
+            // ---------------------------------------------------------------
+            // URL as the single source of truth for "where am I"
+            // ---------------------------------------------------------------
+            //
+            // There used to be two: the server's ?section= and the client-written
+            // #fragment. They disagreed — a reload dropped the anchor, a copy of
+            // the URL lost the section, and a component click changed one while
+            // leaving the other stale. One parameter fixes that, and it has to
+            // accept both kinds of id, because a component is a perfectly good
+            // destination: the server resolves it to its parent section and
+            // renders that.
+
+            /** The id in ?section=, or '' when absent. */
+            function locationId() {
+                try {
+                    return new URL(window.location.href).searchParams.get(SECTION_PARAM) || '';
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            /**
+             * Writes the current location into the URL.
+             *
+             * push for navigation, replace for the scroll spy. A spy that pushed
+             * would put an entry in history for every target the reader passed
+             * through, so Back would walk the scrollback one pixel at a time.
+             */
+            function syncUrl(id, { push = false } = {}) {
+                if (!id || typeof history === 'undefined') return;
+
+                const url = new URL(window.location.href);
+                if (id === DEFAULT_SECTION) {
+                    url.searchParams.delete(SECTION_PARAM);
+                } else {
+                    url.searchParams.set(SECTION_PARAM, id);
+                }
+                url.hash = '';
+
+                const next = url.pathname + url.search;
+                if (push) history.pushState({ [SECTION_PARAM]: id }, '', next);
+                else history.replaceState({ [SECTION_PARAM]: id }, '', next);
+            }
+
+            /**
+             * Applies a location id that arrived from outside the page: the server
+             * on first paint, or the Back button afterwards.
+             */
+            function applyLocation(id) {
+                if (!id) return;
+
+                if (isSectionId(id)) {
+                    setActiveSection(id);
+                    markAnchor(id);
+                } else {
+                    const group = parentGroupOf(id);
+                    if (group) setActiveSection(group);
+                    markAnchor(id);
+                }
+
+                nextTick(() => {
+                    invalidateElementCache();
+                    scrollTargetIntoView(id);
+                    observeSpyTargets();
+                });
             }
 
             /**
@@ -519,10 +673,17 @@ export default function mountApp(injectedContext = null) {
             }
 
             /**
-             * Picks the target the reader is on, from the cached positions.
-             * Identical rules to the original scroll handler: at the bottom of the
-             * scroller the last target wins, otherwise the last one whose top has
-             * passed the activation line.
+             * Picks the component the reader is on, from the cached positions.
+             *
+             * Only ever writes activeAnchor. A section-level update from here is
+             * what broke the conditional render: the spy runs at mount with
+             * scrollTop === 0, concludes the reader is on the first target, and
+             * an unconditional setActiveSection() there unmounts whichever
+             * section the server had rendered.
+             *
+             * When the server opened a section that is not the first one, the
+             * first target IS that section, so the spy agrees with the server by
+             * construction and marks it — no special case needed.
              */
             function syncActiveFromScroll() {
                 const main = mainEl.value;
@@ -548,7 +709,8 @@ export default function mountApp(injectedContext = null) {
                     }
                 }
 
-                setActiveSection(current || positions[0].id);
+                markAnchor(current || positions[0].id);
+                syncUrl(state.activeAnchor, { push: false });
             }
 
             /** Fallback for engines without IntersectionObserver: poll on scroll. */
@@ -656,12 +818,36 @@ export default function mountApp(injectedContext = null) {
                 nextTick(() => observeSpyTargets());
             });
 
+            // Swapping the section replaces every observed element inside it, so
+            // the observer has to be rebuilt against the new DOM. Without this the
+            // spy keeps reporting the anchors of the section that was just
+            // unmounted, and the sub-nav highlight drifts to a component that is
+            // no longer on the page.
+            watch(() => state.activeSection, () => {
+                invalidateElementCache();
+                nextTick(() => observeSpyTargets());
+            });
+
             let topbarObserver = null;
             let contentObserver = null;
+
+            /**
+             * Back/forward across the entries scrollTo() pushed.
+             *
+             * Without this the URL and the page disagree the moment anyone
+             * presses Back: the address bar moves, the rendered section does not.
+             * applyLocation() is reused rather than duplicated, so a history
+             * entry and a nav click can never take different paths to the same
+             * destination.
+             */
+            function onPopState() {
+                applyLocation(locationId());
+            }
 
             onMounted(() => {
                 measureShell();
                 window.addEventListener('resize', onResize);
+                window.addEventListener('popstate', onPopState);
 
                 // The topbar can wrap or grow, which moves the shell without resizing it.
                 const topbar = document.querySelector('.app-topbar');
@@ -682,15 +868,21 @@ export default function mountApp(injectedContext = null) {
 
                 observeSpyTargets();
 
-                const hash = window.location.hash.replace(/^#/, '');
-                if (hash && document.getElementById(hash)) {
-                    setActiveSection(hash);
-                    nextTick(() => scrollTargetIntoView(hash));
-                }
+                // First paint honours the server's answer. It arrives either as
+                // ?section= (already in locationId(), the server put it there to
+                // render this) or as the injected state, and the two always
+                // agree because the same request produced both.
+                //
+                // This runs after observeSpyTargets() on purpose. The spy fires
+                // once on mount and concludes the reader is on the first target;
+                // because it only writes activeAnchor it cannot undo what is set
+                // here, whichever order they end up running in.
+                applyLocation(locationId() || serverSection);
             });
 
             onBeforeUnmount(() => {
                 window.removeEventListener('resize', onResize);
+                window.removeEventListener('popstate', onPopState);
                 topbarObserver?.disconnect();
                 contentObserver?.disconnect();
                 spyObserver?.disconnect();

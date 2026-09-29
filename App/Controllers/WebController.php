@@ -33,9 +33,10 @@ class WebController extends Controller
     }
     
     #[Route('/phui', methods: ['GET'])]
-    public function ui(): Response
+    public function ui(Request $request): Response
     {
-        return $this->ui->render('Pages/PhUI', []);
+        $section = (string) $request->getQuery('section', 'index');
+        return $this->ui->render('Pages/PhUI', ['section' => $section]);
     }
 
     #[Route('/ui/showcase', methods: ['GET'])]
