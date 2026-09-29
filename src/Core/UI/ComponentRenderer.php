@@ -168,7 +168,7 @@ class ComponentRenderer
         // 1a: Compute transitive dependency graph upfront for both SSR and Client modulepreloads
         $deps = [];
         if ($this->loaderRegistry !== null && $componentName !== null) {
-            $discoverer = new ComponentDiscoverer($this->loaderRegistry);
+            $discoverer = new ComponentDiscoverer($this->loaderRegistry, $this->logger);
             $deps = $discoverer->resolveTransitiveDependencies($componentName);
         }
 
@@ -349,7 +349,7 @@ JS,
                     $context = ['name' => 'PhNavigation', 'uri' => $uri];
 
                     if ($this->loaderRegistry !== null) {
-                        $discoverer = new ComponentDiscoverer($this->loaderRegistry);
+                        $discoverer = new ComponentDiscoverer($this->loaderRegistry, $this->logger);
                         $deps = $discoverer->resolveTransitiveDependencies('PhNavigation');
                         $components = [];
 
