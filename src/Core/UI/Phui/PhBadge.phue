@@ -1,5 +1,5 @@
 <template>
-  <span :class="['badge', variantClass, sizeClass, { 'rounded-pill': pill }]">
+  <span :class="['badge', variantClass, { 'rounded-pill': pill }]" :style="sizeStyle">
     <slot>{{ label }}</slot>
   </span>
 </template>
@@ -40,8 +40,25 @@ export default {
       };
       return map[this.variant] || 'text-bg-secondary';
     },
-    sizeClass() {
-      return this.size === 'sm' ? 'badge-sm' : this.size === 'lg' ? 'badge-lg' : '';
+    sizeStyle() {
+      const map = {
+        sm: {
+          '--bs-badge-font-size': '0.7em',
+          '--bs-badge-padding-y': '0.3em',
+          '--bs-badge-padding-x': '0.5em'
+        },
+        md: {
+          '--bs-badge-font-size': '0.85em',
+          '--bs-badge-padding-y': '0.35em',
+          '--bs-badge-padding-x': '0.65em'
+        },
+        lg: {
+          '--bs-badge-font-size': '1em',
+          '--bs-badge-padding-y': '0.45em',
+          '--bs-badge-padding-x': '0.85em'
+        }
+      };
+      return map[this.size] || {};
     }
   }
 };
