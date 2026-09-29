@@ -133,7 +133,7 @@ return [
                         }"
                         :aria-current="activeSection === nav.id ? 'true' : null"
                         :aria-expanded="expandedSections[nav.id] ? 'true' : 'false'"
-                        @click.stop="expandedSections[nav.id] ? toggleSection(nav.id) : scrollTo(nav.id)"
+                        @click.stop="nav.components.length ? toggleSection(nav.id) : scrollTo(nav.id)"
                     >
                         <span style="flex: 1;">{{ nav.label }}</span>
                         <span
