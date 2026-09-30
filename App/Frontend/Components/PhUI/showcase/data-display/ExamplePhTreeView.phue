@@ -1,0 +1,445 @@
+<template>
+  <example-factory
+    tag="<ph-tree-view />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Hierarchical tree with expansion, selection and checkboxes.
+        <strong>Fully controlled</strong>: the component holds no state of its
+        own — <code>selected</code> and <code>expanded</code> are arrays of node
+        keys that <em>you</em> own, and <code>select</code> /
+        <code>toggle</code> / <code>check</code> only re-emit. Nothing appears to
+        happen until you write the new value back.
+      </p>
+      <p class="text-muted small mb-0">
+        Give every node a <code>key</code>. It is the identity used by
+        <code>selected</code>/<code>expanded</code> and it names the
+        <code>node-&lt;key&gt;</code> slot — a node without one cannot be
+        targeted by a slot.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          File tree — selection, expansion, checkboxes
+        </h6>
+        <ph-tree-view
+          :nodes="nodes"
+          :selected="selected"
+          :expanded="expanded"
+          checkable
+          @select="onSelect"
+          @toggle="onToggle"
+          @check="onCheck"
+        >
+          <template #node-readme="{ node }">
+            <ph-badge label="New" variant="info" class="ms-2" />
+          </template>
+        </ph-tree-view>
+
+        <hr class="my-3" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          State you own
+        </h6>
+        <dl class="row small mb-0">
+          <dt class="col-4 text-body-secondary">selected</dt>
+          <dd class="col-8"><code>{{ selected.length ? selected.join(', ') : '—' }}</code></dd>
+
+          <dt class="col-4 text-body-secondary">expanded</dt>
+          <dd class="col-8"><code>{{ expanded.length ? expanded.join(', ') : '—' }}</code></dd>
+
+          <dt class="col-4 text-body-secondary">checked</dt>
+          <dd class="col-8">
+            <code>{{ checkedLabels.length ? checkedLabels.join(', ') : '—' }}</code>
+          </dd>
+        </dl>
+        <button
+          type="button"
+          class="btn btn-link btn-sm px-0 mt-2"
+          @click="reset"
+        >
+          Reset state
+        </button>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="300px" />
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mt-3 mb-2">
+          The controlled half
+        </h6>
+        <ph-code language="js" :code="nodeSnippet" maxHeight="520px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+
+        <strong>Emits</strong>
+        <ul>
+          <li>
+            <code>select(node)</code> — a node label was clicked. The payload is
+            the node spread with a resolved <code>key</code>
+          </li>
+          <li>
+            <code>toggle(node)</code> — a branch's chevron was clicked. The
+            component does <em>not</em> expand anything by itself
+          </li>
+          <li>
+            <code>check(node)</code> — a checkbox changed. The payload carries
+            <code>checked: !isChecked</code>, so write it back
+          </li>
+        </ul>
+
+        <strong>Slots</strong>
+        <ul>
+          <li>
+            <code>node-&lt;key&gt;</code> — scoped <code>{ node }</code>,
+            projected at the end of the node's row. The name is
+            <code>node-</code> + the node's <code>key</code> verbatim
+          </li>
+        </ul>
+
+        <hr />
+        <h4>Node shape</h4>
+        <p class="text-muted">
+          Every field is optional except <code>label</code>. Give every node a
+          <code>key</code> — it is what <code>selected</code> /
+          <code>expanded</code> match on and what the slot name is built from.
+        </p>
+        <ph-data-table
+          :columns="[
+            {key: 'field', label: 'Field', sortable: true},
+            {key: 'type', label: 'Type'},
+            {key: 'notes', label: 'Notes'}
+          ]"
+          :items="nodeProps"
+          paginated
+          :page-size="10"
+        >
+          <template #cell(field)="{ value }"><strong v-html="value"></strong></template>
+          <template #cell(type)="{ value }"><span v-html="value"></span></template>
+          <template #cell(notes)="{ value }"><span v-html="value"></span></template>
+        </ph-data-table>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhTreeView",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+
+      /**
+       * Every node carries a `key`. Selection and expansion are matched on it,
+       * so two nodes sharing a label would otherwise be indistinguishable.
+       */
+      nodes: [
+        {
+          key: "src",
+          label: "src",
+          icon: "folder2-open",
+          children: [
+            {
+              key: "src-core",
+              label: "Core",
+              icon: "folder2-open",
+              children: [
+                { key: "src-core-app", label: "Application.php", icon: "filetype-php" },
+                { key: "src-core-router", label: "Router.php", icon: "filetype-php" },
+                { key: "src-core-http", label: "Http", icon: "folder", children: [
+                  { key: "src-core-http-req", label: "Request.php", icon: "filetype-php" },
+                  { key: "src-core-http-res", label: "Response.php", icon: "filetype-php" },
+                ] },
+              ],
+            },
+            { key: "src-ui", label: "UI", icon: "folder", children: [
+              { key: "src-ui-phui", label: "Phui", icon: "folder", children: [
+                { key: "src-ui-phui-btn", label: "PhButton.phue", icon: "filetype-php" },
+                { key: "src-ui-phui-input", label: "PhInput.phue", icon: "filetype-php" },
+              ] },
+            ] },
+          ],
+        },
+        {
+          key: "docs",
+          label: "docs",
+          icon: "folder2-open",
+          children: [
+            { key: "docs-readme", label: "README.md", icon: "filetype-md" },
+            { key: "docs-arch", label: "Architecture.md", icon: "filetype-md" },
+          ],
+        },
+        { key: "composer", label: "composer.json", icon: "filetype-json" },
+      ],
+
+      // Owned here, passed down, mutated on the emitted events.
+      selected: ["src-core-router"],
+      expanded: ["src", "src-core"],
+      checked: ["src-core-router", "src-core-app"],
+
+      snippet: `<!--
+  PhTreeView is fully controlled: selected / expanded are arrays of node keys
+  that the page owns, and the emits do not change anything by themselves.
+-->
+<ph-tree-view
+  :nodes="nodes"
+  :selected="selected"
+  :expanded="expanded"
+  checkable
+  @select="onSelect"
+  @toggle="onToggle"
+  @check="onCheck"
+>
+  <template #node-readme="{ node }">
+    <ph-badge label="New" variant="info" class="ms-2" />
+  </template>
+</ph-tree-view>`,
+
+      nodeSnippet: `export default {
+  data() {
+    return {
+      selected: ['src-core-router'],
+      expanded: ['src', 'src-core'],
+      nodes: [
+        {
+          key: "src",
+          label: "src",
+          icon: "folder2-open",
+          children: [
+            {
+              key: "src-core",
+              label: "Core",
+              icon: "folder2-open",
+              children: [
+                { key: "src-core-app", label: "Application.php", icon: "filetype-php" },
+                { key: "src-core-router", label: "Router.php", icon: "filetype-php" },
+                { key: "src-core-http", label: "Http", icon: "folder", children: [
+                  { key: "src-core-http-req", label: "Request.php", icon: "filetype-php" },
+                  { key: "src-core-http-res", label: "Response.php", icon: "filetype-php" },
+                ] },
+              ],
+            },
+            { key: "src-ui", label: "UI", icon: "folder", children: [
+              { key: "src-ui-phui", label: "Phui", icon: "folder", children: [
+                { key: "src-ui-btn", label: "PhButton.phue", icon: "filetype-php" },
+                { key: "src-ui-input", label: "PhInput.phue", icon: "filetype-php" },
+              ] },
+            ] },
+          ],
+        },
+        {
+          key: "docs",
+          label: "docs",
+          icon: "folder2-open",
+          children: [
+            { key: "docs-readme", label: "README.md", icon: "filetype-md" },
+            { key: "docs-arch", label: "Architecture.md", icon: "filetype-md" },
+          ],
+        },
+        { key: "composer", label: "composer.json", icon: "filetype-json" },
+      ],
+    };
+  },
+  methods: {
+    // select(node) — node already carries a resolved \`key\`
+    onSelect(node) {
+      this.selected = this.selected.includes(node.key)
+        ? this.selected.filter((k) => k !== node.key)
+        : [...this.selected, node.key];
+    },
+
+    // toggle(node) — the chevron does NOT expand on its own
+    onToggle(node) {
+      this.expanded = this.expanded.includes(node.key)
+        ? this.expanded.filter((k) => k !== node.key)
+        : [...this.expanded, node.key];
+    },
+
+    // check(node) — node.checked is the value the component computed for you
+    onCheck(node) {
+      this.updateNode(node.key, { checked: node.checked });
+    },
+
+    // Walks the tree and writes one node in place. \`checked\` lives on the node,
+    // not in a separate prop, so it has to be written back into the data.
+    updateNode(key, patch, list = this.nodes) {
+      for (const node of list) {
+        if (node.key === key) return Object.assign(node, patch);
+        if (node.children) this.updateNode(key, patch, node.children);
+      }
+    },
+  },
+};`,
+
+      propsData: [
+        {
+          name: "nodes",
+          type: "Array",
+          default: "[]",
+          notes: "Root nodes — see the <strong>Node shape</strong> table below. Nested branches use <code>children</code>",
+        },
+        {
+          name: "selected",
+          type: "Array",
+          default: "[]",
+          notes: "Keys of the selected nodes. Multiple selection — matched with <code>includes()</code> against each node's <code>key</code>",
+        },
+        {
+          name: "expanded",
+          type: "Array",
+          default: "[]",
+          notes: "Keys of the branches to open. A node with no <code>children</code> is never expanded, whatever this contains",
+        },
+        {
+          name: "checkable",
+          type: "Boolean",
+          default: "false",
+          notes: "Renders a checkbox per node. State comes from <code>node.checked</code>, not from a prop — the <code>check</code> emit has to be written back",
+        },
+      ],
+
+      nodeProps: [
+        {
+          field: "key",
+          type: "String | Number",
+          notes: "Identity. Matched against <code>selected</code> / <code>expanded</code>, used as the <code>v-for</code> key, and appended to build the <code>node-&lt;key&gt;</code> slot name. <strong>Set it on every node.</strong>",
+        },
+        {
+          field: "label",
+          type: "String",
+          notes: "The text shown in the row, and what the emitted payload falls back to when <code>key</code> is absent",
+        },
+        {
+          field: "children",
+          type: "Array",
+          notes: "Child nodes. The row becomes expandable only when this is a <em>non-empty</em> array",
+        },
+        {
+          field: "icon",
+          type: "String",
+          notes: "Bootstrap Icons name in front of the label, e.g. <code>'folder2-open'</code> or <code>'filetype-php'</code>",
+        },
+        {
+          field: "checked",
+          type: "Boolean | String",
+          notes: "<code>true</code> / <code>false</code>, or the string <code>'indeterminate'</code> for a partially-checked branch. Read-only — the component emits the next value instead of writing it",
+        },
+      ],
+    };
+  },
+
+  computed: {
+    /** Labels of every checked leaf, so the readout is legible. */
+    checkedLabels() {
+      const out = [];
+      const walk = (list) => {
+        for (const node of list) {
+          if (node.children && node.children.length) {
+            walk(node.children);
+          } else if (node.checked === true) {
+            out.push(node.label);
+          }
+        }
+      };
+      walk(this.nodes);
+      return out;
+    },
+  },
+
+  methods: {
+    onSelect(node) {
+      this.selected = this.selected.includes(node.key)
+        ? this.selected.filter((key) => key !== node.key)
+        : [...this.selected, node.key];
+    },
+
+    onToggle(node) {
+      this.expanded = this.expanded.includes(node.key)
+        ? this.expanded.filter((key) => key !== node.key)
+        : [...this.expanded, node.key];
+    },
+
+    onCheck(node) {
+      this.updateNode(node.key, { checked: node.checked });
+      this.syncAncestors();
+    },
+
+    /** Writes one node in place, by key, at any depth. */
+    updateNode(key, patch, list = this.nodes) {
+      for (const node of list) {
+        if (node.key === key) {
+          return Object.assign(node, patch);
+        }
+        if (node.children) {
+          this.updateNode(key, patch, node.children);
+        }
+      }
+      return null;
+    },
+
+    /**
+     * Derives a branch's own checkbox from its children: all checked -> true,
+     * some -> 'indeterminate', none -> false.
+     *
+     * The component reads `node.checked` off the node and has no notion of a
+     * parent, so a tri-state branch is entirely the page's job.
+     */
+    syncAncestors() {
+      const walk = (list) => {
+        for (const node of list) {
+          if (!node.children || node.children.length) continue;
+
+          const states = node.children
+            .map((child) => this.findNode(child.key))
+            .filter(Boolean)
+            .map((child) => child.checked);
+          const on = states.filter((state) => state === true).length;
+
+          node.checked = on === 0 ? false : on === states.length ? true : "indeterminate";
+          walk(node.children);
+        }
+      };
+      walk(this.nodes);
+    },
+
+    findNode(key, list = this.nodes) {
+      for (const node of list) {
+        if (node.key === key) return node;
+        if (node.children) {
+          const hit = this.findNode(key, node.children);
+          if (hit) return hit;
+        }
+      }
+      return null;
+    },
+
+    reset() {
+      this.nodes.forEach((node) => this.clearChecks(node));
+      this.selected = [];
+      this.expanded = ["src", "src-core"];
+    },
+
+    clearChecks(node) {
+      delete node.checked;
+      (node.children || []).forEach((child) => this.clearChecks(child));
+    },
+  },
+};
+</script>
