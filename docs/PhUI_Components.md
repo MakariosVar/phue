@@ -948,7 +948,7 @@ word initials, or the first two characters of a single-word name. Falls back to
 No emits.
 
 ```
-<ph-avatar name="Makarios Varoutsos" size="lg" shape="circle" />
+<ph-avatar name="Makarios Varos" size="lg" shape="circle" />
 <ph-avatar src="/uploads/u.png" name="Ada Lovelace" alt="Ada" />
 ```
 
