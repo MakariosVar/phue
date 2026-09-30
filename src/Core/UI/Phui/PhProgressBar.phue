@@ -4,7 +4,7 @@
       <span v-if="label" class="progress-label">{{ label }}</span>
       <span v-if="showValue" class="progress-value">{{ normalizedValue }}%</span>
     </div>
-    <div :class="['progress', sizeClass]">
+    <div :class="['progress', sizeClass]" :style="trackStyles">
       <div
         :class="['progress-bar', variantClass, { 'progress-bar-striped progress-bar-animated': animated }]"
         :style="{ width: `${normalizedValue}%` }"
@@ -64,6 +64,17 @@ export default {
     },
     sizeClass() {
       return this.size === 'sm' ? 'progress-sm' : this.size === 'lg' ? 'progress-lg' : '';
+    },
+    /**
+     * The vendored Bootstrap build ships no `.progress-sm` / `.progress-lg`, so
+     * those classes match nothing and every size rendered identically. The
+     * mechanism Bootstrap 5.3 actually uses is this variable, so drive it
+     * directly and keep the class for builds that do define it.
+     */
+    trackStyles() {
+      const heights = { sm: '0.5rem', md: '1rem', lg: '1.5rem' };
+      const height = heights[this.size] || heights.md;
+      return height === heights.md ? null : { '--bs-progress-height': height };
     }
   }
 };
