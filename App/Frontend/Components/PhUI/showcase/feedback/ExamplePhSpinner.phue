@@ -1,0 +1,168 @@
+<template>
+  <example-factory
+    tag="<ph-spinner />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Busy indicator. <code>role="status"</code> with the label in a
+        <code>visually-hidden</code> span, so it announces itself rather than
+        being a silent spinner.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          border vs grow
+        </h6>
+        <div class="d-flex align-items-center gap-4">
+          <div class="text-center">
+            <ph-spinner variant="border" />
+            <div class="small text-body-secondary mt-2">border</div>
+          </div>
+          <div class="text-center">
+            <ph-spinner variant="grow" />
+            <div class="small text-body-secondary mt-2">grow</div>
+          </div>
+        </div>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Sizes
+        </h6>
+        <div class="d-flex align-items-center gap-4">
+          <ph-spinner size="sm" />
+          <ph-spinner size="md" />
+          <ph-spinner size="lg" />
+          <ph-spinner :size="64" />
+        </div>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Colours
+        </h6>
+        <div class="d-flex flex-wrap align-items-center gap-4">
+          <ph-spinner
+            v-for="c in colors"
+            :key="c"
+            :color="c"
+          />
+        </div>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          In context
+        </h6>
+        <div class="d-flex align-items-center gap-2">
+          <ph-spinner size="sm" label="Loading projects" />
+          <span class="small text-body-secondary">Loading projects…</span>
+        </div>
+        <ph-button
+          class="mt-3"
+          size="sm"
+          variant="primary"
+          :loading="busy"
+          @click="run"
+        >
+          Save
+        </ph-button>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits</strong>
+        <ul>
+          <li><em>None</em> — it is inert markup</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhSpinner",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      busy: false,
+      colors: ["primary", "secondary", "success", "warning", "danger", "info", "light", "dark"],
+      snippet: `<!-- variant: border | grow -->
+<ph-spinner />
+<ph-spinner variant="grow" />
+
+<!-- size: sm | md | lg, or a number of px -->
+<ph-spinner size="sm" />
+<ph-spinner :size="64" />
+
+<!-- color is a token, not a raw value -->
+<ph-spinner color="success" />
+<ph-spinner color="error" />   <!-- alias of danger -->
+
+<!-- role="status" with a visually-hidden label: it announces itself -->
+<ph-spinner label="Loading projects" />
+
+<!-- For a button, prefer the loading prop over swapping in a spinner -->
+<ph-button :loading="busy">Save</ph-button>`,
+      propsData: [
+        {
+          name: "size",
+          type: "String \\| Number",
+          default: "'md'",
+          notes: "sm | md | lg, or a number of <strong>px</strong>. <code>sm</code> maps to Bootstrap's <code>*-sm</code>; the rest are applied as inline width/height",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "'border'",
+          notes: "border | grow → <code>spinner-border</code> / <code>spinner-grow</code>",
+        },
+        {
+          name: "color",
+          type: "String",
+          default: "''",
+          notes: "primary | secondary | success | warning | danger | error | info | light | dark. <code>error</code> is an alias of <code>danger</code>",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "'Loading…'",
+          notes: "Rendered in a <code>visually-hidden</code> span inside the <code>role=\"status\"</code> element. Pass an empty string to announce nothing",
+        },
+      ],
+    };
+  },
+  beforeUnmount() {
+    if (this.timer) clearTimeout(this.timer);
+  },
+  methods: {
+    run() {
+      if (this.busy) return;
+      this.busy = true;
+      this.timer = setTimeout(() => {
+        this.busy = false;
+      }, 1500);
+    },
+  },
+};
+</script>

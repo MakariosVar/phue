@@ -1,0 +1,202 @@
+<template>
+  <example-factory
+    tag="<ph-drawer />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Off-canvas panel, teleported to <code>body</code>. Same shape as
+        <code>&lt;ph-modal&gt;</code> but anchored to an edge —
+        <code>position</code> picks the edge and <code>size</code> the extent.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="d-flex flex-wrap gap-2">
+          <ph-button
+            v-for="p in ['start', 'end', 'top', 'bottom']"
+            :key="p"
+            size="sm"
+            variant="outline-primary"
+            @click="openDrawer(p)"
+          >
+            {{ p }}
+          </ph-button>
+          <ph-button size="sm" variant="outline-secondary" @click="openDrawer('end', '420px')">
+            Custom size
+          </ph-button>
+          <ph-button size="sm" variant="ghost" @click="openDrawer('start', null, true)">
+            With footer
+          </ph-button>
+        </div>
+      </ph-card>
+
+      <ph-drawer
+        v-model="open_"
+        :position="position"
+        :size="size"
+        :title="title"
+        :closable="closable"
+        :close-on-backdrop="closeOnBackdrop"
+        :scrollable="scrollable"
+        @open="lastEvent = 'open'"
+        @close="lastEvent = 'close'"
+      >
+        <p class="mb-0">
+          Position <code>{{ position }}</code
+          ><span v-if="size">, size <code>{{ size }}</code></span>.
+          The body scrolls on its own when
+          <code>scrollable</code> is on, so a long panel never pushes the
+          header off screen.
+        </p>
+        <div v-if="scrollable" class="mt-3">
+          <p v-for="n in 12" :key="n" class="text-body-secondary small mb-2">
+            Paragraph {{ n }} — enough text to make the body overflow, so the
+            scroll is real rather than decorative.
+          </p>
+        </div>
+        <p class="text-body-secondary small mt-3 mb-0">
+          Last event: <code>{{ lastEvent }}</code>
+        </p>
+
+        <template v-if="withFooter" #footer>
+          <ph-button variant="ghost" @click="open_ = false">Cancel</ph-button>
+          <ph-button variant="primary" @click="open_ = false">Save</ph-button>
+        </template>
+      </ph-drawer>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+
+        <strong>Emits</strong>
+        <ul>
+          <li><code>update:modelValue(false)</code> — wire with <code>v-model</code></li>
+          <li><code>open</code> — after the panel became visible</li>
+          <li><code>close</code> — after it was dismissed</li>
+        </ul>
+
+        <strong>Slots</strong>
+        <ul>
+          <li><code>default</code> — the body</li>
+          <li><code>header</code> — replaces the default title row</li>
+          <li><code>footer</code> — a pinned footer</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhDrawer",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      open_: false,
+      position: "end",
+      size: null,
+      title: "Details",
+      closable: true,
+      closeOnBackdrop: true,
+      scrollable: true,
+      withFooter: false,
+      lastEvent: "—",
+      snippet: `<!-- position: start | end | top | bottom -->
+<ph-button @click="open = true">Open</ph-button>
+
+<ph-drawer
+  v-model="open"
+  position="end"
+  title="Details"
+  scrollable
+  @open="onOpen"
+  @close="onClose"
+>
+  The body scrolls on its own when scrollable is on.
+
+  <template #footer>
+    <ph-button variant="ghost" @click="open = false">Cancel</ph-button>
+    <ph-button variant="primary" @click="save">Save</ph-button>
+  </template>
+</ph-drawer>
+
+<!-- size is a raw CSS length, not a token -->
+<ph-drawer v-model="open" position="start" size="420px" />
+
+<!-- A modal you cannot escape by clicking outside -->
+<ph-drawer v-model="open" :closable="false" :close-on-backdrop="false" />`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "Boolean",
+          default: "false",
+          notes: "Visibility. Wire it with <code>v-model</code>",
+        },
+        {
+          name: "position",
+          type: "String",
+          default: "'end'",
+          notes: "start | end | top | bottom — the edge the panel is anchored to",
+        },
+        {
+          name: "size",
+          type: "String \\| Number",
+          default: "null",
+          notes: "The extent along its edge — a raw CSS length like <code>420px</code>, not a token. <code>null</code> uses the component default",
+        },
+        {
+          name: "title",
+          type: "String",
+          default: "''",
+          notes: "Accessible name (<code>aria-label</code>) and the default header text",
+        },
+        {
+          name: "closable",
+          type: "Boolean",
+          default: "true",
+          notes: "Shows the ✕ and enables the state-changing close actions",
+        },
+        {
+          name: "closeOnBackdrop",
+          type: "Boolean",
+          default: "true",
+          notes: "Backdrop click closes",
+        },
+        {
+          name: "scrollable",
+          type: "Boolean",
+          default: "true",
+          notes: "The body scrolls independently, so the header stays put",
+        },
+      ],
+    };
+  },
+  methods: {
+    openDrawer(position, size = null, withFooter = false) {
+      this.position = position;
+      this.size = size;
+      this.withFooter = withFooter;
+      this.title = `${position} drawer`;
+      this.lastEvent = "—";
+      this.open_ = true;
+    },
+  },
+};
+</script>

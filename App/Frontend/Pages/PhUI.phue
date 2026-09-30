@@ -53,6 +53,13 @@ $navItems = [
             ['id' => 'alert', 'label' => 'Alert'],
             ['id' => 'modal', 'label' => 'Modal'],
             ['id' => 'progress-bar', 'label' => 'Progress Bar'],
+            ['id' => 'skeleton', 'label' => 'Skeleton'],
+            ['id' => 'spinner', 'label' => 'Spinner'],
+            ['id' => 'toast', 'label' => 'Toast'],
+            ['id' => 'popover', 'label' => 'Popover'],
+            ['id' => 'tooltip', 'label' => 'Tooltip'],
+            ['id' => 'drawer', 'label' => 'Drawer'],
+            ['id' => 'confirm-dialog', 'label' => 'Confirm Dialog'],
         ]
     ],
     [
@@ -323,21 +330,37 @@ return [
                 <!-- Feedback -->
                 <section v-if="activeSection === 'feedback'" id="feedback" class="mb-5">
                     <ph-card title='Feedback'>
-
                         <div class="d-flex flex-column gap-2">
                             <span id="alert">
                                 <example-ph-alert />
                             </span>
-                            <!-- 
-                            <ExamplePhModal />
-                            <ExamplePhProgressBar />
-                            <ExamplePhSkeleton />
-                            <ExamplePhSpinner />
-                            <ExamplePhTooltip />
-                            <ExamplePhToast />
-                            <ExamplePhDrawer />
-                            <ExamplePhConfirmDialog />
-                            <ExamplePhPopover /> -->
+                            <span id="modal">
+                                <example-ph-modal />
+                            </span>
+                            <span id="progress-bar">
+                                <example-ph-progress-bar />
+                            </span>
+                            <span id="skeleton">
+                                <example-ph-skeleton />
+                            </span>
+                            <span id="spinner">
+                                <example-ph-spinner />
+                            </span>
+                            <span id="toast">
+                                <example-ph-toast />
+                            </span>
+                            <span id="popover">
+                                <example-ph-popover />
+                            </span>
+                            <span id="tooltip">
+                                <example-ph-tooltip />
+                            </span>
+                            <span id="drawer">
+                                <example-ph-drawer />
+                            </span>
+                            <span id="confirm-dialog">
+                                <example-ph-confirm-dialog />
+                            </span>
                         </div>
                     </ph-card>
                 </section>

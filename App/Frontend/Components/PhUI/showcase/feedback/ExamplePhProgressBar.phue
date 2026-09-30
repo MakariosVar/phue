@@ -1,0 +1,183 @@
+<template>
+  <example-factory
+    tag="<ph-progress-bar />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Progress meter. <code>value</code> is clamped to 0–100, so an
+        over- or under-shot number renders a full or empty bar rather than an
+        overflowing one.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Variants
+        </h6>
+        <div class="d-flex flex-column gap-3">
+          <ph-progress-bar
+            v-for="v in variants"
+            :key="v"
+            :label="v"
+            :variant="v"
+            :value="progress[v]"
+            show-value
+          />
+        </div>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Sizes
+        </h6>
+        <div class="d-flex flex-column gap-2">
+          <ph-progress-bar v-for="s in sizes" :key="s" :label="s" :size="s" :value="65" />
+        </div>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Animated, and live
+        </h6>
+        <ph-progress-bar label="Uploading" :value="upload" variant="success" animated show-value />
+        <button type="button" class="btn btn-sm btn-outline-primary mt-2" @click="startUpload">
+          {{ uploading ? "Reset" : "Run upload" }}
+        </button>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Clamping
+        </h6>
+        <div class="d-flex flex-column gap-2">
+          <ph-progress-bar label=":value=&quot;140&quot;" :value="140" show-value />
+          <ph-progress-bar label=":value=&quot;-5&quot;" :value="-5" show-value />
+        </div>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits</strong>
+        <ul>
+          <li><em>None</em> — it is a pure readout of <code>value</code></li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhProgressBar",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      upload: 0,
+      uploading: false,
+      timer: null,
+      variants: ["primary", "secondary", "success", "warning", "error"],
+      sizes: ["sm", "md", "lg"],
+      progress: {
+        primary: 25,
+        secondary: 50,
+        success: 75,
+        warning: 90,
+        error: 100,
+      },
+      snippet: `<!-- Label row + live value -->
+<ph-progress-bar label="Syncing" :value="sync" variant="success" show-value />
+
+<!-- Sizes: sm | md | lg -->
+<ph-progress-bar :size="sm" :value="65" />
+
+<!-- Striped + animated -->
+<ph-progress-bar label="Uploading" :value="upload" variant="success" animated show-value />
+
+<!-- Over- and under-shoot are clamped, never rendered as an overflowing bar -->
+<ph-progress-bar :value="140" />   <!-- renders 100% -->
+<ph-progress-bar :value="-5" />    <!-- renders 0% -->`,
+      propsData: [
+        {
+          name: "value",
+          type: "Number",
+          default: "0",
+          notes: "Percentage, <strong>clamped to 0–100</strong>",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "Text on the left of the value row. The row renders only when there is a label or <code>showValue</code>",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "'primary'",
+          notes: "primary | secondary | success | warning | error. <code>error</code> maps to <code>bg-danger</code>",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg — maps to <code>progress-sm</code> / default / <code>progress-lg</code>",
+        },
+        {
+          name: "showValue",
+          type: "Boolean",
+          default: "false",
+          notes: "Renders the clamped number on the right of the value row",
+        },
+        {
+          name: "animated",
+          type: "Boolean",
+          default: "false",
+          notes: "Striped + animated bar",
+        },
+      ],
+    };
+  },
+  beforeUnmount() {
+    this.stop();
+  },
+  methods: {
+    startUpload() {
+      if (this.uploading) {
+        this.stop();
+        this.upload = 0;
+        return;
+      }
+      this.uploading = true;
+      this.upload = 0;
+      this.timer = setInterval(() => {
+        this.upload = Math.min(100, this.upload + 5);
+        if (this.upload >= 100) this.stop();
+      }, 120);
+    },
+    stop() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+      this.uploading = false;
+    },
+  },
+};
+</script>

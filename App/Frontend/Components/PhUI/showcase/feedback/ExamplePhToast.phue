@@ -1,0 +1,164 @@
+<template>
+  <example-factory
+    tag="<ph-toast />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Programmatic notification stack, teleported to <code>body</code> under a
+        fixed region. It mounts itself onto <code>window.toast</code>, so you
+        push from anywhere without holding a ref.
+      </p>
+      <p class="text-muted small mb-0">
+        <strong>One per page.</strong> This page already mounts
+        <code>&lt;ph-toast /&gt;</code> globally, so this example does
+        <em>not</em> render a second one: a second instance would take over
+        <code>window.toast</code> and then null it on unmount when you navigate
+        away, breaking the host's.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="d-flex flex-wrap gap-2">
+          <ph-button size="sm" variant="primary" @click="pushPlain">Plain message</ph-button>
+          <ph-button size="sm" variant="success" @click="pushSuccess">Success + title</ph-button>
+          <ph-button size="sm" variant="warning" @click="pushWarning">Warning</ph-button>
+          <ph-button size="sm" variant="danger" @click="pushError">Error</ph-button>
+          <ph-button size="sm" variant="info" @click="pushCustom">Custom 2s duration</ph-button>
+          <ph-button size="sm" variant="outline-secondary" @click="pushBurst">Burst past max</ph-button>
+          <ph-button size="sm" variant="ghost" @click="clearAll">Clear all</ph-button>
+        </div>
+        <p class="text-muted small mt-3 mb-0">
+          <code>push()</code> returns the toast id. Hovering a toast pauses its
+          countdown, so a long message stays readable.
+        </p>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+
+        <strong>Emits</strong>
+        <ul>
+          <li><code>dismiss(id)</code> — a toast was dismissed or timed out</li>
+        </ul>
+
+        <strong>Methods, on <code>window.toast</code></strong>
+        <ul>
+          <li>
+            <code>push(source)</code> — a string, or
+            <code>{ message, variant, title, duration }</code>. Returns the id
+          </li>
+          <li><code>remove(id)</code> — manual dismiss with a fade-out</li>
+          <li><code>clear()</code> — drops the whole stack</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhToast",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<!-- Once per page, high in the tree. It teleports to body itself. -->
+<ph-toast position="top-right" :duration="5000" :max="5" />
+
+<!-- Anywhere in your code, no ref, no import -->
+window.toast.push('Saved.');
+window.toast.push({ variant: 'success', title: 'Saved', message: 'Changes persisted.' });
+window.toast.push({ variant: 'error', title: 'Failed', message: 'Try again.', duration: 8000 });
+
+const id = window.toast.push('Working…');
+window.toast.remove(id);
+window.toast.clear();`,
+      propsData: [
+        {
+          name: "position",
+          type: "String",
+          default: "'top-right'",
+          notes: "top-right | top-left | top-center | bottom-right | bottom-left | bottom-center",
+        },
+        {
+          name: "duration",
+          type: "Number",
+          default: "5000",
+          notes: "Auto-dismiss in ms. A per-toast <code>duration</code> wins",
+        },
+        {
+          name: "max",
+          type: "Number",
+          default: "5",
+          notes: "Excess toasts are dropped from the front",
+        },
+        {
+          name: "dismissible",
+          type: "Boolean",
+          default: "true",
+          notes: "Shows the <code>btn-close</code> per toast",
+        },
+      ],
+    };
+  },
+  methods: {
+    pushPlain() {
+      window.toast.push('Saved.');
+    },
+    pushSuccess() {
+      window.toast.push({
+        variant: 'success',
+        title: 'Saved',
+        message: 'Changes persisted.',
+      });
+    },
+    pushWarning() {
+      window.toast.push({
+        variant: 'warning',
+        message: 'Your session expires in 5 minutes.',
+      });
+    },
+    pushError() {
+      window.toast.push({
+        variant: 'error',
+        title: 'Upload failed',
+        message: 'The server rejected the file.',
+        duration: 8000,
+      });
+    },
+    pushCustom() {
+      window.toast.push({
+        variant: 'info',
+        title: 'Heads up',
+        message: 'This one only stays for 2 seconds.',
+        duration: 2000,
+      });
+    },
+    pushBurst() {
+      for (let i = 1; i <= 7; i += 1) {
+        window.toast.push({ message: `Message ${i} — the first ones get dropped.` });
+      }
+    },
+    clearAll() {
+      window.toast.clear();
+    },
+  },
+};
+</script>

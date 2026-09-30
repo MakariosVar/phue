@@ -17,13 +17,13 @@
             <ph-card title="Weekly Report" subtitle="Last 7 days" hoverable>
               Hoverable card
               <template #footer>
-                <ph-button variant="outline" size="sm">View details</ph-button>
+                <ph-button variant="outline-secondary" size="sm">View details</ph-button>
               </template>
             </ph-card>
             <ph-card title="Monthly Report" subtitle="Last month">
               Default card
               <template #footer>
-                <ph-button variant="outline" size="sm">View details</ph-button>
+                <ph-button variant="outline-secondary" size="sm">View details</ph-button>
               </template>
             </ph-card>
           </div>
@@ -60,7 +60,7 @@ export default {
       snippet: `<ph-card title="Weekly Report" subtitle="Last 7 days" hoverable>
   Revenue grew 12% week over week.
   <template #footer>
-    <ph-button variant="outline" size="sm">View details</ph-button>
+    <ph-button variant="outline-secondary" size="sm">View details</ph-button>
   </template>
 </ph-card>`,
       propsData: [
