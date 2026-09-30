@@ -78,10 +78,11 @@ class ComponentDiscoverer
      * names for known components present within the registry.
      *
      * @param string $template The raw template content to scan.
+     * @param string|null $self The name of the component scanning itself, if applicable.
      *
      * @return array<int, string> Deduplicated and sorted list of PascalCase component names.
      */
-    public function scanTemplate(string $template): array
+    public function scanTemplate(string $template, ?string $self = null): array
     {
         $found = [];
 
@@ -94,6 +95,12 @@ class ComponentDiscoverer
                 }
 
                 $pascalName = $this->normalizeToPascalCase($tag);
+
+                // A self-reference is not a dependency. It is already in this
+                // module, so importing it would be a self-import.
+                if ($self !== null && $pascalName === $self) {
+                    continue;
+                }
 
                 // Use cheap existence check instead of triggering module build via moduleUrl/scriptUrl
                 if ($this->registry->hasComponent($pascalName)) {
@@ -150,7 +157,7 @@ class ComponentDiscoverer
             return $graph;
         }
 
-        $children = $this->scanTemplate($template);
+        $children = $this->scanTemplate($template, $name);
 
         foreach ($children as $childName) {
             // Pass shared $visited and $graph references down the stack

@@ -400,7 +400,7 @@ class PhueComponentLoader
                 $children = $this->templateChildrenMemo[$filePath]['children'];
             } else {
                 $discoverer = new ComponentDiscoverer($this->registry, $this->logger);
-                $children = $discoverer->scanTemplate($structure['template']);
+                $children = $discoverer->scanTemplate($structure['template'], $name);
                 if ($contentHash !== '') {
                     $this->templateChildrenMemo[$filePath] = [
                         'hash' => $contentHash,
