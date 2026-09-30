@@ -1,5 +1,9 @@
 <template>
-  <div class="ph-code border rounded position-relative bg-body-secondary" data-phui="code">
+  <div
+    class="ph-code border rounded position-relative bg-body-secondary"
+    data-phui="code"
+    :data-ph-theme-scope="scopeId"
+  >
     <div
       v-if="language || copyable || themeSwitcher"
       class="ph-code-header d-flex justify-content-between align-items-center px-3 py-2 border-bottom rounded-top bg-body-tertiary"
@@ -60,6 +64,8 @@
 </template>
 
 <script>
+import { useId } from "vue";
+
 // Prism is served same-origin by the framework's npm vendor pipeline
 // (`bin/phue npm:install prismjs` -> /assets/vendor/prismjs). It has to be
 // same-origin: SecurityMiddleware ships `script-src 'self'; style-src 'self'`,
@@ -86,9 +92,171 @@ const THEME_LABELS = {
 // url -> promise, so N PhCode blocks on a page share one request per asset.
 const inflight = new Map();
 
+// Theme CSS text, cached per URL. The *raw* sheet is shared by every block; the
+// scoped rewrite on top of it is per instance.
+const themeText = new Map();
+
 let corePromise = null;
 let lineNumbersPromise = null;
 let hasWarned = false;
+
+/**
+ * Splits a selector list on top-level commas only.
+ *
+ * A naive `list.split(',')` breaks the moment a selector contains a comma
+ * inside brackets or parens — and Prism's themes are full of them:
+ * `[class*=language-]`, `:not(pre)>code[class*=language-]`, and
+ * `code[class*=language-],pre[class*=language-]` on one line. Splitting inside
+ * `:not(a,b)` produces fragments that are not selectors at all, and the scoped
+ * rule silently never matches.
+ */
+function splitSelectors(list) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  let quote = null;
+
+  for (let i = 0; i < list.length; i += 1) {
+    const ch = list[i];
+
+    if (quote) {
+      current += ch;
+      if (ch === quote && list[i - 1] !== '\\') quote = null;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+
+    if (ch === '(' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === ']') depth -= 1;
+
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  parts.push(current);
+
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+// Selectors that already address the page root. `[scope] :root` would mean "a
+// :root somewhere inside this block", which matches nothing, so these are
+// rewritten to the scope element itself.
+const ROOT_SELECTORS = [':root', 'html', 'body'];
+
+/**
+ * Prefixes every selector in a list with the instance scope, so the rule can
+ * only ever match inside this block.
+ */
+function prefixSelectorList(list, prefix) {
+  return splitSelectors(list)
+    .map((selector) => {
+      if (ROOT_SELECTORS.indexOf(selector.toLowerCase()) !== -1) {
+        return prefix;
+      }
+      return prefix + ' ' + selector;
+    })
+    .join(',');
+}
+
+// At-rules whose *body* is a nested list of rules and therefore needs the same
+// recursive treatment. Everything else (@font-face, @keyframes, @import) has no
+// selectors in its body and must be passed through untouched — prefixing
+// `from`/`0%` inside a @keyframes would destroy the animation.
+const NESTING_AT_RULES = ['media', 'supports', 'layer', 'container', 'scope'];
+
+/**
+ * Rewrites a Prism theme so it applies to one block only.
+ *
+ * A Prism theme is page-global CSS: `.token.comment`, `code[class*=language-]`,
+ * and friends match across the whole document, which is why a `<link>` can only
+ * ever be a page-wide switch. This walks the sheet rule by rule and anchors each
+ * selector to `[data-ph-theme-scope="<id>"]`, so two blocks on one page can hold
+ * two different themes at once.
+ *
+ * It is a scanner rather than a full CSS parser on purpose: the component ships
+ * no build step and no dependency, and the grammar it has to survive is the one
+ * Prism's themes actually use.
+ */
+function scopeThemeCss(css, prefix) {
+  let output = '';
+  let cursor = 0;
+
+  while (cursor < css.length) {
+    const braceStart = css.indexOf('{', cursor);
+    if (braceStart === -1) {
+      output += css.slice(cursor);
+      break;
+    }
+
+    const prelude = css.slice(cursor, braceStart);
+    const trimmed = prelude.trim();
+
+    // Match the closing brace of this block, tracking nesting.
+    let depth = 1;
+    let end = braceStart + 1;
+    while (end < css.length && depth > 0) {
+      if (css[end] === '{') depth += 1;
+      else if (css[end] === '}') depth -= 1;
+      end += 1;
+    }
+    const body = css.slice(braceStart + 1, end - 1);
+
+    if (trimmed.charAt(0) === '@') {
+      const at = /^@([a-z-]+)/i.exec(trimmed);
+      const name = at ? at[1].toLowerCase() : '';
+
+      output += NESTING_AT_RULES.indexOf(name) !== -1
+        ? prelude + '{' + scopeThemeCss(body, prefix) + '}'
+        : prelude + '{' + body + '}';
+    } else if (trimmed) {
+      output += prefixSelectorList(trimmed, prefix) + '{' + body + '}';
+    }
+
+    cursor = end;
+  }
+
+  return output;
+}
+
+/**
+ * Fetches a theme's CSS, shared across every block on the page.
+ *
+ * The sheets are same-origin (`/assets/vendor/prismjs`), so this is allowed by
+ * the shell's `default-src 'self'` — and it has to be a fetch rather than a
+ * `<link>`, because a `<link>` cannot be scoped.
+ */
+function fetchThemeCss(url) {
+  if (themeText.has(url)) {
+    return themeText.get(url);
+  }
+
+  const pending = fetch(url, { credentials: 'same-origin' })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error('Cannot load ' + url + ' (HTTP ' + response.status + ')');
+      }
+      return response.text();
+    })
+    .catch((error) => {
+      // Drop the rejection so a later block (or a retry) can try again.
+      themeText.delete(url);
+      throw error;
+    });
+
+  themeText.set(url, pending);
+
+  return pending;
+}
 
 function warnOnce(message) {
   if (!hasWarned) {
@@ -139,14 +307,51 @@ function loadStyle(base, path, marker) {
 }
 
 /**
- * Injects the theme stylesheet, dropping any previously injected one.
+ * Applies a theme to **this block only**.
  *
- * Both sheets target the same `.token` selectors with equal specificity, so the
- * later <link> wins: keeping the old one would make a theme switch a silent
- * no-op the second time round (A -> B -> A leaves [A, B] in the head).
+ * The previous implementation kept a single page-wide
+ * `<link data-prism-css="theme-*">` and removed any other block's sheet, so
+ * switching one block's theme repainted every block on the page — and a second
+ * block with a different theme silently fought it for ownership of the one
+ * link. Themes are now fetched once, rewritten against this instance's scope
+ * attribute, and injected as a `<style>` owned by this component.
  */
-function setTheme(base, theme) {
+async function applyScopedTheme(base, theme, scopeId) {
   // The theme name reaches a URL, so it is validated before interpolation.
+  if (!/^[a-z0-9-]+$/i.test(theme || '')) {
+    return false;
+  }
+
+  const href = base + '/themes/prism-' + theme + '.min.css';
+  const css = await withTimeout(fetchThemeCss(href));
+
+  if (!css) {
+    return false;
+  }
+
+  const selector = '[data-ph-theme-scope="' + scopeId + '"]';
+  const style = document.createElement('style');
+  style.setAttribute('type', 'text/css');
+  style.setAttribute('data-ph-theme-scope', scopeId);
+  style.textContent = scopeThemeCss(css, selector);
+
+  // Replacing, not accumulating: only the active theme's colours may apply, and
+  // A -> B -> A must not leave three sheets behind.
+  const previous = document.querySelectorAll('style[data-ph-theme-scope="' + scopeId + '"]');
+  previous.forEach((node) => node.remove());
+
+  document.head.appendChild(style);
+
+  return true;
+}
+
+/**
+ * Last-resort page-wide theme, used only when the theme sheet could not be
+ * fetched. It cannot be scoped, so it is deliberately not the normal path: a
+ * degraded block is better than an unstyled one, but every block sharing a
+ * theme is exactly the bug this replaced.
+ */
+function applyGlobalThemeFallback(base, theme) {
   if (!/^[a-z0-9-]+$/i.test(theme || '')) {
     return;
   }
@@ -154,9 +359,6 @@ function setTheme(base, theme) {
   const href = base + '/themes/prism-' + theme + '.min.css';
   const current = document.querySelector('link[data-prism-css^="theme-"]');
 
-  // Already applied: leave the link alone. highlight() runs again on every code
-  // or language change, and removing a live <link> would re-fetch the sheet and
-  // flash the block unstyled.
   if (current && current.getAttribute('href') === href) {
     return;
   }
@@ -256,6 +458,12 @@ export default {
     assetBase: { type: String, default: DEFAULT_ASSET_BASE },
   },
   emits: ['copy', 'theme-change'],
+  setup() {
+    // Hydration-stable per-instance id, used as the scope the theme is rewritten
+    // against. A module counter would drift between the server render and the
+    // client, which is fine for correctness but produces a confusing mismatch.
+    return { scopeId: 'ph-theme-' + useId() };
+  },
   data() {
     return {
       copied: false,
@@ -265,6 +473,9 @@ export default {
       pending: true,
       // Local copy of `theme`: the picker writes here, the prop stays read-only.
       activeTheme: this.theme,
+      // False only when the scoped sheet could not be applied and the component
+      // fell back to the page-wide theme.
+      themed: true,
       unwatch: [],
     };
   },
@@ -335,8 +546,7 @@ export default {
       // browser fetches it in parallel. Awaiting core + autoloader first kept the
       // block on the page background (white) for two extra round-trips, which is
       // exactly the "white block, then it jumps dark" flash on load.
-      // The theme name reaches a URL, so it is validated before interpolation.
-      setTheme(base, this.activeTheme);
+      await this.loadTheme();
 
       if (!(await withTimeout(ensureCore(base)))) {
         return false;
@@ -347,6 +557,26 @@ export default {
       }
 
       return true;
+    },
+    /**
+     * Puts this block's theme in place, scoped to this block.
+     *
+     * Falls back to a page-wide `<link>` only when the sheet could not be
+     * fetched, so a missing/blocked theme degrades to "shared theme" rather
+     * than to "unreadable code".
+     */
+    async loadTheme() {
+      try {
+        if (await applyScopedTheme(this.assetRoot, this.activeTheme, this.scopeId)) {
+          this.themed = true;
+          return;
+        }
+        throw new Error('timed out or returned an unsafe theme name');
+      } catch (error) {
+        this.themed = false;
+        applyGlobalThemeFallback(this.assetRoot, this.activeTheme);
+        warnOnce('Could not scope the code theme (' + error.message + ') — falling back to one shared theme for the page.');
+      }
     },
     async highlight() {
       const el = this.$refs.codeEl;
@@ -428,6 +658,15 @@ export default {
     for (const stop of this.unwatch) {
       stop();
     }
+
+    // Drop this instance's sheet. The raw theme text stays in the module cache,
+    // so a remount re-injects it without another request.
+    if (typeof document === 'undefined' || !this.themed) {
+      return;
+    }
+    document
+      .querySelectorAll('style[data-ph-theme-scope="' + this.scopeId + '"]')
+      .forEach((node) => node.remove());
   },
 };
 </script>
