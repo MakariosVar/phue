@@ -1,52 +1,137 @@
 <template>
   <div
+    v-if="hasItems"
     data-phui="timeline"
-    class="ph-timeline"
+    class="ph-timeline d-flex"
+    :class="vertical ? 'flex-column' : 'flex-row'"
+    :style="rootStyle"
+    :role="interactive ? null : 'list'"
   >
-    <div
-      v-for="(item, index) in items"
-      :key="item.key || index"
-      class="ph-timeline-item position-relative ps-4 pb-4"
-      :class="{ 'ph-timeline-item-last': index === items.length - 1 }"
+    <component
+      :is="itemTag(item)"
+      v-for="(item, index) in ordered"
+      :key="itemKey(item, index)"
+      class="ph-timeline-item position-relative"
+      :class="itemClasses(item)"
+      :style="[itemBoxStyle(item), interactionStyle(item, index)]"
+      :role="interactive ? null : 'listitem'"
+      :aria-current="item.active ? 'step' : null"
+      :aria-disabled="item.disabled ? 'true' : null"
+      :tabindex="clickable && !item.disabled ? 0 : null"
+      :href="item.href || null"
+      :type="itemTag(item) === 'button' ? 'button' : null"
+      @click="onItemClick(item, index, $event)"
+      @keydown.enter.prevent="clickable && !item.disabled && onItemClick(item, index, $event)"
+      @keydown.space.prevent="clickable && !item.disabled && onItemClick(item, index, $event)"
+      @mouseenter="onHover(item, index, true)"
+      @mouseleave="onHover(item, index, false)"
+      @focusin="onFocus(item, index, true)"
+      @focusout="onFocus(item, index, false)"
     >
-      <div class="ph-timeline-marker position-absolute start-0 top-0" :style="{ width: '2rem' }">
+      <!--
+        The connector is absolutely positioned rather than laid out as a flex
+        sibling, so it always meets the *next* marker regardless of how tall
+        this item's content happens to be.
+      -->
+      <span
+        v-if="index < ordered.length - 1 && lineStyle !== 'none'"
+        class="ph-timeline-line position-absolute"
+        :style="lineStyleFor(item)"
+        aria-hidden="true"
+      ></span>
+
+      <!-- marker: dot / icon / index number -->
+      <span
+        class="ph-timeline-marker position-absolute d-inline-flex align-items-center justify-content-center rounded-circle border"
+        :class="markerClasses(item)"
+        :style="markerStyle(item)"
+        aria-hidden="true"
+      >
+        <ph-icon
+          v-if="markerIcon(item)"
+          :name="markerIcon(item)"
+          :size="iconSize"
+          :variant="markerIconVariant(item)"
+        />
+        <span v-else-if="showIndex(item)" class="ph-timeline-index fw-semibold">
+          {{ item.label != null ? item.label : index + 1 }}
+        </span>
+      </span>
+
+      <!-- content -->
+      <div class="ph-timeline-content" :class="contentClasses(item)">
         <div
-          class="ph-timeline-dot rounded-circle border"
-          :class="[
-            variant ? `bg-${variant} border-${variant}` : 'bg-primary border-primary',
-            { 'bg-body': !item.variant && !variant }
-          ]"
-          :style="{
-            width: '1rem',
-            height: '1rem',
-            marginLeft: '-0.5rem',
-            borderWidth: '2px'
-          }"
+          v-if="item.time || item.badge || item.meta"
+          class="ph-timeline-head d-flex align-items-center gap-2 flex-wrap mb-1"
         >
-          <ph-icon
-            v-if="item.icon"
-            :name="item.icon"
-            :size="xs"
-            variant="light"
-          />
+          <time
+            v-if="item.time"
+            class="ph-timeline-time text-body-secondary small text-nowrap"
+            :datetime="item.dateTime || null"
+          >{{ item.time }}</time>
+
+          <span v-if="item.badge" class="ph-timeline-badge badge" :class="badgeClasses(item)">
+            {{ badgeLabel(item) }}
+          </span>
+
+          <span v-if="item.meta" class="ph-timeline-meta text-body-secondary small">{{ item.meta }}</span>
         </div>
-        <div
-          v-if="index < items.length - 1"
-          class="ph-timeline-line"
-          :style="{ height: 'calc(100% + 1rem)', borderLeft: `2px dashed ${variant ? `var(--bs-${variant}-border-subtile)` : 'var(--bs-border-color)'}` }"
-        ></div>
+
+        <div v-if="item.title" class="ph-timeline-title fw-semibold" :class="titleClasses(item)">
+          {{ item.title }}
+        </div>
+
+        <div v-if="item.body" class="ph-timeline-body text-body-secondary small" :class="bodyClasses(item)">
+          {{ item.body }}
+        </div>
+
+        <!-- per-item escape hatch: #item-<key> scoped with { item, index, active } -->
+        <slot :name="`item-${itemKey(item, index)}`" :item="item" :index="index" :active="isActive(item)" />
       </div>
-      <div class="ph-timeline-content ms-3">
-        <div class="ph-timeline-time text-body-secondary small mb-1" v-if="item.time">{{ item.time }}</div>
-        <div class="ph-timeline-title fw-semibold" v-if="item.title">{{ item.title }}</div>
-        <div class="ph-timeline-body text-body-secondary small" v-if="item.body">{{ item.body }}</div>
-        <slot :name="`item-${item.key || index}`" :item="item" />
-      </div>
-    </div>
+    </component>
+  </div>
+
+  <div
+    v-else
+    data-phui="timeline"
+    class="ph-timeline-empty text-body-secondary text-center small"
+    :style="rootStyle"
+  >
+    <slot name="empty">{{ emptyText }}</slot>
   </div>
 </template>
 
 <script>
+const SPACING = {
+  none: '0',
+  xs: '0.25rem',
+  sm: '0.5rem',
+  md: '1rem',
+  lg: '1.5rem',
+  xl: '2rem'
+};
+
+const MARKER = {
+  xs: '0.5rem',
+  sm: '0.75rem',
+  md: '1rem',
+  lg: '1.25rem',
+  xl: '1.5rem'
+};
+
+const VARIANTS = ['primary', 'secondary', 'success', 'danger', 'error', 'warning', 'info', 'neutral'];
+
+const VARIANT_ALIASES = {
+  error: 'danger',
+  neutral: 'secondary'
+};
+
+const LINE_STYLES = {
+  solid: 'solid',
+  dashed: 'dashed',
+  dotted: 'dotted'
+};
+
 export default {
   name: 'PhTimeline',
   props: {
@@ -54,10 +139,382 @@ export default {
       type: Array,
       default: () => []
     },
+    /** Fallback colour for every marker and line that has no per-item variant. */
     variant: {
       type: String,
       default: '',
-      validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info'].includes(v)
+      validator: (v) => v === '' || VARIANTS.includes(v)
+    },
+    orientation: {
+      type: String,
+      default: 'vertical',
+      validator: (v) => ['vertical', 'horizontal'].includes(v)
+    },
+    /** Flip the reading order (newest-first is the usual reason). */
+    reverse: {
+      type: Boolean,
+      default: false
+    },
+    spacing: {
+      type: String,
+      default: 'md',
+      validator: (v) => Object.prototype.hasOwnProperty.call(SPACING, v)
+    },
+    marker: {
+      type: String,
+      default: 'md',
+      validator: (v) => Object.prototype.hasOwnProperty.call(MARKER, v)
+    },
+    lineStyle: {
+      type: String,
+      default: 'solid',
+      validator: (v) => v === 'none' || Object.prototype.hasOwnProperty.call(LINE_STYLES, v)
+    },
+    lineWidth: {
+      type: Number,
+      default: 2
+    },
+    /** Makes every item a focusable button and emits `item-click`. */
+    clickable: {
+      type: Boolean,
+      default: false
+    },
+    /** Renders the 1-based position inside the marker when it has no icon. */
+    numbered: {
+      type: Boolean,
+      default: false
+    },
+    /** Content on a `bg-body-tertiary` card instead of bare on the surface. */
+    card: {
+      type: Boolean,
+      default: false
+    },
+    emptyText: {
+      type: String,
+      default: 'No timeline entries yet.'
+    }
+  },
+  emits: ['item-click'],
+  data() {
+    return {
+      // Which row is hovered / focused, by its rendered key. Kept as state
+      // rather than a `:hover` CSS rule because the component ships no
+      // stylesheet, and a bound style is the only way to react to hover
+      // without one.
+      hoveredKey: null,
+      focusedKey: null
+    };
+  },
+  computed: {
+    hasItems() {
+      return Array.isArray(this.items) && this.items.length > 0;
+    },
+    vertical() {
+      return this.orientation === 'vertical';
+    },
+    /** Non-object entries (strings, numbers) are dropped rather than crashing the loop. */
+    ordered() {
+      const list = this.items.filter((item) => item && typeof item === 'object');
+      return this.reverse ? list.slice().reverse() : list;
+    },
+    gap() {
+      return SPACING[this.spacing] || SPACING.md;
+    },
+    markerSize() {
+      return MARKER[this.marker] || MARKER.md;
+    },
+    markerPx() {
+      return Math.round(parseFloat(this.markerSize) * 16 * 100) / 100;
+    },
+    /**
+     * A dot has to hold a glyph, and a glyph has to be legible. A plain dot can
+     * be small; a numbered one cannot, so it is floored at 1.25rem instead of
+     * rendering a 8px digit inside a 16px circle.
+     */
+    dotSize() {
+      const needsGlyph = this.ordered.some((item) => this.showIndex(item));
+      const size = needsGlyph ? Math.max(this.markerPx, 20) : this.markerPx;
+      return `${Math.round(size * 100) / 100}px`;
+    },
+    dotPx() {
+      return parseFloat(this.dotSize);
+    },
+    iconSize() {
+      return `${Math.round(this.dotPx * 0.55 * 100) / 100}px`;
+    },
+    /** Half the marker: the inset the component needs so the dot is not clipped. */
+    dotInset() {
+      return `calc(${this.dotSize} / 2)`;
+    },
+    /** Horizontal room reserved for the marker, so content never sits under the dot. */
+    gutter() {
+      return `calc(${this.dotSize} + 0.75rem)`;
+    },
+    /**
+     * True when at least one item is a real control (button or link). The
+     * `list`/`listitem` roles are then dropped: a `listitem` that is also a
+     * button is a role conflict, and axe rejects it.
+     */
+    interactive() {
+      return this.clickable || this.ordered.some((item) => !!item.href);
+    },
+    rootStyle() {
+      const axis = this.vertical ? 'column' : 'row';
+      const style = {
+        flexDirection: this.reverse ? `${axis}-reverse` : axis,
+        gap: this.gap
+      };
+      // The marker is centred on the spine, so half of it hangs outside the
+      // first item. Without this inset the leading dot is clipped by the
+      // parent's padding (and outright invisible at the viewport edge).
+      style[this.vertical ? 'paddingLeft' : 'paddingTop'] = this.dotInset;
+      return style;
+    }
+  },
+  methods: {
+    itemKey(item, index) {
+      return item.key || item.id || index;
+    },
+    /** `a` when the item has an href, `button` when clickable, otherwise a plain div. */
+    itemTag(item) {
+      if (item.href) return 'a';
+      return this.clickable ? 'button' : 'div';
+    },
+    /** Per-item variant wins over the component-level `variant`; `error`/`neutral` are aliased. */
+    color(item) {
+      const raw = item.variant || this.variant || '';
+      if (!raw) return '';
+      return VARIANT_ALIASES[raw] || raw;
+    },
+    lineColor(item) {
+      const color = this.color(item);
+      // 0.35 was invisible on a dark surface: a tinted connector on a dark
+      // card is a colour at low alpha over near-black, and green in particular
+      // vanished entirely. The connector is the only thing that communicates
+      // sequence, so it has to survive the surface it sits on.
+      return color ? `rgba(var(--bs-${color}-rgb), 0.65)` : 'var(--bs-border-color)';
+    },
+    haloColor(item) {
+      const color = this.color(item);
+      return color
+        ? `rgba(var(--bs-${color}-rgb), 0.18)`
+        : 'rgba(var(--bs-secondary-rgb), 0.18)';
+    },
+    itemClasses(item) {
+      // A clickable row is a real <button>/<a>, so it has to be reset back to a
+      // neutral block: the UA border, background and text alignment are all
+      // button chrome that the timeline never asked for.
+      const control = this.clickable || !!item.href;
+      return [
+        {
+          'ph-timeline-item-card': this.card,
+          'ph-timeline-item-clickable': control && !item.disabled,
+          'ph-timeline-item-active': this.isActive(item),
+          'ph-timeline-item-disabled': !!item.disabled,
+          'bg-transparent': control,
+          'border-0': control || this.card,
+          'text-start': control
+        },
+        item.class
+      ];
+    },
+    itemBoxStyle() {
+      const style = { minWidth: 0 };
+      if (!this.vertical) {
+        style.flex = '1 1 0';
+      }
+      if (this.card) {
+        style.padding = '0.5rem 0.75rem';
+      }
+      // The gutter pushes content clear of the marker; `card` padding must not
+      // win over it, so it is re-applied last.
+      if (this.vertical) {
+        style.paddingLeft = this.gutter;
+      } else {
+        style.paddingTop = this.gutter;
+      }
+      return style;
+    },
+    /**
+     * The connector is a *painted bar*, not a border.
+     *
+     * A `dashed` border derives its dash length from the border box, so a 2px
+     * dashed border renders as 2px dashes separated by 2px gaps — a row of
+     * disconnected fragments rather than a dashed rule, and the pattern shifts
+     * with the length of every segment. A `repeating-linear-gradient` has a
+     * fixed period, so the dash is identical on every item at any height.
+     *
+     * Centring translates along the *cross* axis only. The main axis is already
+     * pinned by `top`/`bottom` (vertical) or `left`/`right` (horizontal), and
+     * translating it as well would slide the bar off its own extent. The marker
+     * uses the same cross-axis translate against the same origin, which is what
+     * makes the two provably concentric — deriving each from its own negative
+     * margin only coincides when the line width happens to equal the dot size.
+     */
+    lineStyleFor(item) {
+      const color = this.lineColor(item);
+      const kind = LINE_STYLES[this.lineStyle] || 'solid';
+      const style = {
+        backgroundColor: kind === 'solid' ? color : 'transparent'
+      };
+
+      if (kind === 'dashed') {
+        // dash : gap = 1 : 1, so the period is twice the dash. Written with
+        // explicit two-position stops — a bare `transparent <dash> 0 <period>`
+        // is a three-position stop and the whole gradient is dropped.
+        const dash = this.lineWidth * 2;
+        const period = dash * 2;
+        style.backgroundImage = this.vertical
+          ? `repeating-linear-gradient(to bottom, ${color} 0 ${dash}px, transparent ${dash}px ${period}px)`
+          : `repeating-linear-gradient(to right, ${color} 0 ${dash}px, transparent ${dash}px ${period}px)`;
+      } else if (kind === 'dotted') {
+        const period = `${this.lineWidth * 3}px`;
+        const dot = `radial-gradient(circle closest-side, ${color} 99%, transparent 100%)`;
+        style.backgroundImage = dot;
+        style.backgroundSize = this.vertical ? `${this.lineWidth}px ${period}` : `${period} ${this.lineWidth}px`;
+        style.backgroundRepeat = 'repeat';
+      }
+
+      if (this.vertical) {
+        style.top = this.dotInset;
+        style.bottom = `calc(-${this.gap} - ${this.dotInset})`;
+        style.left = '0';
+        style.width = `${this.lineWidth}px`;
+        style.transform = 'translateX(-50%)';
+      } else {
+        style.top = '0';
+        style.bottom = 'auto';
+        style.left = this.dotInset;
+        style.right = `calc(-${this.gap} - ${this.dotInset})`;
+        style.width = 'auto';
+        style.height = `${this.lineWidth}px`;
+        style.transform = 'translateY(-50%)';
+      }
+      return style;
+    },
+    markerClasses(item) {
+      const color = this.color(item) || 'secondary';
+      if (item.outline) {
+        return { 'bg-body': true, [`border-${color}`]: true };
+      }
+      if (this.color(item)) {
+        return { [`bg-${color}`]: true, [`border-${color}`]: true };
+      }
+      return { 'bg-body': true, 'border-secondary': true };
+    },
+    markerStyle(item) {
+      const size = this.dotSize;
+      const style = {
+        top: '0',
+        left: '0',
+        width: size,
+        height: size,
+        minWidth: size,
+        borderWidth: '2px',
+        lineHeight: '1',
+        // Same cross-axis centring as the connector, against the same `left/top`
+        // origin — that is what guarantees the dot and the line are concentric
+        // for *any* marker size and line width, not just the matching pair.
+        transform: this.vertical ? 'translateX(-50%)' : 'translateY(-50%)',
+        // The digit is drawn inside the 2px border, so it scales off the inner
+        // box, not the outer one — otherwise a 1px ring swallows the glyph.
+        fontSize: `${Math.max(10, Math.round(this.dotPx * 0.4 * 100) / 100)}px`
+      };
+      if (item.outline && this.color(item)) {
+        style.color = `var(--bs-${this.color(item)})`;
+      }
+      if (this.isActive(item)) {
+        style.boxShadow = `0 0 0 0.25rem ${this.haloColor(item)}`;
+      }
+      return style;
+    },
+    markerIcon(item) {
+      if (item.icon) return item.icon;
+      if (item.done || item.completed) return 'check-lg';
+      return '';
+    },
+    markerIconVariant(item) {
+      if (item.iconVariant) return item.iconVariant;
+      if (item.onColor) return item.onColor;
+      // A filled marker needs a light glyph; a surface-coloured one (no
+      // variant, or `outline`) needs a dark one, or it is invisible.
+      if (this.color(item) && !item.outline) return 'light';
+      if (item.outline) return this.color(item) || 'primary';
+      return 'secondary';
+    },
+    showIndex(item) {
+      // `label` always wins; otherwise a marker is only enlarged when it will
+      // actually show a digit — an item that resolved to an icon never will.
+      if (item.label != null) return true;
+      return this.numbered && !this.markerIcon(item);
+    },
+    isActive(item) {
+      return item.active === true;
+    },
+    contentClasses(item) {
+      return {
+        'bg-body-tertiary': this.card,
+        'rounded-3': this.card,
+        'text-body-secondary': !!item.dimmed
+      };
+    },
+    titleClasses(item) {
+      if (item.dimmed || !this.color(item)) return '';
+      return `text-${this.color(item)}`;
+    },
+    /**
+     * The body is the last fixed element in the content block — the per-item
+     * slot is projected straight after it — so its bottom margin would read as
+     * a gap the consumer never asked for.
+     */
+    bodyClasses() {
+      return { 'mb-0': true };
+    },
+    badgeLabel(item) {
+      return typeof item.badge === 'object' ? item.badge.label : item.badge;
+    },
+    badgeClasses(item) {
+      const badge = typeof item.badge === 'object' ? item.badge : {};
+      const color = VARIANT_ALIASES[badge.variant] || badge.variant || 'secondary';
+      return `bg-${color} rounded-pill`;
+    },
+    onItemClick(item, index, event) {
+      if (item.disabled) {
+        event.preventDefault();
+        return;
+      }
+      // An `a`/href item follows the link natively; don't double-fire.
+      if (item.href) return;
+      this.$emit('item-click', item, index);
+    },
+    onHover(item, index, on) {
+      if (item.disabled) return;
+      this.hoveredKey = on ? this.itemKey(item, index) : null;
+    },
+    onFocus(item, index, on) {
+      if (item.disabled) return;
+      this.focusedKey = on ? this.itemKey(item, index) : null;
+    },
+    /**
+     * The affordance a clickable row owes the user: a visible hover tint and a
+     * focus ring. Without them a `<button>` styled flat is indistinguishable
+     * from the non-interactive rows around it, and keyboard focus is invisible.
+     */
+    interactionStyle(item, index) {
+      if (!this.interactive || item.disabled) return null;
+      const key = this.itemKey(item, index);
+      const style = {};
+      if (this.hoveredKey === key) {
+        style.backgroundColor = 'var(--bs-secondary-bg-subtle, rgba(128, 128, 128, 0.12))';
+        style.cursor = 'pointer';
+      }
+      if (this.focusedKey === key) {
+        // Drawn as an outline rather than a box-shadow: the box-shadow channel
+        // is already used by the `active` halo on the marker.
+        style.outline = '2px solid var(--bs-primary)';
+        style.outlineOffset = '-2px';
+      }
+      return Object.keys(style).length ? style : null;
     }
   }
 };

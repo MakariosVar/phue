@@ -1032,21 +1032,144 @@ Slots: `item-<key>` (scoped). No emits.
 
 ### `<ph-timeline>`
 
-Vertical timeline with markers, time, title, body and variant colors.
+Chronological list of events on a connected spine. Vertical (default) or
+horizontal, with icon / numbered / plain markers, per-item colour overrides, an
+`active` highlight, optional click handling, and a per-item slot for anything
+the `items` shape cannot express.
+
+Everything is inline (`style` bindings + Bootstrap utilities) — the component
+ships **no `<style>` block and no external stylesheet**, so it can be dropped on
+any page without touching a single CSS file and cannot collide with another
+page's `.ph-timeline-*` rules.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `items` | `Array` | `[]` | `{time, title, body, icon?, variant?}` |
-| `variant` | `String` | `''` | Global variant for line/markers |
+| `items` | `Array` | `[]` | See the item shape below. Non-object entries are dropped |
+| `variant` | `String` | `''` | Fallback colour for markers and lines: `primary` \| `secondary` \| `success` \| `danger` \| `error` \| `warning` \| `info` \| `neutral` |
+| `orientation` | `String` | `'vertical'` | `vertical` \| `horizontal` |
+| `reverse` | `Boolean` | `false` | Flips the reading order (newest-first) via `column-reverse` / `row-reverse` — the `items` array is never mutated |
+| `spacing` | `String` | `'md'` | `none` \| `xs` \| `sm` \| `md` \| `lg` \| `xl` (the shared spacing scale) |
+| `marker` | `String` | `'md'` | `xs` \| `sm` \| `md` \| `lg` \| `xl` — drives the dot, the content gutter **and** the icon size. Floored at `1.25rem` when any marker has to hold a digit (see below) |
+| `lineStyle` | `String` | `'solid'` | `solid` \| `dashed` \| `dotted` \| `none` — `dashed`/`dotted` are painted gradients, not CSS borders (see below) |
+| `lineWidth` | `Number` | `2` | Connector thickness in px. Independent of `marker` — the two stay concentric at any combination |
+| `clickable` | `Boolean` | `false` | Renders each item as a real `<button type="button">` and emits `item-click` |
+| `numbered` | `Boolean` | `false` | Prints the 1-based position inside a marker that has no icon |
+| `card` | `Boolean` | `false` | Content sits on a `bg-body-tertiary` card instead of the bare surface |
+| `emptyText` | `String` | `'No timeline entries yet.'` | Shown when `items` is empty |
 
-Slots: `item-<key>` (scoped). No emits.
+Emits: `item-click(item, index)` — `index` is the position **in the rendered
+order**, so it already accounts for `reverse`.
+
+Slots:
+
+| Slot | Scoped props | Notes |
+|---|---|---|
+| `item-<key>` | `{ item, index, active }` | Projected after the body. The name comes from `item.key` (or `item.id`), falling back to the index |
+| `empty` | — | Replaces `emptyText` |
+
+**Item shape** — every field except `title` is optional:
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` / `id` | `String` | Stable identity: the `v-for` key *and* the `item-<key>` slot name |
+| `time` | `String` | Rendered inside a `<time>` element |
+| `dateTime` | `String` | Machine-readable value for the `<time datetime="…">` (machine parsing, sorting) |
+| `title` | `String` | Takes the item's `variant` as its text colour |
+| `body` | `String` | Secondary text |
+| `meta` | `String` | Free-form trailing text in the time row (an author, a host) |
+| `badge` | `String \| Object` | `'live'` or `{ label, variant }` |
+| `icon` | `String` | Bootstrap Icons name, drawn inside the marker |
+| `variant` | `String` | Per-item colour; **beats** the component-level `variant` |
+| `outline` | `Boolean` | Marker keeps the surface background and takes a coloured ring + glyph |
+| `active` | `Boolean` | Coloured halo around the marker, and `aria-current="step"` |
+| `done` / `completed` | `Boolean` | Marker falls back to a `check-lg` glyph when no `icon` is given |
+| `label` | `String \| Number` | Explicit marker content; wins over `numbered` |
+| `dimmed` | `Boolean` | Mutes the whole content block |
+| `href` | `String` | Renders the item as an `<a>`; no `item-click` is emitted |
+| `disabled` | `Boolean` | `aria-disabled`, click swallowed, not a tab stop |
+| `iconVariant` | `String` | Forces the glyph colour |
+| `onColor` | `String` | Glyph colour inside a filled marker (defaults to `light`) |
+| `class` | `String` | Extra classes on the item element |
+
+**What the component guarantees:**
+
+- **Exactly `n - 1` connectors.** The last item never draws a line into empty
+  space, and a single-item timeline draws none at all.
+- **The connector always meets the next marker.** It is absolutely positioned
+  from the centre of its own dot with a negative offset of `-(gap + dot / 2)`,
+  so it crosses the inter-item gap regardless of how tall the content is. The
+  in-flow approach (a flex sibling with `height: 100%`) breaks as soon as one
+  item has more text than the next.
+- **Dot and line are provably concentric, at any size.** Both are pinned to the
+  same `left/top` origin and centred by the same cross-axis
+  `transform: translate(-50%)`. They used to be centred independently — the dot
+  by a negative `margin` of `-dot/2`, the line by `-lineWidth/2` — which only
+  coincides when `lineWidth` happens to equal the dot size. At
+  `:line-width="6" marker="xl"` (or any other mismatch) the line visibly drifted
+  off the dot's axis, and horizontally the drift was along the wrong axis
+  entirely. `translate` is applied to the **cross axis only**: the main axis is
+  already pinned by `top`/`bottom` or `left`/`right`, and translating it too
+  would slide the bar off its own extent.
+- **`dashed` is a gradient, not a border.** A CSS `dashed` border derives its
+  dash length from the border box, so a 2px dashed border renders as 2px dashes
+  with 2px gaps — disconnected fragments, with a pattern that shifts as the
+  segment's length changes. `dashed` is a `repeating-linear-gradient` with a
+  fixed period (`lineWidth * 2` on, `* 2` off), and `dotted` is a tiled
+  `radial-gradient`; both are identical on every item regardless of height.
+  Note the gradient stops are written as explicit two-position stops
+  (`color 0 4px, transparent 4px 8px`) — a three-position stop is invalid and
+  silently drops the whole declaration.
+- **Nothing is clipped.** The dot is centred on the spine, so half of it hangs
+  outside the first item; the component insets itself by `dot / 2` on the
+  leading axis to make room. Without that inset the leading marker is cut in
+  half by the parent's padding.
+- **A dot that has to hold a digit is big enough to hold it.** When any marker
+  renders a number (`numbered`, or an explicit `label`), the dot is floored at
+  `1.25rem` regardless of `marker`, and the digit is sized from the *inner* box
+  (the box minus the 2px ring) so the border cannot swallow it. A `16px` circle
+  with an `8px` digit inside a `2px` ring is not a step marker, it is a smudge.
+- **Colour precedence is item → component → neutral**, with `error → danger` and
+  `neutral → secondary` aliased onto Bootstrap's real class names, so
+  `bg-error` can never be emitted. The connector is drawn at `0.65` alpha: at a
+  lower alpha a tinted line on a dark surface — green especially — disappears
+  entirely, and the connector is the only thing communicating sequence.
+- **Real controls when interactive.** `clickable` gives every item a
+  `<button type="button">` (never a form-submitting default) with `Enter` /
+  `Space` support; a `disabled` item is not a tab stop and swallows its click.
+  An `href` item is left entirely to the browser, so navigation and the emit
+  never both fire. Interactive rows carry a hover tint and a focus outline as
+  **bound styles driven by `mouseenter`/`mouseleave` and `focusin`/`focusout`**
+  — the same approach `<ph-input-shell>` uses, since with no stylesheet there
+  is no `:hover` rule to hook. The focus ring is an `outline`, not a
+  `box-shadow`, because that channel already carries the `active` halo.
+- **No role conflicts.** A static timeline is `role="list"` / `role="listitem"`;
+  as soon as any item is interactive those roles are dropped, because a
+  `<button role="listitem">` is invalid ARIA.
 
 ```
+<!-- Vertical, coloured spine, deployment feed -->
 <ph-timeline variant="primary" :items="[
-  { time: '10:00', title: 'Deployed', body: 'v2.4.0 to production' },
-  { time: '09:30', title: 'Tests passed', body: 'All 1,234 tests green' }
+  { key: 'd1', time: '10:00', dateTime: '2026-01-15T10:00', title: 'Deployed', body: 'v2.4.0 to production' },
+  { key: 'd2', time: '09:30', title: 'Tests passed', body: 'All 1,234 tests green', variant: 'success' },
+  { key: 'd3', time: '09:00', title: 'Build failed', body: '2 lint errors', variant: 'danger', icon: 'x-lg' }
 ]" />
+
+<!-- Steps with numbers, newest first, on cards -->
+<ph-timeline numbered reverse card orientation="vertical" :items="steps" />
+
+<!-- Audit log: selectable rows -->
+<ph-timeline clickable line-style="dashed" spacing="lg" :items="audit" @item-click="openEntry" />
 ```
+
+```
+<ph-timeline :items="[{ key: 'deploy', title: 'Deploy' }]">
+  <template #item-deploy="{ item, index, active }">
+    <ph-badge :label="item.stage" variant="info" />
+  </template>
+  <template #empty>No deployments in this window.</template>
+</ph-timeline>
+```
+
 
 ### `<ph-code>`
 
