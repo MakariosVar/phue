@@ -275,8 +275,6 @@ return [
                 <!-- Data Display -->
                 <section v-if="activeSection === 'data'" id="data" class="mb-5">
                     <ph-card title='Data Display'>
-
-                        <h2 class="h4 fw-semibold mb-3">Data Display</h2>
                         <div class="d-flex flex-column gap-2">
                             <span id="table">
                                 <example-ph-data-table />
@@ -324,19 +322,24 @@ return [
 
                 <!-- Feedback -->
                 <section v-if="activeSection === 'feedback'" id="feedback" class="mb-5">
-                    <h2 class="h4 fw-semibold mb-3">Feedback</h2>
-                    <div class="row g-4">
-                        <!-- <ExamplePhAlert />
-                        <ExamplePhModal />
-                        <ExamplePhProgressBar />
-                        <ExamplePhSkeleton />
-                        <ExamplePhSpinner />
-                        <ExamplePhTooltip />
-                        <ExamplePhToast />
-                        <ExamplePhDrawer />
-                        <ExamplePhConfirmDialog />
-                        <ExamplePhPopover /> -->
-                    </div>
+                    <ph-card title='Feedback'>
+
+                        <div class="d-flex flex-column gap-2">
+                            <span id="alert">
+                                <example-ph-alert />
+                            </span>
+                            <!-- 
+                            <ExamplePhModal />
+                            <ExamplePhProgressBar />
+                            <ExamplePhSkeleton />
+                            <ExamplePhSpinner />
+                            <ExamplePhTooltip />
+                            <ExamplePhToast />
+                            <ExamplePhDrawer />
+                            <ExamplePhConfirmDialog />
+                            <ExamplePhPopover /> -->
+                        </div>
+                    </ph-card>
                 </section>
 
                 <!-- Navigation -->
