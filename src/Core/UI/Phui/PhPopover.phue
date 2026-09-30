@@ -5,7 +5,7 @@
   >
     <div class="ph-popover-trigger" @click="toggle" @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle" tabindex="0" :aria-expanded="open">
       <slot name="trigger">
-        <ph-button variant="outline" size="sm">{{ triggerLabel }}</ph-button>
+        <ph-button variant="outline-secondary" size="sm">{{ triggerLabel }}</ph-button>
       </slot>
     </div>
     <teleport to="body" v-if="open">
@@ -20,7 +20,10 @@
         role="dialog"
         :aria-describedby="contentId"
       >
-        <div class="popover-arrow" data-popper-arrow></div>
+        <!-- No popover-arrow: Bootstrap only *positions* it, it never sets
+             position itself — Popper writes `position: absolute` + transform
+             inline. Without Popper the arrow stays a display:block box in normal
+             flow at the top of the box, pushing the header down. -->
         <h3 v-if="title" class="popover-header" :id="titleId">{{ title }}</h3>
         <div class="popover-body" :id="contentId">
           <slot name="content">{{ content }}</slot>
@@ -32,9 +35,26 @@
 </template>
 
 <script>
+import { useId } from "vue";
+
 export default {
   name: 'PhPopover',
+  setup() {
+    // `this._uid` is Vue 2 only — in Vue 3 it is undefined, so every popover on
+    // the page rendered id="ph-popover-content-undefined" and aria-describedby
+    // pointed at a duplicate.
+    return { HashID: useId() };
+  },
   props: {
+    /**
+     * Optional open state. Left as null the popover is uncontrolled; bind it (or
+     * use v-model) to own the open flag, which is how a parent keeps several
+     * popovers mutually exclusive — one open, the rest closed.
+     */
+    modelValue: {
+      type: Boolean,
+      default: null
+    },
     title: {
       type: String,
       default: ''
@@ -67,14 +87,28 @@ export default {
       validator: (v) => ['', 'primary', 'secondary', 'success', 'danger', 'warning', 'info'].includes(v)
     }
   },
-  emits: ['show', 'hide'],
+  emits: ['show', 'hide', 'update:modelValue'],
   data() {
     return {
-      open: false,
+      internalOpen: false,
       triggerRect: null
     };
   },
   computed: {
+    /** The prop when bound, the internal flag otherwise. The setter keeps every
+     *  `this.open = ...` call site working while announcing the change. */
+    open: {
+      get() {
+        return this.modelValue === null ? this.internalOpen : this.modelValue;
+      },
+      set(value) {
+        this.internalOpen = value;
+        if (value) {
+          this.updateTriggerRect();
+        }
+        this.$emit('update:modelValue', value);
+      }
+    },
     placementClass() {
       const base = this.placement.split('-')[0];
       return `bs-popover-${base}`;
@@ -82,67 +116,87 @@ export default {
     popoverStyle() {
       if (!this.triggerRect) return {};
       const offset = 8;
+      const r = this.triggerRect;
+      // clientWidth/clientHeight, not 100vw/100vh: those include the scrollbar,
+      // which pushed every `start`/`top` popover further off than it should be.
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      // Bootstrap's .popover is max-width 276px; clamping the anchor point by half
+      // of that keeps the whole box on screen instead of letting it hang off the edge.
+      const half = 138;
+      const clampX = (x) => Math.min(Math.max(x, half), Math.max(half, vw - half));
+      const clampY = (y) => Math.min(Math.max(y, half), Math.max(half, vh - half));
+
       const styles = { position: 'fixed', zIndex: 1070 };
+
       if (this.placement.startsWith('top')) {
-        styles.bottom = `calc(100vh - ${this.triggerRect.top} + ${offset}px)`;
-        styles.left = `${this.triggerRect.left + this.triggerRect.width / 2}px`;
+        styles.bottom = `${vh - r.top + offset}px`;
+        styles.left = `${clampX(r.left + r.width / 2)}px`;
         styles.transform = 'translateX(-50%)';
       } else if (this.placement.startsWith('bottom')) {
-        styles.top = `${this.triggerRect.bottom + offset}px`;
-        styles.left = `${this.triggerRect.left + this.triggerRect.width / 2}px`;
+        styles.top = `${r.bottom + offset}px`;
+        styles.left = `${clampX(r.left + r.width / 2)}px`;
         styles.transform = 'translateX(-50%)';
       } else if (this.placement.startsWith('start')) {
-        styles.right = `calc(100vw - ${this.triggerRect.left} + ${offset}px)`;
-        styles.top = `${this.triggerRect.top + this.triggerRect.height / 2}px`;
+        styles.right = `${vw - r.left + offset}px`;
+        styles.top = `${clampY(r.top + r.height / 2)}px`;
         styles.transform = 'translateY(-50%)';
       } else {
-        styles.left = `${this.triggerRect.right + offset}px`;
-        styles.top = `${this.triggerRect.top + this.triggerRect.height / 2}px`;
+        styles.left = `${Math.min(r.right + offset, vw - half)}px`;
+        styles.top = `${clampY(r.top + r.height / 2)}px`;
         styles.transform = 'translateY(-50%)';
       }
       return styles;
     },
     contentId() {
-      return `ph-popover-content-${this._uid}`;
+      return `ph-popover-content-${this.HashID}`;
     },
     titleId() {
-      return `ph-popover-title-${this._uid}`;
+      return `ph-popover-title-${this.HashID}`;
     }
   },
   watch: {
     open(val) {
-      if (val) {
-        this.$nextTick(() => {
-          this.updateTriggerRect();
-          this.$emit('show');
-        });
-      } else {
-        this.$emit('hide');
-      }
+      // Measured in the `open` setter, BEFORE the value flips — measuring here
+      // meant the first render ran with triggerRect still null, so popoverStyle
+      // was {} and the popover painted unpositioned for a frame.
+      this.$emit(val ? 'show' : 'hide');
     }
   },
   mounted() {
+    // Bound: addEventListener would call these with `this` = the DOM element,
+    // so `this.open = true` wrote to the element and the popover never opened.
+    // The same references are handed back to removeEventListener below.
+    this.onEnter = () => this.openPopover();
+    this.onLeave = () => this.close();
+
     if (this.trigger === 'hover') {
-      this.$el.addEventListener('mouseenter', this.openPopover);
-      this.$el.addEventListener('mouseleave', this.close);
+      this.$el.addEventListener('mouseenter', this.onEnter);
+      this.$el.addEventListener('mouseleave', this.onLeave);
     } else if (this.trigger === 'focus') {
-      this.$el.addEventListener('focusin', this.openPopover);
-      this.$el.addEventListener('focusout', this.close);
+      this.$el.addEventListener('focusin', this.onEnter);
+      this.$el.addEventListener('focusout', this.onLeave);
     }
     document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.onKeydown);
+    if (this.onEnter) this.$el.removeEventListener('mouseenter', this.onEnter);
+    if (this.onEnter) this.$el.removeEventListener('focusin', this.onEnter);
+    if (this.onLeave) this.$el.removeEventListener('mouseleave', this.onLeave);
+    if (this.onLeave) this.$el.removeEventListener('focusout', this.onLeave);
   },
   methods: {
     openPopover() {
-      if (!this.disabled) this.open = true;
+      if (this.disabled || this.open) return;
+      this.open = true;
     },
     close() {
       this.open = false;
     },
     toggle() {
-      if (!this.disabled) this.open = !this.open;
+      if (this.disabled) return;
+      this.open = this.open ? false : true;
     },
     updateTriggerRect() {
       const trigger = this.$el.querySelector('.ph-popover-trigger');
