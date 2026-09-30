@@ -1,8 +1,10 @@
 <template>
-  <span :class="{ 'placeholder-glow': animated }">
+  <span
+    :class="['d-inline-block', { 'placeholder-glow': animated }]"
+    :style="skeletonStyles"
+  >
     <span
-      :class="['placeholder', variantClass, { 'placeholder-wave': animated }]"
-      :style="skeletonStyles"
+      :class="['placeholder', 'w-100', 'h-100', variantClass, { 'placeholder-wave': animated }]"
     ></span>
   </span>
 </template>

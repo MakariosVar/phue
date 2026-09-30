@@ -84,13 +84,19 @@ export default {
   mounted() {
     this.mounted = true;
     if (typeof window !== 'undefined') {
-      window.confirm = this;
+      // Bound, not the raw instance: `window.confirm({...})` is a method call
+      // ON window, so an unbound `this` would be `window` inside confirm() and
+      // every `this.options` / `this.$nextTick` would be undefined.
+      // A bound function is still callable, so the plain call site is unchanged.
+      window.confirm = this.confirm.bind(this);
+      window.confirm.setLoading = this.setLoading.bind(this);
+      window.confirm.__owner = this;
     }
     document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.onKeydown);
-    if (typeof window !== 'undefined' && window.confirm === this) {
+    if (typeof window !== 'undefined' && window.confirm?.__owner === this) {
       window.confirm = null;
     }
   },
