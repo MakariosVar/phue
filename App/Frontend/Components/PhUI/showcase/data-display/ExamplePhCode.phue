@@ -1,0 +1,134 @@
+<template>
+  <example-factory
+    tag="<ph-code />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Code block with syntax highlighting (Prism.js), line numbers, copy button,
+        and an interactive theme picker. Prism is loaded same-origin from the
+        framework's npm vendor pipeline (<code>/assets/vendor/prismjs</code>); third-party CDN
+        mirrors are blocked by SecurityMiddleware (<code>script-src 'self'</code>), so a missing
+        vendor pipeline shows plain text with a console warning — run <code>bin/phue npm:install prismjs</code>.
+      </p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+          <ph-code language="php" code="echo 'Hello, World!'" copyable theme="tomorrow" />
+          <ph-spacer />
+          <ph-code :code="'Simple text fallback'" theme="okaidia" :themes="['coy', 'dark', 'okaidia']" />
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Emits</strong>
+        <ul>
+          <li><code>copy(code)</code></li>
+          <li><code>theme-change(theme)</code></li>
+        </ul>
+        <p class="text-muted small">
+          The header shows the language label (human-readable alias, e.g. <code>PHP</code> not <code>php</code>),
+          a theme picker (<code>&lt;ph-dropdown&gt;</code> with paint-bucket icon), and a copy button.
+          While Prism is loading the block renders at <code>opacity: 0.55</code> so the
+          server-rendered code stays readable without a white-flash jump.
+          Theme switching drops the old <code>&lt;link&gt;</code> and injects the new one — the
+          same DOM node is reused so A→B→A does not stack sheets.
+          The <code>data-ph-highlighted="1"</code> attribute on <code>&lt;code&gt;</code> signals a successful
+          highlight pass. Copy uses the Clipboard API with an execCommand fallback;
+          failures do not stick the button in a copied state.
+        </p>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhDescriptionList",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      model: null,
+      snippet: `<ph-code language="php" code="echo 'Hello, World!'" copyable theme="twilight" />
+<ph-spacer />
+<ph-code :code="'Simple text fallback'" :themes="['coy','dark','okaidia']" />`,
+      propsData: [
+        {
+          name: "code",
+          type: "String",
+          default: "required",
+          notes: "Source code",
+        },
+        {
+          name: "language",
+          type: "String",
+          default: "'text'",
+          notes: "Prism language id; aliases resolved internally (e.g. js→javascript, html→markup, sh→bash)",
+        },
+        {
+          name: "lineNumbers",
+          type: "Boolean",
+          default: "false",
+          notes: "Show line numbers (plugin)",
+        },
+        {
+          name: "copyable",
+          type: "Boolean",
+          default: "true",
+          notes: "Show copy button",
+        },
+        {
+          name: "wrap",
+          type: "Boolean",
+          default: "false",
+          notes: "Wrap long lines",
+        },
+        {
+          name: "maxHeight",
+          type: "String | Number",
+          default: "'400px'",
+          notes: "Max height",
+        },
+        {
+          name: "theme",
+          type: "String",
+          default: "'twilight'",
+          notes: "Active theme (read-only; the picker writes local activeTheme state and emits theme-change)",
+        },
+        {
+          name: "themeSwitcher",
+          type: "Boolean",
+          default: "true",
+          notes: "Show the theme dropdown in the header",
+        },
+        {
+          name: "themes",
+          type: "Array",
+          default: "['coy', 'dark', 'funky', 'okaidia', 'solarizedlight', 'tomorrow', 'twilight']",
+          notes: "Available theme names",
+        },
+        {
+          name: "assetBase",
+          type: "String",
+          default: "'/assets/vendor/prismjs'",
+          notes: "",
+        }
+      ]
+    };
+  },
+};
+</script>
