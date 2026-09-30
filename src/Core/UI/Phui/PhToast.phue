@@ -68,11 +68,19 @@ export default {
   mounted() {
     this.mounted = true;
     if (typeof window !== 'undefined') {
-      window.toast = this;
+      // Bound, not the raw instance: `window.toast.push(...)` is a method call
+      // ON window, so an unbound `this` would be `window` and every
+      // `this.duration` / `this.toasts` / `this.startTimer` would be undefined.
+      window.toast = {
+        push: this.push.bind(this),
+        remove: this.remove.bind(this),
+        clear: this.clear.bind(this),
+        __owner: this
+      };
     }
   },
   beforeUnmount() {
-    if (typeof window !== 'undefined' && window.toast === this) {
+    if (typeof window !== 'undefined' && window.toast?.__owner === this) {
       window.toast = null;
     }
   },
