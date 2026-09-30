@@ -1,0 +1,168 @@
+<template>
+  <example-factory
+    tag="<ph-stat />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>Stat card with label, value, optional delta trend and icon.</p>
+    </template>
+    <template #demo>
+        <ph-card v-if="showDemo">
+            <div class="row">
+              <div class="col-md-4">
+                <ph-stat
+                  label="Orders"
+                  value="423"
+                  delta="-2%"
+                  trend="down"
+                  icon="box"
+                  variant="warning"
+                />
+              </div>
+              <div class="col-md-4">
+                <ph-stat
+                  label="Reports"
+                  value="21"
+                  delta="Last 24h"
+                  icon="exclamation-triangle"
+                  variant="danger"
+                />
+              </div>
+              <div class="col-md-4">
+                <ph-stat
+                  label="Revenue"
+                  value="€12,345"
+                  delta="+12%"
+                  trend="up"
+                  icon="graph-up"
+                  variant="success"
+                />
+              </div>
+            </div>
+        </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+  
+        <strong>slots</strong>
+        <ul>
+          <li><code>icon</code></li>
+          <li><code>default</code> - value</li>
+        </ul>
+
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhStat",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<div class="row">
+  <div class="col-md-4">
+    <ph-stat
+      label="Orders"
+      value="423"
+      delta="-2%"
+      trend="down"
+      icon="box"
+      variant="warning"
+    />
+  </div>
+  <div class="col-md-4">
+    <ph-stat
+      label="Reports"
+      value="21"
+      delta="Last 24h"
+      icon="exclamation-triangle"
+      variant="danger"
+    />
+  </div>
+  <div class="col-md-4">
+    <ph-stat
+      label="Revenue"
+      value="€12,345"
+      delta="+12%"
+      trend="up"
+      icon="graph-up"
+      variant="success"
+    />
+  </div>
+</div>`,
+      propsData: [
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "value",
+          type: "String | Number",
+          default: "''",
+          notes: "",
+        },
+        {
+          name: "delta",
+          type: "String | Number",
+          default: "null",
+          notes: "Change amount",
+        },
+        {
+          name: "trend",
+          type: "String",
+          default: "'neutral'",
+          notes: "up | down | neutral",
+        },
+        {
+          name: "icon",
+          type: "String",
+          default: "''",
+          notes: "Bootstrap icon name",
+        },
+        {
+          name: "iconSize",
+          type: "String | Number",
+          default: "'lg'",
+          notes: "",
+        },
+        {
+          name: "iconVariant",
+          type: "String",
+          default: "''",
+          notes: "Icon color variant",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "''",
+          notes: "Affects value color and border",
+        },
+        {
+          name: "bordered",
+          type: "Boolean",
+          default: "true",
+          notes: "",
+        }
+      ]
+    };
+  },
+};
+</script>
