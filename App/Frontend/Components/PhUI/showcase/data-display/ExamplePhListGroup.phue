@@ -39,7 +39,7 @@
         <ul>
           <li><code>select(item)</code></li>
         </ul>
-        <strong>slots</strong>
+        <strong>Slots</strong>
         <ul>
           <li><code>item-&lt;key&gt;</code> - scoped</li>
         </ul>
