@@ -1,51 +1,67 @@
 <template>
   <div
     data-phui="accordion"
-    class="ph-accordion"
+    class="accordion ph-accordion"
+    :class="{ 'accordion-flush': flush }"
   >
     <div
       v-for="(item, index) in items"
-      :key="item.key || index"
+      :key="itemKey(item, index)"
       class="accordion-item"
-      :class="{ 'border-0': flush }"
     >
-      <h2 class="accordion-header" :id="`ph-accordion-heading-${index}`">
+      <h2 class="accordion-header" :id="headingId(index)">
         <button
-          class="accordion-button collapsed"
-          :class="{
-            'bg-body-secondary': flush,
-            'border-0': flush,
-            'shadow-none': flush,
-            'fw-semibold': item.active !== false
-          }"
           type="button"
-          data-bs-toggle="collapse"
-          :data-bs-target="`#ph-accordion-collapse-${index}`"
-          :aria-expanded="item.active !== false"
-          :aria-controls="`ph-accordion-collapse-${index}`"
+          class="accordion-button"
+          :class="buttonClasses(item, index)"
+          :aria-expanded="isOpen(index) ? 'true' : 'false'"
+          :aria-controls="panelId(index)"
+          @click="toggle(index)"
         >
-          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
-          {{ item.label }}
+          <ph-icon v-if="item?.icon" :name="item.icon" size="sm" class="me-2" />
+          {{ item?.label }}
         </button>
       </h2>
-      <div
-        :id="`ph-accordion-collapse-${index}`"
-        class="accordion-collapse collapse"
-        :class="{ show: item.active !== false }"
-        :data-bs-parent="multiple ? null : $el"
-        :aria-labelledby="`ph-accordion-heading-${index}`"
+
+        <!-- No `collapse` class: Bootstrap's `.collapse:not(.show){display:none}` fights `v-show`. -->
+      <Transition
+        @enter="onEnter"
+        @after-enter="onAfterEnter"
+        @enter-cancelled="onEnterCancelled"
+        @leave="onLeave"
+        @after-leave="onAfterLeave"
+        @leave-cancelled="onLeaveCancelled"
       >
-        <div class="accordion-body">
-          <slot :name="`item-${item.key || index}`" :item="item">
-            {{ item.content }}
-          </slot>
+        <div
+          :id="panelId(index)"
+          class="accordion-collapse"
+          role="region"
+          :aria-labelledby="headingId(index)"
+          v-show="isOpen(index)"
+        >
+          <div class="accordion-body">
+            <slot :name="`item-${itemKey(item, index)}`" :item="item" :index="index" :open="isOpen(index)">
+              {{ item?.content }}
+            </slot>
+          </div>
         </div>
-      </div>
+      </Transition>
     </div>
   </div>
 </template>
 
 <script>
+import { useId } from "vue";
+
+// A prop declared `Array` still gets whatever a caller passes; Vue only warns.
+// `v-model="0"` here used to throw `value.slice is not a function` and take the
+// whole SSR render down with it, so a wrong type must degrade to "nothing open".
+function toKeys(value) {
+  if (Array.isArray(value)) return value.slice();
+  if (value === null || value === undefined || value === '') return [];
+  return [value];
+}
+
 export default {
   name: 'PhAccordion',
   props: {
@@ -53,6 +69,7 @@ export default {
       type: Array,
       default: () => []
     },
+    /** Allow more than one panel open. */
     multiple: {
       type: Boolean,
       default: false
@@ -61,44 +78,125 @@ export default {
       type: Boolean,
       default: false
     },
+    /** Keys of the open panels; kept internally so it works unwired. */
     modelValue: {
       type: Array,
       default: () => []
     }
   },
   emits: ['update:modelValue'],
+  setup() {
+    // Hydration-stable per-instance prefix, so two accordions cannot emit
+    // duplicate ids and aria-controls survives SSR.
+    return { uid: 'ph-accordion-' + useId() };
+  },
+  data() {
+    return {
+      open: [],
+      seeded: false
+    };
+  },
   watch: {
-    modelValue(val) {
-      this.syncFromModel(val);
+    modelValue: {
+      immediate: true,
+      deep: true,
+      handler(value) {
+        this.open = toKeys(value);
+      }
     },
     items: {
       immediate: true,
-      handler() {
-        this.syncFromModel(this.modelValue);
+      handler(list) {
+        // `active` is the INITIAL state, read once — never mutated back.
+        if (this.seeded) return;
+        this.seeded = true;
+
+        const initial = list
+          .map((item, index) => (item && item.active ? this.itemKey(item, index) : null))
+          .filter((key) => key !== null);
+
+        if (initial.length) {
+          this.open = initial;
+        }
       }
     }
   },
   methods: {
-    syncFromModel(value) {
-      this.items.forEach((item, index) => {
-        if (value.includes(index) || value.includes(item.key || index)) {
-          item.active = true;
-        } else if (this.multiple) {
-          item.active = false;
-        }
-      });
+    itemKey(item, index) {
+      return (item && (item.key || item.id)) || index;
     },
-    onToggle(index) {
-      const key = this.items[index]?.key || index;
-      let next = [...this.modelValue];
-      if (next.includes(key)) {
-        next = next.filter(k => k !== key);
+    headingId(index) {
+      return `ph-accordion-heading-${this.uid}-${index}`;
+    },
+    panelId(index) {
+      return `ph-accordion-collapse-${this.uid}-${index}`;
+    },
+    isOpen(index) {
+      return this.open.indexOf(this.itemKey(this.items[index], index)) !== -1;
+    },
+    toggle(index) {
+      const key = this.itemKey(this.items[index], index);
+      const isOpen = this.open.indexOf(key) !== -1;
+
+      let next;
+      if (isOpen) {
+        next = this.open.filter((value) => value !== key);
       } else if (this.multiple) {
-        next.push(key);
+        next = this.open.concat([key]);
       } else {
+        // Single mode replaces, it does not append.
         next = [key];
       }
+
+      this.open = next;
       this.$emit('update:modelValue', next);
+    },
+    buttonClasses(item, index) {
+      const open = this.isOpen(index);
+      return {
+        // Without `collapsed` the ::after chevron keeps the wrong direction.
+        collapsed: !open,
+        'bg-body-secondary': this.flush,
+        'border-0': this.flush,
+        'shadow-none': this.flush,
+        'fw-semibold': open
+      };
+    },
+
+    // Bootstrap's height transition, driven through Vue hooks.
+
+    onEnter(el) {
+      el.style.height = '0px';
+      el.classList.remove('show');
+      el.classList.add('collapsing');
+      void el.offsetHeight; // reflow, so the 0px baseline is committed
+      void el.offsetHeight;
+      el.style.height = el.scrollHeight + 'px';
+    },
+    onAfterEnter(el) {
+      el.classList.remove('collapsing');
+      el.classList.add('show');
+      el.style.height = '';
+    },
+    onEnterCancelled(el) {
+      el.classList.remove('collapsing');
+      el.style.height = '';
+    },
+    onLeave(el) {
+      el.classList.add('show');
+      el.style.height = el.scrollHeight + 'px';
+      void el.offsetHeight;
+      el.classList.add('collapsing');
+      el.classList.remove('show');
+      el.style.height = '0px';
+    },
+    onAfterLeave(el) {
+      el.classList.remove('collapsing', 'show');
+      el.style.height = '';
+    },
+    onLeaveCancelled(el) {
+      el.classList.remove('collapsing', 'show');
+      el.style.height = '';
     }
   }
 };

@@ -147,6 +147,40 @@ Bootstrap classes: `error` → `bg-danger`/`alert-danger`, `neutral` →
 **Slots.** Where a component has both a `label` prop and a default slot, the
 slot wins when present.
 
+### 1.4 State: works unwired, and works controlled
+
+Components that hold a selection — `<ph-accordion>`, `<ph-tree-view>`,
+`<ph-segmented-control>`, `<ph-select>`, and the form controls — follow one rule
+so you do not have to wire state in every caller:
+
+- **Unwired works.** `<ph-accordion :items="items" />` opens and closes on its
+  own. Nothing is emitted that you have to handle.
+- **A prop change wins.** If you pass `modelValue` / `selected` / `expanded` and
+  change it, the component follows you.
+- **A click is authoritative.** Clicking updates the component's own state and
+  announces the result, so binding is optional rather than mandatory. Wire it
+  when you need the value.
+
+```
+<!-- unwired: just works -->
+<ph-accordion :items="items" />
+
+<!-- controlled: you own the array -->
+<ph-accordion v-model="open" :items="items" />
+```
+
+> **The one trade-off:** a prop you pass but never change will drift from what
+> the user clicks, because the click is authoritative. If the prop has to be the
+> single source of truth, handle the update (`v-model`, or `update:selected` /
+> `update:expanded`) so the echo flows back. This is a deliberate choice over the
+> alternative — a strictly controlled component that silently does nothing when
+> you forget a listener.
+
+Array-valued state is a **common wrong type**. `v-model="0"` on `<ph-accordion>`
+used to throw inside the component and take the whole SSR render down with it.
+Wrong types now degrade quietly to a sensible default, but the array is still the
+contract.
+
 ---
 
 ## 2. Form Controls
@@ -1183,55 +1217,183 @@ Code block with syntax highlighting (Prism.js), line numbers, copy button, and a
 | `copyable` | `Boolean` | `true` | Show copy button |
 | `wrap` | `Boolean` | `false` | Wrap long lines |
 | `maxHeight` | `String \| Number` | `'400px'` | Max height |
-| `theme` | `String` | `'twilight'` | Active theme (read-only; the picker writes local `activeTheme` state and emits `theme-change`) |
+| `theme` | `String` | `'twilight'` | Theme name. The picker writes local state and emits `theme-change`; an external change to this prop wins over the local pick |
 | `themeSwitcher` | `Boolean` | `true` | Show the theme dropdown in the header |
 | `themes` | `Array` | `['coy','dark','funky','okaidia','solarizedlight','tomorrow','twilight']` | Available theme names |
 | `assetBase` | `String` | `'/assets/vendor/prismjs'` | Prism asset root (trailing slash normalized) |
 
 Emits: `copy(code)`, `theme-change(themeName)`. No slots.
 
-The header shows the language label (human-readable alias, e.g. `PHP` not `php`), a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. Theme switching drops the old `<link>` and injects the new one — the same DOM node is reused so A→B→A does not stack sheets. The `data-ph-highlighted="1"` attribute on `<code>` signals a successful highlight pass. Copy uses the Clipboard API with an `execCommand` fallback; failures do not stick the button in a copied state.
+The header shows the language label (human-readable alias, e.g. `PHP` not `php`), a theme picker (`<ph-dropdown>` with paint-bucket icon), and a copy button. While Prism is loading the block renders at `opacity: 0.55` so the server-rendered code stays readable without a white-flash jump. The `data-ph-highlighted="1"` attribute on `<code>` signals a successful highlight pass. Copy uses the Clipboard API with an `execCommand` fallback; failures do not stick the button in a copied state.
+
+**Theming is per instance, not per page.** Two blocks on one page can hold two
+different themes at once, and switching one does not repaint the other. Prism
+ships its themes as page-global CSS — `.token.comment`, `code[class*=language-]`
+and friends, with no per-instance opt-in — so a `<link>` can only ever be a
+page-wide switch. The component therefore `fetch()`es the theme sheet (same
+origin, so `default-src 'self'` allows it), rewrites every selector against
+`[data-ph-theme-scope="<id>"]`, and injects one `<style>` it owns. The raw sheet
+is cached per URL, so N blocks on a page cost one request; only the rewrite is
+per instance. The scope id comes from `useId()`, so it is hydration-stable, and
+the `<style>` is removed on unmount.
+
+> It cannot be done with a `<link>`, and it could not be done by simply letting
+> the plugin manage the sheet: a shared `data-prism-css="theme-*"` link meant the
+> last block to mount or switch took ownership and repainted every block, and a
+> second block on a different theme silently fought it for that one link.
+>
+> The page-wide `<link>` survives only as a **fallback for a failed fetch** — a
+> degraded block beats an unstyled one, and it logs a warning. If you ever see
+> two blocks share a theme, that is the fallback, not the normal path.
+
+One consequence worth knowing: a scoped theme must be fetched as *text* to be
+rewritten, which costs a round trip a plain `<link>` never paid. Prism core and
+the theme are therefore **started before either is awaited**, so the two
+requests stay in flight together — awaiting the theme first and then starting the
+scripts would serialise them and put the white-block flash straight back.
 
 ```
 <ph-code language="php" :code="$code" copyable theme="twilight" />
-<ph-code :code="$code" :themes="['coy','dark','okaidia']" @theme-change="onTheme" />
+
+<!-- Two blocks, two themes — independent -->
+<ph-code :code="$readme" theme="coy" />
+<ph-code :code="$diff" theme="dark" />
 ```
 
 ### `<ph-tree-view>`
 
-Hierarchical tree with selection, expansion, checkboxes and slots.
+Hierarchical tree with selection, expansion, checkboxes, a full keyboard model and
+per-node slots. State works unwired (see §1.4) or controlled.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `nodes` | `Array` | `[]` | `{label, children?, icon?, checked?, key?}` |
-| `selected` | `Array` | `[]` | Selected node keys |
-| `expanded` | `Array` | `[]` | Expanded node keys |
-| `checkable` | `Boolean` | `false` | Show checkboxes |
+| `nodes` | `Array` | `[]` | Root nodes — see the node shape below |
+| `selected` | `Array` | `[]` | Keys of the selected nodes. Re-synced whenever the prop changes |
+| `expanded` | `Array` | `[]` | Keys of the open branches |
+| `checkable` | `Boolean` | `false` | Renders a checkbox per node |
+| `multiSelect` | `Boolean` | `false` | More than one selection. Without it a click **replaces** the selection |
+| `ariaLabel` | `String` | `'Tree'` | Accessible name for the tree |
 
-Emits: `select(node)`, `toggle(node)`, `check(node)`. Slots: `node-<key>` (scoped).
+Emits: `select(node)`, `toggle(node)`, `check(node)`, `update:selected`,
+`update:expanded`. Slots: `node-<key>` (scoped).
 
 ```
-<ph-tree-view :nodes="treeData" :selected="selected" :expanded="expanded" checkable @select="onSelect" />
+<ph-tree-view :nodes="treeData" checkable @select="onSelect" />
+
+<ph-tree-view :nodes="treeData" v-model:selected="selected"
+              v-model:expanded="expanded" checkable multi-select />
 ```
+
+**Node shape** — every field is optional except `label`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` | `String \| Number` | Identity. Matched against `selected`/`expanded`, used as the `v-for` key, and appended to build the `node-<key>` slot name. **Set it on every node** |
+| `label` | `String` | Row text, and the fallback identity when `key` is absent |
+| `children` | `Array` | Child nodes. The row only becomes expandable when this is a **non-empty** array |
+| `icon` | `String` | Bootstrap Icons name |
+| `collapsedIcon` | `String` | Icon shown while the branch is closed |
+| `checked` | `Boolean \| String` | `true` / `false`, or the string `'indeterminate'`. **Read-only** — the component emits the next value, it does not write it |
+| `disabled` | `Boolean` | `aria-disabled`, click swallowed, not a tab stop |
+
+**`selected` vs `checked` are different on purpose.** `selected` answers "which
+is current?" (one, or a few) and maps to `aria-selected`. `checked` answers
+"which are ticked?" (many, tri-state) and maps to `aria-checked`. A file tree
+legitimately shows both at once: a current file *and* a set of ticked files.
+ARIA APG treats them as separate states for exactly this reason.
+
+> **But the storage is asymmetric, and it will bite you.** `selected` is
+> component state you can bind with `v-model:selected`. `checked` is **not** —
+> it lives on the node itself, so a ticked node means mutating your own
+> `nodes` in place. A `check` payload arrives with `checked` already computed
+> (and it reads the live input, so a partially-checked node completes rather
+> than clearing). Walking a tree to write one node back, and deriving a
+> branch's own tri-state from its children, is yours to write:
+>
+> ```js
+> onCheck(node) {
+>   this.updateNode(node.key, { checked: node.checked });
+>   this.syncAncestors();   // all children on -> true, some -> 'indeterminate'
+> }
+> ```
+
+**Keyboard.** `role="tree"` is a **single** tab stop, not one per row. Roving
+tabindex puts `tabindex="0"` on the selected row (or the first) and `-1` on the
+rest, so a 40-node tree is one stop rather than forty.
+
+| Key | Behaviour |
+|---|---|
+| `↑` / `↓` | Move between visible rows (collapsed branches' children are skipped) |
+| `→` | Open a collapsed branch; step into the first child of an open one |
+| `←` | Close an open branch; from a leaf, jump to the branch that owns it |
+| `Home` / `End` | First / last visible row |
+| `Enter` / `Space` | Select the focused row |
+
+Accessibility notes: leaves carry **no** `aria-expanded` (it is invalid on a node
+with no children); the leaf spacer is a non-focusable `<span>` rather than an
+`aria-hidden` `<button>`, which would be both a dead tab stop and an
+`aria-hidden-focus` violation; every checkbox has an `aria-label` derived from
+the node's label; and state is expressed as Bootstrap utility classes
+(`fw-semibold text-primary` for a selected label, `opacity-50` for a disabled
+one) because the kit ships no component stylesheet.
 
 ### `<ph-accordion>`
 
-Collapsible panels with single/multiple open, flush style, v-model array.
+Collapsible panels. Works unwired, or controlled with `v-model` (see §1.4).
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `items` | `Array` | `[]` | `{label, content, icon?, active?, disabled?, key?}` |
-| `multiple` | `Boolean` | `false` | Allow multiple open |
-| `flush` | `Boolean` | `false` | Remove borders |
-| `modelValue` | `Array` | `[]` | Open panel keys/indices |
+| `items` | `Array` | `[]` | Panels — see the item shape below |
+| `modelValue` | `Array` | `[]` | Keys of the open panels. **An array** — a wrong type degrades to "nothing open" rather than throwing |
+| `multiple` | `Boolean` | `false` | Allow more than one panel open. When false, opening one closes the others |
+| `flush` | `Boolean` | `false` | Borderless, full-bleed (Bootstrap `accordion-flush`) |
 
-Emits: `update:modelValue`. Slots: `item-<key>` (scoped).
+Emits: `update:modelValue(keys)`. Slots: `item-<key>` — scoped
+`{ item, index, open }`, falling back to `item.content`.
+
+**Item shape** — every field except `label` is optional:
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` / `id` | `String \| Number` | Identity. It is what `modelValue` holds; falls back to the array index |
+| `label` | `String` | Toggle button text |
+| `content` | `String` | Body text, used when the `item-<key>` slot is absent |
+| `icon` | `String` | Bootstrap Icons name in front of the label |
+| `active` | `Boolean` | Opens the panel on first render. Read **once** — later changes are ignored; drive state with `v-model` |
 
 ```
-<ph-accordion v-model="openPanels" :items="[
-  { label: 'Section 1', content: 'Details…', icon: 'chevron-right' }
-]" @update:modelValue="openPanels = $event" />
+<!-- Unwired: opening and closing is internal -->
+<ph-accordion :items="items" />
+
+<!-- Controlled. v-model is an ARRAY of open keys, not a single index -->
+<ph-accordion v-model="open" :items="items" />
+
+<!-- Several panels at once, borderless -->
+<ph-accordion v-model="multiOpen" :items="items" multiple flush />
 ```
+
+> **This is Vue-controlled, not Bootstrap's collapse plugin.** It used to set
+> `data-bs-toggle="collapse"` and delegate the open/close animation to
+> Bootstrap's JS. That had three defects: `data-bs-parent` was handed `$el` — a
+> DOM *element*, which Vue stringified to `"[object HTMLDivElement]"` and
+> Bootstrap passed to `querySelector`, throwing
+> `Document.querySelector: '[object HTMLDivElement]' is not a valid selector`;
+> the plugin and the vdom both wrote the `show` class on the same element, so the
+> DOM and the model desynchronised; and `active` was tested as
+> `item.active !== false`, which is `true` for the `undefined` a plain item has,
+> so every panel rendered open. It is impossible to fix the first by passing an
+> id instead, because the second problem remains. The height animation is
+> preserved through `<Transition>` hooks driving Bootstrap's own `collapsing`
+> class.
+
+Panel and heading ids are prefixed per instance (via `useId()`, so they survive
+hydration) — two accordions on one page can no longer emit duplicate ids and
+break each other's `aria-controls`.
+
+> **`modelValue` must be an array.** `v-model="0"` used to throw
+> `value.slice is not a function` inside the watcher and take the whole SSR
+> render down with it. A wrong type now degrades quietly instead, but the array
+> is still the contract.
 
 ---
 
