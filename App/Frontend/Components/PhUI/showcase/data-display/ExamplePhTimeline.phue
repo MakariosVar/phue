@@ -1,0 +1,327 @@
+<template>
+  <example-factory
+    tag="<ph-timeline />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Chronological list of events on a connected spine. Vertical or
+        horizontal, with icon / numbered / plain markers, per-item colour
+        overrides, an <code>active</code> highlight and clickable rows. Every
+        style is inline — no stylesheet, no <code>&lt;style&gt;</code> block.
+      </p>
+    </template>
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Vertical, coloured spine
+        </h6>
+        <ph-timeline
+          variant="primary"
+          :items="[
+            { key: 'd1', time: '10:00', title: 'Deployed', body: 'v2.4.0 to production', icon: 'rocket' },
+            { key: 'd2', time: '09:30', title: 'Tests passed', body: 'All 1,234 tests green', variant: 'success' },
+            { key: 'd3', time: '09:00', title: 'Build failed', body: '2 lint errors', variant: 'danger', icon: 'x-lg' }
+          ]"
+        />
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Numbered, reversed, on cards — clickable
+        </h6>
+        <ph-timeline
+          numbered
+          reverse
+          card
+          clickable
+          line-style="dashed"
+          :items="steps"
+          @item-click="onStepClick"
+        />
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Horizontal
+        </h6>
+        <ph-timeline
+          orientation="horizontal"
+          marker="sm"
+          variant="info"
+          :items="[
+            { time: 'Draft', title: 'Drafted' },
+            { time: 'Review', title: 'Reviewed', active: true },
+            { time: 'Ship', title: 'Shipped' }
+          ]"
+        />
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Empty
+        </h6>
+        <ph-timeline :items="[]" empty-text="No deployments in this window." />
+      </ph-card>
+    </template>
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
+      </div>
+    </template>
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <strong>Slots</strong>
+        <ul>
+          <li><code>item-&lt;key&gt;</code> - scoped <code>{ item, index, active }</code></li>
+          <li><code>empty</code> - replaces <code>emptyText</code></li>
+        </ul>
+        <strong>Emits</strong>
+        <ul>
+          <li><code>item-click(item, index)</code> - index is in rendered order</li>
+        </ul>
+        <hr />
+        <h4>Item shape</h4>
+        <p class="text-muted">
+          Every field is optional — a bare <code>{ title }</code> is a valid
+          item. Fields marked <em>beats</em> or <em>wins</em> override the
+          component-level prop of the same name.
+        </p>
+        <ph-data-table
+          :columns="[
+            {key: 'field', label: 'Field', sortable: true},
+            {key: 'type', label: 'Type'},
+            {key: 'notes', label: 'Notes'}
+          ]"
+          :items="itemProps"
+          paginated
+          :page-size="10"
+        >
+          <template #cell(field)="{ value }"><strong v-html="value"></strong></template>
+          <template #cell(type)="{ value }"><span v-html="value"></span></template>
+          <template #cell(notes)="{ value }"><span v-html="value"></span></template>
+        </ph-data-table>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhTimeline",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      steps: [
+        { key: 's3', time: 'Day 3', title: 'Monitoring', body: 'Watch the error rate', variant: 'info' },
+        { key: 's2', time: 'Day 2', title: 'Staged rollout', body: '10% of traffic', done: true },
+        { key: 's1', time: 'Day 1', title: 'Merged', body: 'main is green' }
+      ],
+      snippet: `<!-- Colours, icons, one item in trouble -->
+<ph-timeline variant="primary" :items="[
+  { key: 'd1', time: '10:00', title: 'Deployed', body: 'v2.4.0', icon: 'rocket' },
+  { key: 'd2', time: '09:30', title: 'Tests passed', variant: 'success' },
+  { key: 'd3', time: '09:00', title: 'Build failed', variant: 'danger', icon: 'x-lg' }
+]" />
+
+<!-- Numbered steps, newest first, clickable rows on cards -->
+<ph-timeline numbered reverse card clickable
+             line-style="dashed" :items="steps"
+             @item-click="openStep" />
+
+<!-- Per-item slot + empty state -->
+<ph-timeline :items="[{ key: 'deploy', title: 'Deploy' }]">
+  <template #item-deploy="{ item, active }">
+    <ph-badge :label="item.stage" variant="info" />
+  </template>
+  <template #empty>No deployments in this window.</template>
+</ph-timeline>`,
+      propsData: [
+        {
+          name: "items",
+          type: "Array",
+          default: "[]",
+          notes: "Event objects — see the <strong>Item shape</strong> table below. Non-object entries are dropped rather than crashing the loop",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "''",
+          notes: "Fallback colour: primary|secondary|success|danger|error|warning|info|neutral",
+        },
+        {
+          name: "orientation",
+          type: "String",
+          default: "'vertical'",
+          notes: "vertical | horizontal",
+        },
+        {
+          name: "reverse",
+          type: "Boolean",
+          default: "false",
+          notes: "Flip reading order (newest first) via <code>column-reverse</code> / <code>row-reverse</code> — the <code>items</code> array is never mutated",
+        },
+        {
+          name: "spacing",
+          type: "String",
+          default: "'md'",
+          notes: "none|xs|sm|md|lg|xl",
+        },
+        {
+          name: "marker",
+          type: "String",
+          default: "'md'",
+          notes: "xs|sm|md|lg|xl — dot, gutter and icon size. Floored at 1.25rem when a marker has to hold a digit",
+        },
+        {
+          name: "lineStyle",
+          type: "String",
+          default: "'solid'",
+          notes: "solid|dashed|dotted|none. dashed/dotted are painted gradients, so the pattern is fixed regardless of row height",
+        },
+        {
+          name: "lineWidth",
+          type: "Number",
+          default: "2",
+          notes: "Connector thickness in px. Independent of <code>marker</code> — dot and line stay concentric at any pair",
+        },
+        {
+          name: "clickable",
+          type: "Boolean",
+          default: "false",
+          notes: "Each row becomes a real <code>&lt;button type=button&gt;</code> with Enter/Space, a hover tint and a focus outline",
+        },
+        {
+          name: "numbered",
+          type: "Boolean",
+          default: "false",
+          notes: "Print the 1-based position in markers that resolve to no icon",
+        },
+        {
+          name: "card",
+          type: "Boolean",
+          default: "false",
+          notes: "Content on a bg-body-tertiary card",
+        },
+        {
+          name: "emptyText",
+          type: "String",
+          default: "'No timeline entries yet.'",
+          notes: "Used when <code>items</code> is empty; the <code>empty</code> slot wins over it",
+        },
+      ],
+      itemProps: [
+        {
+          field: "key / id",
+          type: "String | Number",
+          notes: "Stable identity: the <code>v-for</code> key and the <code>item-&lt;key&gt;</code> slot name. Falls back to the array index",
+        },
+        {
+          field: "title",
+          type: "String",
+          notes: "Main label. The only field with no meaningful default — an item may be title-less and render as time + body only",
+        },
+        {
+          field: "body",
+          type: "String",
+          notes: "Secondary text under the title",
+        },
+        {
+          field: "time",
+          type: "String",
+          notes: "Rendered inside a <code>&lt;time&gt;</code> element",
+        },
+        {
+          field: "dateTime",
+          type: "String",
+          notes: "Machine-readable value for <code>&lt;time datetime&gt;</code> — ISO 8601. Keep <code>time</code> human, put the parseable form here",
+        },
+        {
+          field: "meta",
+          type: "String",
+          notes: "Free-form trailing text in the time row (an author, a host, a branch)",
+        },
+        {
+          field: "badge",
+          type: "String | Object",
+          notes: "<code>'live'</code>, or <code>{ label, variant }</code> for a coloured pill",
+        },
+        {
+          field: "icon",
+          type: "String",
+          notes: "Bootstrap Icons name drawn inside the marker, e.g. <code>'rocket'</code>",
+        },
+        {
+          field: "variant",
+          type: "String",
+          notes: "Per-item colour. <strong>Beats</strong> the component-level <code>variant</code>. Accepts <code>error</code> / <code>neutral</code>, aliased to <code>danger</code> / <code>secondary</code>",
+        },
+        {
+          field: "outline",
+          type: "Boolean",
+          notes: "Marker keeps the surface background and takes a coloured ring + glyph instead of a fill",
+        },
+        {
+          field: "active",
+          type: "Boolean",
+          notes: "Coloured halo around the marker, and <code>aria-current=\"step\"</code> on the row",
+        },
+        {
+          field: "done / completed",
+          type: "Boolean",
+          notes: "Marker falls back to a <code>check-lg</code> glyph when no <code>icon</code> is given",
+        },
+        {
+          field: "label",
+          type: "String | Number",
+          notes: "Explicit marker content. Wins over <code>numbered</code> and over the auto index",
+        },
+        {
+          field: "dimmed",
+          type: "Boolean",
+          notes: "Mutes the whole content block and drops the title's variant colour",
+        },
+        {
+          field: "href",
+          type: "String",
+          notes: "Renders the row as an <code>&lt;a&gt;</code>. No <code>item-click</code> is emitted — the browser navigates",
+        },
+        {
+          field: "disabled",
+          type: "Boolean",
+          notes: "<code>aria-disabled</code>, click swallowed, not a tab stop, no hover or focus styling",
+        },
+        {
+          field: "iconVariant",
+          type: "String",
+          notes: "Forces the glyph colour, overriding the filled/outline default",
+        },
+        {
+          field: "onColor",
+          type: "String",
+          notes: "Glyph colour inside a filled marker. Defaults to <code>light</code>",
+        },
+        {
+          field: "class",
+          type: "String",
+          notes: "Extra classes appended to the row element",
+        },
+      ]
+    };
+  },
+  methods: {
+    onStepClick(item) {
+      this.$root?.$emit?.("phui:timeline-step", item);
+    },
+  },
+};
+</script>
