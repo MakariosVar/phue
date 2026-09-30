@@ -214,6 +214,12 @@ Emits: `click`.
 | `dark` | `btn-dark` | Dark background |
 | `link` / `ghost` | `btn-link` | Minimal/ghost button |
 
+> **There is no bare `outline`.** An outline button is `outline-primary`,
+> `outline-secondary`, and so on — one per colour. `variant="outline"` is not in
+> the validator, so it is rejected and falls back to the default `primary`, which
+> turns an intended outline button into a solid one without any visible error
+> beyond a dev-mode prop warning.
+
 **Outline variants:**
 
 | Variant | Bootstrap Class | Use Case |
@@ -970,7 +976,7 @@ Slots: `header` (default: title + subtitle), default (body), `footer`
 <ph-card title="Weekly Report" subtitle="Last 7 days" hoverable>
   Revenue grew 12% week over week.
   <template #footer>
-    <ph-button variant="outline" size="sm">View details</ph-button>
+    <ph-button variant="outline-secondary" size="sm">View details</ph-button>
   </template>
 </ph-card>
 ```
@@ -1399,260 +1405,398 @@ break each other's `aria-controls`.
 
 ## 4. Feedback
 
+Every component here is stateless-by-default with the exceptions called out per
+component. Where a component owns state it says so in **bold**, because that is
+what decides whether you must wire something up.
+
 ### `<ph-alert>`
 
-Dismissible alert with optional title. Internal `visible` state — dismiss hides
-the whole alert; re-showing is your job (e.g. a `v-if`/`v-else` with the
-`dismiss` event).
+Inline alert with an optional title. The default slot and the `message` prop are
+interchangeable — **the slot wins**.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `title` | `String` | `''` | Bold `alert-heading` |
-| `message` | `String` | `''` | Default slot content wins |
-| `variant` | `String` | `'info'` | `info` \| `success` \| `warning` \| `error` |
-| `dismissible` | `Boolean` | `false` | Shows the `btn-close` |
+| `title` | `String` | `''` | Rendered as `<h4 class="alert-heading">` above the body |
+| `message` | `String` | `''` | Body text, when the default slot is absent |
+| `variant` | `String` | `'info'` | `info` \| `success` \| `warning` \| `error` → `alert-info` / `-success` / `-warning` / `alert-danger` |
+| `dismissible` | `Boolean` | `false` | Renders the `btn-close` and adds `alert-dismissible` |
 
-Emits: `dismiss`.
+Emits: `dismiss` — fired **after** the alert has already hidden itself.
+
+Slots: `default` (body).
 
 ```
-<ph-alert variant="success" title="Deployed"
-         dismissible @dismiss="alertVisible = false">
-  v2.4.0 is now live.
-</ph-alert>
+<ph-alert variant="success" title="Deployed" message="v2.4.0 is now live." />
+<ph-alert variant="error" title="Build failed">2 lint errors.</ph-alert>
 ```
+
+> **Visibility is internal, and there is no way back.** `dismiss` sets the
+> component's own `visible` to `false`; nothing can set it to `true` again. To
+> re-show an alert, **re-mount it** — `v-if` is enough, and no `:key` bump is
+> needed (going `false` unmounts, so `true` mounts a fresh instance).
+>
+> **There is no `v-model`.** No `modelValue` prop and no `update:modelValue` emit,
+> so `v-model` silently does nothing *and* leaks a stray `modelvalue` attribute
+> into the DOM. Use `v-if` + `@dismiss`.
 
 ### `<ph-modal>`
 
-Teleported to `body`, shown when `modelValue` is truthy. Closable via the ✕,
-the backdrop, or a parent flipping `modelValue`.
+Dialog teleported to `body`, rendered while `modelValue` is true. Closes via the
+✕, the backdrop (when `closeOnBackdrop`), or a parent flipping the model.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `modelValue` | `Boolean` | `false` | Controls visibility |
-| `title` | `String` | `''` | Shown in default header |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` \| `xl` \| `full` |
-| `closable` | `Boolean` | `true` | Shows the ✕ and enables state-affecting close actions |
-| `closeOnBackdrop` | `Boolean` | `true` | Backdrop click closes only when `closable` too |
+| `modelValue` | `Boolean` | `false` | Visibility — wire with `v-model` |
+| `title` | `String` | `''` | Rendered as `<h3 class="modal-title">` unless the `header` slot is used |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` \| `xl` \| `full` → `modal-sm` / default / `-lg` / `-xl` / `modal-fullscreen` |
+| `closable` | `Boolean` | `true` | Shows the ✕. `false` also disables backdrop closing |
+| `closeOnBackdrop` | `Boolean` | `true` | Backdrop click closes. Only honoured while `closable` is also `true` |
 
-Emits: `update:modelValue` (`false`), `close`.
+Emits: `update:modelValue(false)`, `close`.
 
-Slots: `header` (default: `<h3>{{ title }}</h3>`), default (body), `footer`
-(rendered only if provided).
+Slots: `default` (body), `header` (replaces the `<h3>`; the ✕ stays), `footer`
+(**rendered only if the slot is provided** — omit it and there is no footer row).
 
 ```
-<ph-modal v-model="open" title="Confirm" size="md" closable>
+<ph-button @click="open = true">Open</ph-button>
+
+<ph-modal v-model="open" title="Confirm" size="lg" @close="onClose">
   Are you sure you want to continue?
+
   <template #footer>
     <ph-button variant="ghost" @click="open = false">Cancel</ph-button>
-    <ph-button variant="primary" @click="open = false">Confirm</ph-button>
+    <ph-button variant="primary" @click="save">Confirm</ph-button>
   </template>
 </ph-modal>
 ```
 
-### `<ph-progress-bar>`
+> It reuses Bootstrap's real `.modal` markup deliberately. A hand-rolled overlay
+> would leave the `--bs-modal-*` variables undefined and the dialog
+> unstyled — `.modal-content`, its header and its padding all come from them.
 
-Clamped to 0–100. Optional label row and live value.
+### `<ph-drawer>`
 
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `value` | `Number` | `0` | Clamped via `min(100, max(0, value))` |
-| `label` | `String` | `''` | Left of the value row |
-| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `success` \| `warning` \| `error` |
-| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` (extra small/large progress) |
-| `showValue` | `Boolean` | `false` | Shows `{{ value }}%` |
-| `animated` | `Boolean` | `false` | Striped + animated |
-
-No emits.
-
-```
-<ph-progress-bar :value="syncProgress" label="Syncing"
-                 variant="success" show-value animated />
-```
-
-### `<ph-skeleton>`
-
-Loading placeholder. Width/height accept scale tokens, `%`, px numbers, or any
-CSS length.
+Off-canvas panel, teleported to `body`. The same shape as `<ph-modal>` anchored
+to an edge.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `variant` | `String` | `'text'` | `text` \| `circular` \| `rectangular` |
-| `width` | `String \| Number` | `'100%'` | Number → px |
-| `height` | `String \| Number` | `null` | Auto: text `1em`, circular = width, rectangular `100%` |
-| `animated` | `Boolean` | `true` | `placeholder-glow` + `placeholder-wave` |
+| `modelValue` | `Boolean` | `false` | Visibility — wire with `v-model` |
+| `position` | `String` | `'end'` | `start` \| `end` \| `top` \| `bottom` — the edge it is anchored to |
+| `size` | `String \| Number` | `null` | The extent along that edge, as a **raw CSS length** (`'420px'`) — *not* a token |
+| `title` | `String` | `''` | Accessible name (`aria-label`) and the default header text |
+| `closable` | `Boolean` | `true` | Shows the ✕ and enables the state-changing close actions |
+| `closeOnBackdrop` | `Boolean` | `true` | Backdrop click closes |
+| `scrollable` | `Boolean` | `true` | The body scrolls independently, so the header stays put |
 
-No emits.
+Emits: `update:modelValue(false)`, `open`, `close`.
+
+Slots: `default` (body), `header`, `footer`.
 
 ```
-<ph-skeleton variant="text" width="240" height="12" />
-<ph-skeleton variant="circular" width="48" />
-<ph-skeleton variant="rectangular" width="200" height="120" />
+<ph-drawer v-model="open" position="end" title="Details" scrollable>
+  The body scrolls on its own.
+  <template #footer>
+    <ph-button variant="primary" @click="save">Save</ph-button>
+  </template>
+</ph-drawer>
+
+<ph-drawer v-model="open" position="start" size="420px" />
+<ph-drawer v-model="open" :closable="false" :close-on-backdrop="false" />
 ```
+
+> **`size` is a length, not a token.** `sm`/`md`/`lg` mean nothing here the way
+> they do on `<ph-button>`; pass a CSS length or leave it `null`.
+
+### `<ph-confirm-dialog>`
+
+Promise-based confirmation dialog. It takes over `window.confirm`, so a call site
+reads as ordinary control flow and the caller can `await` the answer. Focus is
+trapped, starts on **Cancel**, and is restored to the trigger on close.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| *(none)* | — | — | Fully driven by `window.confirm(options)` and the emitted events |
+
+**Options for `window.confirm(options)`** — the payload is a `Promise<boolean>`:
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `title` | `String` | `'Are you sure?'` | Header text |
+| `message` | `String` | `''` | Body text |
+| `confirmText` | `String` | `'Confirm'` | Label of the confirm button |
+| `cancelText` | `String` | `'Cancel'` | Label of the cancel button, and where focus starts |
+| `variant` | `String` | `'primary'` | `primary` \| `danger`. `danger` also tints the icon |
+| `icon` | `String` | `''` | Bootstrap Icons name in the header |
+| `loading` | `Boolean` | `false` | Busy state: disables both buttons and blocks closing. Usually driven by `setLoading()` |
+| `closeOnBackdrop` | `Boolean` | **`false`** | Backdrop click confirms. Off by default — a stray click must not answer a destructive prompt |
+
+Methods on `window.confirm`: `confirm(options)` and `setLoading(bool)`.
+
+Emits: `confirm`, `cancel`.
+
+```
+<!-- Once per page, high in the tree. -->
+<ph-confirm-dialog />
+
+<script setup>
+async function remove(id) {
+  const ok = await window.confirm({
+    title: 'Delete this project?',
+    message: 'It also deletes its deployments. This cannot be undone.',
+    confirmText: 'Delete',
+    cancelText: 'Keep it',
+    variant: 'danger',
+    icon: 'exclamation-triangle',
+  });
+  if (!ok) return;
+  await api.delete(id);
+}
+
+// Hold it open while the server works, so it cannot be dismissed mid-flight.
+window.confirm.setLoading(true);
+try { await api.save(); } finally { window.confirm.setLoading(false); }
+</script>
+```
+
+> **One per page.** It registers on `window` in `mounted` and clears that in
+> `beforeUnmount`, so a second instance takes the global over and then nulls it
+> when it unmounts — leaving the host with a dead `window.confirm`. Mount it once,
+> high in the tree, and leave it there.
+>
+> **`window.confirm` is a bound function, not the instance.** It is exposed as
+> `this.confirm.bind(this)` so the receiver is the component rather than `window`;
+> it stays directly callable, and `window.confirm.setLoading` is bound the same
+> way. Exposing the raw instance would break every `this.*` inside it.
 
 ### `<ph-toast>`
 
-Programmatic notification stack, teleported to `body` under a fixed container.
-Auto-registers on `window.toast`. Push toasts from anywhere without holding a `ref`.
+Programmatic notification stack, teleported to `body` under a fixed region.
+Mounts onto `window.toast`, so you push from anywhere without holding a ref.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `position` | `String` | `'top-right'` | `top-right` \| `top-left` \| `top-center` \| `bottom-right` \| `bottom-left` \| `bottom-center` |
-| `duration` | `Number` | `5000` | Auto-dismiss ms (per-item override wins) |
+| `duration` | `Number` | `5000` | Auto-dismiss in ms. A per-toast `duration` wins |
 | `max` | `Number` | `5` | Excess toasts are dropped from the front |
-| `dismissible` | `Boolean` | `true` | Shows the `btn-close` |
+| `dismissible` | `Boolean` | `true` | Shows the `btn-close` per toast |
 
-Emits: `dismiss` (toast id).
+Emits: `dismiss(id)`.
 
-Methods (on `window.toast`):
+**Methods on `window.toast`:**
 
 | Method | Signature | Notes |
 |---|---|---|
-| `push` | `push(source)` | `source` = string (message) or `{ message, variant, title?, duration? }`; returns the toast id |
-| `remove` | `remove(id)` | Manual dismiss with fade-out |
+| `push` | `push(source)` | `source` is a string, or `{ message, variant, title?, duration? }`. **Returns the toast id** |
+| `remove` | `remove(id)` | Manual dismiss, with a fade-out |
 | `clear` | `clear()` | Drops the whole stack |
 
-`variant`: `info` | `success` | `warning` | `error` (colored left border via
-Bootstrap CSS variables — dark-mode safe). Hovering a toast pauses its countdown.
+`variant`: `info` \| `success` \| `warning` \| `error`. Hovering a toast pauses
+its countdown, so a long message stays readable.
 
 ```
-<ph-toast position="top-right" @dismiss="onToastDismiss" />
+<!-- Once per page, high in the tree. -->
+<ph-toast position="top-right" :duration="5000" :max="5" />
 
-<ph-button variant="primary" @click="window.toast.push({
-    variant: 'success', title: 'Saved',
-    message: 'Changes persisted.', duration: 3000
-  })">Mention success</ph-button>
+<script setup>
+window.toast.push('Saved.');
+window.toast.push({ variant: 'success', title: 'Saved', message: 'Changes persisted.' });
+window.toast.push({ variant: 'error', title: 'Failed', message: 'Try again.', duration: 8000 });
+
+const id = window.toast.push('Working…');
+window.toast.remove(id);
+window.toast.clear();
+</script>
 ```
 
-```
-window.toast.push({ variant: 'success', title: 'Saved', message: 'Done!' });
-```
+> **One per page**, for the same reason as `<ph-confirm-dialog>`: `window.toast` is
+> set in `mounted` and nulled in `beforeUnmount`.
+>
+> The exposed methods are **bound** to the instance, not the raw instance —
+> `window.toast.push(...)` is a method call *on `window`*, so an unbound `this`
+> would make every `this.duration` / `this.toasts` / `this.startTimer` undefined.
 
-### `<ph-popover>`
+### `<ph-progress-bar>`
 
-Popover with title, content, multiple placements, click/hover/focus triggers.
+Progress meter. `value` is **clamped to 0–100**, so an over- or under-shot number
+renders a full or empty bar rather than an overflowing one.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `title` | `String` | `''` | Header title |
-| `content` | `String` | `''` | Body content |
-| `triggerLabel` | `String` | `'Popover'` | Default trigger button label |
-| `placement` | `String` | `'top'` | 12 positions |
-| `trigger` | `String` | `'click'` | `click` \| `hover` \| `focus` |
-| `disabled` | `Boolean` | `false` | |
-| `variant` | `String` | `''` | Border color variant |
+| `value` | `Number` | `0` | Percentage, clamped to 0–100 |
+| `label` | `String` | `''` | Left of the value row. The row renders only with a label or `showValue` |
+| `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `success` \| `warning` \| `error` (`error` → `bg-danger`) |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `showValue` | `Boolean` | `false` | Renders the clamped number on the right |
+| `animated` | `Boolean` | `false` | `progress-bar-striped progress-bar-animated` |
 
-Emits: `show`, `hide`. Slots: `trigger`, `content`.
+No emits.
 
 ```
-<ph-popover title="Info" content="Details here" placement="top" trigger="hover">
-  <template #trigger><ph-button size="sm">Hover me</ph-button></template>
-</ph-popover>
+<ph-progress-bar label="Syncing" :value="sync" variant="success" show-value animated />
+<ph-progress-bar :size="sm" :value="65" />
+
+<ph-progress-bar :value="140" />   <!-- renders 100% -->
+<ph-progress-bar :value="-5" />    <!-- renders 0% -->
 ```
 
-### `<ph-tooltip>`
+> **`size` drives `--bs-progress-height`, not a class.** The vendored Bootstrap
+> build ships **no** `.progress-sm` / `.progress-lg`, so those classes match
+> nothing and every size renders identically. The component sets the variable
+> (`0.5rem` / `1rem` / `1.5rem`) and keeps the class for builds that define it.
 
-CSS-positioned tooltip (no Popper).
+### `<ph-skeleton>`
+
+Loading placeholder. Inert markup, no emits.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `content` | `String` | `''` | Or `content` slot |
-| `placement` | `String` | `'top'` | `top` \| `bottom` \| `start` \| `end` |
-| `trigger` | `String` | `'hover'` | `hover` \| `focus` \| `click` |
-| `delay` | `Number` | `120` | Show delay in ms |
-| `disabled` | `Boolean` | `false` | |
-| `variant` | `String` | `'dark'` | `dark` \| `light` |
-| `maxWidth` | `String` | `'260px'` | |
-
-No emits. Slots: default (trigger), `content`.
+| `variant` | `String` | `'text'` | `text` \| `circular` \| `rectangular` → `rounded` / `rounded-circle` / `rounded-0` |
+| `width` | `String \| Number` | `'100%'` | A **number** is px; a string is passed through as a CSS value |
+| `height` | `String \| Number` | `null` | Same rules. `null` derives it: text → `1em`, circular → the width, rectangular → `100%` |
+| `animated` | `Boolean` | `true` | `placeholder-glow` + `placeholder-wave` |
 
 ```
-<ph-tooltip content="Copied to clipboard" placement="top">
-  <ph-button size="sm">Copy</ph-button>
-</ph-tooltip>
+<ph-skeleton width="100%" />
+<ph-skeleton width="75%" />
+<ph-skeleton :width="240" />          <!-- :number -> px -->
 
-<!-- Rich body via the content slot, click-triggered on touch devices -->
-<ph-tooltip placement="end" trigger="click" variant="light" max-width="320px">
-  <template #default><span class="text-decoration-underline">Shipping</span></template>
-  <template #content>Ships in 2–4 business days.</template>
-</ph-tooltip>
+<ph-skeleton variant="circular" :width="48" />
+<ph-skeleton variant="rectangular" :width="200" :height="120" />
+<ph-skeleton width="100%" :animated="false" />
 ```
 
-`<ph-tooltip>` is CSS-positioned, not Popper-driven: it never measures collision
-against the viewport, so prefer `placement="top"`/`"bottom"` in tight layouts.
-
-### `<ph-drawer>`
-
-Off-canvas side panel (teleported, focus-trapped, `Esc`-closable).
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `modelValue` | `Boolean` | `false` | |
-| `position` | `String` | `'end'` | `start` \| `end` \| `top` \| `bottom` |
-| `size` | `String` | `null` | CSS length (default `25rem` / `20rem`) |
-| `title` | `String` | `''` | |
-| `closable` | `Boolean` | `true` | |
-| `closeOnBackdrop` | `Boolean` | `true` | |
-| `scrollable` | `Boolean` | `true` | |
-
-Emits: `update:modelValue`, `close`, `open`. Slots: `header`, default, `footer`.
-
-```
-<!-- Right-hand panel, 28rem wide -->
-<ph-drawer v-model="open" position="end" size="28rem" title="Filters">
-  <ph-select3 v-model="status" label="Status" :options="statuses" />
-  <template #footer>
-    <ph-button variant="primary" @click="open = false">Apply</ph-button>
-  </template>
-</ph-drawer>
-```
-
-### `<ph-confirm-dialog>`
-
-Promise-based confirmation dialog host. Mount **once** (e.g. in a base page). Auto-registers on `window.confirm`. Call `window.confirm.confirm(options)` returning `Promise<boolean>`.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `title` | `String` | `''` | Dialog title |
-| `message` | `String` | `''` | Dialog body text |
-| `confirmText` | `String` | `'Confirm'` | Confirm button label |
-| `cancelText` | `String` | `'Cancel'` | Cancel button label |
-| `variant` | `String` | `'primary'` | `'primary'` \| `'danger'` (affects confirm button + icon color) |
-| `icon` | `String` | `''` | Bootstrap icon name for header |
-| `loading` | `Boolean` | `false` | Disables buttons, shows spinner on confirm |
-| `closeOnBackdrop` | `Boolean` | `false` | Allow backdrop click to cancel |
-
-Emits: `confirm`, `cancel`. Methods: `confirm(options)`, `setLoading(bool)`, `close(result)`.
-
-```
-<ph-confirm-dialog />
-
-const ok = await window.confirm.confirm({
-  title: 'Delete product?',
-  message: 'This cannot be undone.',
-  variant: 'danger',
-  icon: 'exclamation-triangle',
-  confirmText: 'Delete',
-});
-```
+> **Bind the number: `:width="48"`, not `width="48"`.** The px conversion is
+> `typeof === 'number'`, and a bare attribute is a **string** — so
+> `width="48"` produces `width: 48`, a unitless value the browser discards. The
+> placeholder then has no size at all: a `circular` skeleton collapses to nothing.
+>
+> The size is applied to the **root** element, which is a `d-inline-block` box.
+> With it on the inner span instead, a `width="100%"` inside a flex row resolved
+> against a shrink-to-fit parent — i.e. against a width computed from the very
+> child being sized — and collapsed to zero. It also means a `class` on
+> `<ph-skeleton>` lands on a real box, so `mt-2` and friends actually work.
 
 ### `<ph-spinner>`
 
-Standalone loading spinner (`spinner-border` / `spinner-grow`).
+Busy indicator. `role="status"` with the label in a `visually-hidden` span, so it
+announces itself rather than being a silent spinner. No emits.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `size` | `String \| Number` | `'md'` | `sm` \| `md` \| `lg` or pixels |
+| `size` | `String \| Number` | `'md'` | `sm` \| `md` \| `lg`, **or a number of px**. `sm` maps to `*-sm`; the rest are inline width/height |
 | `variant` | `String` | `'border'` | `border` \| `grow` |
-| `color` | `String` | `''` | Bootstrap text-color variant |
-| `label` | `String` | `'Loading…'` | Visually-hidden text for screen readers |
-
-No emits or slots.
+| `color` | `String` | `''` | `primary` \| `secondary` \| `success` \| `warning` \| `danger` \| `error` \| `info` \| `light` \| `dark`. `error` aliases `danger` |
+| `label` | `String` | `'Loading…'` | Visually hidden text. Pass `''` to announce nothing |
 
 ```
+<ph-spinner />
+<ph-spinner variant="grow" />
 <ph-spinner size="sm" />
-<ph-spinner variant="grow" color="primary" />
-<ph-spinner :size="48" label="Fetching orders…" />
+<ph-spinner :size="64" />
+<ph-spinner color="success" />
+<ph-spinner label="Loading projects" />
 ```
+
+> For a button, prefer `<ph-button :loading>` over swapping a spinner in.
+
+### `<ph-popover>`
+
+Rich overlay anchored to a trigger, teleported to `body` and positioned from the
+trigger's own `getBoundingClientRect()`, so a scrolling parent cannot clip it.
+`Esc` closes it, and so does a click on the backdrop.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `null` | Open state. **`null` (unbound) = the popover keeps its own**; bind it to own the flag |
+| `title` | `String` | `''` | Header text. Omit for a body-only popover |
+| `content` | `String` | `''` | Body text. The `content` slot wins over it |
+| `triggerLabel` | `String` | `'Popover'` | Label of the default trigger button. Ignored when the `trigger` slot is used |
+| `placement` | `String` | `'top'` | `top`, `bottom`, `start`, `end`, plus `top-start`, `top-end`, `bottom-start`, `bottom-end`, `start-top`, `start-bottom`, `end-top`, `end-bottom` |
+| `trigger` | `String` | `'click'` | `click` \| `hover` \| `focus` |
+| `variant` | `String` | `''` | Border tint: `primary` \| `secondary` \| `success` \| `danger` \| `warning` \| `info`. Empty means no tint |
+| `disabled` | `Boolean` | `false` | Short-circuits every trigger — the popover never opens |
+
+Emits: `show`, `hide`, `update:modelValue(open)`.
+Slots: `trigger` (replaces the default button; the slot content is wrapped in a
+focusable element), `content`.
+
+```
+<ph-popover title="Click me" content="Opened by a click." trigger="click" />
+
+<ph-popover title="Help" content="…">
+  <template #trigger>
+    <ph-button variant="primary" size="sm">Help</ph-button>
+  </template>
+</ph-popover>
+
+<ph-popover placement="bottom-start" trigger-label="Anchored" content="…" />
+<ph-popover disabled trigger-label="Disabled" content="…" />
+```
+
+> **Bind `modelValue` to keep several mutually exclusive.** Unbound, each popover
+> keeps its own state and they will happily stack up. One key does it:
+>
+> ```html
+> <ph-popover v-for="p in items" :key="p.id"
+>             :model-value="openKey === p.id"
+>             :title="p.title" :content="p.body"
+>             @update:model-value="openKey = $event ? p.id : null" />
+> ```
+>
+> **The anchor is measured before the open, not in `$nextTick`.** Measuring after
+> the flag flips meant the *first* render ran with no rect at all, so
+> `popoverStyle` was `{}` — no `position: fixed`, no coordinates — and the
+> popover painted wherever the body happened to drop it.
+>
+> **There is no arrow.** Bootstrap only *positions* `.popover-arrow`; it relies on
+> **Popper** to write `position: absolute` and the transform inline. This
+> component has no Popper, so an arrow would sit in normal flow as a `1rem ×
+> .5rem` block at the top of the box and push the header down. Positioning uses
+> `clientWidth`/`clientHeight` rather than `100vw`/`100vh`, which include the
+> scrollbar, and the anchor point is clamped so a popover can never hang off the
+> edge.
+>
+> `hover` and `focus` are registered with **bound** listeners. `addEventListener`
+> calls a method with `this` = the DOM element, so an unbound handler wrote
+> `this.open` onto the element instead of the component and the popover never
+> opened.
+
+### `<ph-tooltip>`
+
+CSS-positioned hint — no Popper, nothing to measure. The default slot is the
+trigger; `hover` is the default trigger, with a short delay so the tip does not
+flash as the cursor passes.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `content` | `String` | `''` | Tip text. The `content` slot wins over it |
+| `placement` | `String` | `'top'` | `top` \| `bottom` \| `start` \| `end` |
+| `trigger` | `String` | `'hover'` | `hover` \| `focus` \| `click` |
+| `delay` | `Number` | `120` | Show delay in ms. `0` shows it **synchronously**, with no timer |
+| `variant` | `String` | `'dark'` | `dark` \| `light` |
+| `maxWidth` | `String` | `'260px'` | Any CSS length |
+| `disabled` | `Boolean` | `false` | Suppresses the tip entirely |
+
+No emits. Slots: `default` (the trigger — any element, not just a button),
+`content` (the tip body).
+
+```
+<ph-tooltip content="Explain the thing.">
+  <ph-button variant="outline-secondary" size="sm">Hover me</ph-button>
+</ph-tooltip>
+
+<ph-tooltip placement="end" content="Anchored to the end.">
+  <span class="badge bg-secondary">a badge</span>
+</ph-tooltip>
+
+<ph-tooltip trigger="click" content="Click toggles it.">…</ph-tooltip>
+<ph-tooltip :delay="0" content="No timer at all.">…</ph-tooltip>
+<ph-tooltip variant="light" max-width="360px" content="A wider tip.">…</ph-tooltip>
+```
+
+> The tip is linked with `aria-describedby` **only while visible**, so assistive
+> tech reads the trigger's own label until there is a description to read.
 
 ---
 
@@ -2133,7 +2277,7 @@ icon is the *only* content of a control, or the control has no accessible name.
 | PhChip | `<ph-chip>` | Data display |
 | PhCode | `<ph-code>` | Data display |
 | PhCol | `<ph-col>` | Layout |
-| PhConfirmDialog | `<ph-confirm-dialog>` | Feedback |
+| PhConfirmDialog | `<ph-confirm-dialog>` | Feedback — **one per page**, self-registers on `window.confirm` |
 | PhDataTable | `<ph-data-table>` | Data display |
 | PhDatePicker | `<ph-date-picker>` | Form control |
 | PhDescriptionList | `<ph-description-list>` | Data display |
@@ -2176,7 +2320,7 @@ icon is the *only* content of a control, or the control has no accessible name.
 | PhTextarea | `<ph-textarea>` | Form control |
 | PhTheme | `<ph-theme>` | Navigation |
 | PhTimeline | `<ph-timeline>` | Data display |
-| PhToast | `<ph-toast>` | Feedback |
+| PhToast | `<ph-toast>` | Feedback — **one per page**, self-registers on `window.toast` |
 | PhTooltip | `<ph-tooltip>` | Feedback |
 | PhTreeNode | `<ph-tree-node>` | Internal — recursion helper rendered by `<ph-tree-view>`; not for direct use |
 | PhTreeView | `<ph-tree-view>` | Data display |
