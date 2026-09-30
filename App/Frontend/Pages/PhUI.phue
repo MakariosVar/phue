@@ -43,6 +43,7 @@ $navItems = [
             ['id' => 'timeline', 'label' => 'Timeline'],
             ['id' => 'code', 'label' => 'Code'],
             ['id' => 'tree-view', 'label' => 'Tree View'],
+            ['id' => 'accordion', 'label' => 'Accordion']
         ]
     ],
     [
@@ -313,10 +314,9 @@ return [
                             <span id="tree-view">
                                 <example-ph-tree-view />
                             </span>
-
-                        <!--
-                            <ExamplePhAccordion />
-                            <ExamplePhIcon /> -->
+                            <span id="accordion">
+                                <example-ph-accordion />
+                            </span>
                         </div>
                     </ph-card>
                     
