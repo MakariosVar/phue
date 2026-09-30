@@ -1,34 +1,72 @@
 <template>
-  <li class="ph-tree-node" role="treeitem" :aria-selected="isSelected" :aria-expanded="isExpanded">
-    <div class="ph-tree-node-content d-flex align-items-center gap-1 py-1 px-2" :style="{ paddingLeft: `${(level + 1) * 1.5}rem` }">
+  <li
+    class="ph-tree-node"
+    :class="nodeClasses"
+    role="treeitem"
+    :aria-selected="isSelected ? 'true' : 'false'"
+    :aria-expanded="hasChildren ? (isExpanded ? 'true' : 'false') : null"
+    :aria-level="level + 1"
+    :aria-disabled="node.disabled ? 'true' : null"
+    :data-ph-tree-row="''"
+    :data-ph-tree-id="String(key)"
+    @click.stop="onRowClick"
+  >
+    <div
+      class="ph-tree-node-content d-flex align-items-center gap-2 py-1 pe-2"
+      :style="rowStyle"
+    >
+      <!--
+        Branches get a real button; leaves get a non-focusable span. It used to
+        be a <button aria-hidden="true">, which is a keyboard trap (an
+        aria-hidden element must not be focusable — axe "aria-hidden-focus") and
+        a dead tab stop.
+
+        The hidden icon is load-bearing: it reserves exactly the width the
+        toggle occupies, so a leaf's label lines up with a branch label at the
+        same depth. An empty span reserves nothing and shifts every leaf left.
+      -->
       <button
         v-if="hasChildren"
-        class="ph-tree-toggle btn p-0"
+        type="button"
+        class="ph-tree-toggle btn p-0 d-inline-flex align-items-center"
+        tabindex="-1"
         :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        @click.stop="toggle"
+        @click.stop="$emit('toggle', payload)"
       >
         <ph-icon :name="isExpanded ? 'chevron-down' : 'chevron-right'" size="xs" />
       </button>
-      <button
-        v-else
-        class="ph-tree-spacer btn p-0"
-        aria-hidden="true"
-      >
+      <span v-else class="ph-tree-spacer d-inline-flex align-items-center" aria-hidden="true">
         <ph-icon name="chevron-right" size="xs" style="visibility: hidden;" />
-      </button>
-      <label v-if="checkable" class="ph-tree-checkbox d-flex align-items-center gap-1 mb-0">
+      </span>
+
+      <label v-if="checkable" class="ph-tree-checkbox d-flex align-items-center mb-0 flex-shrink-0">
         <input
+          :ref="checkboxRef"
           type="checkbox"
+          class="form-check-input m-0"
           :checked="isChecked"
-          :indeterminate="isIndeterminate"
+          :disabled="!!node.disabled"
+          :aria-label="`Select ${node.label}`"
+          @click.stop
           @change.stop="onCheck"
         />
       </label>
-      <ph-icon v-if="node.icon" :name="node.icon" size="sm" />
-      <span class="ph-tree-label flex-grow-1" @click.stop="select">{{ node.label }}</span>
+
+      <ph-icon
+        v-if="node.icon"
+        :name="isExpanded ? node.icon : (node.collapsedIcon || node.icon)"
+        size="sm"
+        class="flex-shrink-0"
+      />
+
+      <span class="ph-tree-label flex-grow-1 text-truncate" :class="labelClasses">
+        {{ node.label }}
+      </span>
+
       <slot :name="`node-${node.key}`" :node="node" />
     </div>
-    <ul v-if="hasChildren && isExpanded" class="ph-tree-children" role="group">
+
+    <ul v-if="hasChildren && isExpanded" class="ph-tree-children list-unstyled mb-0" role="group">
       <ph-tree-node
         v-for="(child, index) in node.children"
         :key="child.key || index"
@@ -37,41 +75,39 @@
         :expanded="expanded"
         :checkable="checkable"
         :level="level + 1"
-        @select="onSelect"
-        @toggle="onToggle"
-        @check="onCheck"
+        @select="(n) => $emit('select', n)"
+        @toggle="(n) => $emit('toggle', n)"
+        @check="(n) => $emit('check', n)"
+        @keydown="(e) => $emit('keydown', e)"
+        @focusin="(e) => $emit('focusin', e)"
       />
     </ul>
   </li>
 </template>
 
 <script>
+import { ref, watch, onMounted } from "vue";
+
 export default {
   name: 'PhTreeNode',
   props: {
-    node: {
-      type: Object,
-      required: true
-    },
-    selected: {
-      type: Array,
-      default: () => []
-    },
-    expanded: {
-      type: Array,
-      default: () => []
-    },
-    checkable: {
-      type: Boolean,
-      default: false
-    },
-    level: {
-      type: Number,
-      default: 0
-    }
+    node: { type: Object, required: true },
+    selected: { type: Array, default: () => [] },
+    expanded: { type: Array, default: () => [] },
+    checkable: { type: Boolean, default: false },
+    level: { type: Number, default: 0 }
   },
-  emits: ['select', 'toggle', 'check'],
+  emits: ['select', 'toggle', 'check', 'keydown', 'focusin'],
+  setup() {
+    const checkboxEl = ref(null);
+    return { checkboxEl };
+  },
   computed: {
+    /**
+     * Identity, resolved once. `key` is the contract; `label` is the fallback
+     * for a hand-written tree that omits it. PhTreeView's v-for key uses the
+     * same fallback, so a re-ordered keyless tree cannot desync the two.
+     */
     key() {
       return this.node.key || this.node.label;
     },
@@ -79,27 +115,117 @@ export default {
       return Array.isArray(this.node.children) && this.node.children.length > 0;
     },
     isSelected() {
-      return this.selected.includes(this.key);
+      return this.selected.indexOf(this.key) !== -1;
     },
     isExpanded() {
-      return this.expanded.includes(this.key);
+      return this.expanded.indexOf(this.key) !== -1;
     },
     isChecked() {
       return this.node.checked === true;
     },
     isIndeterminate() {
       return this.node.checked === 'indeterminate';
+    },
+    /**
+     * State as Bootstrap utility classes — the same language PhListGroup uses for
+     * `active`/`disabled`. The kit ships no component stylesheet at all, so a
+     * class name on its own renders nothing; without this the only feedback a
+     * selection produced was an invisible `aria-selected`.
+     */
+    nodeClasses() {
+      return {
+        'ph-tree-node-selected': this.isSelected,
+        'ph-tree-node-checked': this.isChecked,
+        // Tri-state is its own visual state, not a half-strength checked one.
+        'ph-tree-node-indeterminate': this.isIndeterminate,
+        'ph-tree-node-expanded': this.isExpanded,
+        'ph-tree-node-disabled': !!this.node.disabled,
+      };
+    },
+    labelClasses() {
+      return {
+        'fw-semibold': this.isSelected,
+        'text-primary': this.isSelected,
+        'text-decoration-line-through': this.node.disabled,
+        'text-body-secondary': !!this.node.disabled,
+        'opacity-50': !!this.node.disabled,
+      };
+    },
+    /**
+     * Indentation, expressed as a guide line plus a constant inset rather than
+     * a growing `padding-left`.
+     *
+     * `margin-left: level * STEP` puts each row's left border at its own depth,
+     * and every row then uses the same `padding-left`, so consecutive siblings
+     * at one depth draw a continuous vertical rail down the tree. That rail is
+     * what makes the nesting legible; a bare growing `padding-left` indents the
+     * text but leaves nothing connecting a child to its parent.
+     *
+     * The net text position is unchanged — `margin + padding` is still
+     * `(level + 1) * STEP` — so the guide costs no horizontal room.
+     */
+    rowStyle() {
+      const step = 1.5;
+      return {
+        marginLeft: `${this.level * step}rem`,
+        paddingLeft: `${step}rem`,
+        borderLeft: this.level > 0 ? '1px solid var(--bs-border-color)' : 'none'
+      };
+    },
+    /**
+     * The payload every event carries: the node spread with a *resolved* key, so
+     * a consumer never has to re-derive identity the way the component had to.
+     */
+    payload() {
+      return { ...this.node, key: this.key };
     }
   },
+  watch: {
+    /**
+     * `indeterminate` is a DOM property, not an attribute. `:indeterminate`
+     * renders `indeterminate="false"` on the <input>, which the browser ignores
+     * — so a partially-checked branch never showed its third state, and the
+     * checkbox was plain wrong rather than merely unstyled.
+     */
+    isIndeterminate: {
+      immediate: true,
+      handler(value) {
+        this.syncIndeterminate(value);
+      }
+    },
+    isChecked() {
+      this.syncIndeterminate(this.isIndeterminate);
+    }
+  },
+  mounted() {
+    this.syncIndeterminate(this.isIndeterminate);
+  },
   methods: {
-    select() {
-      this.$emit('select', { ...this.node, key: this.key });
+    checkboxRef(el) {
+      this.checkboxEl = el;
     },
-    toggle() {
-      this.$emit('toggle', { ...this.node, key: this.key });
+    syncIndeterminate(value) {
+      if (this.checkboxEl) {
+        this.checkboxEl.indeterminate = !!value;
+      }
     },
-    onCheck() {
-      this.$emit('check', { ...this.node, key: this.key, checked: !this.isChecked });
+    onRowClick() {
+      // The row itself is a click target, so the label no longer needs to be —
+      // and it must not be, or clicking the text and clicking the padding would
+      // both be listeners to maintain.
+      if (this.node.disabled) return;
+      this.$emit('select', this.payload);
+    },
+    onCheck(event) {
+      if (this.node.disabled) return;
+      // Derive from the live input, not from `!this.isChecked`: a tri-state
+      // node arrives here as 'indeterminate', and `!'indeterminate'` is `false`,
+      // so clicking a partially-checked branch unchecked it instead of
+      // completing it.
+      this.$emit('check', {
+        ...this.payload,
+        checked: event.target.checked ? true : false
+      });
     }
   }
 };

@@ -374,13 +374,39 @@ final class PhCodeTest extends TestCase
         );
     }
 
-    public function testThemePickerAppliesTheSelectionThroughTheSharedStyleLoader(): void
+    public function testThemePickerAppliesTheSelectionThroughTheScopedThemeLoader(): void
     {
+        // The theme is applied per instance now, so the contract is not "one
+        // shared <link>" but "a sheet scoped to this block, replacing its own
+        // previous one". A picker click must go through that path, or the block
+        // keeps the sheet it had.
         $this->assertStringContainsString(
-            "setTheme(base, this.activeTheme)",
+            'await this.loadTheme()',
             $this->script,
-            'setTheme() is what drops the previous <link>; going through it is what keeps a '
-            . 'switch from leaving two competing theme sheets in the head.',
+            'The active theme must be applied through the scoped loader; that is what drops the '
+            . 'instance\'s previous sheet instead of leaving two competing ones behind.',
+        );
+
+        $this->assertStringContainsString(
+            'applyScopedTheme(this.assetRoot, this.activeTheme, this.scopeId)',
+            $this->script,
+            'The theme must be scoped to this instance. A page-global sheet would repaint every '
+            . 'other <ph-code> on the page, which is the bug per-instance theming exists to fix.',
+        );
+
+        $this->assertStringContainsString(
+            'data-ph-theme-scope',
+            $this->script,
+            'The block must carry the scope attribute the rewritten selectors hang off.',
+        );
+
+        // A self-referential fallback would reintroduce exactly the shared-sheet
+        // coupling above, so the page-wide path has to stay reachable ONLY as a
+        // failure mode, never as the normal one.
+        $this->assertMatchesRegularExpression(
+            '/loadTheme\(\)[\s\S]*?catch[\s\S]*?applyGlobalThemeFallback/',
+            $this->script,
+            'The page-wide <link> must be a fallback for a failed fetch, not the normal path.',
         );
 
         $this->assertMatchesRegularExpression(
@@ -468,18 +494,31 @@ final class PhCodeTest extends TestCase
             'pending is a "first pass settled" flag, not a "highlighted" flag.',
         );
 
-        // The dark background comes from the theme <link>; the reason for the white
-        // flash on load was awaiting the JS before injecting it.
-        $themeAt = strpos($this->script, 'setTheme(base, this.activeTheme)');
-        $coreAt = strpos($this->script, 'if (!(await withTimeout(ensureCore(base))))');
-        $this->assertNotFalse($themeAt);
-        $this->assertNotFalse($coreAt);
+        // The dark background comes from the theme sheet, so it has to be in the
+        // page before Prism finishes. A scoped theme must be FETCHED as text to
+        // be rewritten, so it costs a round trip the old <link> never paid — the
+        // way to keep the "white block, then it jumps dark" flash away is to have
+        // the two requests in flight together, not to await one before starting
+        // the other. Both must therefore be started before the first await.
+        $coreStart = strpos($this->script, 'const coreTask = withTimeout(ensureCore(base))');
+        $themeStart = strpos($this->script, 'await this.loadTheme()');
+        $coreAwait = strpos($this->script, 'await coreTask');
+
+        $this->assertNotFalse($coreStart, 'Prism core must be kicked off explicitly so it can overlap the theme fetch.');
+        $this->assertNotFalse($themeStart);
+        $this->assertNotFalse($coreAwait);
+
         $this->assertLessThan(
-            $coreAt,
-            $themeAt,
-            'The theme stylesheet must be injected before awaiting Prism core. The browser fetches '
-            . 'CSS in parallel with JS, so injecting it first paints the real background '
-            . 'immediately instead of leaving a white block for two extra round-trips.',
+            $themeStart,
+            $coreStart,
+            'Core must be STARTED before the theme is awaited; awaiting the theme first would serialise '
+            . 'the two requests and reintroduce the white-block flash the theme was meant to prevent.',
+        );
+
+        $this->assertLessThan(
+            $coreAwait,
+            $themeStart,
+            'Core must be started but not awaited before the theme lands, for the same reason.',
         );
     }
 

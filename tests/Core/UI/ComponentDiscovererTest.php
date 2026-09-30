@@ -7,6 +7,7 @@ namespace Phue\Tests\Core\UI;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\ComponentDiscoverer;
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Core\UI\PhueTemplateParser;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Tests\Support\TestComponentLoader;
@@ -17,7 +18,9 @@ use Phue\Tests\Support\TestComponentLoader;
  *  - native HTML + Vue builtin tags are ignored,
  *  - kebab-case tags normalize to PascalCase before the catalog lookup,
  *  - duplicate tags collapse to a single entry and the result is sorted,
- *  - transitive traversal across loaders terminates even on self-references.
+ *  - a self-reference is dropped from a component's own children, so the
+ *    component builds without importing itself; genuine cross-component cycles
+ *    (A -> B -> A) are still rejected loudly, because those have no valid module.
  *
  * @package Phue\Tests\Core\UI
  */
@@ -65,8 +68,8 @@ PHUE);
 </template>
 PHUE);
 
-        // Self-referencing component: must terminate once the cheap
-        // existence check replaces the moduleUrl gate.
+        // Self-referencing component: a legitimate shape (a tree node rendering
+        // its own tag), so it must build — and must not import itself.
         $this->writeFixture($this->compsDir . '/SelfRef.phue', <<<'PHUE'
 <template>
 <div><self-ref/><slot/></div>
@@ -147,21 +150,25 @@ PHUE);
     }
 
     /**
-     * A component that references itself (directly or indirectly) is not
-     * compilable: a module that dropped the cyclic self-child would import a
-     * tag it never registered, and the page would render with a silent hole.
+     * A self-referencing component is COMPILABLE, and the one invariant that
+     * makes it so is that it must not import itself.
      *
-     * The contract is fail-loud, and "loud" means an exception. This test used
-     * to assert assertNull() on all four entry points, which is exactly the
-     * failure mode the suite is supposed to prevent: a null from a cycle is
-     * indistinguishable from a null from a component that simply does not
-     * exist, so the assertions were green while the page rendered 200 with a
-     * hole in it and nothing in the response to say why.
+     * The component is already in the module being built, so its own tag is not
+     * a dependency. Listing it as a child used to make buildFor() recurse into
+     * itself and throw — which is right for a genuine cycle but wrong here: a
+     * recursive component (a tree node rendering its own tag, a menu rendering
+     * its own submenu) is a legitimate shape, and rejecting it left the whole
+     * component unusable.
      *
-     * ComponentLoaderRegistry::handleLoaderFailure() now re-throws
-     * CircularComponentReferenceException from every fan-out method, and the
-     * exception message carries the full A -> B -> A chain — the only part of
-     * this failure a developer can act on.
+     * The failure this guards against is silent and specific: if the self-child
+     * were merely skipped at build time but still emitted as an import, the
+     * module would import itself — a real ESM cycle, and one that renders fine
+     * until the browser resolves it. So the assertion is on the emitted module
+     * text, not on an exception.
+     *
+     * Genuine cycles — A -> B -> A across two components — are still rejected
+     * loudly; see testIndirectCycleIsRejectedLoudlyAcrossComponents(). There is
+     * no valid module for those, so no such narrowing is available.
      *
      * These run inline because the build-path guard sits upstream of the
      * recursion. If that guard is ever moved back behind the resolution pass,
@@ -169,40 +176,58 @@ PHUE);
      * ComponentCompilationCostTest::testACircularComponentReferenceIsReportedInsteadOfCrashing,
      * which runs the same shape in a subprocess.
      */
-    public function testSelfReferenceIsRejectedLoudlyInsteadOfSilentlyTruncated(): void
+    public function testSelfReferenceIsExcludedFromItsOwnChildrenRatherThanImportedIntoItself(): void
     {
-        $this->assertThrowsCycle(
-            fn() => $this->comps->buildFor('SelfRef'),
-            'SelfRef',
-            'A self-referential component has no valid module, and saying so must not look like a missing one.'
+        $template = (new PhueTemplateParser())->parseStructure($this->compsDir . '/SelfRef.phue')['template'];
+
+        // Without the owner name the self-tag is still found — it is a real tag in
+        // the template. Discovery only drops it when it knows who is asking.
+        $this->assertSame(
+            ['SelfRef'],
+            $this->discoverer->scanTemplate($template),
+            'Scan must stay honest: the self-tag is in the template until the owner is named.'
         );
 
-        $this->assertThrowsCycle(
-            fn() => $this->registry->moduleUrl('SelfRef'),
-            'SelfRef',
-            'Fail-loud: no URL may be minted — and none may be merely withheld — for a component that cannot be '
-            . 'built. Returning null here is what made a cycle indistinguishable from a missing component.'
+        $this->assertSame(
+            [],
+            $this->discoverer->scanTemplate($template, 'SelfRef'),
+            'A component must not be reported as its own child; there is nothing to import.'
         );
 
-        $this->assertThrowsCycle(
-            fn() => $this->registry->moduleFor('SelfRef', str_repeat('0', 8)),
-            'SelfRef',
-            'Nothing may be served for a component that could not be built.'
+        $module = $this->comps->buildFor('SelfRef');
+        $this->assertIsString($module, 'A self-referencing component must still produce a module.');
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?:import|from)[^;\n]*SelfRef/',
+            $module,
+            'The module must not import itself. This is the whole invariant: a self-import is a real ESM '
+            . 'cycle, and it is the one failure mode that still renders a plausible page.'
         );
 
-        // The resolver used to be the odd one out: it returned an empty graph
-        // and let the page-level build fail later. It calls moduleUrl() while
-        // walking, so it now propagates like everything else — and that is the
-        // better outcome, because the exception already carries the chain. An
-        // empty graph would have deferred the same failure to a point where
-        // the message no longer had the component names in it.
-        $this->assertThrowsCycle(
-            fn() => $this->discoverer->resolveTransitiveDependencies('SelfRef'),
-            'SelfRef',
-            'A cycle must not be reported as an empty graph. An empty graph defers the failure to a caller that no '
-            . 'longer has the chain in hand, which is how a cycle ends up as a nameless 500.'
+        $url = $this->registry->moduleUrl('SelfRef');
+        $this->assertIsString($url, 'A compilable component must be servable.');
+        $this->assertStringEndsWith('.phue.js', $url);
+
+        $hash = $this->registry->moduleHash('SelfRef');
+        $this->assertIsString($hash);
+
+        $this->assertIsString(
+            $this->registry->moduleFor('SelfRef', $hash),
+            'A compilable component must be servable, not merely buildable.'
         );
+
+        // The hash is a cache key, not a formality: the wrong one must not serve.
+        $this->assertNull(
+            $this->registry->moduleFor('SelfRef', str_repeat('0', 8)),
+            'A stale or wrong hash must not resolve to a module.'
+        );
+
+        // The graph walk must terminate rather than recurse forever, and the
+        // component belongs in its own dependency graph exactly once.
+        $graph = $this->discoverer->resolveTransitiveDependencies('SelfRef');
+        $this->assertSame(['SelfRef'], array_keys($graph));
     }
+
 
     public function testIndirectCycleIsRejectedLoudlyAcrossComponents(): void
     {

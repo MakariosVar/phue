@@ -542,13 +542,17 @@ export default {
     async loadPrism() {
       const base = this.assetRoot;
 
-      // Theme before the await: the stylesheet does not depend on the JS and the
-      // browser fetches it in parallel. Awaiting core + autoloader first kept the
-      // block on the page background (white) for two extra round-trips, which is
-      // exactly the "white block, then it jumps dark" flash on load.
+      // The theme and Prism core are independent, so they are STARTED together
+      // and awaited in sequence. A scoped theme has to be fetched as text before
+      // it can be rewritten, which is one round trip the old <link> never paid —
+      // awaiting the theme first and *then* starting the scripts would serialise
+      // the two and put the white flash straight back. Issuing both before the
+      // first await keeps them in flight together.
+      const coreTask = withTimeout(ensureCore(base));
+
       await this.loadTheme();
 
-      if (!(await withTimeout(ensureCore(base)))) {
+      if (!(await coreTask)) {
         return false;
       }
 

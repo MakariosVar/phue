@@ -2,14 +2,22 @@
   <div
     data-phui="tree-view"
     class="ph-tree-view"
+    :class="{ 'ph-tree-view-checkable': checkable }"
   >
-    <ul class="ph-tree-node-list" role="tree">
+    <ul
+      ref="rootEl"
+      class="ph-tree-node-list list-unstyled mb-0"
+      role="tree"
+      :aria-multiselectable="isMultiSelect ? 'true' : 'false'"
+      :aria-label="ariaLabel"
+      @keydown="onKeydown"
+    >
       <ph-tree-node
         v-for="(node, index) in nodes"
-        :key="node.key || index"
+        :key="node.key || node.label || index"
         :node="node"
-        :selected="selected"
-        :expanded="expanded"
+        :selected="activeSelected"
+        :expanded="activeExpanded"
         :checkable="checkable"
         :level="0"
         @select="onSelect"
@@ -21,37 +29,261 @@
 </template>
 
 <script>
+function sameIds(a, b) {
+  if (a.length !== b.length) return false;
+  const left = a.slice();
+  const right = b.slice();
+  left.sort();
+  right.sort();
+  return left.every((value, i) => value === right[i]);
+}
 
 export default {
   name: 'PhTreeView',
   props: {
-    nodes: {
-      type: Array,
-      default: () => []
-    },
+    nodes: { type: Array, default: () => [] },
+    /**
+     * Initial selection, re-synced whenever the prop changes.
+     *
+     * The tree keeps the selection itself and mutates it on click, then
+     * announces the result — so a plain `<ph-tree-view :nodes="…" />` selects
+     * and expands on its own instead of silently doing nothing. Pass a prop and
+     * you are driving it: any change you make lands in the tree, which is what
+     * `v-model:selected` relies on.
+     *
+     * The one trade-off: a prop you pass but never change will drift from what
+     * the user clicks, because the click is authoritative. Handle
+     * `update:selected` (or use `v-model:selected`) if the prop is to be the
+     * single source of truth.
+     */
+    selected: { type: Array, default: () => [] },
+    /** As `selected`, for which branches are open. See `update:expanded`. */
+    expanded: { type: Array, default: () => [] },
+    checkable: { type: Boolean, default: false },
+    /** Allow more than one selected node. `select` then toggles membership. */
+    multiSelect: { type: Boolean, default: false },
+    ariaLabel: { type: String, default: 'Tree' }
+  },
+  emits: ['select', 'toggle', 'check', 'update:selected', 'update:expanded'],
+  data() {
+    return {
+      internalSelected: [],
+      internalExpanded: []
+    };
+  },
+  mounted() {
+    this.syncTabindex();
+  },
+  updated() {
+    this.syncTabindex();
+  },
+  watch: {
+    // `deep` because a consumer usually hands us an array built from their own
+    // reactive tree, and a branch's `checked` can change in place.
     selected: {
-      type: Array,
-      default: () => []
+      immediate: true,
+      deep: true,
+      handler(value) {
+        this.internalSelected = value.slice();
+      }
     },
     expanded: {
-      type: Array,
-      default: () => []
-    },
-    checkable: {
-      type: Boolean,
-      default: false
+      immediate: true,
+      deep: true,
+      handler(value) {
+        this.internalExpanded = value.slice();
+      }
     }
   },
-  emits: ['select', 'toggle', 'check'],
+  computed: {
+    isMultiSelect() {
+      return this.multiSelect || this.internalSelected.length > 1;
+    },
+    activeSelected() {
+      return this.internalSelected;
+    },
+    activeExpanded() {
+      return this.internalExpanded;
+    }
+  },
   methods: {
     onSelect(node) {
+      if (node.disabled) return;
+
+      const current = this.activeSelected;
+      const isCurrent = current.indexOf(node.key) !== -1;
+      let next;
+
+      if (isCurrent) {
+        // Re-clicking the selected row: in multi it deselects, in single it
+        // stays put rather than leaving nothing selected on a stray second click.
+        next = this.isMultiSelect ? current.filter((key) => key !== node.key) : current;
+      } else {
+        // Single-select REPLACES. Appending here is what made
+        // `:selected="['x']"` plus a click on `z` yield `['x','z']`.
+        next = this.isMultiSelect ? current.concat([node.key]) : [node.key];
+      }
+
+      this.commit('selected', next);
       this.$emit('select', node);
     },
+
     onToggle(node) {
+      if (node.disabled) return;
+
+      const current = this.activeExpanded;
+      const next = current.indexOf(node.key) === -1
+        ? current.concat([node.key])
+        : current.filter((key) => key !== node.key);
+
+      this.commit('expanded', next);
       this.$emit('toggle', node);
     },
+
     onCheck(node) {
       this.$emit('check', node);
+    },
+
+    /** Writes internal state and announces it, so `v-model:selected` works. */
+    commit(which, value) {
+      if (which === 'selected') {
+        this.internalSelected = value;
+        this.selectedMirror = value;
+        this.$emit('update:selected', value);
+      } else {
+        this.internalExpanded = value;
+        this.expandedMirror = value;
+        this.$emit('update:expanded', value);
+      }
+    },
+
+    /**
+     * Roving tabindex: `role="tree"` must be a SINGLE tab stop, not one per row.
+     * Every row gets `tabindex="-1"` and exactly one carries `0` — the selected
+     * row if there is one, else the first. Without this a 40-node tree is 40
+     * tab stops before the page, which is the other half of "states don't work"
+     * for anyone not using a mouse.
+     */
+    syncTabindex() {
+      if (!this.$refs.rootEl) return;
+
+      const rows = Array.from(this.$refs.rootEl.querySelectorAll('[data-ph-tree-row]'));
+      if (!rows.length) return;
+
+      rows.forEach((row) => { row.setAttribute('tabindex', '-1'); });
+
+      const selected = rows.find((row) => row.getAttribute('aria-selected') === 'true');
+      (selected || rows[0]).setAttribute('tabindex', '0');
+    },
+
+    // ------------------------------------------------ keyboard (role="tree")
+
+    /** Visible rows only — a collapsed branch's children are display:none. */
+    visibleRows() {
+      if (!this.$refs.rootEl) return [];
+      return Array.from(this.$refs.rootEl.querySelectorAll('[data-ph-tree-row]'))
+        .filter((row) => row.offsetParent !== null);
+    },
+
+    onKeydown(event) {
+      const rows = this.visibleRows();
+      if (!rows.length) return;
+
+      const row = event.target.closest('[data-ph-tree-row]');
+      const index = row ? rows.indexOf(row) : 0;
+      const current = row || rows[0];
+
+      const move = (to) => {
+        const target = rows[Math.max(0, Math.min(rows.length - 1, to))];
+        if (target) {
+          // Keep the single tab stop on whatever row focus is now on, so
+          // shift-tab back out of the tree lands where the user left it.
+          rows.forEach((row) => { row.setAttribute('tabindex', '-1'); });
+          target.setAttribute('tabindex', '0');
+          target.focus();
+          event.preventDefault();
+        }
+      };
+
+      switch (event.key) {
+        case 'ArrowDown':
+          move(index + 1);
+          break;
+
+        case 'ArrowUp':
+          move(index - 1);
+          break;
+
+        case 'Home':
+          move(0);
+          break;
+
+        case 'End':
+          move(rows.length - 1);
+          break;
+
+        case 'ArrowRight': {
+          // A collapsed branch opens; an open one steps into its first child.
+          const expanded = current.getAttribute('aria-expanded');
+          if (expanded === 'false') {
+            this.toggleById(current.getAttribute('data-ph-tree-id'));
+          } else if (expanded === 'true') {
+            move(index + 1);
+          }
+          event.preventDefault();
+          break;
+        }
+
+        case 'ArrowLeft': {
+          const expanded = current.getAttribute('aria-expanded');
+          if (expanded === 'true') {
+            this.toggleById(current.getAttribute('data-ph-tree-id'));
+            event.preventDefault();
+          } else {
+            // From a leaf, jump to the branch that owns it.
+            const level = Number(current.getAttribute('aria-level'));
+            for (let i = index - 1; i >= 0; i -= 1) {
+              if (Number(rows[i].getAttribute('aria-level')) < level) {
+                move(i);
+                event.preventDefault();
+                break;
+              }
+            }
+          }
+          break;
+        }
+
+        case 'Enter':
+        case ' ': {
+          const id = current.getAttribute('data-ph-tree-id');
+          const node = this.findById(id);
+          if (node) this.onSelect(node);
+          event.preventDefault();
+          break;
+        }
+
+        default:
+          break;
+      }
+    },
+
+    toggleById(id) {
+      const node = this.findById(id);
+      if (node) this.onToggle(node);
+    },
+
+    /** Depth-first search by resolved identity. */
+    findById(id, list = this.nodes) {
+      if (id == null) return null;
+      for (const node of list) {
+        const key = node.key || node.label;
+        if (String(key) === String(id)) return node;
+        if (Array.isArray(node.children)) {
+          const hit = this.findById(id, node.children);
+          if (hit) return hit;
+        }
+      }
+      return null;
     }
   }
 };
