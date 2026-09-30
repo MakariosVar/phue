@@ -124,8 +124,14 @@ export default {
     <ph-card v-if="!open">Closed</ph-card>
     <p v-else>{{ item.content }}</p>
   </template>
-</ph-accordion>`,
+</ph-accordion>
 
+// Example item state
+// items: [
+  // { key: "s1", label: "Section 1", content: "Details…", icon: "chevron-right" },
+  // { key: "s2", label: "Section 2", content: "More details…", icon: "chevron-right" },
+  // { key: "s3", label: "Section 3", content: "Even more details…", icon: "chevron-right" },
+// ]`,
       propsData: [
         {
           name: "items",
