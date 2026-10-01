@@ -265,109 +265,106 @@ return [
 
                 <!-- Form Controls -->
                 <section v-if="activeSection === 'forms'" id="forms" class="mb-5">
-                    <ph-card title='Form Controls'>
-                        <div class="d-flex flex-column gap-2">
-                            <span id="button">
-                                <example-ph-button />
-                            </span>
-                            <span id="input">
-                                <example-ph-input />
-                            </span>
-                            <span id="number-input">
-                                <example-ph-number-input />
-                            </span>
-                            <span id="select">
-                                <example-ph-select />
-                            </span>
-                            <span id="select3">
-                                <example-ph-select3 />
-                            </span>
-                            <span id="textarea">
-                                <example-ph-textarea />
-                            </span>
-                            <span id="checkbox">
-                                <example-ph-checkbox />
-                            </span>
-                            <span id="radio">
-                                <example-ph-radio />
-                            </span>
-                            <span id="switch">
-                                <example-ph-switch />
-                            </span>
-                            <span id="search-input">
-                                <example-ph-search-input />
-                            </span>
-                            <span id="range">
-                                <example-ph-range />
-                            </span>
-                            <span id="file-input">
-                                <example-ph-file-input />
-                            </span>
-                            <span id="date-picker">
-                                <example-ph-date-picker />
-                            </span>
-                            <span id="segmented-control">
-                                <example-ph-segmented-control />
-                            </span>
-                            <span id="form">
-                                <example-ph-form />
-                            </span>
-                            <span id="form-field">
-                                <example-ph-form-field />
-                            </span>
-                            <span id="input-shell">
-                                <example-ph-input-shell />
-                            </span>
-                        </div>
-                    </ph-card>
-
+                    <h3 class="fw-semibold mb-3">Form Controls</h3>
+                    <div class="d-flex flex-column gap-2">
+                        <span id="button">
+                            <example-ph-button />
+                        </span>
+                        <span id="input">
+                            <example-ph-input />
+                        </span>
+                        <span id="number-input">
+                            <example-ph-number-input />
+                        </span>
+                        <span id="select">
+                            <example-ph-select />
+                        </span>
+                        <span id="select3">
+                            <example-ph-select3 />
+                        </span>
+                        <span id="textarea">
+                            <example-ph-textarea />
+                        </span>
+                        <span id="checkbox">
+                            <example-ph-checkbox />
+                        </span>
+                        <span id="radio">
+                            <example-ph-radio />
+                        </span>
+                        <span id="switch">
+                            <example-ph-switch />
+                        </span>
+                        <span id="search-input">
+                            <example-ph-search-input />
+                        </span>
+                        <span id="range">
+                            <example-ph-range />
+                        </span>
+                        <span id="file-input">
+                            <example-ph-file-input />
+                        </span>
+                        <span id="date-picker">
+                            <example-ph-date-picker />
+                        </span>
+                        <span id="segmented-control">
+                            <example-ph-segmented-control />
+                        </span>
+                        <span id="form">
+                            <example-ph-form />
+                        </span>
+                        <span id="form-field">
+                            <example-ph-form-field />
+                        </span>
+                        <span id="input-shell">
+                            <example-ph-input-shell />
+                        </span>
+                    </div>
                 </section>
 
                 <!-- Data Display -->
                 <section v-if="activeSection === 'data'" id="data" class="mb-5">
-                    <ph-card title='Data Display'>
-                        <div class="d-flex flex-column gap-2">
-                            <span id="table">
-                                <example-ph-data-table />
-                            </span>
-                            <span id="badge">
-                                <example-ph-badge />
-                            </span>
-                            <span id="chip">
-                                <example-ph-chip />
-                            </span>
-                            <span id="avatar">
-                                <example-ph-avatar />
-                            </span>
-                            <span id="card">
-                                <example-ph-card />
-                            </span>
-                            <span id="empty-state">
-                                <example-ph-empty-state />
-                            </span>
-                            <span id="stat">
-                                <example-ph-stat />
-                            </span>
-                            <span id="list-group">
-                                <example-ph-list-group />
-                            </span>
-                            <span id="description-list">
-                                <example-ph-description-list />
-                            </span>
-                            <span id="timeline">
-                                <example-ph-timeline />
-                            </span>
-                            <span id="code">
-                                <example-ph-code />
-                            </span>
-                            <span id="tree-view">
-                                <example-ph-tree-view />
-                            </span>
-                            <span id="accordion">
-                                <example-ph-accordion />
-                            </span>
-                        </div>
-                    </ph-card>
+                    <h3 class="fw-semibold mb-3">Data Display</h3>
+                    <div class="d-flex flex-column gap-2">
+                        <span id="table">
+                            <example-ph-data-table />
+                        </span>
+                        <span id="badge">
+                            <example-ph-badge />
+                        </span>
+                        <span id="chip">
+                            <example-ph-chip />
+                        </span>
+                        <span id="avatar">
+                            <example-ph-avatar />
+                        </span>
+                        <span id="card">
+                            <example-ph-card />
+                        </span>
+                        <span id="empty-state">
+                            <example-ph-empty-state />
+                        </span>
+                        <span id="stat">
+                            <example-ph-stat />
+                        </span>
+                        <span id="list-group">
+                            <example-ph-list-group />
+                        </span>
+                        <span id="description-list">
+                            <example-ph-description-list />
+                        </span>
+                        <span id="timeline">
+                            <example-ph-timeline />
+                        </span>
+                        <span id="code">
+                            <example-ph-code />
+                        </span>
+                        <span id="tree-view">
+                            <example-ph-tree-view />
+                        </span>
+                        <span id="accordion">
+                            <example-ph-accordion />
+                        </span>
+                    </div>
                     
                 </section>
 
