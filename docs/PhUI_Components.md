@@ -2018,6 +2018,37 @@ shown, and the control looked dead while it worked.
 
 Action menu with self-managed open state (no Bootstrap JS/Popper).
 
+**The panel is teleported to `<body>` and positioned in document space.** That is
+not a detail — it is what makes the menu usable inside a scrolling layout:
+
+- In flow, the menu is anchored to its trigger for free, but **any ancestor with
+  `overflow: hidden|auto` clips it**. `overflow-y: auto` is enough: per CSS, an
+  axis left `visible` next to a non-visible one computes to `auto`, so a
+  scrolling column also clips horizontally. A menu in a scrolling panel was being
+  cut off mid-word at the panel's edge.
+- `position: fixed` escapes the clip but stops following the trigger, so every
+  scroll would leave the menu behind.
+- Document-space `absolute` outside the scroller **escapes the clip and stays
+  anchored**: page scrolling moves trigger and menu together. A capture-phase
+  scroll listener covers *nested* scrollers, which do not move with the page.
+
+> **No z-index can escape a clip.** If a menu is being covered rather than cut,
+> that is a different failure — check the layer instead (see below).
+
+**The layer is `1040`, not Bootstrap's `1000`.** Once teleported, the menu
+competes in the **root** stacking context, so the numbers finally mean something,
+and `1000` loses to sticky chrome at `1020` — exactly what a dropdown must win,
+since it opens *over* page content. It sits above fixed chrome (1030) and below
+the layers that are genuinely overlays:
+
+| Above the menu | Below the menu |
+|---|---|
+| sticky 1020, fixed 1030 | modal 1055, popover 1070, tooltip 1080, toast 1090 |
+
+The second column is deliberate: those are overlays that *should* sit above page
+content, and a dropdown inside a modal has to stay in the modal's layer.
+
+
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `label` | `String` | `'Menu'` | Default trigger label |
@@ -2032,12 +2063,12 @@ Emits: `select(item)`, `open`, `close`. Slots: `trigger` (scoped `{ open, toggle
 default (menu content).
 
 ```
-<ph-dropdown label="Actions" variant="outline-primary" size="sm" align="end"
+<ph-dropdown label="Actions" variant="outline" size="sm" align="end"
              :items="[
                { label: 'Edit',   icon: 'pencil' },
                { label: 'Archive', icon: 'archive' },
                { divider: true },
-               { label: 'Delete', icon: 'trash', variant: 'danger' },
+               { label: 'Delete', icon: 'trash' },
                { label: 'Purge',  disabled: true }
              ]"
              @select="onAction">

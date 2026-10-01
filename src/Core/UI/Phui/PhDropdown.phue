@@ -24,43 +24,47 @@
         />
       </button>
     </slot>
+    <teleport to="body" v-if="open">
+      <div
+        ref="menu"
+        data-phui="dropdown-menu"
+        class="dropdown-menu show"
+        role="menu"
+        :style="menuStyle"
+      >
+        <template v-for="(item, index) in items" :key="index">
+          <h6 v-if="item.header" class="dropdown-header">{{ item.header }}</h6>
+          <hr v-else-if="item.divider" class="dropdown-divider" />
+          <span
+            v-else-if="item.disabled"
+            class="dropdown-item disabled d-flex align-items-center"
+            aria-disabled="true"
+          >
+            <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
+            {{ item.label }}
+          </span>
+          <a
+            v-else
+            class="dropdown-item d-flex align-items-center"
+            href="#"
+            role="menuitem"
+            @click.prevent="select(item)"
+          >
+            <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
+            {{ item.label }}
+          </a>
+        </template>
 
-    <div
-      v-if="open"
-      class="dropdown-menu show"
-      :class="{ 'dropdown-menu-end': align === 'end' }"
-      role="menu"
-      :style="menuStyle"
-    >
-      <template v-for="(item, index) in items" :key="index">
-        <h6 v-if="item.header" class="dropdown-header">{{ item.header }}</h6>
-        <hr v-else-if="item.divider" class="dropdown-divider" />
-        <span
-          v-else-if="item.disabled"
-          class="dropdown-item disabled d-flex align-items-center"
-          aria-disabled="true"
-        >
-          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
-          {{ item.label }}
-        </span>
-        <a
-          v-else
-          class="dropdown-item d-flex align-items-center"
-          href="#"
-          role="menuitem"
-          @click.prevent="select(item)"
-        >
-          <ph-icon v-if="item.icon" :name="item.icon" size="sm" class="me-2" />
-          {{ item.label }}
-        </a>
-      </template>
-
-      <slot :close="close" />
-    </div>
+        <slot :close="close" />
+      </div>
+    </teleport>
   </div>
 </template>
 
 <script>
+
+const MENU_Z = 1040;
+
 export default {
   name: 'PhDropdown',
   props: {
@@ -99,7 +103,10 @@ export default {
   emits: ['select', 'open', 'close'],
   data() {
     return {
-      open: false
+      open: false,
+      // Page-space geometry of the trigger, measured when the menu opens.
+      anchorRect: null,
+      tracking: false
     };
   },
   computed: {
@@ -126,25 +133,41 @@ export default {
       };
     },
     menuStyle() {
+      if (!this.anchorRect) {
+        // Opened before the first measurement (can only happen before mount):
+        // hide it rather than flash it at the top-left of the document.
+        return { visibility: 'hidden' };
+      }
+
       const style = {
         position: 'absolute',
-        top: '100%',
+        top: `${this.anchorRect.bottom}px`,
         marginTop: '0.125rem',
-        zIndex: 1000
+        zIndex: MENU_Z
       };
+
       if (this.align === 'end') {
-        style.right = '0';
-        style.left = 'auto';
+        // Right edge of the menu on the right edge of the trigger. Bootstrap's
+        // `.dropdown-menu-end` is not used: it sets `right: 0` against the
+        // original offset parent, which no longer exists once teleported.
+        style.left = `${this.anchorRect.right}px`;
+        style.transform = 'translateX(-100%)';
       } else {
-        style.left = '0';
-        style.right = 'auto';
+        style.left = `${this.anchorRect.left}px`;
       }
+
       return style;
     }
   },
   watch: {
     open(value) {
       this.$emit(value ? 'open' : 'close');
+
+      if (value) {
+        this.startTracking();
+      } else {
+        this.stopTracking();
+      }
     }
   },
   mounted() {
@@ -154,11 +177,58 @@ export default {
   beforeUnmount() {
     document.removeEventListener('click', this.onDocumentClick);
     document.removeEventListener('keydown', this.onKeydown);
+    this.stopTracking();
   },
   methods: {
+    /** Trigger geometry in document space, so page scroll needs no recompute. */
+    measure() {
+      const trigger = this.$refs.root;
+      if (!trigger || typeof trigger.getBoundingClientRect !== 'function') {
+        this.anchorRect = null;
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      this.anchorRect = {
+        left: rect.left + window.scrollX,
+        right: rect.right + window.scrollX,
+        bottom: rect.bottom + window.scrollY
+      };
+    },
+    /**
+     * Page scrolling is already handled by the document-space coordinates; what
+     * still moves the trigger without moving the menu is a *nested* scroller —
+     * the column the trigger sits inside. A scroll listener on window in the
+     * capture phase sees those too, since scroll events do not bubble.
+     */
+    startTracking() {
+      if (this.tracking) return;
+      this.tracking = true;
+      this.measure();
+
+      window.addEventListener('scroll', this.onViewportChange, true);
+      window.addEventListener('resize', this.onViewportChange);
+    },
+    stopTracking() {
+      if (!this.tracking) return;
+      this.tracking = false;
+
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+    },
+    onViewportChange() {
+      if (this.open) {
+        this.measure();
+      }
+    },
     toggle() {
       if (this.disabled) return;
-      this.open = !this.open;
+
+      if (this.open) {
+        this.close();
+      } else {
+        this.open = true;
+      }
     },
     close() {
       if (this.open) {
@@ -177,7 +247,14 @@ export default {
     },
     onDocumentClick(event) {
       if (!this.open) return;
-      if (this.$refs.root && !this.$refs.root.contains(event.target)) {
+
+      // The menu is no longer a descendant of the component, so "outside" means
+      // outside the trigger AND outside the teleported panel. Checking only the
+      // root would close the menu on every click inside it.
+      const inTrigger = this.$refs.root && this.$refs.root.contains(event.target);
+      const inMenu = this.$refs.menu && this.$refs.menu.contains(event.target);
+
+      if (!inTrigger && !inMenu) {
         this.close();
       }
     },
