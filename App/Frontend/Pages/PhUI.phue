@@ -70,6 +70,7 @@ $navItems = [
             ['id' => 'link', 'label' => 'Link'],
             ['id' => 'pagination', 'label' => 'Pagination'],
             ['id' => 'tabs', 'label' => 'Tabs'],
+            ['id' => 'theme', 'label' => 'Theme']
         ]
     ],
     [
@@ -426,8 +427,10 @@ return [
                         <span id="tabs">
                             <example-ph-tabs @setAnchor="scrollTo('tabs')"/>
                         </span>
+                        <span id="theme">
+                            <example-ph-theme @setAnchor="scrollTo('theme')"/>
+                        </span>
                         <!-- 
-                        <ExamplePhTheme />
                         <ExamplePhDropdown />
                         <ExamplePhStepper /> -->
                     </div>

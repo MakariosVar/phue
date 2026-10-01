@@ -1,0 +1,143 @@
+<template>
+  <example-factory
+    tag="<ph-theme />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Interactive dark/light theme switcher toggle button.
+        Automatically synchronizes with Bootstrap 5 <code>data-bs-theme</code>
+        attribute on <code>&lt;html&gt;</code> and persists selection to
+        <code>localStorage</code>. Designed for zero-hydration mismatch in SSR environments.
+      </p>
+      <p>
+        The glyph is a <code>&lt;ph-icon&gt;</code> and it names the theme the click switches
+        <em>to</em> — so it always agrees with the button's own
+        <code>aria-label</code>. Icons resolve <strong>prop → <code>themeConfig</code> → default</strong>,
+        and each has a slot for a custom glyph.
+      </p>
+      <p class="small text-body-secondary mb-0">
+        Every toggle below drives the same <code>&lt;html data-bs-theme&gt;</code>, so clicking any
+        of them flips the whole page — they differ only in how the icon is chosen.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="d-flex flex-column align-items-start flex-wrap gap-3">
+          <span class="small text-body-secondary">Defaults:</span>
+          <ph-theme aria-label="Toggle theme" storage-key="my-app-theme" />
+
+          <span class="small text-body-secondary">Via props:</span>
+          <ph-theme aria-label="Toggle theme" storage-key="my-app-theme"
+                    light-icon="sun-fill" dark-icon="circle-half" />
+
+          <span class="small text-body-secondary">Via <code>themeConfig</code>:</span>
+          <ph-theme aria-label="Toggle theme" storage-key="my-app-theme"
+                    :theme-config="{ lightIcon: 'cloud-sun', darkIcon: 'moon-stars-fill' }" />
+
+          <span class="small text-body-secondary">Using Slots:</span>
+          <ph-theme aria-label="Toggle theme" storage-key="my-app-theme">
+            <template #light-icon>
+              <span style="font-size: 1rem; line-height: 1;">🌤️</span>
+            </template>
+            <template #dark-icon>
+              <span style="font-size: 1rem; line-height: 1;">🌙</span>
+            </template>
+          </ph-theme>
+        </div>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="my-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <h4>Slots</h4>
+        <ul>
+          <li><code>light-icon</code> / <code>dark-icon</code> — replace one glyph, the other keeps its default</li>
+        </ul>
+        <p>None emits, handles internal DOM theme mutation and storage</p>
+        <p>
+          <b>Hydration Contract:</b> Initializes with 'light' state identically
+          on server and initial client render, deferring the active DOM/OS
+          reading to mounted() to prevent SSR hydration mismatches.
+        </p>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhTheme",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-theme aria-label="Toggle theme" storage-key="my-app-theme" />
+
+<!-- icons: prop → themeConfig → default -->
+<ph-theme light-icon="sun-fill" dark-icon="circle-half" :theme-config="{ darkIcon: 'moon-stars-fill' }" />
+
+<!-- Using Slots -->
+<ph-theme>
+  <template #light-icon><my-brand-sun />🌤️</template>
+  <template #dark-icon><my-brand-moon />🌙</template>
+</ph-theme>`,
+      propsData: [
+        {
+          name: "storageKey",
+          type: "String",
+          default: "null",
+          notes: "LocalStorage key name (defaults to 'phue-theme')",
+        },
+        {
+          name: "ariaLabel",
+          type: "String",
+          default: "null",
+          notes: "Accessible button label override",
+        },
+        {
+          name: "themeConfig",
+          type: "Object",
+          default: "{}",
+          notes: "Config fallback: storageKey, ariaLabel, lightIcon, darkIcon",
+        },
+        {
+          name: "lightIcon",
+          type: "String",
+          default: "null",
+          notes: "Icon for the light theme (defaults to 'sun'); '' renders no icon",
+        },
+        {
+          name: "darkIcon",
+          type: "String",
+          default: "null",
+          notes: "Icon for the dark theme (defaults to 'moon'); '' renders no icon",
+        },
+        {
+          name: "iconSize",
+          type: "String | Number",
+          default: "'md'",
+          notes: "Any <ph-icon> size token, or a raw CSS length",
+        }
+      ]
+    };
+  }
+};
+</script>
