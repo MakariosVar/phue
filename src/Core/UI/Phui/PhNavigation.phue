@@ -1,16 +1,4 @@
 <template>
-  <teleport v-if="teleported && !isSidebar" to=".app-topbar">
-    <button
-      type="button"
-      class="navbar-toggler d-lg-none ms-auto align-self-center"
-      :aria-controls="collapseId"
-      :aria-expanded="expanded ? 'true' : 'false'"
-      aria-label="Toggle navigation"
-      @click="toggle"
-    >
-      <span class="navbar-toggler-icon"></span>
-    </button>
-  </teleport>
 
   <div :class="rootClasses" @click="onNavClick">
     <component :is="isSidebar ? 'nav' : 'ul'" :class="navClasses">
@@ -142,14 +130,12 @@ const options = {
     themeConfig: { type: Object, default: () => {} }
   },
   setup(props) {
-    const rootRef = ref(null);
     const isSidebar = computed(() => props.orientation === 'sidebar' || props.orientation === 'vertical');
     const navClasses = computed(() => isSidebar.value ? 'nav nav-pills flex-column gap-1' : 'navbar-nav me-auto mb-2 mb-lg-0');
 
     const rootClasses = 'd-flex flex-column flex-lg-row align-items-lg-center w-100';
 
     const collapseId = 'nav';
-    const teleported = ref(false);
     const expanded = ref(false);
 
     const isMobile = ref(false);
@@ -168,10 +154,13 @@ const options = {
     function onDocumentPointerDown(event) {
       if (openDropdown.value === null) return;
 
-      const root = rootRef.value;
-      if (root && !root.contains(event.target)) {
-        closeDropdown();
-      }
+      // Scoped to the `.dropdown` item itself rather than to a component ref: the
+      // ref was never bound to a template element, so the check silently never
+      // fired and outside clicks left the menu open.
+      const target = event.target;
+      if (target && target.closest && target.closest('.dropdown')) return;
+
+      closeDropdown();
     }
 
     function applyCollapseState() {
@@ -181,6 +170,27 @@ const options = {
       if (panel) {
         panel.classList.toggle('show', expanded.value);
       }
+
+      // The trigger is server-rendered markup in AppLayout, so its state is
+      // written here rather than bound in a template.
+      for (const trigger of document.querySelectorAll('[data-bs-toggle="collapse"][data-bs-target="#nav"]')) {
+        trigger.setAttribute('aria-expanded', expanded.value ? 'true' : 'false');
+      }
+    }
+
+    /** The one piece of Bootstrap JS this pattern needs, which the shell lacks. */
+    function onCollapseTriggerClick(event) {
+      const trigger = event.target
+        && event.target.closest
+        && event.target.closest('[data-bs-toggle="collapse"][data-bs-target="#nav"]');
+
+      if (!trigger) return;
+
+      const panel = document.getElementById('nav');
+      if (!panel) return;
+
+      event.preventDefault();
+      expanded.value = !panel.classList.contains('show');
     }
 
     function toggle() {
@@ -230,7 +240,6 @@ const options = {
 
       mobileQuery = window.matchMedia(MOBILE_QUERY);
       isMobile.value = mobileQuery.matches;
-      teleported.value = true;
       applyCollapseState();
 
       if (typeof mobileQuery.addEventListener === 'function') {
@@ -242,11 +251,13 @@ const options = {
 
       document.addEventListener('keydown', onKeydown);
       document.addEventListener('click', onDocumentPointerDown);
+      document.addEventListener('click', onCollapseTriggerClick);
     });
 
     onBeforeUnmount(() => {
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('click', onDocumentPointerDown);
+      document.removeEventListener('click', onCollapseTriggerClick);
 
       if (mobileQuery) {
         if (typeof mobileQuery.removeEventListener === 'function') {
@@ -295,7 +306,6 @@ const options = {
       collapseId,
       expanded,
       isMobile,
-      teleported,
       openDropdown,
       toggleDropdown,
       closeDropdown,

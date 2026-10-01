@@ -200,20 +200,27 @@ final class FailClosedDefaultsTest extends TestCase
      */
     public function testUnhandledExceptionDoesNotLeakInternalsByDefault(): void
     {
-        $app = $this->app();
+        // Must run with the env cleaned, like its siblings above. Without this it
+        // inherits whatever APP_DEBUG a previously executed test left in Env, the
+        // app comes up in debug mode, and the handler echoes the exception message
+        // — which is exactly the leak this test exists to catch, so the pollution
+        // turns a real failure into a phantom one (and hides a real one).
+        $this->withCleanEnvironment(['APP_DEBUG', 'APP_DEV_TOOL'], function (): void {
+            $app = $this->app();
 
-        $app->getRouter()->get('/boom', static function (): Response {
-            throw new \RuntimeException('connection to pgsql://user:hunter2@10.0.0.5 failed');
+            $app->getRouter()->get('/boom', static function (): Response {
+                throw new \RuntimeException('connection to pgsql://user:hunter2@10.0.0.5 failed');
+            });
+
+            $response = $app->handle(new Request('GET', '/boom', [], [], ['Accept' => 'application/json']));
+            $body = (string) $response->getContent();
+
+            $this->assertStringNotContainsString('hunter2', $body, 'Credentials leaked into a response.');
+            $this->assertStringNotContainsString('10.0.0.5', $body, 'Internal host leaked into a response.');
+            $this->assertStringNotContainsString($this->baseDir, $body, 'Filesystem path leaked into a response.');
+            $this->assertStringNotContainsString('RuntimeException', $body, 'Exception class leaked into a response.');
+            $this->assertStringNotContainsString('.php', $body, 'A file name leaked into a response.');
         });
-
-        $response = $app->handle(new Request('GET', '/boom', [], [], ['Accept' => 'application/json']));
-        $body = (string) $response->getContent();
-
-        $this->assertStringNotContainsString('hunter2', $body, 'Credentials leaked into a response.');
-        $this->assertStringNotContainsString('10.0.0.5', $body, 'Internal host leaked into a response.');
-        $this->assertStringNotContainsString($this->baseDir, $body, 'Filesystem path leaked into a response.');
-        $this->assertStringNotContainsString('RuntimeException', $body, 'Exception class leaked into a response.');
-        $this->assertStringNotContainsString('.php', $body, 'A file name leaked into a response.');
     }
 
     /**

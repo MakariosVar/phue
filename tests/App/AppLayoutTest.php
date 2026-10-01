@@ -118,7 +118,11 @@ final class AppLayoutTest extends TestCase
 
         $this->assertStringContainsString('<div class="app-layout">', $html);
         $this->assertStringContainsString('<ul class="navbar-nav me-auto mb-2 mb-lg-0">', $html);
-        $this->assertStringNotContainsString('flex-column', $html);
+        $this->assertStringContainsString(
+            '<div class="d-flex flex-column flex-lg-row align-items-lg-center w-100">',
+            $html,
+            'The nav container is a row from lg up and only stacks below it.',
+        );
         $this->assertStringContainsString('<p>page content</p>', $html);
     }
 
@@ -144,7 +148,7 @@ final class AppLayoutTest extends TestCase
             $html
         );
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">Modules</a>',
+            '<a href="#" class="nav-link dropdown-toggle" role="button" aria-haspopup="true" aria-expanded="false">Modules</a>',
             $html
         );
         $this->assertMatchesRegularExpression('/<a href="\/" class="nav-link">Home<\/a>/', $html);
@@ -167,7 +171,7 @@ final class AppLayoutTest extends TestCase
         $html = $this->renderLayout([]);
 
         $this->assertStringContainsString(
-            '<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2" style="position: sticky; top: 0; z-index: 1020;">',
+            '<header class="app-topbar navbar navbar-expand-lg align-items-start bg-body-tertiary border-bottom px-3 py-2" style="position: sticky; top: 0; z-index: 1020;">',
             $html
         );
     }
@@ -177,7 +181,7 @@ final class AppLayoutTest extends TestCase
         $html = $this->renderLayout(['sticky' => false]);
 
         $this->assertMatchesRegularExpression(
-            '/<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2">/',
+            '/<header class="app-topbar navbar navbar-expand-lg align-items-start bg-body-tertiary border-bottom px-3 py-2">/',
             $html
         );
         $this->assertStringNotContainsString('position: sticky', $html);
@@ -202,7 +206,20 @@ final class AppLayoutTest extends TestCase
             '/<a class="navbar-brand[^"]*" href="\/">Phue App<\/a>/',
             $html
         );
-        $this->assertStringContainsString('<div class="ms-auto', $html);
+        // The theme/actions group sits right on desktop but drops onto its own line
+        // below `lg`, so it only auto-margins from lg up.
+        $this->assertStringContainsString('<div class="ms-lg-auto', $html);
+
+        // Bootstrap's collapse contract: a server-rendered toggler targeting the
+        // panel, and the panel carrying `collapse navbar-collapse` so it is hidden
+        // below `lg` on first paint (no flash, no hydration mismatch) and forced
+        // back to flex from `lg` up by `navbar-expand-lg`.
+        $this->assertStringContainsString('class="navbar-toggler d-lg-none ms-auto"', $html);
+        $this->assertStringContainsString('data-bs-toggle="collapse"', $html);
+        $this->assertStringContainsString('data-bs-target="#nav"', $html);
+        $this->assertStringContainsString('aria-controls="nav"', $html);
+        $this->assertStringContainsString('<div id="nav" class="collapse navbar-collapse flex-grow-1">', $html);
+
         $this->assertStringContainsString('aria-label="Toggle theme"', $html);
         $this->assertStringContainsString('Login', $html);
         $this->assertStringNotContainsString('Logout', $html);

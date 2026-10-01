@@ -99,7 +99,21 @@ final class NavPartialTest extends TestCase
         $html = $this->render($this->items(), '/docs');
 
         $this->assertStringContainsString('<ul class="navbar-nav me-auto mb-2 mb-lg-0">', $html);
-        $this->assertStringNotContainsString('flex-column', $html);
+
+        // The container stacks only below `lg` and is a row from `lg` up: that is
+        // what lets the collapsed panel be a full-width stacked block on a phone
+        // while the desktop navbar stays a single line. A bare `flex-column` (the
+        // original bug) or a bare `flex-lg-row` (a column on desktop) both fail here.
+        $this->assertStringContainsString(
+            '<div class="d-flex flex-column flex-lg-row align-items-lg-center w-100">',
+            $html,
+            'The horizontal nav must be a row from lg up and only stack below it.',
+        );
+        $this->assertStringNotContainsString(
+            '<nav class="nav nav-pills',
+            $html,
+            'Horizontal orientation must not emit the sidebar nav element.',
+        );
     }
 
     public function testSidebarOrientationEmitsFlexColumn(): void
@@ -179,7 +193,7 @@ final class NavPartialTest extends TestCase
             $html
         );
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Learn</a>',
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" aria-haspopup="true" aria-expanded="false">Learn</a>',
             $html
         );
         $this->assertStringContainsString(
@@ -319,8 +333,8 @@ final class NavPartialTest extends TestCase
         $html = $this->render([], '/');
 
         $this->assertSame(
-            '<div class="d-flex align-items-center w-100"><ul class="navbar-nav me-auto mb-2 mb-lg-0"><!--[--><!--]--></ul>'
-                . '<div class="ms-auto d-flex align-items-center gap-2"><!--[--><!----><!--[--><!--]--><!--]--></div></div>',
+            '<div class="d-flex flex-column flex-lg-row align-items-lg-center w-100"><ul class="navbar-nav me-auto mb-2 mb-lg-0"><!--[--><!--]--></ul>'
+                . '<div class="ms-lg-auto d-flex align-items-center gap-2 mt-3 mt-lg-0"><!--[--><!----><!--[--><!--]--><!--]--></div></div>',
             $html
         );
     }
@@ -330,7 +344,7 @@ final class NavPartialTest extends TestCase
         $html = $this->render([], '/', 'sidebar');
 
         $this->assertSame(
-            '<div class="d-flex align-items-center w-100"><nav class="nav nav-pills flex-column gap-1"><!--[--><!--]--></nav><!----></div>',
+            '<div class="d-flex flex-column flex-lg-row align-items-lg-center w-100"><nav class="nav nav-pills flex-column gap-1"><!--[--><!--]--></nav><!----></div>',
             $html
         );
     }
@@ -359,7 +373,7 @@ final class NavPartialTest extends TestCase
         $html = $this->render($items, '/tutorials', 'horizontal');
 
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle active" role="button" data-bs-toggle="dropdown" aria-expanded="false">Learn</a>',
+            '<a href="#" class="nav-link dropdown-toggle active" role="button" aria-haspopup="true" aria-expanded="false">Learn</a>',
             $html
         );
         $this->assertStringContainsString(
@@ -376,7 +390,7 @@ final class NavPartialTest extends TestCase
         $html = $this->render($items, '/', 'horizontal');
 
         $this->assertStringContainsString(
-            '<a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">Learn</a>',
+            '<a href="#" class="nav-link dropdown-toggle" role="button" aria-haspopup="true" aria-expanded="false">Learn</a>',
             $html
         );
     }
