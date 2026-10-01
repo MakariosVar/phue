@@ -10,13 +10,16 @@ namespace Phue\Core\Asset;
 class ImportMapManager
 {
     private string $manifestPath;
+    private bool $debug;
 
     /**
      * @param string $basePath The project root directory path.
+     * @param bool $debug when debug mode is enabled, using the vue browser.
      */
-    public function __construct(string $basePath)
+    public function __construct(string $basePath, bool $debug = false)
     {
         $this->manifestPath = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'phue-packages.json';
+        $this->debug = $debug;
     }
 
     /**
@@ -30,9 +33,7 @@ class ImportMapManager
      */
     public function getImportMap(): array
     {
-        $imports = [
-            'vue' => '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js',
-        ];
+        $imports = [];
 
         if (!file_exists($this->manifestPath)) {
             return ['imports' => $imports];
@@ -79,6 +80,8 @@ class ImportMapManager
                 }
             }
         }
+
+        $imports['vue'] = !$this->debug ? '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js' : '/assets/vendor/vue3/vue.runtime.esm-browser.js';
 
         return ['imports' => $imports];
     }

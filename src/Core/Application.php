@@ -8,7 +8,9 @@ use Phue\Core\Asset\AssetsController;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\AssetServer;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Asset\ImportMapManager;
 use Phue\Core\Cache\FileCache;
+use Phue\Core\Console\PathResolver;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
@@ -460,7 +462,10 @@ class Application
         ));
 
         $this->container->singleton(HtmlShellRenderer::class, function (): HtmlShellRenderer {
-            return new HtmlShellRenderer($this->container->get(AssetRegistry::class));
+            return new HtmlShellRenderer(
+                $this->container->get(AssetRegistry::class),
+                new ImportMapManager(PathResolver::resolveBasePath(), $this->debug)
+            );
         });
 
     }
