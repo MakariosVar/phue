@@ -46,10 +46,9 @@
           <ph-link
             href="/products/7"
             :underline="false"
+            label="Unavailable"
             disabled
-          >
-            Unavailable
-          </ph-link>
+          />
         </div>
       </ph-card>
     </template>
@@ -82,7 +81,31 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
-      snippet: ``,
+      snippet: `<ph-link
+  href="mailto:hi@example.com"
+  variant="danger"
+>
+  Contact
+</ph-link>
+  <ph-link
+  href="/"
+  variant="primary"
+>
+  Home
+</ph-link>
+<ph-link
+  href="/docs"
+  target="_blank"
+  variant="secondary"
+>
+  Docs
+</ph-link>
+<ph-link
+  href="/products/7"
+  :underline="false"
+  label="Unavailable"
+  disabled
+/>`,
       propsData: [
         {
           name: "href",
