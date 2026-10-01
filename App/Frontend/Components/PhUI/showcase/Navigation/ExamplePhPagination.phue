@@ -18,7 +18,7 @@
     <template #demo>
       <ph-card v-if="showDemo">
         <h5 class="text-center">{{ page }} of {{ lastPage }}</h5>
-        <ph-pagination v-model:current-page="page" :total-pages="lastPage" max-visible="6" />
+        <ph-pagination v-model:current-page="page" :total-pages="lastPage" :max-visible="6" />
       </ph-card>
     </template>
 
@@ -48,7 +48,7 @@ export default {
       showProps: true,
       page: 1,
       lastPage: 10,
-      snippet: `<ph-pagination v-model:current-page="page" :total-pages="lastPage" max-visible="6" />`,
+      snippet: `<ph-pagination v-model:current-page="page" :total-pages="lastPage" :max-visible="6" />`,
       propsData: [
         {
           name: "currentPage",
