@@ -273,55 +273,55 @@ return [
                     <h3 class="fw-semibold mb-3">Form Controls</h3>
                     <div class="d-flex flex-column gap-2">
                         <span id="button">
-                            <example-ph-button />
+                            <example-ph-button @setAnchor="scrollTo('button')"/>
                         </span>
                         <span id="input">
-                            <example-ph-input />
+                            <example-ph-input @setAnchor="scrollTo('input')"/>
                         </span>
                         <span id="number-input">
-                            <example-ph-number-input />
+                            <example-ph-number-input @setAnchor="scrollTo('number-input')"/>
                         </span>
                         <span id="select">
-                            <example-ph-select />
+                            <example-ph-select @setAnchor="scrollTo('select')"/>
                         </span>
                         <span id="select3">
-                            <example-ph-select3 />
+                            <example-ph-select3 @setAnchor="scrollTo('select3')"/>
                         </span>
                         <span id="textarea">
-                            <example-ph-textarea />
+                            <example-ph-textarea @setAnchor="scrollTo('textarea')"/>
                         </span>
                         <span id="checkbox">
-                            <example-ph-checkbox />
+                            <example-ph-checkbox @setAnchor="scrollTo('checkbox')"/>
                         </span>
                         <span id="radio">
-                            <example-ph-radio />
+                            <example-ph-radio @setAnchor="scrollTo('radio')"/>
                         </span>
                         <span id="switch">
-                            <example-ph-switch />
+                            <example-ph-switch @setAnchor="scrollTo('switch')"/>
                         </span>
                         <span id="search-input">
-                            <example-ph-search-input />
+                            <example-ph-search-input @setAnchor="scrollTo('search-input')"/>
                         </span>
                         <span id="range">
-                            <example-ph-range />
+                            <example-ph-range @setAnchor="scrollTo('range')"/>
                         </span>
                         <span id="file-input">
-                            <example-ph-file-input />
+                            <example-ph-file-input @setAnchor="scrollTo('file-input')"/>
                         </span>
                         <span id="date-picker">
-                            <example-ph-date-picker />
+                            <example-ph-date-picker @setAnchor="scrollTo('date-picker')"/>
                         </span>
                         <span id="segmented-control">
-                            <example-ph-segmented-control />
+                            <example-ph-segmented-control @setAnchor="scrollTo('segmented-control')"/>
                         </span>
                         <span id="form">
-                            <example-ph-form />
+                            <example-ph-form @setAnchor="scrollTo('form')"/>
                         </span>
                         <span id="form-field">
-                            <example-ph-form-field />
+                            <example-ph-form-field @setAnchor="scrollTo('form-field')"/>
                         </span>
                         <span id="input-shell">
-                            <example-ph-input-shell />
+                            <example-ph-input-shell @setAnchor="scrollTo('input-shell')"/>
                         </span>
                     </div>
                 </section>
@@ -331,43 +331,43 @@ return [
                     <h3 class="fw-semibold mb-3">Data Display</h3>
                     <div class="d-flex flex-column gap-2">
                         <span id="table">
-                            <example-ph-data-table />
+                            <example-ph-data-table @setAnchor="scrollTo('table')"/>
                         </span>
                         <span id="badge">
-                            <example-ph-badge />
+                            <example-ph-badge @setAnchor="scrollTo('badge')"/>
                         </span>
                         <span id="chip">
-                            <example-ph-chip />
+                            <example-ph-chip @setAnchor="scrollTo('chip')"/>
                         </span>
                         <span id="avatar">
-                            <example-ph-avatar />
+                            <example-ph-avatar @setAnchor="scrollTo('avatar')"/>
                         </span>
                         <span id="card">
-                            <example-ph-card />
+                            <example-ph-card @setAnchor="scrollTo('card')"/>
                         </span>
                         <span id="empty-state">
-                            <example-ph-empty-state />
+                            <example-ph-empty-state @setAnchor="scrollTo('empty-state')"/>
                         </span>
                         <span id="stat">
-                            <example-ph-stat />
+                            <example-ph-stat @setAnchor="scrollTo('stat')"/>
                         </span>
                         <span id="list-group">
-                            <example-ph-list-group />
+                            <example-ph-list-group @setAnchor="scrollTo('list-group')"/>
                         </span>
                         <span id="description-list">
-                            <example-ph-description-list />
+                            <example-ph-description-list @setAnchor="scrollTo('description-list')"/>
                         </span>
                         <span id="timeline">
-                            <example-ph-timeline />
+                            <example-ph-timeline @setAnchor="scrollTo('timeline')"/>
                         </span>
                         <span id="code">
-                            <example-ph-code />
+                            <example-ph-code @setAnchor="scrollTo('code')"/>
                         </span>
                         <span id="tree-view">
-                            <example-ph-tree-view />
+                            <example-ph-tree-view @setAnchor="scrollTo('tree-view')"/>
                         </span>
                         <span id="accordion">
-                            <example-ph-accordion />
+                            <example-ph-accordion @setAnchor="scrollTo('accordion')"/>
                         </span>
                     </div>
                     
@@ -378,34 +378,34 @@ return [
                     <h3 class="fw-semibold mb-3">Feedback</h3>
                     <div class="d-flex flex-column gap-2">
                         <span id="alert">
-                            <example-ph-alert />
+                            <example-ph-alert @setAnchor="scrollTo('alert')"/>
                         </span>
                         <span id="modal">
-                            <example-ph-modal />
+                            <example-ph-modal @setAnchor="scrollTo('modal')"/>
                         </span>
                         <span id="progress-bar">
-                            <example-ph-progress-bar />
+                            <example-ph-progress-bar @setAnchor="scrollTo('progress-bar')"/>
                         </span>
                         <span id="skeleton">
-                            <example-ph-skeleton />
+                            <example-ph-skeleton @setAnchor="scrollTo('skeleton')"/>
                         </span>
                         <span id="spinner">
-                            <example-ph-spinner />
+                            <example-ph-spinner @setAnchor="scrollTo('spinner')"/>
                         </span>
                         <span id="toast">
-                            <example-ph-toast />
+                            <example-ph-toast @setAnchor="scrollTo('toast')"/>
                         </span>
                         <span id="popover">
-                            <example-ph-popover />
+                            <example-ph-popover @setAnchor="scrollTo('popover')"/>
                         </span>
                         <span id="tooltip">
-                            <example-ph-tooltip />
+                            <example-ph-tooltip @setAnchor="scrollTo('tooltip')"/>
                         </span>
                         <span id="drawer">
-                            <example-ph-drawer />
+                            <example-ph-drawer @setAnchor="scrollTo('drawer')"/>
                         </span>
                         <span id="confirm-dialog">
-                            <example-ph-confirm-dialog />
+                            <example-ph-confirm-dialog @setAnchor="scrollTo('confirm-dialog')"/>
                         </span>
                     </div>
                 </section>
@@ -415,16 +415,16 @@ return [
                     <h3 class="fw-semibold mb-3">Navigation</h3>
                     <div class="row g-4">
                         <span id="breadcrumb">
-                            <example-ph-breadcrumb />
+                            <example-ph-breadcrumb @setAnchor="scrollTo('breadcrumb')"/>
                         </span>
                         <span id="link">
-                            <example-ph-link />
+                            <example-ph-link @setAnchor="scrollTo('link')"/>
                         </span>
                         <span id="pagination">
-                            <example-ph-pagination @setAnchor="scrollTo('pagination')" />
+                            <example-ph-pagination @setAnchor="scrollTo('pagination')"/>
                         </span>
                         <span id="tabs">
-                            <example-ph-tabs />
+                            <example-ph-tabs @setAnchor="scrollTo('tabs')"/>
                         </span>
                         <!-- 
                         <ExamplePhTheme />
