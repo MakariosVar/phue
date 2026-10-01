@@ -1,16 +1,14 @@
 <template>
-  <component
-    :is="componentType"
-    :href="isAnchor ? href : undefined"
-    :to="!isAnchor ? href : undefined"
-    :target="target"
+  <a
+    :href="hrefAttr"
+    :target="targetAttr"
     :rel="computedRel"
-    :class="['link-underline', variantClass, { 'link-underline-opacity-0': !underline, 'disabled pointer-events-none text-body-secondary': disabled }]"
+    :class="linkClasses"
     :aria-disabled="disabled ? 'true' : undefined"
     @click="handleClick"
   >
     <slot>{{ label }}</slot>
-  </component>
+  </a>
 </template>
 
 <script>
@@ -18,7 +16,7 @@ export default {
   name: 'PhLink',
   props: {
     href: {
-      type: [String, Object],
+      type: String,
       default: '#'
     },
     label: {
@@ -32,7 +30,7 @@ export default {
     },
     target: {
       type: String,
-      default: '_self'
+      default: null
     },
     rel: {
       type: String,
@@ -49,17 +47,32 @@ export default {
   },
   emits: ['click'],
   computed: {
-    isAnchor() {
-      if (typeof this.href !== 'string') {
-        return false;
-      }
-      return this.href.startsWith('http')
-        || this.href.startsWith('mailto:')
-        || this.href.startsWith('#')
-        || this.href.startsWith('/');
+    /**
+     * Navigation is a plain <a href>. The SPA handler in
+     * storage/assets/js/phue-explorer.js is a delegated document listener
+     * matching `a[href]`, so a real anchor is what makes a link both
+     * crawlable (SEO) and interceptable (no full reload) — and it works
+     * with JavaScript disabled, which no client router does.
+     *
+     * A disabled link drops the href altogether: an <a> without href is not
+     * focusable, so it leaves the tab order and cannot be activated by
+     * Enter — no aria-disabled-only trickery.
+     */
+    hrefAttr() {
+      if (this.disabled) return undefined;
+      return typeof this.href === 'string' && this.href !== '' ? this.href : undefined;
     },
-    componentType() {
-      return this.isAnchor ? 'a' : 'router-link';
+    /**
+     * `_self` is the HTML default: rendering it explicitly only adds an
+     * attribute to every link and confuses the "opens where" reasoning.
+     */
+    targetAttr() {
+      if (this.disabled || !this.target || this.target === '_self') return undefined;
+      return this.target;
+    },
+    computedRel() {
+      if (this.rel) return this.rel;
+      return this.target === '_blank' ? 'noopener noreferrer' : undefined;
     },
     variantClass() {
       const map = {
@@ -70,17 +83,51 @@ export default {
       };
       return map[this.variant] || 'link-primary';
     },
-    computedRel() {
-      if (this.rel) return this.rel;
-      return this.target === '_blank' ? 'noopener noreferrer' : undefined;
+    linkClasses() {
+      return [
+        this.underline ? 'text-decoration-underline' : 'text-decoration-none',
+        this.variantClass,
+        { 'disabled pe-none opacity-50': this.disabled }
+      ];
     }
   },
   methods: {
+    /**
+     * True when this click is one the SPA handler would swallow.
+     *
+     * storage/assets/js/phue-explorer.js delegates on document and hijacks
+     * every same-origin `a[href]` left-click — it has no guard for `target`,
+     * so a `target="_blank"` link was preventDefault()ed into a same-tab SPA
+     * navigation and never opened a tab. The component cannot un-hijack
+     * itself after the fact (the default action is already cancelled by then),
+     * so it declines the propagation instead: the handler runs on document in
+     * the bubble phase, i.e. after this element listener, so stopping it here
+     * leaves the browser's own "open in a new tab" behaviour intact.
+     *
+     * Deliberately mirrors the handler's own guards (plain left click, no
+     * modifier keys): a ctrl/meta-click already passes through the handler, so
+     * swallowing its propagation would only silence unrelated listeners.
+     */
+    wouldBeHijackedBySpaHandler(event) {
+      if (!this.targetAttr) return false;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+
+      return true;
+    },
     handleClick(event) {
+      // Belt and braces: hrefAttr already makes the anchor inert, but a
+      // parent can still dispatch a synthetic click, and the delegated SPA
+      // listener sits above us on document.
       if (this.disabled) {
         event.preventDefault();
+        event.stopPropagation();
         return;
       }
+
+      if (this.wouldBeHijackedBySpaHandler(event)) {
+        event.stopPropagation();
+      }
+
       this.$emit('click', event);
     }
   }
