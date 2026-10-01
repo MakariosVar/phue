@@ -290,11 +290,15 @@ final class HtmlShellRendererTest extends TestCase
             'The import map must contain exactly one resolvable "vue" entry.'
         );
 
-        $bundles = glob(dirname(__DIR__, 3) . '/storage/assets/vendor/vue3/*.js') ?: [];
-
-        $this->assertCount(1, $bundles, 'Expected exactly one vendored Vue bundle on disk.');
-
-        $this->assertSame('/assets/vendor/vue3/' . basename($bundles[0]), $matches[1]);
+        // Which of the installed bundles it names is decided by the debug flag,
+        // not by there happening to be only one. The default renderer is built
+        // without debug, so the invariant here is "names a file that exists" —
+        // picking between the two builds is ImportMapManager's job and is
+        // asserted there against the debug flag.
+        $this->assertFileExists(
+            dirname(__DIR__, 3) . '/storage' . $matches[1],
+            sprintf('The import map names %s, which is not installed.', $matches[1])
+        );
     }
 
     public function testInjectedManagerAppendsInstalledPackagesToImportMap(): void
@@ -317,7 +321,7 @@ final class HtmlShellRendererTest extends TestCase
         );
 
         try {
-            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir));
+            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir), false);
             $html = $renderer->render('T');
 
             $this->assertStringContainsString(
@@ -350,7 +354,7 @@ final class HtmlShellRendererTest extends TestCase
         $this->registry->addStyle('/assets/theme.css');
 
         try {
-            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir));
+            $renderer = new HtmlShellRenderer($this->registry, new ImportMapManager($baseDir), false);
             $html = $renderer->render('T');
 
             $this->assertStringContainsString(

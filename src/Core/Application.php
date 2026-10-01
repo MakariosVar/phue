@@ -464,7 +464,8 @@ class Application
         $this->container->singleton(HtmlShellRenderer::class, function (): HtmlShellRenderer {
             return new HtmlShellRenderer(
                 $this->container->get(AssetRegistry::class),
-                new ImportMapManager(PathResolver::resolveBasePath(), $this->debug)
+                new ImportMapManager(PathResolver::resolveBasePath(), $this->debug),
+                $this->debug
             );
         });
 

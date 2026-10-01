@@ -20,9 +20,10 @@ class HtmlShellRenderer
      */
     public function __construct(
         private AssetRegistry $registry,
-        ?ImportMapManager $importMapManager = null
+        ?ImportMapManager $importMapManager = null,
+        private bool $debug = false
     ) {
-        $this->importMapManager = $importMapManager ?? new ImportMapManager(PathResolver::resolveBasePath());
+        $this->importMapManager = $importMapManager ?? new ImportMapManager(PathResolver::resolveBasePath(), $debug);
     }
 
     /**
