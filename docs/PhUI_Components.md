@@ -1859,13 +1859,13 @@ Emits: `click` (suppressed when `disabled`).
 > not a restriction. `click` is swallowed too (`preventDefault` +
 > `stopPropagation`).
 
-> **`target="_blank"` and the SPA handler.** The handler in `phue-explorer.js`
-> hijacks every same-origin `a[href]` left-click and has no `target`/`download`
-> guard, so it will `preventDefault()` a same-origin `_blank` link into a
-> same-tab navigation. `<ph-link>` defends itself by stopping propagation on a
-> plain left click, which leaves the browser's own new-tab behaviour intact.
-> Hand-written `<a target="_blank">` markup is **not** covered — add the missing
-> guard to the handler if you rely on it.
+> **`target="_blank"` works because of the SPA handler's guards.** The handler
+> intercepts same-origin clicks and must decline the ones the browser owns
+> (`download`, any `target` but `_self`, `rel="external"`, `data-no-spa`). That
+> logic lives in the handler, not here — see [SPA navigation
+> contract](Core.md#223-spa-navigation-contract-phue-explorerjs). `<ph-link>`
+> deliberately keeps no private copy of it, because a component that defends
+> itself hides the fact that the shared handler is broken.
 
 ### `<ph-pagination>`
 

@@ -164,7 +164,55 @@ The import map and the module preloads are emitted **before** any `<script type=
 
 `ImportMapManager` maps `vue` to the **production** build (`vue.runtime.esm-browser.prod.js`). The `__DEV__` branches, devtools hooks and HMR wiring of the dev build are ~31.5 KiB of extra transfer on the critical path for zero runtime value. A stale import map entry puts the browser and the SSR sidecar on different Vue builds, which surfaces as a hydration mismatch rather than an error.
 
-### 2.2.3 View Styles Metadata (`'styles'` in `.phue` `<php>` block)
+### 2.2.3 SPA navigation contract (`phue-explorer.js`)
+
+`storage/assets/js/phue-explorer.js` is the only client-side router in Phue, and it is not a router at all: it is a **delegated `click` listener on `document`** that intercepts same-origin anchors, re-fetches the page with `X-Phue-SPA: true`, and swaps `#app`.
+
+```
+click on a[href]
+  → guards (§ below)
+  → same origin?
+      no  → browser handles it
+      yes → preventDefault() + fetch(url, { headers: { 'X-Phue-SPA': 'true' } })
+            → JSON { title, html, state, scripts, navState, modulePreload }
+            → pushState → unmount #app → innerHTML → mount modules → sync #nav
+            → any throw ⇒ window.location.href = url   (hard reload, by design)
+```
+
+**The consequence that drives every other rule: links must be real `<a href>`.** The selector is `a[href]`, narrowed to `HTMLAnchorElement` before any anchor-only property (`target`, `relList`) is read — an SVG `<a href>` matches the selector but has neither, so it is deliberately left to the browser. A `<button>`, a `<div onclick>` or any other non-anchor element is invisible to the interceptor, so its click is never intercepted — the user gets a full page reload, silently. This is also why the same href has to be in the SSR HTML: the link is the crawler's only handle on it, and it works with JavaScript disabled, which no router does.
+
+There is **no `vue-router`** in the framework — `ssr/package.json` ships only `vue` and `@vue/server-renderer`, and no mount calls `app.use(router)`. A `<router-link>` does not fail loudly; Vue renders it as an unknown element with no `href` and logs one console warning.
+
+**What the interceptor leaves to the browser** — each of these is a plain left click (`e.button === 0`, no modifier keys) that the handler declines:
+
+| Case | Why |
+|---|---|
+| `download` attribute | A fetch with `X-Phue-SPA` would receive the JSON payload envelope instead of the file |
+| `target` other than `_self` | "Open somewhere else" is the browser's contract; hijacking it turns a new tab into a same-tab navigation |
+| `rel="external"` | The de-facto opt-out marker |
+| `data-no-spa` | The explicit opt-out, for anchors that carry JS-driven behaviour |
+| `href` starting with `#` | Same-page scroll, not a navigation |
+| Cross-origin `href` | Not ours to route |
+| Any non-HTTP scheme (`mailto:`, `tel:`, …) | Caught by the origin check, not by an allowlist — `new URL('mailto:…').origin` is `"null"` |
+
+Modifier clicks and non-left buttons are ignored earlier still, so ctrl/middle/right-click keep their native meaning.
+
+**Post-mount steps cannot fail the navigation.** `navigate()` wraps everything in one `try`, and its `catch` is `window.location.href = url`. So a throw in a *cosmetic* step does not degrade — it discards a page that already mounted and hard-reloads the browser instead. `updateNavigationState()` therefore isolates each nav item: an href the URL parser rejects, or a non-HTTP scheme, deactivates that one item (`active` removed, `aria-current` removed) and the sync continues.
+
+> The two rules above exist because of the same failure mode, and neither throws where you can see it. A rejected promise inside an `async` listener is invisible, and `new URL()` on an untrusted `href` throws for plenty of real input (`http://`, `https://[`). Both were shipped: an unguarded `new URL()` in the nav sync turned **every** SPA navigation into a full page reload.
+
+```
+<!-- crawled, interceptable, works without JS -->
+<a href="/products/7">Product</a>
+
+<!-- new tab: the browser owns it -->
+<a href="/products/7" target="_blank" rel="noopener">Product</a>
+
+<!-- opt out explicitly -->
+<a href="/orders" data-no-spa>Orders (full reload)</a>
+```
+
+### 2.2.4 View Styles Metadata (`'styles'` in `.phue` `<php>` block)
 
 A `.phue` component (or page) can declare its own stylesheet dependencies in the `<php>` block return array:
 
@@ -185,7 +233,7 @@ return [
 
 > **BC note:** `$styles` was appended as the **last** constructor parameter in `View` (after `$html`), so the pre-styles positional signature `new View($tpl, $state, $scripts, $inlineScript, $html)` remains 100% compatible.
 
-### 2.2.4 `App/Assets/` — User-space asset directory
+### 2.2.5 `App/Assets/` — User-space asset directory
 
 Place your project's CSS/JS in `App/Assets/` (e.g. `App/Assets/styles/main.css`). In `public/index.php`, the source is registered:
 
