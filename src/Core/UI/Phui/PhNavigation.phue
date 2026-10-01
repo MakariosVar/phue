@@ -1,8 +1,21 @@
 <template>
-  <div class="d-flex align-items-center w-100">
+  <teleport v-if="teleported && !isSidebar" to=".app-topbar">
+    <button
+      type="button"
+      class="navbar-toggler d-lg-none ms-auto align-self-center"
+      :aria-controls="collapseId"
+      :aria-expanded="expanded ? 'true' : 'false'"
+      aria-label="Toggle navigation"
+      @click="toggle"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+  </teleport>
+
+  <div :class="rootClasses" @click="onNavClick">
     <component :is="isSidebar ? 'nav' : 'ul'" :class="navClasses">
-      <!-- Sidebar Mode -->
-      <template v-if="isSidebar">
+    <!-- Sidebar Mode -->
+    <template v-if="isSidebar">
         <template v-for="(item, idx) in items" :key="idx">
           <h6 
             v-if="item.group && item.group !== (items[idx - 1]?.group)" 
@@ -44,17 +57,24 @@
           </li>
 
           <!-- Dropdown Group -->
-          <li v-else class="nav-item dropdown">
-            <a 
-              href="#" 
-              :class="['nav-link', 'dropdown-toggle', { active: node.items.some(child => isRouteActive(child.href)) }]" 
-              role="button" 
-              data-bs-toggle="dropdown" 
-              aria-expanded="false"
+          <li
+            v-else
+            class="nav-item dropdown"
+            :class="{ show: openDropdown === node.name }"
+          >
+            <a
+              href="#"
+              :class="['nav-link', 'dropdown-toggle', { show: openDropdown === node.name, active: node.items.some(child => isRouteActive(child.href)) }]"
+              role="button"
+              aria-haspopup="true"
+              :aria-expanded="openDropdown === node.name ? 'true' : 'false'"
+              @click.prevent="toggleDropdown(node.name)"
+              @keydown.enter.prevent="toggleDropdown(node.name)"
+              @keydown.space.prevent="toggleDropdown(node.name)"
             >
               {{ node.name }}
             </a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu" :class="{ show: openDropdown === node.name }">
               <li v-for="(child, cIdx) in node.items" :key="cIdx">
                 <span v-if="child.disabled" class="dropdown-item disabled" aria-disabled="true">
                   {{ child.label }}
@@ -62,8 +82,9 @@
                 <a 
                   v-else 
                   :href="child.href || '#'" 
-                  :class="['dropdown-item', { active: isRouteActive(child.href) }]" 
+:class="['dropdown-item', { active: isRouteActive(child.href) }]"
                   :aria-current="isRouteActive(child.href) ? 'page' : null"
+                  @click="closeDropdown"
                 >
                   {{ child.label }}
                 </a>
@@ -74,40 +95,43 @@
       </template>
     </component>
 
-    <!-- Header Actions & Theme Toggle -->
-    <div v-if="!isSidebar" class="ms-auto d-flex align-items-center gap-2">
-      <!-- Actions Prefix: Theme toggle first, then actions -->
-      <template v-if="isThemePrefix">
-        <ph-theme aria-label="Toggle theme"></ph-theme>
-        <a 
-          v-for="(action, aIdx) in actions" 
-          :key="aIdx" 
-          :href="action.href || '#'" 
-          :class="['nav-link', { active: isRouteActive(action.href) }]"
-          :aria-current="isRouteActive(action.href) ? 'page' : null"
-        >
-          {{ action.label }}
-        </a>
-      </template>
-      <!-- Actions Suffix: Actions first, then theme toggle -->
-      <template v-else>
-        <a 
-          v-for="(action, aIdx) in actions" 
-          :key="aIdx" 
-          :href="action.href || '#'" 
-          :class="['nav-link', { active: isRouteActive(action.href) }]"
-          :aria-current="isRouteActive(action.href) ? 'page' : null"
-        >
-          {{ action.label }}
-        </a>
-        <ph-theme aria-label="Toggle theme"></ph-theme>
-      </template>
-    </div>
-  </div>
+      <!-- Header Actions & Theme Toggle -->
+      <div v-if="!isSidebar" class="ms-lg-auto d-flex align-items-center gap-2 mt-3 mt-lg-0">
+        <!-- Actions Prefix: Theme toggle first, then actions -->
+        <template v-if="isThemePrefix">
+          <ph-theme aria-label="Toggle theme"></ph-theme>
+          <a
+            v-for="(action, aIdx) in actions"
+            :key="aIdx"
+            :href="action.href || '#'"
+            :class="['nav-link', { active: isRouteActive(action.href) }]"
+            :aria-current="isRouteActive(action.href) ? 'page' : null"
+          >
+            {{ action.label }}
+          </a>
+        </template>
+        <!-- Actions Suffix: Actions first, then theme toggle -->
+        <template v-else>
+          <a
+            v-for="(action, aIdx) in actions"
+            :key="aIdx"
+            :href="action.href || '#'"
+            :class="['nav-link', { active: isRouteActive(action.href) }]"
+            :aria-current="isRouteActive(action.href) ? 'page' : null"
+          >
+            {{ action.label }}
+          </a>
+          <ph-theme aria-label="Toggle theme"></ph-theme>
+        </template>
+      </div>
+</div>
 </template>
 
 <script>
-import { createSSRApp, createApp, computed } from 'vue';
+import { createSSRApp, createApp, computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+
+/** Bootstrap's `lg` breakpoint minus a hair, so this matches `.navbar-expand-lg`. */
+const MOBILE_QUERY = '(max-width: 991.98px)';
 
 const options = {
   props: {
@@ -115,11 +139,123 @@ const options = {
     actions: { type: Array, default: () => [] },
     activeRoute: { type: String, default: '/' },
     orientation: { type: String, default: 'horizontal' },
-    themeConfig: { type: Object, default: () => ({}) }
+    themeConfig: { type: Object, default: () => {} }
   },
   setup(props) {
+    const rootRef = ref(null);
     const isSidebar = computed(() => props.orientation === 'sidebar' || props.orientation === 'vertical');
     const navClasses = computed(() => isSidebar.value ? 'nav nav-pills flex-column gap-1' : 'navbar-nav me-auto mb-2 mb-lg-0');
+
+    const rootClasses = 'd-flex flex-column flex-lg-row align-items-lg-center w-100';
+
+    const collapseId = 'nav';
+    const teleported = ref(false);
+    const expanded = ref(false);
+
+    const isMobile = ref(false);
+    let mobileQuery = null;
+
+        const openDropdown = ref(null);
+
+    function toggleDropdown(name) {
+      openDropdown.value = openDropdown.value === name ? null : name;
+    }
+
+    function closeDropdown() {
+      openDropdown.value = null;
+    }
+
+    function onDocumentPointerDown(event) {
+      if (openDropdown.value === null) return;
+
+      const root = rootRef.value;
+      if (root && !root.contains(event.target)) {
+        closeDropdown();
+      }
+    }
+
+    function applyCollapseState() {
+      if (typeof document === 'undefined') return;
+
+      const panel = document.getElementById('nav');
+      if (panel) {
+        panel.classList.toggle('show', expanded.value);
+      }
+    }
+
+    function toggle() {
+      expanded.value = !expanded.value;
+    }
+
+    function onNavClick(event) {
+      if (!expanded.value) return;
+      const link = event.target && event.target.closest && event.target.closest('a');
+      if (!link) return;
+
+      if (link.getAttribute('role') === 'button' || link.getAttribute('href') === '#') {
+        return;
+      }
+
+      expanded.value = false;
+      closeDropdown();
+      applyCollapseState();
+    }
+
+    function onKeydown(event) {
+      if (event.key !== 'Escape') return;
+
+      if (openDropdown.value !== null) {
+        closeDropdown();
+        return;
+      }
+
+      if (expanded.value) {
+        expanded.value = false;
+        applyCollapseState();
+      }
+    }
+
+    function onBreakpointChange(event) {
+      isMobile.value = event.matches;
+      if (!event.matches) {
+        expanded.value = false;
+        closeDropdown();
+      }
+    }
+
+    watch(expanded, applyCollapseState);
+
+    onMounted(() => {
+      if (typeof window.matchMedia !== 'function') return;
+
+      mobileQuery = window.matchMedia(MOBILE_QUERY);
+      isMobile.value = mobileQuery.matches;
+      teleported.value = true;
+      applyCollapseState();
+
+      if (typeof mobileQuery.addEventListener === 'function') {
+        mobileQuery.addEventListener('change', onBreakpointChange);
+      } else if (typeof mobileQuery.addListener === 'function') {
+        // Safari < 14.
+        mobileQuery.addListener(onBreakpointChange);
+      }
+
+      document.addEventListener('keydown', onKeydown);
+      document.addEventListener('click', onDocumentPointerDown);
+    });
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('keydown', onKeydown);
+      document.removeEventListener('click', onDocumentPointerDown);
+
+      if (mobileQuery) {
+        if (typeof mobileQuery.removeEventListener === 'function') {
+          mobileQuery.removeEventListener('change', onBreakpointChange);
+        } else if (typeof mobileQuery.removeListener === 'function') {
+          mobileQuery.removeListener(onBreakpointChange);
+        }
+      }
+    });
 
     const isThemePrefix = computed(() => {
       const pos = props.themeConfig?.position || 'actions_prefix';
@@ -155,6 +291,16 @@ const options = {
     return {
       isSidebar,
       navClasses,
+      rootClasses,
+      collapseId,
+      expanded,
+      isMobile,
+      teleported,
+      openDropdown,
+      toggleDropdown,
+      closeDropdown,
+      toggle,
+      onNavClick,
       isThemePrefix,
       isRouteActive,
       groupedNodes

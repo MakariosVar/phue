@@ -74,9 +74,9 @@ if ($orientation === 'sidebar') {
 } else {
     $layoutHtml = sprintf(
         '<div class="app-layout">' .
-            '<header class="app-topbar navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2"%s>' .
+            '<header class="app-topbar navbar navbar-expand-lg align-items-start bg-body-tertiary border-bottom px-3 py-2"%s>' .
                 '<a class="navbar-brand me-3" href="%s">%s</a>' .
-                '<div id="nav" class="flex-grow-1 me-auto">%s</div>' .
+                '<div id="nav" class="collapse navbar-collapse flex-grow-1">%s</div>' .
             '</header>' .
             '<main class="app-content p-3">%s</main>' .
         '</div>',
