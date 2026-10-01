@@ -27,61 +27,95 @@ final class VersionLockTest extends TestCase
     private const SIDE_PACKAGE = 'ssr/package.json';
 
     /**
-     * The vendored Vue ESM bundle, discovered rather than hardcoded.
+     * Every vendored Vue ESM bundle, discovered rather than hardcoded.
      *
-     * The bundle's filename is a build artifact — it changed from
+     * The bundle filenames are build artifacts — they changed from
      * "vue.runtime.esm-browser.js" to "vue.runtime.esm-browser.prod.js" when the
-     * production vendor was adopted, and this test failed on that rename even
-     * though the version lock it exists to protect was untouched.
+     * production vendor was adopted, and a *second* one appeared when the
+     * development build was added. An "exactly one bundle" assertion broke on
+     * both events while the version lock it exists to protect was untouched.
+     *
+     * "Exactly one" was never the invariant that mattered. The invariant is that
+     * the lock is *unambiguous*: whichever build the import map selects — the
+     * production one in a normal install, the development one when debug is on —
+     * the SSR sidecar must have been pinned to that same Vue version. So every
+     * bundle on disk is discovered and they are all required to agree.
      *
      * Discovery is from the install directory, not from ImportMapManager, so
      * this stays an independent check rather than a tautology.
+     *
+     * @return array<int, string> Absolute paths, sorted for a stable message.
      */
-    private static function vendoredClientBundle(): string
+    private static function vendoredClientBundles(): array
     {
-        $dir = self::APP_ROOT . '/' . self::VENDOR_VUE_DIR;
-
-        $bundles = glob($dir . '/*.js') ?: [];
+        $bundles = glob(self::APP_ROOT . '/' . self::VENDOR_VUE_DIR . '/*.js') ?: [];
 
         self::assertNotEmpty(
             $bundles,
-            sprintf('No vendored Vue bundle found in %s. Run the npm install step.', $dir)
+            sprintf(
+                'No vendored Vue bundle found in %s. Run the npm install step.',
+                self::APP_ROOT . '/' . self::VENDOR_VUE_DIR
+            )
         );
 
-        self::assertCount(
-            1,
-            $bundles,
-            'Expected exactly one vendored Vue ESM bundle, found: ' . implode(', ', $bundles)
-            . '. The SSR version lock reads this file; two bundles make the lock ambiguous.'
-        );
+        sort($bundles);
 
-        return $bundles[0];
+        return $bundles;
     }
 
     /**
-     * @return string The 3.x.y version declared by the vendored client bundle.
+     * @return string The 3.x.y version declared by a vendored client bundle.
      */
-    public function testVendoredBundleReportsAVueVersion(): string
+    private static function versionIn(string $path): string
     {
-        $path = self::vendoredClientBundle();
-
         $content = file_get_contents($path);
 
-        $this->assertIsString($content, sprintf('Client bundle not readable: %s', $path));
+        self::assertIsString($content, sprintf('Client bundle not readable: %s', $path));
 
-        $this->assertMatchesRegularExpression(
+        self::assertMatchesRegularExpression(
             '/3\.\d+\.\d+/',
             $content,
-            'Client bundle does not advertise a Vue version banner.'
+            sprintf('Client bundle %s does not advertise a Vue version banner.', basename($path))
         );
 
         preg_match('/3\.\d+\.\d+/', $content, $matches);
 
-        $bundleVersion = $matches[0];
+        return $matches[0];
+    }
 
-        $this->assertSame(3, (int) $bundleVersion[0], 'Client bundle is not Vue 3.x.');
+    /**
+     * @return string The 3.x.y version every vendored client bundle agrees on.
+     */
+    public function testVendoredBundleReportsAVueVersion(): string
+    {
+        $versions = [];
 
-        return $bundleVersion;
+        foreach (self::vendoredClientBundles() as $path) {
+            $version = self::versionIn($path);
+
+            $this->assertSame(
+                3,
+                (int) $version[0],
+                sprintf('Client bundle %s is not Vue 3.x.', basename($path))
+            );
+
+            $versions[basename($path)] = $version;
+        }
+
+        // The lock this file guards is "one Vue version for client and sidecar".
+        // With two bundles on disk that is only meaningful if they agree — a dev
+        // build a minor version behind the prod build would hydrate against a
+        // different Vue than the sidecar rendered with, and the failure mode is a
+        // hydration mismatch rather than an error.
+        $this->assertSame(
+            [array_values($versions)[0]],
+            array_values(array_unique($versions)),
+            'Vendored Vue bundles disagree on version: ' . json_encode($versions)
+            . '. The SSR sidecar is pinned to a single version, so every client build'
+            . ' must be that version too.'
+        );
+
+        return array_values($versions)[0];
     }
 
     /**

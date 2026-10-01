@@ -195,17 +195,68 @@ final class AssetDemoTest extends TestCase
         }
     }
 
-    public function testImportMapPointsVueAtTheProductionBuild(): void
+    public function testImportMapVueEntryFollowsTheApplicationDebugFlag(): void
     {
         // Guards the switch: a stale import map entry silently puts the browser
         // and the SSR sidecar on different Vue builds, which shows up as a
         // hydration mismatch rather than an error.
-        $body = $this->app->handle(new Request('GET', '/'))->getContent();
+        //
+        // Which build is correct depends on the app's debug flag, so this used to
+        // hardcode the production bundle and fail on every developer machine —
+        // where debug is on and the development build is exactly what should be
+        // served. Asserting one literal could not tell "the flag is wired through"
+        // from "the test env happens to match"; driving both flags can.
+        foreach ([false, true] as $debug) {
+            $app = new Application('/app', $debug);
+            $app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
+            $registry = $app->getContainer()->get(AssetRegistry::class);
+            $registry->registerSource('/assets', '/app/App/Frontend');
+            $registry->registerSource('/assets/vendor', '/app/storage/assets/vendor');
 
-        $this->assertMatchesRegularExpression(
-            '#"vue"\s*:\s*"[^"]*vue3/vue\.runtime\.esm-browser\.prod\.js"#',
-            $body,
-            'the import map must map "vue" to the production build'
+            $body = (string) $app->handle(new Request('GET', '/'))->getContent();
+
+            $this->assertSame(
+                1,
+                preg_match('#"vue"\s*:\s*"([^"]+)"#', $body, $matches),
+                sprintf('the import map must carry exactly one "vue" entry (debug=%s)', var_export($debug, true))
+            );
+
+            $expected = $debug
+                ? '/assets/vendor/vue3/vue.runtime.esm-browser.js'
+                : '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js';
+
+            $this->assertSame(
+                $expected,
+                $matches[1],
+                sprintf(
+                    'the import map must follow the application debug flag: debug=%s must serve %s',
+                    var_export($debug, true),
+                    $expected
+                )
+            );
+        }
+    }
+
+    public function testTheImportMapVueEntryIsActuallyServed(): void
+    {
+        // Whatever build the map names, the asset server must be able to hand it
+        // over. A map entry pointing at a file that 404s is an unresolvable bare
+        // specifier in the browser, not a missing script — the page dies blank
+        // with no error anywhere to read.
+        $body = (string) $this->app->handle(new Request('GET', '/'))->getContent();
+
+        $this->assertSame(
+            1,
+            preg_match('#"vue"\s*:\s*"([^"]+)"#', $body, $matches),
+            'the import map must carry a "vue" entry'
+        );
+
+        $response = $this->app->handle(new Request('GET', $matches[1]));
+
+        $this->assertSame(
+            200,
+            $response->getStatusCode(),
+            sprintf('the import map names %s, which the asset server does not serve', $matches[1])
         );
     }
 
