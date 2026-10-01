@@ -33,7 +33,7 @@
     </template>
 
     <template #props>
-      <ph-card class="mt-3" v-if="showProps">
+      <ph-card class="my-3" v-if="showProps">
         <h4>Props</h4>
         <props-table :items="propsData" />
       </ph-card>
