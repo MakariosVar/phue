@@ -23,19 +23,42 @@
    * @param {string} targetUrl The current active URL
    */
   function updateNavigationState(targetUrl) {
-    const targetPath = new URL(targetUrl, window.location.origin).pathname;
+    let targetPath = '';
+    try {
+      targetPath = new URL(targetUrl, window.location.origin).pathname;
+    } catch {
+      return; // Early return if targetUrl itself is malformed
+    }
 
     document.querySelectorAll('#nav .nav-link, #nav .dropdown-item').forEach((a) => {
       const href = a.getAttribute('href');
       if (!href || href === '#') return;
 
-      const linkPath = new URL(href, window.location.origin).pathname;
-      const isActive = linkPath === '/' ? targetPath === '/' : (targetPath === linkPath || targetPath.startsWith(linkPath + '/'));
+      // Per-item error boundary to isolate malformed hrefs
+      try {
+        const linkUrl = new URL(href, window.location.origin);
+        
+        // Ignore non-http/https links like mailto: or tel:
+        if (linkUrl.origin !== window.location.origin) {
+          a.classList.remove('active');
+          a.removeAttribute('aria-current');
+          return;
+        }
 
-      a.classList.toggle('active', isActive);
-      if (isActive) {
-        a.setAttribute('aria-current', 'page');
-      } else {
+        const linkPath = linkUrl.pathname;
+        const isActive = linkPath === '/' 
+          ? targetPath === '/' 
+          : (targetPath === linkPath || targetPath.startsWith(linkPath + '/'));
+
+        a.classList.toggle('active', isActive);
+        if (isActive) {
+          a.setAttribute('aria-current', 'page');
+        } else {
+          a.removeAttribute('aria-current');
+        }
+      } catch {
+        // Continue to next item if this specific href is malformed
+        a.classList.remove('active');
         a.removeAttribute('aria-current');
       }
     });
@@ -181,10 +204,18 @@
   }
 
   document.addEventListener('click', async (e) => {
+    // 1. Ignore modifier keys & non-left clicks
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
 
     const link = e.target.closest('a[href]');
     if (!link) return;
+
+    if (!(link instanceof HTMLAnchorElement)) return;
+
+    // 2. Guard against download attributes, targets, rel="external", or opt-outs
+    if (link.hasAttribute('download')) return;
+    if (link.target && link.target !== '_self') return;
+    if (link.relList.contains('external') || link.hasAttribute('data-no-spa')) return;
 
     const href = link.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
@@ -198,7 +229,7 @@
     } catch {
       // Fallback to standard browser navigation
     }
-  });
+});
 
   window.addEventListener('popstate', () => {
     navigate(window.location.href, false);

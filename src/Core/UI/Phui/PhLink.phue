@@ -92,40 +92,14 @@ export default {
     }
   },
   methods: {
-    /**
-     * True when this click is one the SPA handler would swallow.
-     *
-     * storage/assets/js/phue-explorer.js delegates on document and hijacks
-     * every same-origin `a[href]` left-click — it has no guard for `target`,
-     * so a `target="_blank"` link was preventDefault()ed into a same-tab SPA
-     * navigation and never opened a tab. The component cannot un-hijack
-     * itself after the fact (the default action is already cancelled by then),
-     * so it declines the propagation instead: the handler runs on document in
-     * the bubble phase, i.e. after this element listener, so stopping it here
-     * leaves the browser's own "open in a new tab" behaviour intact.
-     *
-     * Deliberately mirrors the handler's own guards (plain left click, no
-     * modifier keys): a ctrl/meta-click already passes through the handler, so
-     * swallowing its propagation would only silence unrelated listeners.
-     */
-    wouldBeHijackedBySpaHandler(event) {
-      if (!this.targetAttr) return false;
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
-
-      return true;
-    },
     handleClick(event) {
-      // Belt and braces: hrefAttr already makes the anchor inert, but a
-      // parent can still dispatch a synthetic click, and the delegated SPA
-      // listener sits above us on document.
+      // The href is already gone when disabled, so the anchor is inert; this
+      // guard covers what markup cannot — a synthetic click dispatched by a
+      // parent, or an Enter keypress on a link that is still focused.
       if (this.disabled) {
         event.preventDefault();
         event.stopPropagation();
         return;
-      }
-
-      if (this.wouldBeHijackedBySpaHandler(event)) {
-        event.stopPropagation();
       }
 
       this.$emit('click', event);
