@@ -68,6 +68,7 @@ $navItems = [
         'components' => [
             ['id' => 'breadcrumb', 'label' => 'Breadcrumb'],
             ['id' => 'link', 'label' => 'Link'],
+            ['id' => 'pagination', 'label' => 'Pagination'],
         ]
     ],
     [
@@ -418,8 +419,10 @@ return [
                         <span id="link">
                             <example-ph-link />
                         </span>
+                        <span id="pagination">
+                            <example-ph-pagination @setAnchor="scrollTo('pagination')" />
+                        </span>
                         <!-- 
-                        <ExamplePhPagination />
                         <ExamplePhTabs />
                         <ExamplePhTheme />
                         <ExamplePhDropdown />
@@ -509,7 +512,7 @@ export default function mountApp(injectedContext = null) {
 
             // The server's answer before the 'index' fallback, kept apart so a plain
             // visit is not read as "show Overview" and yanked to the top on Back.
-        const serverSection = initState.activeSection ?? '';
+            const serverSection = initState.activeSection ?? '';
 
             // activeSection = which section is in the DOM (the v-if reads it, so the
             // server must get it right); activeAnchor = which component is in view.
