@@ -12,21 +12,28 @@
   >
     <slot />
 
-    <span
-      v-if="rendered"
-      v-show="visible"
-      :id="tipId"
-      role="tooltip"
-      :class="tipClasses"
-      :style="tipStyle"
-    >
-      <slot name="content">{{ content }}</slot>
-    </span>
+    <teleport to="body" v-if="rendered">
+      <span
+        v-show="visible"
+        ref="tip"
+        :id="tipId"
+        role="tooltip"
+        :class="tipClasses"
+        :style="tipStyle"
+      >
+        <slot name="content">{{ content }}</slot>
+      </span>
+    </teleport>
   </span>
 </template>
 
 <script>
 import { useId } from "vue";
+
+
+const TIP_Z = 1100;
+const TIP_OFFSET = 8;
+const VIEWPORT_MARGIN = 8;
 
 export default {
   name: 'PhTooltip',
@@ -71,7 +78,10 @@ export default {
     return {
       visible: false,
       rendered: false,
-      timer: null
+      positioned: false,
+      timer: null,
+      triggerRect: null,
+      tipSize: { width: 0, height: 0 }
     };
   },
   computed: {
@@ -89,35 +99,63 @@ export default {
     },
     tipStyle() {
       const style = {
-        position: 'absolute',
-        zIndex: 1080,
+        position: 'fixed',
+        zIndex: TIP_Z,
         whiteSpace: 'normal',
         width: 'max-content',
         maxWidth: this.maxWidth,
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        top: '0',
+        left: '0',
+       visibility: this.positioned ? 'visible' : 'hidden'
       };
-      if (this.placement === 'bottom') {
-        style.top = '100%';
-        style.left = '50%';
-        style.transform = 'translateX(-50%)';
-        style.marginTop = '0.375rem';
-      } else if (this.placement === 'start') {
-        style.right = '100%';
-        style.top = '50%';
-        style.transform = 'translateY(-50%)';
-        style.marginRight = '0.375rem';
-      } else if (this.placement === 'end') {
-        style.left = '100%';
-        style.top = '50%';
-        style.transform = 'translateY(-50%)';
-        style.marginLeft = '0.375rem';
-      } else {
-        style.bottom = '100%';
-        style.left = '50%';
-        style.transform = 'translateX(-50%)';
-        style.marginBottom = '0.375rem';
+
+      if (!this.positioned || !this.triggerRect || typeof document === 'undefined') {
+        return style;
       }
+
+      const rect = this.triggerRect;
+      const placement = this.placementToUse(rect);
+      const w = this.tipSize.width;
+      const h = this.tipSize.height;
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+
+     let top;
+      let left;
+
+      if (placement === 'top') {
+        top = rect.top - h - TIP_OFFSET;
+      } else if (placement === 'bottom') {
+        top = rect.bottom + TIP_OFFSET;
+      } else {
+        top = rect.top + rect.height / 2 - h / 2;
+      }
+
+      if (placement === 'start') {
+        left = rect.left - w - TIP_OFFSET;
+      } else if (placement === 'end') {
+        left = rect.right + TIP_OFFSET;
+      } else {
+        left = rect.left + rect.width / 2 - w / 2;
+      }
+
+      left = this.clamp(left, VIEWPORT_MARGIN, vw - w - VIEWPORT_MARGIN);
+      top = this.clamp(top, VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN);
+
+      style.left = `${left}px`;
+      style.top = `${top}px`;
+
       return style;
+    }
+  },
+  watch: {
+    visible(isVisible) {
+      if (isVisible) {
+        this.trackViewport();
+      } else {
+        this.releaseViewport();
+      }
     }
   },
   mounted() {
@@ -125,31 +163,99 @@ export default {
   },
   beforeUnmount() {
     this.clearTimer();
+    this.releaseViewport();
   },
   methods: {
+    clamp(value, min, max) {
+      if (max < min) {
+        return min;
+      }
+      return Math.min(Math.max(value, min), max);
+    },
+    placementToUse(rect) {
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const vertical = this.placement === 'top' || this.placement === 'bottom';
+      const opposite = { top: 'bottom', bottom: 'top', start: 'end', end: 'start' };
+      const room = {
+        top: rect.top,
+        bottom: vh - rect.bottom,
+        start: rect.left,
+        end: vw - rect.right
+      };
+      const needed = (vertical ? this.tipSize.height : this.tipSize.width)
+        + TIP_OFFSET
+        + VIEWPORT_MARGIN;
+      const flipped = opposite[this.placement];
+
+      if (room[this.placement] < needed && room[flipped] >= needed) {
+        return flipped;
+      }
+
+      return this.placement;
+    },
+    measureTrigger() {
+      const root = this.$refs.root;
+      if (root) {
+        this.triggerRect = root.getBoundingClientRect();
+      }
+    },
+    measureTip() {
+      const tip = this.$refs.tip;
+      if (tip) {
+        this.tipSize = { width: tip.offsetWidth, height: tip.offsetHeight };
+      }
+      this.positioned = true;
+    },
+    trackViewport() {
+      window.addEventListener('scroll', this.onViewportChange, true);
+      window.addEventListener('resize', this.onViewportChange);
+      document.addEventListener('keydown', this.onKeydown);
+    },
+    releaseViewport() {
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+      document.removeEventListener('keydown', this.onKeydown);
+    },
+    onViewportChange() {
+      if (this.visible) {
+        this.measureTrigger();
+      }
+    },
+    onKeydown(event) {
+     if (event.key === 'Escape' && this.visible) {
+        this.hide();
+      }
+    },
     clearTimer() {
       if (this.timer) {
         clearTimeout(this.timer);
         this.timer = null;
       }
     },
-    show() {
+    reveal() {
       if (this.disabled) return;
+      this.positioned = false;
+      this.measureTrigger();
       this.visible = true;
+      this.$nextTick(() => this.measureTip());
+    },
+    show() {
+      this.reveal();
     },
     hide() {
       this.clearTimer();
       this.visible = false;
+      this.positioned = false;
+      this.triggerRect = null;
     },
     scheduleShow() {
       if (this.disabled) return;
       this.clearTimer();
       if (this.delay > 0) {
-        this.timer = setTimeout(() => {
-          this.visible = true;
-        }, this.delay);
+        this.timer = setTimeout(() => this.reveal(), this.delay);
       } else {
-        this.visible = true;
+        this.reveal();
       }
     },
     onEnter() {
