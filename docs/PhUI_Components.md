@@ -1913,16 +1913,53 @@ Interactive dark/light theme switcher toggle button. Automatically synchronizes 
 |---|---|---|---|
 | `storageKey` | `String` | `null` | LocalStorage key name (defaults to `'phue-theme'`) |
 | `ariaLabel` | `String` | `null` | Accessible button label override |
-| `themeConfig` | `Object` | `{}` | Optional config fallback dictionary |
+| `themeConfig` | `Object` | `{}` | Optional config fallback dictionary (`storageKey`, `ariaLabel`, `lightIcon`, `darkIcon`) |
+| `lightIcon` | `String` | `null` | Bootstrap Icons name for the **light** theme — `'sun'` by default |
+| `darkIcon` | `String` | `null` | Bootstrap Icons name for the **dark** theme — `'moon'` by default |
+| `iconSize` | `String \| Number` | `'md'` | Any `<ph-icon>` size token, or a raw CSS length |
+
+Slots: `light` → `light-icon`, `dark` → `dark-icon`. Each falls back to the
+`<ph-icon>` built from the props, so a slot replaces one glyph and leaves the
+other alone.
 
 Emits: None (handles internal DOM theme mutation and storage).
+
+**The glyph names the theme the button switches TO**, not the one currently on
+screen: while dark it shows the sun, so it sits next to "Switch to light mode" and
+the icon and the label never contradict each other. The names are therefore
+state-named (`lightIcon`) rather than glyph-named (`sunIcon`) — the Bootstrap
+Icons name is an implementation detail.
+
+Icon resolution is **prop → `themeConfig` → default**, mirroring `storageKey`
+and `ariaLabel`, so an app that configures its theme in one place does not have to
+name its icons in a second. An explicit empty string (`light-icon=""`) renders
+**no icon** rather than falling back to the default.
 
 **Hydration Contract:**
 Initializes with `'light'` state identically on server and initial client render, deferring the active DOM/OS reading to `mounted()` to prevent SSR hydration mismatches.
 
 ```html
+<!-- defaults: sun while dark, moon while light -->
 <ph-theme aria-label="Toggle theme" storage-key="my-app-theme" />
+
+<!-- configured centrally, alongside storageKey and ariaLabel -->
+<ph-theme :theme-config="{ storageKey: 'app-theme', ariaLabel: 'Toggle theme', darkIcon: 'circle-half' }" />
+
+<!-- a custom glyph for one theme only; the other keeps its default -->
+<ph-theme>
+  <template #light-icon>
+    <my-brand-sun />
+  </template>
+</ph-theme>
+
+<!-- an icon-less toggle (the accessible name is unchanged) -->
+<ph-theme dark-icon="" aria-label="Toggle theme" />
 ```
+
+> The glyph is decorative and never receives a `label`: `<ph-icon>` switches to
+> `role="img"` with its own `aria-label` as soon as it gets one, which would
+> announce the same string twice from inside the button. The button's name comes
+> from `aria-label` alone — it has no text content at all.
 
 ### `<ph-stepper>`
 

@@ -5,8 +5,22 @@
     :aria-label="resolvedAriaLabel"
     @click="toggleTheme"
   >
-    <span v-if="currentTheme === 'dark'" style="font-size: 1.1rem; line-height: 1;">☀️</span>
-    <span v-else style="font-size: 1.1rem; line-height: 1;">🌙</span>
+    <!--
+      The glyph names the theme the click will switch TO, not the one on screen:
+      the sun appears while dark so it sits next to "Switch to light mode" and the
+      two never contradict each other. Slot first, prop/themeConfig second, so a
+      caller can replace the icon entirely without losing the accessible name.
+    -->
+    <template v-if="currentTheme === 'dark'">
+      <slot name="light-icon">
+        <ph-icon v-if="lightIconName" :name="lightIconName" :size="iconSize" />
+      </slot>
+    </template>
+    <template v-else>
+      <slot name="dark-icon">
+        <ph-icon v-if="darkIconName" :name="darkIconName" :size="iconSize" />
+      </slot>
+    </template>
   </button>
 </template>
 
@@ -25,6 +39,22 @@ export default {
     themeConfig: {
       type: Object,
       default: () => ({})
+    },
+    /**
+     * Bootstrap Icons name shown while dark, i.e. the icon for the theme the
+     * button switches to. An empty string renders no icon at all.
+     */
+    lightIcon: {
+      type: String,
+      default: null
+    },
+    darkIcon: {
+      type: String,
+      default: null
+    },
+    iconSize: {
+      type: [String, Number],
+      default: 'md'
     }
   },
   data() {
@@ -41,6 +71,16 @@ export default {
       if (this.ariaLabel) return this.ariaLabel;
       if (this.themeConfig?.ariaLabel) return this.themeConfig.ariaLabel;
       return `Switch to ${this.currentTheme === 'dark' ? 'light' : 'dark'} mode`;
+    },
+    // Prop → themeConfig → default, mirroring storageKey/ariaLabel: an app that
+    // configures its theme in one place should not have to name its icons twice.
+    // `??` and not `||` on purpose: an explicit `light-icon=""` means "no icon",
+    // which `||` would silently turn back into the default.
+    lightIconName() {
+      return this.lightIcon ?? this.themeConfig?.lightIcon ?? 'sun';
+    },
+    darkIconName() {
+      return this.darkIcon ?? this.themeConfig?.darkIcon ?? 'moon';
     }
   },
   mounted() {

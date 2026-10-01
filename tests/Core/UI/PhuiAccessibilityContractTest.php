@@ -117,6 +117,31 @@ final class PhuiAccessibilityContractTest extends TestCase
         );
     }
 
+    // --------------------------------------- decorative glyphs in a button
+
+    public function testThemeToggleNamesItselfAndKeepsItsGlyphDecorative(): void
+    {
+        // The toggle has no visible text at all — the glyph is the whole UI. So
+        // the accessible name has to come from the button, and the glyph has to
+        // stay out of the accessibility tree: PhIcon flips to role="img" with an
+        // aria-label the moment it is given a `label`, which would announce the
+        // same string twice from inside the button.
+        $source = $this->phui('PhTheme');
+
+        $this->assertMatchesRegularExpression(
+            '/<button\b[^>]*:aria-label="resolvedAriaLabel"/s',
+            $source,
+            'the toggle button must carry the resolved aria-label — it has no text content'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<ph-icon\b[^>]*\blabel=/s',
+            $source,
+            'the theme glyph must stay decorative: a `label` on PhIcon makes it role="img" and '
+            . 'duplicates the button name'
+        );
+    }
+
     // --------------------------------------- native controls: real id/for pair
 
     public function testCheckboxAssociatesItsLabelWithTheInput(): void
