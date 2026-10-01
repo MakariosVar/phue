@@ -1,39 +1,68 @@
 <template>
   <div
     data-phui="stepper"
-    class="ph-stepper"
-    :class="{ 'ph-stepper-vertical': orientation === 'vertical' }"
+    class="d-flex"
+    :class="isVertical ? 'flex-column' : 'flex-row align-items-start'"
+    :style="rootStyle"
   >
-    <div class="ph-stepper-steps">
-      <div
-        v-for="(step, index) in steps"
-        :key="step.key || index"
-        class="ph-stepper-step"
-        :class="{
-          active: index === currentStep,
-          completed: index < currentStep,
-          disabled: step.disabled,
-          clickable: clickable && !step.disabled && !linear
-        }"
-        @click="clickable && !step.disabled && (linear ? (index === currentStep + 1 ? goToStep(index) : false) : goToStep(index))"
+    <div
+      v-for="(step, index) in steps"
+      :key="step.key || index"
+      class="d-flex"
+      :class="isVertical ? 'align-items-start' : 'align-items-start flex-grow-1'"
+      :style="stepRowStyle"
+    >
+      <!--
+        A real <button>, not a div with @click: the indicators are the only way
+        to move between steps, and a div is unreachable by Tab and cannot be
+        activated with Enter/Space. `disabled` (rather than a click handler that
+        ignores the event) also takes a disabled step out of the tab order.
+      -->
+      <button
+        type="button"
+        class="btn btn-link p-0 border-0 d-flex align-items-start text-decoration-none"
+        :class="isVertical ? 'flex-row' : 'flex-column w-100'"
+        :style="buttonStyle(index)"
+        :disabled="step.disabled"
+        :aria-current="index === currentStep ? 'step' : null"
+        :aria-disabled="step.disabled ? 'true' : null"
+        @click="goToStep(index)"
       >
-        <div class="ph-stepper-indicator d-flex align-items-center justify-content-center">
-          <span v-if="index < currentStep" class="ph-stepper-check">
-            <ph-icon name="check" size="sm" variant="light" />
-          </span>
-          <span v-else-if="index === currentStep" class="ph-stepper-number">{{ index + 1 }}</span>
-          <span v-else class="ph-stepper-number">{{ index + 1 }}</span>
-        </div>
-        <div class="ph-stepper-content">
-          <div class="ph-stepper-label fw-medium">{{ step.label }}</div>
-          <div v-if="step.description" class="ph-stepper-description text-body-secondary small">{{ step.description }}</div>
-        </div>
-        <div v-if="index < steps.length - 1" class="ph-stepper-line flex-grow-1" :class="{ completed: index < currentStep }"></div>
-      </div>
+        <span
+          class="d-inline-flex align-items-center justify-content-center rounded-circle border flex-shrink-0 fw-semibold"
+          :style="indicatorStyle(index)"
+        >
+          <ph-icon v-if="index < currentStep" name="check" size="sm" variant="light" />
+          <span v-else>{{ index + 1 }}</span>
+        </span>
+
+        <span class="d-flex flex-column text-start" :style="isVertical ? 'ms-3' : 'mt-2'">
+          <span class="fw-medium" :style="labelStyle(index)">{{ step.label }}</span>
+          <span v-if="step.description" class="small text-body-secondary">{{ step.description }}</span>
+        </span>
+      </button>
+
+      <!--
+        The connector is a sibling of the button, not a child: a child would be
+        stretched by the button's own layout, and it must not be part of the
+        accessible name.
+      -->
+      <span
+        v-if="index < steps.length - 1"
+        :style="connectorStyle(index)"
+        aria-hidden="true"
+      ></span>
     </div>
-    <div class="ph-stepper-panels mt-4">
-      <slot :activeStep="currentStep" :steps="steps" :goToStep="goToStep" />
-    </div>
+  </div>
+
+  <!--
+    The panels are the caller's: this component renders the indicators and hands
+    over { activeStep, steps, goToStep }. Nothing is rendered here unless the
+    caller fills the slot — a wizard with an empty body is the caller's shape to
+    give, not something to guess at.
+  -->
+  <div class="mt-4">
+    <slot :activeStep="currentStep" :steps="steps" :goToStep="goToStep" />
   </div>
 </template>
 
@@ -61,21 +90,173 @@ export default {
     linear: {
       type: Boolean,
       default: true
+    },
+    /**
+     * Diameter of a step indicator, and the thickness of the connector drawn
+     * from it. Both are inline styles rather than classes: no stylesheet in the
+     * framework ships `ph-stepper-*`, so a class-based skin would render an
+     * unstyled component — the same trap PhTimeline avoids by binding its own
+     * geometry.
+     */
+    indicatorSize: {
+      type: [String, Number],
+      default: '2rem'
+    },
+    connectorWidth: {
+      type: [String, Number],
+      default: '2px'
+    },
+    activeColor: {
+      type: String,
+      default: 'var(--bs-primary)'
+    },
+    completedColor: {
+      type: String,
+      default: 'var(--bs-success)'
+    },
+    inactiveBorder: {
+      type: String,
+      default: 'var(--bs-border-color)'
     }
   },
   emits: ['update:modelValue', 'change'],
   computed: {
+    isVertical() {
+      return this.orientation === 'vertical';
+    },
     currentStep() {
+      if (!this.steps.length) return 0;
       return Math.max(0, Math.min(this.modelValue, this.steps.length - 1));
+    },
+    rootStyle() {
+      return { gap: this.isVertical ? '0' : '0.5rem' };
+    },
+    stepRowStyle() {
+      // In a row each step grows so the connectors share the leftover width; in
+      // a column they must not, or every row would be as wide as the widest one.
+      return { flex: this.isVertical ? null : '1 1 0%' };
+    },
+    indicatorPx() {
+      return this.withUnit(this.indicatorSize, '2rem');
+    },
+    connectorThickness() {
+      return this.withUnit(this.connectorWidth, '2px');
     }
   },
   methods: {
+    /**
+     * A length with a unit, so the connector can be centred on the indicator
+     * with `calc()` instead of guessing. A unitless value means px — that is what
+     * a bare Number prop already means everywhere else in the kit (PhIcon's
+     * `resolveSize`). Naive `parseFloat` would read '2rem' as 2 and produce a
+     * 2px circle.
+     */
+    withUnit(value, fallback) {
+      if (typeof value === 'number') return `${value}px`;
+
+      const trimmed = String(value ?? '').trim();
+      if (trimmed === '') return fallback;
+      if (/^[0-9]*\.?[0-9]+$/.test(trimmed)) return `${trimmed}px`;
+
+      return trimmed;
+    },
+    /**
+     * Whether stepping to `index` is allowed — the single rule behind both the
+     * pointer affordance and goToStep(), so the two can never disagree.
+     *
+     * Before this existed the template gated the `clickable` class on
+     * `!linear` while the handler still moved you one step forward: with the
+     * default `linear: true` the class was therefore never applied, and the
+     * control looked inert while it worked.
+     */
+    canGoTo(index) {
+      if (!this.clickable) return false;
+      if (index < 0 || index >= this.steps.length) return false;
+      if (this.steps[index]?.disabled) return false;
+      if (index === this.currentStep) return false;
+      if (this.linear && index > this.currentStep + 1) return false;
+
+      return true;
+    },
     goToStep(index) {
-      if (index < 0 || index >= this.steps.length) return;
-      if (this.linear && index > this.currentStep + 1) return;
-      if (this.steps[index]?.disabled) return;
+      if (!this.canGoTo(index)) return;
+
       this.$emit('update:modelValue', index);
       this.$emit('change', index);
+    },
+    /**
+     * The pointer affordance, driven by the same canGoTo() the click uses, so a
+     * step can never look inert while it works, or invite a click it refuses.
+     */
+    buttonStyle(index) {
+      const style = { textAlign: 'left' };
+
+      if (this.steps[index]?.disabled) {
+        style.cursor = 'not-allowed';
+      } else if (this.canGoTo(index)) {
+        style.cursor = 'pointer';
+      }
+
+      return style;
+    },
+    indicatorStyle(index) {
+      const size = this.indicatorPx;
+      const base = {
+        width: size,
+        height: size,
+        fontSize: '0.875rem',
+        transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease'
+      };
+
+      if (index === this.currentStep) {
+        return { ...base, backgroundColor: this.activeColor, borderColor: this.activeColor, color: '#fff' };
+      }
+
+      if (index < this.currentStep) {
+        return { ...base, backgroundColor: this.completedColor, borderColor: this.completedColor, color: '#fff' };
+      }
+
+      return {
+        ...base,
+        backgroundColor: 'transparent',
+        borderColor: this.inactiveBorder,
+        color: 'var(--bs-secondary-color)'
+      };
+    },
+    labelStyle(index) {
+      if (index === this.currentStep) {
+        return { color: 'var(--bs-emphasis-color)' };
+      }
+
+      return { color: 'var(--bs-secondary-color)' };
+    },
+    connectorStyle(index) {
+      const thickness = this.connectorThickness;
+
+      // The connector is drawn from the centre of the indicator outwards, so it
+      // has to be inset by half the indicator's height (row) or width (column).
+      if (this.isVertical) {
+        return {
+          display: 'block',
+          width: thickness,
+          height: '1.5rem',
+          marginLeft: `calc(${this.indicatorPx} / 2 - ${thickness} / 2)`,
+          marginTop: '0.25rem',
+          marginBottom: '0.25rem',
+          backgroundColor: index < this.currentStep ? this.completedColor : this.inactiveBorder
+        };
+      }
+
+      return {
+        display: 'block',
+        flex: '1 1 auto',
+        height: thickness,
+        minWidth: '1rem',
+        marginTop: `calc(${this.indicatorPx} / 2 - ${thickness} / 2)`,
+        marginLeft: '0.5rem',
+        marginRight: '0.5rem',
+        backgroundColor: index < this.currentStep ? this.completedColor : this.inactiveBorder
+      };
     }
   }
 };

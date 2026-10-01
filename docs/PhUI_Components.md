@@ -1970,14 +1970,49 @@ Step wizard with horizontal/vertical layout, linear/non-linear, clickable steps.
 | `steps` | `Array` | `[]` | `{label, description?, disabled?, key?}` |
 | `modelValue` | `Number` | `0` | Active step index |
 | `orientation` | `String` | `'horizontal'` | `horizontal` \| `vertical` |
-| `clickable` | `Boolean` | `false` | Click steps to navigate |
-| `linear` | `Boolean` | `true` | Enforce order |
+| `clickable` | `Boolean` | `false` | Allow moving between steps from the indicators |
+| `linear` | `Boolean` | `true` | Only the next step is reachable; `false` allows jumping back |
+| `indicatorSize` | `String \| Number` | `'2rem'` | Indicator diameter; a bare number means px |
+| `connectorWidth` | `String \| Number` | `'2px'` | Connector thickness; a bare number means px |
+| `activeColor` | `String` | `'var(--bs-primary)'` | Active indicator fill |
+| `completedColor` | `String` | `'var(--bs-success)'` | Completed indicator and connector fill |
+| `inactiveBorder` | `String` | `'var(--bs-border-color)'` | Upcoming indicator border and connector |
 
 Emits: `update:modelValue`, `change`. Slot: default (scoped `{activeStep, steps, goToStep}`).
 
+**The component renders the indicators; the panel body is the caller's.** That
+is the same shape as `<ph-tabs>`: a step is `{label, description?}` and whatever
+the step *contains* is a rendering decision the framework should not guess at, so
+nothing is drawn in the panel area unless the slot is filled.
+
+**Each step is a real `<button type="button">`.** It used to be a `<div>` with an
+`@click`, which made `clickable` a mouse-only feature: not reachable by Tab, not
+activatable with Enter/Space. A `disabled` step is a genuinely disabled button, so
+it also leaves the tab order.
+
+**One rule decides everything.** `canGoTo(index)` is the single gate behind both
+the click and the pointer affordance (`cursor: pointer` / `not-allowed`), so a
+step cannot look inert while it works or invite a click it will refuse. The
+affordance used to be gated on `!linear` while the handler still moved you one
+step forward — with `linear` on by default the affordance was therefore never
+shown, and the control looked dead while it worked.
+
 ```
-<ph-stepper v-model="step" :steps="[{label:'Step 1'},{label:'Step 2'}]" orientation="vertical" />
+<ph-stepper v-model="step" :steps="steps" clickable>
+  <template #default="{ activeStep, steps }">
+    <h5>{{ steps[activeStep].label }}</h5>
+    <p>{{ steps[activeStep].description }}</p>
+  </template>
+</ph-stepper>
+
+<!-- vertical, and any completed step reachable again -->
+<ph-stepper v-model="step" :steps="steps" orientation="vertical" :linear="false" clickable />
 ```
+
+> **No stylesheet ships these styles.** The indicator geometry and the connector
+> are bound inline styles, the rest is Bootstrap utilities — the same approach
+> `<ph-timeline>` uses. A class-based skin (`ph-stepper-*`) would render an
+> unstyled component, because nothing in the framework implements those classes.
 
 ### `<ph-dropdown>`
 
