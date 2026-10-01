@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Small status label.</p>
@@ -54,6 +55,7 @@
 <script>
 export default {
   name: "ExamplePhBadge",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

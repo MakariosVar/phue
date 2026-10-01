@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Content card. Header (title/subtitle or custom), body (default slot), footer.</p>
@@ -52,6 +53,7 @@
 <script>
 export default {
   name: "ExamplePhCard",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Boolean toggle (<code>.form-switch</code>). Same contract as <code>{{'<ph-checkbox>'}}</code>.</p>
@@ -42,6 +43,7 @@
 <script>
 export default {
   name: "ExamplePhSwitch",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

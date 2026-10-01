@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Button with variant, size, block, loading and disabled states. All Bootstrap 5 button variants are supported.</p>
@@ -126,6 +127,7 @@
 <script>
 export default {
   name: "ExamplePhButton",
+  emits: ['setAnchor'],
   data() {
     return {
       loading: false,

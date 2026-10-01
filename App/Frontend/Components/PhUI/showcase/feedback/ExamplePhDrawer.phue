@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>
@@ -104,6 +105,7 @@
 <script>
 export default {
   name: "ExamplePhDrawer",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

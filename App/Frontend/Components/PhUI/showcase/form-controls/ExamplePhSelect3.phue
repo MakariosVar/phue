@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>
@@ -98,6 +99,7 @@
 <script>
 export default {
   name: "ExamplePhSelect3",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

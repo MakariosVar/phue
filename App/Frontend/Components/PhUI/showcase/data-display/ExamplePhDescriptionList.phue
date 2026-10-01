@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Description list (<code>&lt;dl&gt;</code>) with responsive columns.</p>
@@ -46,6 +47,7 @@
 <script>
 export default {
   name: "ExamplePhDescriptionList",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

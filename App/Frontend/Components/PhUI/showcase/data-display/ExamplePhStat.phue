@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Stat card with label, value, optional delta trend and icon.</p>
@@ -70,6 +71,7 @@
 <script>
 export default {
   name: "ExamplePhStat",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

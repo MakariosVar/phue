@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Single-line text input with label, helper/error text, disabled/readonly states. The id is auto-generated with Vue's useId() unless you pass your own.</p>
@@ -87,6 +88,7 @@
 <script>
 export default {
   name: "ExamplePhInput",
+  emits: ['setAnchor'],
   data() {
     return {
       loading: false,

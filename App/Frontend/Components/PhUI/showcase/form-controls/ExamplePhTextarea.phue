@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Native select bound to modelValue. Options accept either objects <code>{ label, value, disabled? }</code> or plain primitives (normalized internally).</p>
@@ -45,6 +46,7 @@
 <script>
 export default {
   name: "ExamplePhTextarea",
+  emits: ['setAnchor'],
   data() {
     return {
       loading: false,

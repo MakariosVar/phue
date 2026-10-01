@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Range slider (single or dual) with optional value display.</p>
@@ -38,6 +39,7 @@
 <script>
 export default {
   name: "ExamplePhRange",
+  emits: ['setAnchor'],
   data() {
     return {
       showCode: false,

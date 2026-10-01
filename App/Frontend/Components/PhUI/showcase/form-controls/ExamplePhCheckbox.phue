@@ -7,6 +7,7 @@
     @toggleCode="showCode = !showCode"
     @toggleDemo="showDemo = !showDemo"
     @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
   >
     <template #description>
       <p>Boolean checkbox with optional indeterminate visual state.</p>
@@ -42,6 +43,7 @@
 <script>
 export default {
   name: "ExamplePhCheckbox",
+  emits: ['setAnchor'],
   data() {
     return {
       loading: false,
