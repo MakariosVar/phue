@@ -124,17 +124,61 @@ return [
         <ph-toast position="top-right" />
         <ph-confirm-dialog />
 
-        <!-- Sidebar: fixed-height column, never scrolls with the page. -->
+        <!-- Mobile scrim: only exists while the off-canvas sidebar is open. -->
+        <div
+            v-if="sidebarOpen"
+            class="phue-sidebar-backdrop"
+            style="position: fixed; inset: 0; z-index: 1054; background: rgba(0, 0, 0, 0.5);"
+            aria-hidden="true"
+            @click="sidebarOpen = false"
+        ></div>
+
+        <!-- Sidebar: a plain column from lg up, an off-canvas drawer below it. -->
         <aside
-            class="phue-sidebar border-end d-flex flex-column flex-shrink-0 overflow-y-auto"
-            style="width: 260px; background: var(--bs-body-bg);"
+            id="phue-phui-sidebar"
+            class="phue-sidebar border-end d-flex flex-column overflow-y-auto"
+            :class="isMobile ? 'phue-sidebar--mobile' : 'phue-sidebar--static flex-shrink-0'"
+            :style="isMobile
+                ? (sidebarOpen
+                    ? {
+                        position: 'fixed', top: '0', left: '0', bottom: '0', zIndex: 1055,
+                        width: 'min(300px, 85vw)', maxWidth: '100vw',
+                        background: 'var(--bs-body-bg)',
+                        boxShadow: '0 0.5rem 1.5rem rgba(0, 0, 0, 0.25)',
+                        transition: 'transform 0.2s ease',
+                        transform: 'translateX(0)'
+                    }
+                    : {
+                        // Closed: a slim rail that stays IN the flex flow, so it
+                        // never covers the page. A floating toggle over the content
+                        // was the wrong shape for this.
+                        width: '2.75rem', flexShrink: '0',
+                        background: 'var(--bs-body-bg)',
+                        borderRight: '1px solid var(--bs-border-color)'
+                    })
+                : { width: '260px', maxWidth: '85vw', background: 'var(--bs-body-bg)' }"
+            :aria-hidden="isMobile && !sidebarOpen ? 'true' : null"
+            aria-label="PhUI components"
         >
-            <div class="px-4 mb-4 pt-1">
+            <!-- Rail handle: the collapsed sidebar is 44px of this and nothing else. -->
+            <button
+                v-if="isMobile"
+                type="button"
+                class="btn btn-sm btn-link text-body-secondary d-flex align-items-center justify-content-start flex-shrink-0 py-2"
+                style="width: 100%; padding-left: 0.6rem; padding-right: 0; color: var(--bs-body-color);"
+                aria-haspopup="true"
+                :aria-expanded="sidebarOpen ? 'true' : 'false'"
+                aria-controls="phue-phui-sidebar-content"
+                aria-label="Browse components"
+                @click="sidebarOpen = !sidebarOpen"
+            >☰</button>
+
+            <div v-if="!isMobile || sidebarOpen" id="phue-phui-sidebar-content" class="px-4 mb-4 pt-1">
                 <h1 class="h4 fw-semibold mb-1">Phue PhUI</h1>
                 <p class="small text-body-secondary mb-0">Built-in components</p>
             </div>
 
-            <div class="px-4 mb-3">
+            <div v-if="!isMobile || sidebarOpen" class="px-4 mb-3">
                 <ph-search-input
                     v-model="searchQuery"
                     placeholder="Search…"
@@ -143,7 +187,7 @@ return [
                 />
             </div>
 
-            <div class="flex-column px-3 pb-3" style="gap: 0.1rem; min-height: 0;" aria-label="PhUI components">
+            <div v-if="!isMobile || sidebarOpen" class="flex-column px-3 pb-3" style="gap: 0.1rem; min-height: 0;">
                 <div style="display: contents;" v-for="nav in filteredNavItems" :key="nav.id">
                     <!-- Main Nav Link -->
                     <button
@@ -208,7 +252,7 @@ return [
         <!-- Main: the only scroll container on the page. -->
         <main
             ref="mainEl"
-            class="flex-grow-1 p-4 overflow-y-auto"
+            class="flex-grow-1 p-3 p-md-4 overflow-y-auto position-relative"
             style="min-width: 0; min-height: 0;"
         >
             <div ref="contentEl">
@@ -429,6 +473,17 @@ const SECTION_PARAM = 'section';
 /** Where the page opens when the URL says nothing. */
 const DEFAULT_SECTION = 'index';
 
+/** Below this the sidebar cannot coexist with the content, so it becomes an
+ *  off-canvas drawer. 991.98px is Bootstrap's `lg` breakpoint minus a hair, so the
+ *  JS branch and the `d-lg-*` utilities flip on exactly the same pixel. */
+const MOBILE_QUERY = '(max-width: 991.98px)';
+
+/** The sidebar's width where it sits in the flow. */
+const SIDEBAR_WIDTH = '260px';
+
+/** ...and its width when it is an overlay: most of a phone, capped on tablets. */
+const SIDEBAR_DRAWER_WIDTH = 'min(300px, 85vw)';
+
 export default function mountApp(injectedContext = null) {
     if (typeof window !== 'undefined' && window.__phueApp?.unmount) {
         window.__phueApp.unmount();
@@ -466,6 +521,12 @@ export default function mountApp(injectedContext = null) {
             const contentEl = ref(null);
             const shellHeight = ref(initState.shellHeight ?? SHELL_FALLBACK_HEIGHT);
             const expandedSections = reactive({});
+
+            // Below `lg` the sidebar is a drawer: it must be out of the flow, so it
+            // cannot be laid out by CSS alone (there is no stylesheet to put a media
+            // query in) — the breakpoint is mirrored in JS and drives an inline style.
+            const isMobile = ref(false);
+            const sidebarOpen = ref(false);
 
             /** Flat, DOM-ordered list of every spy target (sections + their components). */
             const orderedSpyIds = computed(() => {
@@ -559,6 +620,12 @@ export default function mountApp(injectedContext = null) {
              *  its scroll waits for nextTick; a component is already on screen. */
             function scrollTo(id) {
                 if (!id) return;
+
+                // Picking a destination on a phone should land on the destination,
+                // not on the drawer the reader just touched.
+                if (isMobile.value) {
+                    sidebarOpen.value = false;
+                }
 
                 if (isSectionId(id)) {
                     setActiveSection(id);
@@ -841,10 +908,45 @@ export default function mountApp(injectedContext = null) {
                 applyLocation(locationId());
             }
 
+            /** Mirrors the `lg` breakpoint in JS: below it the sidebar is a drawer. */
+            let mobileQuery = null;
+
+            function onBreakpointChange(event) {
+                isMobile.value = event.matches;
+                // Growing into the desktop layout must not strand an open drawer,
+                // because from lg up there is no scrim and no trigger left to close it.
+                if (!event.matches) {
+                    sidebarOpen.value = false;
+                }
+                invalidateElementCache();
+                measureShell();
+            }
+
+            function onKeydown(event) {
+                if (event.key === 'Escape' && sidebarOpen.value) {
+                    sidebarOpen.value = false;
+                }
+            }
+
             onMounted(() => {
                 measureShell();
                 window.addEventListener('resize', onResize);
                 window.addEventListener('popstate', onPopState);
+                document.addEventListener('keydown', onKeydown);
+
+                // isMobile has to be correct before the first paint of the drawer,
+                // and the server cannot know the viewport — start from the current one
+                // and follow it from here on.
+                if (typeof window.matchMedia === 'function') {
+                    mobileQuery = window.matchMedia(MOBILE_QUERY);
+                    isMobile.value = mobileQuery.matches;
+                    if (typeof mobileQuery.addEventListener === 'function') {
+                        mobileQuery.addEventListener('change', onBreakpointChange);
+                    } else if (typeof mobileQuery.addListener === 'function') {
+                        // Safari < 14 and friends.
+                        mobileQuery.addListener(onBreakpointChange);
+                    }
+                }
 
                 // The topbar can wrap or grow, which moves the shell without resizing it.
                 const topbar = document.querySelector('.app-topbar');
@@ -873,6 +975,14 @@ export default function mountApp(injectedContext = null) {
             onBeforeUnmount(() => {
                 window.removeEventListener('resize', onResize);
                 window.removeEventListener('popstate', onPopState);
+                document.removeEventListener('keydown', onKeydown);
+                if (mobileQuery) {
+                    if (typeof mobileQuery.removeEventListener === 'function') {
+                        mobileQuery.removeEventListener('change', onBreakpointChange);
+                    } else if (typeof mobileQuery.removeListener === 'function') {
+                        mobileQuery.removeListener(onBreakpointChange);
+                    }
+                }
                 topbarObserver?.disconnect();
                 contentObserver?.disconnect();
                 spyObserver?.disconnect();
@@ -887,6 +997,8 @@ export default function mountApp(injectedContext = null) {
                 shellHeight,
                 filteredNavItems,
                 expandedSections,
+                isMobile,
+                sidebarOpen,
                 toggleSection,
                 scrollTo
             };
