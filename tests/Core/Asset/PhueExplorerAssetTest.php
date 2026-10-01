@@ -189,6 +189,31 @@ final class PhueExplorerAssetTest extends TestCase
         return $source;
     }
 
+    /**
+     * The shipped source with every comment removed.
+     *
+     * Source-text assertions are only worth keeping if prose cannot satisfy
+     * them. This file used to carry a comment saying the `target` / `download`
+     * guards were "pending user implementation" right next to a *passing* test —
+     * a guard that exists only inside a comment satisfies
+     * assertStringContainsString, so `target="_blank"` shipped hijacked with the
+     * suite green. Every guard assertion below therefore runs against
+     * comment-stripped code; the behaviour itself is executed in
+     * PhueExplorerNavigationGuardTest, which needs bun, while this one does not.
+     */
+    private function explorerCode(): string
+    {
+        $source = $this->explorerSource();
+
+        $stripped = preg_replace(
+            ['#/\*.*?\*/#s', '#//[^\n]*#'],
+            '',
+            $source
+        );
+
+        return is_string($stripped) ? $stripped : $source;
+    }
+
     public function testSourceIsIifeWithGlobalInitGuard(): void
     {
         $source = $this->explorerSource();
@@ -199,22 +224,65 @@ final class PhueExplorerAssetTest extends TestCase
 
     public function testSourceIgnoresModifiedAndNonLeftClicks(): void
     {
-        $source = $this->explorerSource();
+        $source = $this->explorerCode();
 
         foreach (['e.metaKey', 'e.ctrlKey', 'e.shiftKey', 'e.altKey', 'e.button !== 0'] as $guard) {
             $this->assertStringContainsString($guard, $source, "Interceptor must guard {$guard}");
         }
     }
 
-    public function testSourceSkipsExternalFragmentJavaScriptAndDownloadLinks(): void
+    public function testSourceLeavesBrowserOwnedLinksAlone(): void
     {
-        $source = $this->explorerSource();
+        $source = $this->explorerCode();
 
-        // Current implementation guards # and javascript: anchors.
-        // Features targeting `_blank`, download attributes, and cross-origin
-        // checks are pending user implementation of the external-link guard.
+        // A download link must never be fetched with X-Phue-SPA: the handler
+        // would receive the JSON payload envelope instead of the file.
+        $this->assertStringContainsString(
+            'hasAttribute(\'download\')',
+            $source,
+            'the interceptor must skip download links',
+        );
+
+        // target="_blank" — and any other browsing context — must not be
+        // preventDefault-ed into a same-tab SPA navigation.
+        $this->assertStringContainsString('_self', $source, 'the interceptor must compare target against _self');
+
+        // The de-facto opt-out markers.
+        $this->assertStringContainsString(
+            'external',
+            $source,
+            'the interceptor must honour rel="external"',
+        );
+        $this->assertStringContainsString(
+            'data-no-spa',
+            $source,
+            'the interceptor must honour the data-no-spa opt-out',
+        );
+
+        // Same-page and non-navigational schemes.
         $this->assertStringContainsString('href.startsWith(\'#\')', $source);
         $this->assertStringContainsString('href.startsWith(\'javascript:\')', $source);
+
+        // Cross-origin stays on the browser path.
+        $this->assertStringContainsString('resolvedUrl.origin === window.location.origin', $source);
+    }
+
+    public function testSourceDoesNotReadAnchorPropertiesOffAnUnmatchedElement(): void
+    {
+        $source = $this->explorerCode();
+
+        // `closest('a[href]')` is a selector match, not a type check: an SVG
+        // `<a href>` matches it, and an SVGElement has neither `relList` nor a
+        // `target` property. Because the listener is async, a throw there is a
+        // rejected promise — invisible in the console, and every later click on
+        // the page stops navigating. The guard must be established before any
+        // anchor-only property is read.
+        $this->assertMatchesRegularExpression(
+            '/closest\(\s*[\'"]a\[href\][\'"]\s*\)[\s\S]{0,400}?HTMLAnchorElement/',
+            $source,
+            'after matching a[href] the interceptor must establish that the element is an HTML anchor '
+            . 'before reading target/relList off it',
+        );
     }
 
     public function testSourceFetchesWithSpaMarkerHeader(): void
