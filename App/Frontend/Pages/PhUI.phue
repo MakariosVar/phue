@@ -71,7 +71,8 @@ $navItems = [
             ['id' => 'pagination', 'label' => 'Pagination'],
             ['id' => 'tabs', 'label' => 'Tabs'],
             ['id' => 'theme', 'label' => 'Theme'],
-            ['id' => 'stepper', 'label' => 'Stepper']
+            ['id' => 'stepper', 'label' => 'Stepper'],
+            ['id' => 'dropdown', 'label' => 'Dropdown']
         ]
     ],
     [
@@ -434,10 +435,9 @@ return [
                         <span id="stepper">
                             <example-ph-stepper @setAnchor="scrollTo('stepper')"/>
                         </span>
-                        
-                        <!-- 
-                        <ExamplePhDropdown />
-                        -->
+                        <span id="dropdown">
+                            <example-ph-dropdown @setAnchor="scrollTo('dropdown')"/>
+                        </span>
                     </div>
                 </section>
 
