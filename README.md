@@ -4,7 +4,7 @@
     <img src="public/Phue.svg" alt="Phue logo" width="140">
 </p>
 <p align="center">
-    <strong>Almost a web development framework.</strong>
+    <strong>Almost a framework.</strong>
 </p>
 <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/MakariosVar/phue?style=flat-square" alt="License"></a>
