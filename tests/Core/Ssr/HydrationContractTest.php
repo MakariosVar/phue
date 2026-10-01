@@ -121,33 +121,41 @@ final class HydrationContractTest extends TestCase
             }
         }
 
-        $bindings = array_values(array_unique(array_diff($roots, $locals)));
+$bindings = array_values(array_unique(array_diff($roots, $locals)));
 
-        if ($bindings === []) {
-            // A page can legitimately have no text bindings at all — Pages/PhUI renders
-            // purely structural markup (`v-for` aliases and :style/:class bindings only),
-            // so this contract has nothing to check for it. The sibling tests in this
-            // class still run for such a page; see SsrHydrationParityTest for the
-            // page-level first-render parity contract.
-            $this->markTestSkipped(
-                sprintf('%s has no simple text bindings; the state-key contract is vacuous here.', basename($file))
-            );
-        }
+        // A page whose every interpolation is a v-for alias has no state-key
+        // contract to check — Pages/PhUI is exactly that case, with `{{ nav.label }}`
+        // and `{{ comp.label }}` both loop aliases. Skipping it left the page with
+        // the most interpolations entirely unguarded, and a rename of either alias
+        // would have shipped silently. So instead of skipping, every root must
+        // resolve to something real: either a state key the server ships, or a
+        // local the template itself declares. A typo in either direction fails here.
+        $this->assertNotEmpty(
+            $roots,
+            sprintf(
+                '%s declares no interpolations at all. A page that ships state but binds none of '
+                . 'it is either a stub or a regression — either way nothing renders from the state, '
+                . 'and this contract has nothing left to verify.',
+                basename($file)
+            )
+        );
 
-        foreach ($bindings as $binding) {
-            $this->assertContains(
-                $binding,
-                $stateKeys,
-                sprintf(
-                    '%s binds "{{ %s }}" but the server state only ships: [%s]. '
-                    . 'Contract 3.4: template binding names must equal state keys '
-                    . 'so the server and the client resolve the same value.',
-                    basename($file),
-                    $binding,
-                    implode(', ', $stateKeys)
-                )
-            );
-        }
+        $unresolved = array_values(array_unique(array_diff($roots, $locals, $stateKeys)));
+
+        $this->assertSame(
+            [],
+            $unresolved,
+            sprintf(
+                '%s binds {{ %s }}, which is neither a state key the server ships [%s] nor a '
+                . 'local the template declares [%s]. Contract 3.4: template bindings must resolve '
+                . 'against something, or the server interpolates an empty node and the client '
+                . 'patches a hydration mismatch on mount.',
+                basename($file),
+                implode(' }}, {{ ', $unresolved),
+                implode(', ', $stateKeys),
+                implode(', ', array_unique($locals))
+            )
+        );
     }
 
     #[DataProvider('demoPages')]
