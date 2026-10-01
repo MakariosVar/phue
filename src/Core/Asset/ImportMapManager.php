@@ -9,17 +9,25 @@ namespace Phue\Core\Asset;
  */
 class ImportMapManager
 {
+    private string $vendorRoot;
+    private ?string $resolvedVueUrl = null;
+    private bool $vueResolutionAttempted = false;
     private string $manifestPath;
     private bool $debug;
 
     /**
-     * @param string $basePath The project root directory path.
-     * @param bool $debug when debug mode is enabled, using the vue browser.
+     * @param string $basePath The project root directory path (holds phue-packages.json).
+     * @param bool $debug Serve the Vue development build instead of the production build.
+     * @param string|null $vendorRoot Directory holding the assets the vendor URLs resolve to. Defaults to "<basePath>/storage" when null.
      */
-    public function __construct(string $basePath, bool $debug = false)
+    public function __construct(string $basePath, bool $debug = false, ?string $vendorRoot = null)
     {
-        $this->manifestPath = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'phue-packages.json';
+        $base = rtrim($basePath, DIRECTORY_SEPARATOR);
+        $this->manifestPath = $base . DIRECTORY_SEPARATOR . 'phue-packages.json';
         $this->debug = $debug;
+        $this->vendorRoot = $vendorRoot !== null 
+            ? rtrim($vendorRoot, DIRECTORY_SEPARATOR) 
+            : $base . DIRECTORY_SEPARATOR . 'storage';
     }
 
     /**
@@ -34,6 +42,12 @@ class ImportMapManager
     public function getImportMap(): array
     {
         $imports = [];
+
+        // Resolve core 'vue' mapping first so it's present even if manifest is missing
+        $vueUrl = $this->resolveVueUrl();
+        if ($vueUrl !== null) {
+            $imports['vue'] = $vueUrl;
+        }
 
         if (!file_exists($this->manifestPath)) {
             return ['imports' => $imports];
@@ -54,7 +68,8 @@ class ImportMapManager
         if (is_array($packages)) {
             foreach ($packages as $pkgName => $pkgData) {
                 $name = is_string($pkgName) ? $pkgName : ($pkgData['name'] ?? null);
-                if (!$name) {
+                if (!$name || $name === 'vue') {
+                    // Explicitly guard against manifest overwriting core 'vue' mapping
                     continue;
                 }
 
@@ -81,9 +96,36 @@ class ImportMapManager
             }
         }
 
-        $imports['vue'] = !$this->debug ? '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js' : '/assets/vendor/vue3/vue.runtime.esm-browser.js';
-
         return ['imports' => $imports];
+    }
+
+    /**
+     * Resolves the Vue URL based on disk availability and debug mode.
+     * Results are memoized using $vueResolutionAttempted as a sentinel for null values.
+     */
+    private function resolveVueUrl(): ?string
+    {
+        if ($this->vueResolutionAttempted) {
+            return $this->resolvedVueUrl;
+        }
+
+        $this->vueResolutionAttempted = true;
+
+        $devRel = '/assets/vendor/vue3/vue.runtime.esm-browser.js';
+        $prodRel = '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js';
+
+        $preferredRel = $this->debug ? $devRel : $prodRel;
+        $fallbackRel  = $this->debug ? $prodRel : $devRel;
+
+        if (file_exists($this->vendorRoot . $preferredRel)) {
+            $this->resolvedVueUrl = $preferredRel;
+        } elseif (file_exists($this->vendorRoot . $fallbackRel)) {
+            $this->resolvedVueUrl = $fallbackRel;
+        } else {
+            $this->resolvedVueUrl = null;
+        }
+
+        return $this->resolvedVueUrl;
     }
 
     /**

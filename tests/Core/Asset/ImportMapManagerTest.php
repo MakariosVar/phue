@@ -74,6 +74,22 @@ final class ImportMapManagerTest extends TestCase
         );
     }
 
+    /**
+     * The on-disk path a public vendor URL maps to, for content assertions.
+     *
+     * A string comparison cannot tell "the map names the right file" from "the
+     * map names a file that does not exist" — the second is a blank page. And
+     * it cannot tell the two Vue bundles apart without hardcoding a build
+     * artifact's name, which is what broke these tests when the dev build was
+     * added. Reading the file and asking what it *does* answers both.
+     */
+    private static function vendorPath(string $url): string
+    {
+        $relative = ltrim(substr($url, strlen(self::VENDOR_URL_PREFIX)), '/');
+
+        return self::vendorRoot() . '/' . $relative;
+    }
+
     private const VENDOR_URL_PREFIX = '/assets/vendor';
 
     private static function vendorRoot(): string
@@ -81,7 +97,33 @@ final class ImportMapManagerTest extends TestCase
         return dirname(__DIR__, 3) . '/storage/assets/vendor';
     }
 
-    private function manager(array $manifest): ImportMapManager
+    /**
+     * The directory the public vendor URLs resolve against.
+     *
+     * ImportMapManager's third constructor argument is the root a "/assets/..."
+     * URL hangs off, not the vendor directory itself — the same relationship
+     * AssetRegistry encodes when it registers "/assets/vendor" against the vendor
+     * directory. So this is two levels above vendorRoot(), and passing
+     * vendorRoot() here would look for "/app/storage/assets/vendor/assets/vendor/..."
+     * and silently resolve nothing.
+     */
+    private static function urlRoot(): string
+    {
+        return dirname(self::vendorRoot(), 2);
+    }
+
+    /**
+     * A manager over a temp manifest dir, pointed at the real vendor tree.
+     *
+     * The manifest fixture lives in a temp dir on purpose — the real
+     * phue-packages.json is the app's, not the test's to edit. But the Vue entry
+     * is resolved from the vendor tree, so the vendor root has to be passed
+     * explicitly. Leaving it to default to "<basePath>/storage" would point the
+     * lookup at a temp dir that has no vendor tree in it, and the vue entry
+     * would silently vanish — which is the whole class of bug these tests
+     * exist to catch, so it must not be how they are set up.
+     */
+    private function manager(array $manifest, bool $debug = false): ImportMapManager
     {
         if (file_put_contents(
             $this->dir . '/phue-packages.json',
@@ -90,17 +132,39 @@ final class ImportMapManagerTest extends TestCase
             throw new RuntimeException('Failed to write manifest fixture.');
         }
 
-        return new ImportMapManager($this->dir);
+        return new ImportMapManager($this->dir, $debug, self::urlRoot());
     }
 
     public function testAbsentManifestFallsBackToOnlyVue(): void
     {
-        $manager = new ImportMapManager($this->dir);
+        $manager = new ImportMapManager($this->dir, vendorRoot: self::urlRoot());
 
         $imports = $manager->getImportMap()['imports'];
 
         $this->assertSame(['vue'], array_keys($imports), 'Vue is the only default import.');
         $this->assertAssetResolves($imports['vue']);
+    }
+
+    /**
+     * A Vue entry that resolves to a build which is not installed is worse than
+     * no entry at all: the browser gets a 404 for an import-map key, which is
+     * an unresolvable bare specifier, not a missing script — the page dies blank
+     * with nothing in the console to act on. So with neither build present the
+     * map must carry no vue entry rather than a broken one.
+     */
+    public function testNoVueEntryWhenNeitherBuildIsInstalled(): void
+    {
+        $base = $this->vendorTreeWith([]);
+
+        $imports = (new ImportMapManager($base, vendorRoot: $base . '/storage'))->getImportMap()['imports'];
+
+        $this->assertArrayNotHasKey(
+            'vue',
+            $imports,
+            'With no Vue build on disk the map must omit vue rather than name a file that 404s.'
+        );
+
+        $this->removeTree($base);
     }
 
     public function testMergesInstalledPackagesWithVueCore(): void
@@ -131,26 +195,135 @@ final class ImportMapManagerTest extends TestCase
      */
     public function testVueCoreEntryTracksTheVendoredBundleOnDisk(): void
     {
-        $manager = new ImportMapManager($this->dir);
-        $url = $manager->getImportMap()['imports']['vue'];
+        $imports = $this->manager([])->getImportMap()['imports'];
+        $this->assertArrayHasKey('vue', $imports, 'The import map must always carry a vue entry.');
+        $url = $imports['vue'];
 
-        $onDisk = self::vendorRoot() . '/vue3';
+        $this->assertDirectoryExists(self::vendorRoot() . '/vue3', 'The vendored vue3 package is not installed.');
+        $this->assertAssetResolves($url);
 
-        $this->assertDirectoryExists($onDisk, 'The vendored vue3 package is not installed.');
-
-        $bundles = glob($onDisk . '/*.js') ?: [];
-
-        $this->assertCount(
-            1,
-            $bundles,
-            'Expected exactly one vendored Vue bundle, found: ' . implode(', ', $bundles)
+        // "Exactly one vendored bundle" stopped being the invariant the moment a
+        // development build shipped beside the production one — there are two
+        // now, on purpose. The invariant that still matters is which *semantics*
+        // the default map picks, and that is decided by content rather than by
+        // filename: only the development build carries the per-node hydration
+        // warnings, and the production build is the one that must be served by
+        // default.
+        $this->assertStringNotContainsString(
+            'Hydration node mismatch',
+            (string) file_get_contents(self::vendorPath($url)),
+            'The default import map must point at the production Vue build: the development build '
+            . 'reports hydration mismatches per node, which is not what a default install should serve.'
         );
+    }
+
+    public function testDebugModeSelectsTheDevelopmentBundle(): void
+    {
+        $imports = $this->manager([], debug: true)->getImportMap()['imports'];
+        $this->assertArrayHasKey('vue', $imports, 'The import map must always carry a vue entry.');
+        $url = $imports['vue'];
+
+        $this->assertAssetResolves($url);
+        $this->assertStringContainsString(
+            'Hydration node mismatch',
+            (string) file_get_contents(self::vendorPath($url)),
+            'Debug mode must serve the development Vue build. Without it a hydration mismatch is '
+            . 'reported as a single useless line — no element, no attribute, no cause.'
+        );
+    }
+
+    public function testTheManifestCannotOverrideTheVueBuildDecision(): void
+    {
+        // A `vue` key in phue-packages.json used to win, because the manifest was
+        // merged after the hardcoded default. It must not: the build is chosen by
+        // the debug flag, and a manifest entry deciding it would swap the build
+        // for every environment at once — including production.
+        $manager = $this->manager([
+            'packages' => [
+                'vue' => ['main' => '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js'],
+            ],
+        ]);
+
+        $this->assertStringNotContainsString(
+            'Hydration node mismatch',
+            (string) file_get_contents(self::vendorPath($manager->getImportMap()['imports']['vue'])),
+            'Without debug the map must still name the production build, whatever the manifest says.'
+        );
+
+        $debugImports = (new ImportMapManager(
+            $this->dir,
+            debug: true,
+            vendorRoot: self::urlRoot()
+        ))->getImportMap()['imports'];
+        $this->assertArrayHasKey('vue', $debugImports, 'The import map must always carry a vue entry.');
+        $this->assertStringContainsString(
+            'Hydration node mismatch',
+            (string) file_get_contents(self::vendorPath($debugImports['vue'])),
+            'With debug the map must name the development build, whatever the manifest says.'
+        );
+    }
+
+    public function testDebugFallsBackToProductionWhenTheDevelopmentBundleIsMissing(): void
+    {
+        // The dev build is not shipped by every install: it is a single
+        // `curl` into storage/assets/vendor/vue3/. A debug flag on a host that
+        // never ran it must fall back to production, not hand the browser a URL
+        // that 404s — which, for an import map entry, is not a missing script
+        // but an unresolvable bare specifier and a blank page.
+        $base = $this->vendorTreeWith(['vue.runtime.esm-browser.prod.js']);
+        file_put_contents(
+            $base . '/phue-packages.json',
+            json_encode(['packages' => new \stdClass()], JSON_PRETTY_PRINT)
+        );
+
+        $imports = (new ImportMapManager($base, debug: true, vendorRoot: $base . '/storage'))
+            ->getImportMap()['imports'];
+        $this->assertArrayHasKey('vue', $imports, 'The import map must always carry a vue entry.');
 
         $this->assertSame(
-            '/assets/vendor/vue3/' . basename($bundles[0]),
-            $url,
-            'The import map default must name the bundle that is actually installed.'
+            '/assets/vendor/vue3/vue.runtime.esm-browser.prod.js',
+            $imports['vue'],
+            'Debug mode with no development build on disk must fall back to the production build.'
         );
+
+        $this->removeTree($base);
+    }
+
+    /**
+     * A throwaway base path holding only the listed Vue bundles, so a test can
+     * describe a vendor tree that is missing one of them.
+     *
+     * @param array<int, string> $bundles
+     */
+    private function vendorTreeWith(array $bundles): string
+    {
+        $base = sys_get_temp_dir() . '/importmap_vendor_' . bin2hex(random_bytes(6));
+        $dir = $base . '/storage/assets/vendor/vue3';
+        mkdir($dir, 0777, true);
+
+        foreach ($bundles as $bundle) {
+            file_put_contents($dir . '/' . $bundle, '/* ' . $bundle . ' */');
+        }
+
+        return $base;
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->removeTree($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
     }
 
     public function testScopedPackageMapsToScaffoldedVendorPath(): void
