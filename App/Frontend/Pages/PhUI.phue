@@ -67,6 +67,7 @@ $navItems = [
         'label' => 'Navigation',
         'components' => [
             ['id' => 'breadcrumb', 'label' => 'Breadcrumb'],
+            ['id' => 'link', 'label' => 'Link'],
         ]
     ],
     [
@@ -414,8 +415,10 @@ return [
                         <span id="breadcrumb">
                             <example-ph-breadcrumb />
                         </span>
+                        <span id="link">
+                            <example-ph-link />
+                        </span>
                         <!-- 
-                        <ExamplePhLink />
                         <ExamplePhPagination />
                         <ExamplePhTabs />
                         <ExamplePhTheme />

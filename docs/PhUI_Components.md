@@ -1823,27 +1823,49 @@ No emits.
 
 ### `<ph-link>`
 
-Switches between native `<a>` and `router-link` based on `href` type:
-
-- string starting with `http`, `mailto:`, or `#` → native anchor;
-- any other string or an object → `router-link` bound through `to`.
+Always renders a native `<a href>`. Phue has no client-side router: navigation is
+the delegated `a[href]` handler in `storage/assets/js/phue-explorer.js`, which
+fetches the next page with the `X-Phue-SPA` header and re-mounts `#app`. A real
+anchor is therefore what makes a link crawlable **and** interceptable — and it
+still works with JavaScript disabled, which no router does.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `href` | `String \| Object` | `'#'` | Drives element + `href`/`to` |
+| `href` | `String` | `'#'` | Native `href`. Internal paths, absolute URLs, `mailto:`/`tel:`, fragments — all fine |
 | `label` | `String` | `''` | Default slot wins |
 | `variant` | `String` | `'primary'` | `primary` \| `secondary` \| `neutral` \| `danger` |
-| `target` | `String` | `'_self'` | |
+| `target` | `String` | `null` | Rendered only when set and not `_self` |
 | `rel` | `String` | `null` | Auto `noopener noreferrer` when `target="_blank"` |
-| `underline` | `Boolean` | `true` | `false` → `link-underline-opacity-0` |
-| `disabled` | `Boolean` | `false` | `preventDefault` on click, dimmed, `aria-disabled` |
+| `underline` | `Boolean` | `true` | `false` → `text-decoration-none` |
+| `disabled` | `Boolean` | `false` | Drops `href` + `target`, dims (`pe-none opacity-50`), sets `aria-disabled` |
 
-Emits: `click` (suppressed when disabled).
+Emits: `click` (suppressed when `disabled`).
 
 ```
 <ph-link href="mailto:hi@example.com" variant="danger" underline>Contact</ph-link>
-<ph-link :href="{ name: 'product', params: { id: 7 } }" target="_blank">Buy</ph-link>
+<ph-link href="/products/7">Product</ph-link>
+<ph-link href="/products/7" target="_blank">Opens in a new tab</ph-link>
+<ph-link href="/products/7" disabled>Unavailable</ph-link>
 ```
+
+> **`href` is a String, not a route object.** There is no route resolver in Phue,
+> so an object href has nowhere to go: it would stringify to `[object Object]` and
+> the anchor would point nowhere. Build the path yourself (or server-side, in the
+> `<php>` block).
+
+> **`disabled` removes the `href` rather than only dimming the link.** An `<a>`
+> without `href` is not focusable, so it leaves the tab order and cannot be
+> activated with `Enter` — `aria-disabled` alone would only be an announcement,
+> not a restriction. `click` is swallowed too (`preventDefault` +
+> `stopPropagation`).
+
+> **`target="_blank"` and the SPA handler.** The handler in `phue-explorer.js`
+> hijacks every same-origin `a[href]` left-click and has no `target`/`download`
+> guard, so it will `preventDefault()` a same-origin `_blank` link into a
+> same-tab navigation. `<ph-link>` defends itself by stopping propagation on a
+> plain left click, which leaves the browser's own new-tab behaviour intact.
+> Hand-written `<a target="_blank">` markup is **not** covered — add the missing
+> guard to the handler if you rely on it.
 
 ### `<ph-pagination>`
 

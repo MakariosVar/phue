@@ -1,0 +1,131 @@
+<template>
+  <example-factory
+    tag="<ph-link />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+  >
+    <template #description>
+      <p>
+        Always renders a native <code>&lt;a href&gt;</code> — crawlable, keyboard accessible, and picked up by the
+        SPA handler (<code>phue-explorer.js</code> delegates on <code>a[href]</code>) for client navigation.
+      </p>
+      <ul>
+        <li><code>href</code> is a string: internal paths, absolute URLs, <code>mailto:</code>, fragments — all work;</li>
+        <li><code>disabled</code> drops the <code>href</code> entirely, so the link leaves the tab order;</li>
+        <li><code>target="_blank"</code> auto-adds <code>rel="noopener noreferrer"</code>.</li>
+      </ul>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="d-flex gap-3">
+          <ph-link
+            href="mailto:hi@example.com"
+            variant="danger"
+          >
+            Contact
+          </ph-link>
+           <ph-link
+            href="/"
+            variant="primary"
+          >
+            Home
+          </ph-link>
+          <ph-link
+            href="/docs"
+            target="_blank"
+            variant="secondary"
+          >
+            Docs
+          </ph-link>
+          <ph-link
+            href="/products/7"
+            :underline="false"
+            disabled
+          >
+            Unavailable
+          </ph-link>
+        </div>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <h4>Emits</h4>
+        <ul>
+          <li><code>click</code> (suppressed when <code>disabled</code>)</li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhLink",
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: ``,
+      propsData: [
+        {
+          name: "href",
+          type: "String",
+          default: "'#'",
+          notes: "Native href — internal, external, mailto: or fragment",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "''",
+          notes: "Default slot wins",
+        },
+        {
+          name: "variant",
+          type: "String",
+          default: "'primary'",
+          notes: "primary | secondary | neutral | danger",
+        },
+        {
+          name: "target",
+          type: "String",
+          default: "null",
+          notes: "Omitted when unset or _self",
+        },
+        {
+          name: "rel",
+          type: "String",
+          default: "null",
+          notes: "Auto noopener noreferrer when target=\"_blank\"",
+        },
+        {
+          name: "underline",
+          type: "Boolean",
+          default: "true",
+          notes: "false → text-decoration-none",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "href removed (unfocusable), dimmed, aria-disabled, click suppressed",
+        }
+      ]
+    };
+  }
+};
+</script>
