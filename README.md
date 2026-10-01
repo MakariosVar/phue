@@ -1,4 +1,4 @@
-# Phue Framework
+# Phue
 
 <p align="center">
     <img src="public/Phue.svg" alt="Phue logo" width="140">
