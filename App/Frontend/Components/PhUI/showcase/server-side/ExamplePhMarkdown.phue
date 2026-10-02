@@ -73,9 +73,23 @@ $guideHtml = $partialRenderer->renderPartial('PhMarkdown', [
     'src' => 'docs/Core.md',            // base-relative file
 ]);
 
+$markdownSource = <<<'MARKDOWN'
+# Server-rendered
+
+This block was parsed **on the server** and injected as static HTML — no client
+JS ships for it.
+
+- Headings, **bold**, _italic_ and \`inline code\`
+- Fenced code blocks and [links](/phui)
+- > Blockquotes
+
+Content is escaped before formatting and \`javascript:\` / \`data:\` link schemes are
+neutralised, so a \`.md\` file cannot inject script.
+MARKDOWN;
+
 // ...or inline markdown:
 $inlineHtml = $partialRenderer->renderPartial('PhMarkdown', [
-    'markdown' => '**bold** and \`inline code\`',
+    'markdown' => $markdownSource,
 ]);
 
 // The result is a finished HTML string — print it, do not bind it:
