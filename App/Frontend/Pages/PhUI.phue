@@ -523,6 +523,44 @@ return [
                         </span>
                     </div>
                 </section>
+
+                <!-- Footer: rendered once, after every section, because the v-if above
+                     keeps only one of them mounted. scrollTo() already expands the nav
+                     entry and rewrites ?section=, so it is the same trip as the sidebar. -->
+                <nav
+                    v-if="hasSectionNeighbours"
+                    class="d-flex justify-content-between align-items-center gap-2 mt-4 pt-3 border-top"
+                    aria-label="Section navigation"
+                >
+                    <a
+                        v-if="sectionNeighbours.previous"
+                        :href="'?section=' + sectionNeighbours.previous.id"
+                        class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 text-decoration-none"
+                        data-no-spa
+                        @click.prevent="scrollTo(sectionNeighbours.previous.id)"
+                    >
+                        <span aria-hidden="true">&larr;</span>
+                        <span class="text-start">
+                            <small class="d-block text-body-secondary">Previous</small>
+                            {{ sectionNeighbours.previous.label }}
+                        </span>
+                    </a>
+                    <span v-else></span>
+
+                    <a
+                        v-if="sectionNeighbours.next"
+                        :href="'?section=' + sectionNeighbours.next.id"
+                        class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 text-decoration-none ms-auto"
+                        data-no-spa
+                        @click.prevent="scrollTo(sectionNeighbours.next.id)"
+                    >
+                        <span class="text-end">
+                            <small class="d-block text-body-secondary">Next</small>
+                            {{ sectionNeighbours.next.label }}
+                        </span>
+                        <span aria-hidden="true">&rarr;</span>
+                    </a>
+                </nav>
             </div>
         </main>
     </div>
@@ -726,6 +764,43 @@ export default function mountApp(injectedContext = null) {
             function toggleSection(id) {
                 expandedSections[id] = !expandedSections[id];
             }
+
+            // Only one section is mounted at a time, so the footer can live once,
+            // after them all: it renders against whichever section is active. The
+            // order comes from navItems, so the two can never disagree.
+            /** The active section's neighbours, or null at either end. */
+            const sectionNeighbours = computed(() => {
+                // Every nav group is a section, including Overview, which has no
+                // components of its own — filtering on `components` would drop it and
+                // strand the reader on the first page.
+                const sections = state.navItems;
+                const index = sections.findIndex((nav) => nav.id === state.activeSection);
+                if (index === -1) return { previous: null, next: null };
+
+                const pick = (offset) => {
+                    const target = sections[index + offset];
+                    if (!target) return null;
+
+                    // Land on the section's first component when it has one: arriving
+                    // at "Form Controls" should put the reader in front of Button, not
+                    // at a heading with nothing under it. A section with no components
+                    // (Overview) is its own destination.
+                    const first = target.components?.[0];
+                    return { id: first ? first.id : target.id, label: target.label };
+                };
+
+                return { previous: pick(-1), next: pick(1) };
+            });
+
+            // Flat, not derived from sectionNeighbours: the SSR renderer evaluates a
+            // v-if from setup's bindings only, and a computed that reads another
+            // computed comes back undefined and the block is dropped.
+            const hasSectionNeighbours = computed(() => {
+                const sections = state.navItems;
+                const index = sections.findIndex((nav) => nav.id === state.activeSection);
+                if (index === -1) return true;
+                return index > 0 || index < sections.length - 1;
+            });
 
             // URL as the single source of truth for "where am I": one ?section= id
             // replaced the server param and the client-written #fragment, which disagreed.
@@ -1077,7 +1152,9 @@ export default function mountApp(injectedContext = null) {
                 isMobile,
                 sidebarOpen,
                 toggleSection,
-                scrollTo
+                scrollTo,
+                sectionNeighbours,
+                hasSectionNeighbours
             };
         }
     });
