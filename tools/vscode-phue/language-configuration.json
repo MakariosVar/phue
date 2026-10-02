@@ -9,7 +9,9 @@
     ["(", ")"],
     ["<template>", "</template>"],
     ["<script>", "</script>"],
-    ["<php>", "</php>"]
+    ["<style>", "</style>"],
+    ["<php>", "</php>"],
+    ["<?php", "?>"]
   ],
   "autoClosingPairs": [
     { "open": "{", "close": "}" },
@@ -26,7 +28,8 @@
     ["(", ")"],
     ["'", "'"],
     ["\"", "\""],
-    ["`", "`"]
+    ["`", "`"],
+    ["<", ">"]
   ],
   "folding": {
     "markers": {
@@ -34,13 +37,28 @@
       "end": "^\\s*<!--\\s*#?endregion\\b.*-->"
     },
     "offSide": true,
-    "begin": "^\\s*<(template|script|php)\\b[^>]*>",
-    "end": "^\\s*</(template|script|php)>"
+    "begin": "^\\s*<(template|script|style|php)\\b[^>]*>",
+    "end": "^\\s*</(template|script|style|php)>"
   },
   "onEnterRules": [
     {
-      "beforeText": "^\\s*<(template|script|php)\\b[^>]*>\\s*$",
-      "afterText": "^\\s*</(template|script|php)>\\s*$",
+      "beforeText": "^\\s*<(template|script|style|php)\\b[^>]*>\\s*$",
+      "afterText": "^\\s*</(template|script|style|php)>\\s*$",
+      "action": { "indent": true, "appendText": "" }
+    },
+    {
+      "beforeText": "^\\s*<([a-zA-Z][\\w:-]*)(?:\\s+[^>]*)?>\\s*$",
+      "afterText": "^\\s*</([a-zA-Z][\\w:-]*)>\\s*$",
+      "action": { "indent": true, "appendText": "" }
+    },
+    {
+      "beforeText": "^.*\\{\\s*$",
+      "afterText": "^\\s*\\}.*$",
+      "action": { "indent": true, "appendText": "" }
+    },
+    {
+      "beforeText": "^.*\\[\\s*$",
+      "afterText": "^\\s*\\].*$",
       "action": { "indent": true, "appendText": "" }
     }
   ],

@@ -304,3 +304,29 @@ test('custom data is valid v1.1 and covers every PhUI component file', () => {
     }
   }
 });
+
+test('php block supports modern PHP 8.x features (attributes, match, arrow functions, types)', async () => {
+  const g = await loadGrammar();
+  let stack = INITIAL;
+  const lines = [
+    '<php>',
+    "  #[Attribute]",
+    "  $status = match ($code) { 200 => 'ok', default => 'error' };",
+    "  $format = fn(string $val): string => strtoupper($val);",
+    "  $userName = $user?->name ?? 'Guest';",
+    '</php>',
+  ];
+
+  const allScopes: string[] = [];
+  for (const line of lines) {
+    const r = g.tokenizeLine(line, stack);
+    stack = r.ruleStack;
+    allScopes.push(...r.tokens.flatMap((t) => t.scopes));
+  }
+
+  expect(allScopes).toContain('meta.attribute.php'); // #[Attribute]
+  expect(allScopes).toContain('keyword.control.php'); // match, default
+  expect(allScopes).toContain('keyword.other.php'); // fn
+  expect(allScopes).toContain('storage.type.php'); // string
+  expect(allScopes).toContain('keyword.operator.php'); // ?->, ??, =>
+});

@@ -1,23 +1,28 @@
 {
   "name": "phue-vscode",
   "displayName": "Phue Language Support",
-  "description": "Syntax highlighting, snippets and PhUI component autocompletion for .phue single-file components.",
-  "version": "0.1.0",
+  "description": "Syntax highlighting, snippets, PHP linting, and Vue/Volar autodiscovery for .phue single-file components.",
+  "version": "0.2.0",
   "publisher": "phue",
   "license": "MIT",
   "main": "./out/extension.js",
   "engines": {
     "vscode": "^1.80.0"
   },
-  "activationEvents": ["onLanguage:phue"],
+  "activationEvents": [
+    "onLanguage:phue",
+    "workspaceContains:**/*.phue"
+  ],
   "categories": [
     "Programming Languages",
-    "Snippets"
+    "Snippets",
+    "Linters"
   ],
   "keywords": [
     "phue",
     "vue",
     "php",
+    "volar",
     "single-file-component"
   ],
   "icon": "icon.png",
@@ -47,7 +52,9 @@
         "embeddedLanguages": {
           "text.html.vue": "html",
           "source.js": "javascript",
-          "source.php": "php"
+          "source.ts": "typescript",
+          "source.php": "php",
+          "source.css": "css"
         }
       }
     ],
@@ -61,11 +68,54 @@
       "customData": [
         "./custom-data/phui-custom-data.json"
       ]
+    },
+    "commands": [
+      {
+        "command": "phue.generateTypes",
+        "title": "Phue: Generate Component Type Definitions for Volar",
+        "category": "Phue"
+      },
+      {
+        "command": "phue.configureVolar",
+        "title": "Phue: Configure Workspace for Vue Volar",
+        "category": "Phue"
+      },
+      {
+        "command": "phue.refreshComponents",
+        "title": "Phue: Refresh Auto-discovered Components",
+        "category": "Phue"
+      }
+    ],
+    "configuration": {
+      "title": "Phue",
+      "properties": {
+        "phue.volar.autoGenerateTypes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically generate .phue/phue-components.d.ts for Vue Volar autodiscovery support."
+        },
+        "phue.php.validate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Lint PHP syntax inside <php> blocks."
+        },
+        "phue.php.maxPhpBlocks": {
+          "type": "number",
+          "default": 1,
+          "description": "Maximum number of <php> blocks allowed per .phue file (default: 1)."
+        },
+        "phue.components.autoDiscovery": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan and index PhUI and App .phue components in workspace."
+        }
+      }
     }
   },
   "scripts": {
     "build": "tsc -p .",
-    "watch": "tsc -w -p ."
+    "watch": "tsc -w -p .",
+    "generate-data": "php scripts/generate-custom-data.php"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

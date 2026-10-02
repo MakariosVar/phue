@@ -7,13 +7,15 @@
     { "include": "#blocks" },
     { "include": "#phui-tags" },
     { "include": "#template-tag" },
-    { "include": "#template-close" }
+    { "include": "#template-close" },
+    { "include": "#block-close" }
   ],
   "repository": {
     "blocks": {
       "patterns": [
         { "include": "#block-template" },
         { "include": "#block-script" },
+        { "include": "#block-style" },
         { "include": "#block-php" }
       ]
     },
@@ -39,10 +41,18 @@
         "3": { "name": "punctuation.definition.tag.end.phue" }
       }
     },
+    "block-close": {
+      "match": "(</)(script|php|style)(>)",
+      "captures": {
+        "1": { "name": "punctuation.definition.tag.begin.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      }
+    },
     "phui-tags": {
       "patterns": [
         {
-          "begin": "(<)(ph-[\\w-]+)",
+          "begin": "(<)([A-Za-z][\\w.-]*)",
           "beginCaptures": {
             "1": { "name": "punctuation.definition.tag.begin.phue" },
             "2": { "name": "entity.name.tag.phue" }
@@ -56,7 +66,7 @@
           ]
         },
         {
-          "match": "(</)(ph-[\\w-]+)(>)",
+          "match": "(</)([A-Za-z][\\w.-]*)(>)",
           "captures": {
             "1": { "name": "punctuation.definition.tag.begin.phue" },
             "2": { "name": "entity.name.tag.phue" },
@@ -125,8 +135,27 @@
         { "include": "source.js" }
       ]
     },
+    "block-style": {
+      "begin": "^(\\s*)(<)(style)(\\b[^>]*)>",
+      "beginCaptures": {
+        "1": { "name": "punctuation.whitespace.phue" },
+        "2": { "name": "punctuation.definition.tag.begin.phue" },
+        "3": { "name": "entity.name.tag.phue" },
+        "4": { "name": "punctuation.definition.tag.attributes.phue" }
+      },
+      "end": "^\\1(</)(style)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.phue" },
+        "2": { "name": "entity.name.tag.phue" },
+        "3": { "name": "punctuation.definition.tag.end.phue" }
+      },
+      "contentName": "source.css meta.embedded.block.style.phue",
+      "patterns": [
+        { "include": "source.css" }
+      ]
+    },
     "block-php": {
-      "begin": "^(\\s*)(<)(php)(>)",
+      "begin": "^(\\s*)(<)(php)(>|\\b[^>]*>)",
       "beginCaptures": {
         "1": { "name": "punctuation.whitespace.phue" },
         "2": { "name": "punctuation.definition.tag.begin.phue" },
@@ -141,12 +170,13 @@
       },
       "contentName": "source.php meta.embedded.block.php.phue",
       "patterns": [
-        { "include": "#php-lite" }
+        { "include": "#php-full" },
+        { "include": "source.php" }
       ]
     },
     "vue-attribute": {
-      "comment": "Vue bindings/events: :prop, @event, v-directive (with optional value)",
-      "match": "((?:@|:|v-)[\\w-]+(?:\\.[\\w-]+)*)\\s*(?:=(?:\"([^\"]*)\"|'([^']*)'))?",
+      "comment": "Vue bindings/events: :prop, @event, v-directive, #slot",
+      "match": "((?:@|:|#|v-)[\\w.:-]+)\\s*(?:=(?:\"([^\"]*)\"|'([^']*)'))?",
       "captures": {
         "1": { "name": "entity.other.attribute-name.html.vue" },
         "2": { "name": "string.quoted.double.html.vue" },
@@ -164,26 +194,56 @@
       },
       "name": "meta.expression.vue",
       "patterns": [
+        { "include": "source.js" },
         {
           "match": "[\\w$]+(?:\\.[\\w$]+)*",
           "name": "variable.other.js"
         }
       ]
     },
-    "php-lite": {
+    "php-full": {
       "patterns": [
+        { "include": "#php-attribute-tag" },
+        { "include": "#php-comment-doc" },
         { "include": "#php-comment-line" },
         { "include": "#php-comment-block" },
         { "include": "#php-string-single" },
         { "include": "#php-string-double" },
+        { "include": "#php-string-heredoc" },
+        { "include": "#php-variable-this" },
+        { "include": "#php-variable-superglobal" },
         { "include": "#php-variable" },
+        { "include": "#php-keyword-control" },
+        { "include": "#php-keyword-other" },
+        { "include": "#php-storage-type" },
+        { "include": "#php-constant-language" },
+        { "include": "#php-constant-magic" },
+        { "include": "#php-operator" },
         { "include": "#php-function-call" },
-        { "include": "#php-keyword" },
         { "include": "#php-number" }
       ]
     },
+    "php-attribute-tag": {
+      "begin": "(#\\[)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.section.attribute.begin.php" }
+      },
+      "end": "(\\])",
+      "endCaptures": {
+        "1": { "name": "punctuation.section.attribute.end.php" }
+      },
+      "name": "meta.attribute.php",
+      "patterns": [
+        { "include": "#php-full" }
+      ]
+    },
+    "php-comment-doc": {
+      "begin": "/\\*\\*",
+      "end": "\\*/",
+      "name": "comment.block.documentation.php"
+    },
     "php-comment-line": {
-      "match": "(//[^\\n]*|#[^\\n]*)",
+      "match": "(//[^\\n]*|#[^\\n\\[][^\\n]*|#$)",
       "name": "comment.line.php.phue"
     },
     "php-comment-block": {
@@ -192,27 +252,95 @@
       "name": "comment.block.php.phue"
     },
     "php-string-single": {
-      "match": "'(?:[^'\\\\]|\\\\.)*'",
-      "name": "string.quoted.single.php"
+      "begin": "'",
+      "end": "'",
+      "name": "string.quoted.single.php",
+      "patterns": [
+        {
+          "match": "\\\\['\\\\]",
+          "name": "constant.character.escape.php"
+        }
+      ]
     },
     "php-string-double": {
-      "match": "\"(?:[^\"\\\\]|\\\\.)*\"",
-      "name": "string.quoted.double.php"
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.php",
+      "patterns": [
+        {
+          "match": "\\\\[\"\\\\nrtvfe$]",
+          "name": "constant.character.escape.php"
+        },
+        {
+          "match": "\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*",
+          "name": "variable.other.php"
+        },
+        {
+          "begin": "(\\{)(\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.section.embedded.begin.php" },
+            "2": { "name": "variable.other.php" }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.section.embedded.end.php" }
+          }
+        }
+      ]
+    },
+    "php-string-heredoc": {
+      "begin": "<<<\\s*['\"]?([A-Za-z0-9_]+)['\"]?",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.php" }
+      },
+      "end": "^\\1;?$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.php" }
+      },
+      "name": "string.unquoted.heredoc.php"
+    },
+    "php-variable-this": {
+      "match": "\\$this\\b",
+      "name": "variable.language.this.php"
+    },
+    "php-variable-superglobal": {
+      "match": "\\$(?:GLOBALS|_SERVER|_GET|_POST|_FILES|_COOKIE|_SESSION|_REQUEST|_ENV)\\b",
+      "name": "variable.other.global.php"
     },
     "php-variable": {
-      "match": "\\$\\w+",
+      "match": "\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*",
       "name": "variable.other.php"
     },
-    "php-function-call": {
-      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*\\()",
-      "name": "entity.name.function.php"
-    },
-    "php-keyword": {
-      "match": "\\b(?:return|array|new|function|null|true|false|continue|break|exit|die|echo|print|if|else|elseif|foreach|as|use|namespace|class|extends|implements|public|private|protected|static|const|interface|trait|yield)\\b",
+    "php-keyword-control": {
+      "match": "\\b(?:return|if|else|elseif|foreach|as|for|while|do|switch|case|break|continue|match|default|try|catch|finally|throw|yield|from|declare|goto|exit|die)\\b",
       "name": "keyword.control.php"
     },
+    "php-keyword-other": {
+      "match": "\\b(?:function|fn|class|interface|trait|enum|extends|implements|new|clone|instanceof|use|namespace|const|global|abstract|final|readonly|static|public|protected|private)\\b",
+      "name": "keyword.other.php"
+    },
+    "php-storage-type": {
+      "match": "\\b(?:string|int|float|bool|array|object|callable|iterable|void|never|mixed|null|false|true|self|parent)\\b",
+      "name": "storage.type.php"
+    },
+    "php-constant-language": {
+      "match": "\\b(?:true|false|null|TRUE|FALSE|NULL)\\b",
+      "name": "constant.language.php"
+    },
+    "php-constant-magic": {
+      "match": "\\b(?:__DIR__|__FILE__|__LINE__|__CLASS__|__METHOD__|__FUNCTION__|__NAMESPACE__|__TRAIT__)\\b",
+      "name": "constant.language.magic.php"
+    },
+    "php-operator": {
+      "match": "(?:\\?->|->|::|=>|\\?\\?=|===|!==|==|!=|<=>|<=|>=|\\?\\?|\\?:|&&|\\|\\||!|\\.\\=|[-+*\\/%]=|\\*\\*=|[-+*\\/%.~^&|]|\\?|:)",
+      "name": "keyword.operator.php"
+    },
+    "php-function-call": {
+      "match": "\\b[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?=\\s*\\()",
+      "name": "entity.name.function.php"
+    },
     "php-number": {
-      "match": "\\b\\d+(?:\\.\\d+)?\\b",
+      "match": "\\b(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\\d[0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b",
       "name": "constant.numeric.php"
     }
   }
