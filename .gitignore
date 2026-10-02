@@ -1,6 +1,8 @@
 .opencode
 AGENTS.md
 
+/.phue/
+
 !storage/vendor/*
 /vendor/
 
