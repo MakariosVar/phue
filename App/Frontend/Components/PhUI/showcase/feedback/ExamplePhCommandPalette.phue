@@ -1,0 +1,192 @@
+<template>
+  <example-factory
+    tag="&lt;ph-command-palette&gt;"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Overlay search on a configurable ⌘/Ctrl chord, built on
+        <code>&lt;ph-modal&gt;</code>: a real combobox, ranked results, grouped
+        headings and full arrow-key navigation.
+      </p>
+      <p class="mb-0">
+        Press <kbd>Ctrl</kbd>+<kbd>L</kbd> anywhere on this page, or use the
+        button. <code>shortcut-key</code> defaults to <code>k</code>; this demo
+        moves it to <code>l</code>, because the showcase page already owns
+        Ctrl+K for its own search. Pass <code>:shortcut="false"</code> to drive
+        the palette yourself.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-flex align="center" gap="sm" class="my-2">
+          <ph-button variant="primary" @click="open = true">
+            <ph-icon name="search" class="me-1" size="sm" />
+            Open palette
+          </ph-button>
+          <ph-badge variant="secondary" label="or press Ctrl+L" />
+        </ph-flex>
+
+        <ph-text size="sm" color="muted">
+          Last selected:
+          <strong>{{ lastSelected ? lastSelected.label : '—' }}</strong>
+        </ph-text>
+
+        <ph-command-palette
+          v-model="open"
+          shortcut-key="l"
+          :items="items"
+          placeholder="Jump to a section or run a command…"
+          @select="onSelect"
+        />
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          Results are <b>ranked, not filtered</b>: a label prefix beats a label
+          substring, which beats a keyword hit, which beats a hint. Without that
+          order, typing <code>ta</code> floats an item whose label merely happens
+          to contain those two letters, above the one that was meant.
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhCommandPalette",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      open: false,
+      lastSelected: null,
+      items: [
+        { label: 'Overview', group: 'Navigate', hint: '/phui', icon: 'house' },
+        { label: 'Form Controls', group: 'Navigate', hint: '/phui?section=forms', icon: 'table' },
+        { label: 'Data Display', group: 'Navigate', hint: '/phui?section=data', icon: 'grid' },
+        { label: 'Feedback', group: 'Navigate', hint: '/phui?section=feedback', icon: 'bell' },
+        { label: 'Content & Layout', group: 'Navigate', hint: '/phui?section=content', icon: 'text-paragraph' },
+        { label: 'Create project', group: 'Commands', icon: 'plus-circle', shortcut: 'N' },
+        { label: 'Invite teammate', group: 'Commands', icon: 'person-plus', shortcut: 'I' },
+        { label: 'Toggle theme', group: 'Commands', icon: 'circle-half', active: true },
+        { label: 'Archive', group: 'Destructive', icon: 'archive' },
+        { label: 'Delete workspace', group: 'Destructive', icon: 'trash', disabled: true, keywords: 'remove destroy' }
+      ],
+      snippet: `<ph-flex align="center" gap="sm" class="my-2">
+  <ph-button variant="primary" @click="open = true">
+    <ph-icon name="search" class="me-1" size="sm" />
+    Open palette
+  </ph-button>
+  <ph-badge variant="secondary" label="or press Ctrl+L" />
+</ph-flex>
+
+<ph-text size="sm" color="muted">
+  Last selected:
+  <strong>{{ lastSelected ? lastSelected.label : '—' }}</strong>
+</ph-text>
+
+<ph-command-palette
+  v-model="open"
+  shortcut-key="l"
+  :items="items"
+  placeholder="Jump to a section or run a command…"
+  @select="onSelect"
+/>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "Boolean",
+          default: "false",
+          notes: "v-model for the open state",
+        },
+        {
+          name: "items",
+          type: "Array",
+          default: "[]",
+          notes: "{ label, group?, hint?, icon?, shortcut?, keywords?, active?, disabled? }",
+        },
+        {
+          name: "placeholder",
+          type: "String",
+          default: "'Type a command or search…'",
+          notes: "",
+        },
+        {
+          name: "label",
+          type: "String",
+          default: "'Command palette'",
+          notes: "Accessible name for the dialog",
+        },
+        {
+          name: "emptyText",
+          type: "String",
+          default: "'No matches.'",
+          notes: "Shown when the query filters everything out",
+        },
+        {
+          name: "shortcut",
+          type: "Boolean",
+          default: "true",
+          notes: "Bind the shortcut internally",
+        },
+        {
+          name: "shortcutKey",
+          type: "String",
+          default: "'k'",
+          notes: "The key, without the modifier — 'l' for Ctrl/⌘+L",
+        },
+        {
+          name: "groupKey",
+          type: "String",
+          default: "'group'",
+          notes: "Property holding the group heading",
+        },
+        {
+          name: "limit",
+          type: "Number",
+          default: "50",
+          notes: "Max results kept",
+        },
+        {
+          name: "error",
+          type: "String",
+          default: "''",
+          notes: "Red message above the list",
+        },
+        {
+          name: "disabled",
+          type: "Boolean",
+          default: "false",
+          notes: "Blocks the overlay and the shortcut",
+        }
+      ]
+    };
+  },
+  methods: {
+    onSelect(entry) {
+      this.lastSelected = entry;
+    }
+  }
+};
+</script>

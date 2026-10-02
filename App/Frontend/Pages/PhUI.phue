@@ -65,6 +65,7 @@ $navItems = [
             ['id' => 'tooltip', 'label' => 'Tooltip'],
             ['id' => 'drawer', 'label' => 'Drawer'],
             ['id' => 'confirm-dialog', 'label' => 'Confirm Dialog'],
+            ['id' => 'command-palette', 'label' => 'Command Palette'],
         ]
     ],
     [
@@ -509,6 +510,9 @@ return [
                         </span>
                         <span id="confirm-dialog">
                             <example-ph-confirm-dialog @setAnchor="scrollTo('confirm-dialog')"/>
+                        </span>
+                        <span id="command-palette">
+                            <example-ph-command-palette @setAnchor="scrollTo('command-palette')"/>
                         </span>
                     </div>
                 </section>

@@ -1,0 +1,429 @@
+<template>
+  <!--
+    Built on PhModal rather than a hand-rolled backdrop: the scrim, the z-order,
+    the backdrop click and the portal already live there, so a second copy here
+    would be a second set of rules to keep in step. PhModal teleports only while
+    modelValue is true, which also means the SSR output carries no overlay
+    placeholder to hydrate against.
+  -->
+  <ph-modal
+    :model-value="isOpen"
+    size="lg"
+    :title="label"
+    :closable="false"
+    :close-on-backdrop="true"
+    @update:model-value="requestClose('backdrop')"
+  >
+    <template #header>
+      <div
+        class="d-flex align-items-center gap-2 w-100"
+        @keydown="onPanelKeydown"
+      >
+        <ph-icon name="search" size="sm" />
+        <input
+          ref="input"
+          :id="inputId"
+          type="text"
+          class="form-control border-0 shadow-none p-0 flex-grow-1"
+          :class="{ 'is-invalid': !!error }"
+          :placeholder="placeholder"
+          :value="query"
+          :disabled="disabled"
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+          :aria-controls="listId"
+          :aria-expanded="visibleItems.length > 0 ? 'true' : 'false'"
+          :aria-activedescendant="activeId"
+          aria-autocomplete="list"
+          @input="onQueryInput"
+        />
+        <kbd v-if="hasShortcut">{{ shortcutLabel }}</kbd>
+      </div>
+    </template>
+
+    <div @keydown="onPanelKeydown">
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+
+    <div
+      v-if="visibleItems.length"
+      :id="listId"
+      class="list-unstyled mb-0"
+      role="listbox"
+      :aria-label="label"
+      :style="listStyle"
+    >
+      <template v-for="(group, groupIndex) in visibleItems" :key="(group.name || 'items') + groupIndex">
+        <li v-if="group.name" class="px-2 pt-2 pb-1 small text-body-secondary" role="presentation">
+          {{ group.name }}
+        </li>
+        <button
+          v-for="entry in group.items"
+          :id="entry.domId"
+          :key="entry.id"
+          type="button"
+          class="btn btn-sm d-flex align-items-center gap-2 w-100 text-start border-0"
+          :class="entry.flatIndex === activeIndex ? 'btn-primary' : 'btn-light'"
+          role="option"
+          :aria-selected="entry.flatIndex === activeIndex ? 'true' : 'false'"
+          :disabled="entry.disabled"
+          @mousedown.prevent
+          @click="run(entry)"
+          @mouseenter="activeIndex = entry.flatIndex"
+        >
+          <ph-icon v-if="entry.icon" :name="entry.icon" size="sm" />
+          <span class="flex-grow-1 text-truncate">
+            {{ entry.label }}
+            <small v-if="entry.hint" class="text-body-secondary ms-1">{{ entry.hint }}</small>
+          </span>
+          <kbd v-if="entry.shortcut" class="small">{{ entry.shortcut }}</kbd>
+          <span v-if="entry.active" class="ms-1" aria-label="Current">
+            <ph-icon name="check-lg" size="sm" />
+          </span>
+        </button>
+      </template>
+    </div>
+
+    <p v-else class="text-body-secondary py-3 mb-0">
+      {{ query ? emptyText : 'No commands.' }}
+    </p>
+    </div>
+
+    <template #footer>
+      <div class="d-flex align-items-center flex-wrap gap-3 small text-body-secondary">
+        <span><kbd>&uarr;</kbd> <kbd>&darr;</kbd> navigate</span>
+        <span><kbd>&crarr;</kbd> run</span>
+        <span><kbd>Esc</kbd> close</span>
+        <span v-if="results.length" class="ms-auto">{{ results.length }} result(s)</span>
+      </div>
+    </template>
+  </ph-modal>
+</template>
+
+<script>
+import { useId } from 'vue';
+
+export default {
+  name: 'PhCommandPalette',
+  props: {
+    modelValue: {
+      type: Boolean,
+      default: false
+    },
+    items: {
+      type: Array,
+      default: () => []
+    },
+    placeholder: {
+      type: String,
+      default: 'Type a command or search…'
+    },
+    label: {
+      type: String,
+      default: 'Command palette'
+    },
+    emptyText: {
+      type: String,
+      default: 'No matches.'
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    /** Open on ⌘K / Ctrl+K without the caller wiring a listener. */
+    shortcut: {
+      type: Boolean,
+      default: true
+    },
+    /**
+     * The key that opens the palette, without the modifier. Single character, so
+     * Ctrl/⌘+L can take it when the page already owns Ctrl/⌘+K.
+     */
+    shortcutKey: {
+      type: String,
+      default: 'k'
+    },
+    groupKey: {
+      type: String,
+      default: 'group'
+    },
+    limit: {
+      type: Number,
+      default: 50
+    }
+  },
+  emits: ['update:modelValue', 'select', 'search', 'open', 'close'],
+  data() {
+    return {
+      query: '',
+      activeIndex: 0,
+      // Minted once per instance: the option ids have to be unique per palette,
+      // or two palettes on one page claim the same aria-activedescendant target.
+      uid: useId()
+    };
+  },
+  computed: {
+    isOpen() {
+      return this.modelValue && !this.disabled;
+    },
+    inputId() {
+      return `ph-command-input-${useId()}`;
+    },
+    listId() {
+      return `ph-command-list-${this.uid}`;
+    },
+    /** The key we listen for, lowercased once instead of on every keydown. */
+    normalisedKey() {
+      return String(this.shortcutKey || '').toLowerCase();
+    },
+    hasShortcut() {
+      return this.shortcut && this.normalisedKey.length > 0;
+    },
+    /** How the shortcut is written on screen — ⌘ on Apple, Ctrl elsewhere. */
+    shortcutLabel() {
+      if (!this.hasShortcut) {
+        return '';
+      }
+      const key = this.shortcutKey.length === 1
+        ? this.shortcutKey.toUpperCase()
+        : this.shortcutKey;
+      const apple = typeof navigator !== 'undefined'
+        && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+      return apple ? `⌘${key}` : `Ctrl+${key}`;
+    },
+    /** The active option's DOM id, for aria-activedescendant. */
+    activeId() {
+      const entry = this.flatItems[this.activeIndex];
+      return entry ? entry.domId : null;
+    },
+    listStyle() {
+      // The body scrolls, not the page: a long result set must not push the
+      // header and the hint bar off screen.
+      return { maxHeight: '55vh', overflowY: 'auto' };
+    },
+    /** One flat pass so the score is comparable across groups. */
+    results() {
+      const q = this.query.trim().toLowerCase();
+      if (!q) {
+        // The items themselves, not copies: a fresh array each time made the
+        // `results` watcher fire on every recompute, because an array is never
+        // === the previous one.
+        return this.items;
+      }
+      return this.items
+        .map((item) => ({ ...item, score: this.score(item, q) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, this.limit);
+    },
+    /**
+     * The flat list the arrow keys walk, grouped only for rendering.
+     *
+     * Each entry carries its position in the FLAT list, because the v-for index
+     * inside a group is group-local: comparing it against `activeIndex` (which
+     * walks the flat list) highlighted one row per group at the same time, and
+     * a hover wrote a global index from a local one — so the arrows then moved a
+     * row the reader was not on.
+     */
+    visibleItems() {
+      const groups = [];
+      let current = null;
+      this.results.forEach((entry, flatIndex) => {
+        const name = entry[this.groupKey] || '';
+        if (!current || current.name !== name) {
+          current = { name, items: [] };
+          groups.push(current);
+        }
+        // A stable key from the item's own identity, not an index: results are
+        // re-ranked on every keystroke, and an index key would remount the row
+        // the reader is standing on.
+        const id = entry.id ?? `${flatIndex}:${entry.label}`;
+        current.items.push({
+          ...entry,
+          id,
+          flatIndex,
+          domId: `ph-command-option-${this.uid}-${id}`
+        });
+      });
+      return groups;
+    },
+    /** Flat counterpart of visibleItems, so the index is unambiguous. */
+    flatItems() {
+      return this.visibleItems.flatMap((group) => group.items);
+    }
+  },
+  watch: {
+    isOpen(open) {
+      if (open) {
+        this.query = '';
+        this.activeIndex = this.firstEnabled(this.flatItems);
+        this.$emit('open');
+        this.focusInput();
+      } else {
+        this.$emit('close');
+      }
+    },
+    query() {
+      this.activeIndex = 0;
+      this.$emit('search', this.query);
+    },
+    activeIndex() {
+      this.scrollActiveIntoView();
+    },
+    results() {
+      // A query re-ranks and can shorten the list out from under the highlight.
+      const items = this.flatItems;
+      if (!items.length) {
+        this.activeIndex = 0;
+        return;
+      }
+
+      if (this.activeIndex > items.length - 1 || items[this.activeIndex]?.disabled) {
+        this.activeIndex = this.firstEnabled(items);
+      }
+    }
+  },
+  mounted() {
+    if (this.hasShortcut) {
+      document.addEventListener('keydown', this.onGlobalKeydown);
+    }
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.onGlobalKeydown);
+  },
+  methods: {
+    /**
+     * Ranked, not filtered: a prefix match has to beat a substring match, or
+     * typing "ta" floats an item whose label merely contains "ta".
+     */
+    score(item, q) {
+      const label = String(item.label ?? '').toLowerCase();
+      const hint = String(item.hint ?? '').toLowerCase();
+      const keywords = String(item.keywords ?? '').toLowerCase();
+
+      if (label.startsWith(q)) return 100;
+      if (label.includes(q)) return 60;
+      if (keywords.includes(q)) return 40;
+      if (hint.includes(q)) return 20;
+      return 0;
+    },
+    /**
+     * The list scrolls, the page does not: walking past the edge with the arrows
+     * would otherwise leave the highlight off-screen with no indication that
+     * anything happened.
+     */
+    scrollActiveIntoView() {
+      this.$nextTick(() => {
+        if (typeof document === 'undefined') {
+          return;
+        }
+        const active = document.getElementById(this.activeId || '');
+        if (!active || typeof active.scrollIntoView !== 'function') {
+          return;
+        }
+        // 'nearest' so the list only moves when the row is actually outside it.
+        active.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    focusInput() {
+      // The input does not exist until PhModal's teleport has rendered, so the
+      // focus is deferred a tick rather than taken against a detached node.
+      this.$nextTick(() => {
+        const el = this.$refs.input;
+        if (el && typeof el.focus === 'function') {
+          el.focus();
+        }
+      });
+    },
+    onQueryInput(event) {
+      this.query = event.target.value;
+    },
+    onGlobalKeydown(event) {
+      const isShortcut = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+      if (!isShortcut || event.key.toLowerCase() !== this.normalisedKey) {
+        return;
+      }
+      if (this.disabled || event.defaultPrevented) {
+        return;
+      }
+      event.preventDefault();
+      this.$emit('update:modelValue', !this.isOpen);
+    },
+    onPanelKeydown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.requestClose('escape');
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.move(1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.move(-1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const entry = this.flatItems[this.activeIndex];
+        if (entry) {
+          this.run(entry);
+        }
+        return;
+      }
+
+      // Tab must leave the palette rather than cycling the rows it contains.
+      if (event.key === 'Tab') {
+        this.requestClose('tab');
+      }
+    },
+    /**
+     * Moves the highlight by `delta`, wrapping, and skips disabled rows.
+     *
+     * A disabled row that swallowed the highlight would strand the reader: Enter
+     * does nothing there, so the keys look broken until they try again.
+     */
+    /** Index of the first selectable row, or 0 when every row is disabled. */
+    firstEnabled(items) {
+      const index = items.findIndex((entry) => !entry.disabled);
+      return index < 0 ? 0 : index;
+    },
+    move(delta) {
+      const items = this.flatItems;
+      const total = items.length;
+      if (!total) {
+        return;
+      }
+
+      let index = this.activeIndex;
+      for (let step = 0; step < total; step++) {
+        index = (index + delta + total) % total;
+        if (!items[index]?.disabled) {
+          this.activeIndex = index;
+          return;
+        }
+      }
+    },
+    run(entry) {
+      if (entry.disabled) {
+        return;
+      }
+      this.$emit('select', entry);
+      this.requestClose('select');
+    },
+    requestClose(reason) {
+      this.$emit('update:modelValue', false);
+      this.$emit('close', reason);
+    },
+    open() {
+      this.$emit('update:modelValue', true);
+    }
+  }
+};
+</script>

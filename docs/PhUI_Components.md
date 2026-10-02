@@ -632,6 +632,106 @@ Emits: `update:modelValue`, `change`, `open`, `close`, `clear`.
 form payload without a serialisation step.
 
 
+### `<ph-calendar>`
+
+Month grid with events. Unlike `<ph-date-picker>`, which is a **control** that
+returns one ISO date, this is a **view** of a whole month — with `selectable` it
+also returns the days that were clicked.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Array` | `[]` | Selected ISO dates (`YYYY-MM-DD`) |
+| `events` | `Array` | `[]` | `{ date\|start\|iso, label?, color? }`, or bare ISO strings |
+| `month` | `String` | `''` | ISO month to open; defaults to today |
+| `weekStart` | `Number` | `1` | `0` = Sunday, `1` = Monday |
+| `selectable` | `Boolean` | `false` | Emits selection changes |
+| `multiple` | `Boolean` | `true` | Range vs single selection |
+| `min` / `max` | `String` | `''` | ISO bounds; out-of-range days are disabled |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` |
+| `maxDots` | `Number` | `3` | Dots per day before the `+n` overflow |
+| `showLegend` | `Boolean` | `true` | Colour key under the grid |
+| `highlightToday` | `Boolean` | `true` | `aria-current` + ring on today |
+| `eventColorKey` | `String` | `'color'` | Property read for the dot colour |
+| `eventLabelKey` | `String` | `'label'` | Property read for the legend text |
+
+Emits: `update:modelValue`, `select(next, iso)`, `day-click(iso, events)`,
+`month-change(iso)`.
+
+**What the component guarantees:**
+
+- **A fixed 6×7 grid.** 42 cells are always rendered, so the calendar's height
+  never changes as you page between months — a 4-week February would otherwise
+  make the whole grid jump a seventh taller.
+- **The leading blanks are computed, not guessed.** `offset` is
+  `(firstOfMonth.getDay() - weekStart + 7) % 7`, the difference on the same
+  weekday axis. Deriving it by looking the weekday up in the label array can
+  return `-1`, which silently renders a grid shifted by a whole week.
+- **Events are grouped once per render** into an ISO-keyed map, so a cell is an
+  O(1) lookup rather than a scan of the whole event list for all 42 cells.
+- **Arrow keys walk two axes.** `←/→` step a day, `↑/↓` step a week, and a step
+  that crosses a month edge moves the view to follow the focused cell — so the
+  roving `tabindex` always points at a cell that exists.
+- **A `selectable` off-calendar is not disabled.** Clicking an outside day in a
+  read-only calendar emits `day-click` instead of silently doing nothing.
+
+```
+<!-- read-only month view -->
+<ph-calendar :events="events" />
+
+<!-- selectable: v-model is an array of ISO dates -->
+<ph-calendar v-model="days" :events="events" selectable />
+
+<!-- a bare ISO string is a valid event; colour comes from the theme -->
+<ph-calendar :events="['2026-10-14', '2026-10-27']" />
+
+<!-- Sunday-first, no legend -->
+<ph-calendar :events="events" :week-start="0" :show-legend="false" />
+```
+
+### `<ph-color-picker>`
+
+Swatch palette plus a hex field. The default palette is **Bootstrap's own**, so
+a swatch and a `text-primary` element are the same colour — and both follow the
+theme in dark mode.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | `#rrggbb` or `#rrggbbaa` |
+| `palette` | `Array` | Bootstrap's 12 | Any CSS colour, including `var(--bs-*)` |
+| `swatchesOnly` | `Boolean` | `false` | Hide the hex field |
+| `hex` | `Boolean` | `true` | Show the inline hex input |
+| `alpha` | `Boolean` | `false` | Alpha slider; emits 8-digit hex |
+| `maxRecent` | `Number` | `6` | Recently used swatches kept |
+| `label` | `String` | `''` | |
+| `helperText` / `error` | `String` | `''` | |
+| `id` | `String` | `null` | Auto-generated when omitted |
+| `name` | `String` | `''` | Forwarded to the hex field, so `<ph-form>` can submit it |
+| `placeholder` | `String` | `'#000000'` | Hex-field placeholder |
+| `disabled` / `required` | `Boolean` | `false` | |
+
+Emits: `update:modelValue`, `change(color)`, `open`, `close`.
+
+**Input is normalised on the way in:** a missing `#` is added, `#abc` expands to
+`#aabbcc`, and the result is lower-cased. Anything that is not yet a valid colour
+is passed through **untouched** — a field that swallowed the half-typed `"#ab"`
+would be unusable, and one that refused to emit until the colour was complete
+would leave `v-model` lying about what the user sees.
+
+**`alpha` emits `#rrggbbaa`,** not a colour object, so the value stays a plain
+string and round-trips through a form payload untouched. A swatch counts as
+selected when the RGB matches, so picking one clears a stale alpha instead of
+looking unselected.
+
+```
+<ph-color-picker v-model="brand" label="Brand colour" />
+<ph-color-picker v-model="accent" alpha />
+<ph-color-picker v-model="swatch" swatches-only />
+
+<ph-color-picker v-model="tint" :palette="[
+  'var(--bs-primary)', 'var(--bs-success)', 'var(--bs-danger)'
+]" />
+```
+
 ### `<ph-segmented-control>`
 
 Segmented button group (radio-based) with icons and variants.
@@ -958,6 +1058,48 @@ No emits.
 <ph-avatar src="/uploads/u.png" name="Ada Lovelace" alt="Ada" />
 ```
 
+### `<ph-image>`
+
+Image with a reserved box, aspect ratio, fit mode, placeholder and an optional
+lightbox.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `src` | `String` | **required** | |
+| `alt` | `String` | `''` | Native `alt` |
+| `width` / `height` | `String \| Number` | `''` | Reserves the box; a number is px |
+| `aspect` | `String` | `''` | `1x1` \| `4x3` \| `16x9` \| `21x9` |
+| `fit` | `String` | `'cover'` | `cover` \| `contain` \| `fill` \| `none` \| `scale-down` |
+| `rounded` / `circle` | `Boolean` | `false` | Corner treatment |
+| `lazy` | `Boolean` | `true` | `loading="lazy"` |
+| `placeholder` | `Boolean` | `false` | Skeleton block until `load` |
+| `lightbox` | `Boolean` | `false` | Full-screen preview; **also needs** `previewable` |
+| `previewable` | `Boolean` | `false` | Arms the click handler |
+
+Emits: `load`, `error`, `open`.
+
+**The box is reserved before the bytes arrive,** so a grid of images does not
+reflow as each one decodes — which is the single biggest cause of layout shift
+on an image-heavy page.
+
+**The ratio is a real `aspect-ratio`,** not the padding-top percentage hack. The
+hack reserves space but the box has no usable height for `object-fit`, so
+`fit="contain"` ends up sized by its content instead of by the frame.
+
+**A broken `src` falls back to an icon,** never to the browser's broken-image
+glyph, so a dead asset does not leave a torn icon in the middle of a card.
+
+**`lightbox` alone does nothing** — `previewable` is what arms the click
+handler. A plain informational image therefore never becomes interactive by
+accident, and the cursor only changes where the click actually does something.
+
+```
+<ph-image src="/uploads/hero.jpg" alt="Dashboard" aspect="16x9" fit="cover" rounded />
+<ph-image src="/uploads/ada.png" alt="Ada Lovelace" :width="72" :height="72" circle />
+<ph-image src="/uploads/cover.jpg" aspect="4x3" placeholder />
+<ph-image src="/uploads/photo.jpg" alt="Photo" lightbox previewable />
+```
+
 ### `<ph-card>`
 
 Content card. Header (title/subtitle or custom), body (default slot), footer.
@@ -1020,8 +1162,9 @@ Stat card with label, value, optional delta trend and icon.
 | `delta` | `String \| Number` | `null` | Change amount |
 | `trend` | `String` | `'neutral'` | `up` \| `down` \| `neutral` |
 | `icon` | `String` | `''` | Bootstrap icon name |
-| `iconSize` | `String \| Number` | `'lg'` | |
+| `iconSize` | `String \| Number` | `'lg'` | Size of the leading icon |
 | `iconVariant` | `String` | `''` | Icon color variant |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — card scale; sizes the trend glyph |
 | `variant` | `String` | `''` | Affects value color and border |
 | `bordered` | `Boolean` | `true` | |
 
@@ -1029,7 +1172,15 @@ Slots: `icon`, `default` (value). No emits.
 
 ```
 <ph-stat label="Revenue" value="€12,345" delta="+12%" trend="up" icon="graph-up" variant="success" />
+
+<!-- denser row of stats -->
+<ph-stat size="sm" label="Orders" value="423" delta="-2%" trend="down" />
 ```
+
+**Two sizes, deliberately.** `iconSize` is the leading icon; `size` is the card,
+and it sizes the trend glyph beside the delta. The glyph sits inline with `.small`
+delta text, so at the icon default it towers over the number it belongs to — so
+it follows the card scale, not `iconSize`.
 
 ### `<ph-list-group>`
 
@@ -1050,6 +1201,56 @@ Emits: `select(item)`. Slots: `item-<key>` (scoped).
   { divider: true },
   { label: 'Action', action: true }
 ]" @select="onSelect" />
+```
+
+### `<ph-sortable>`
+
+Drag & drop reordering on native HTML5 DnD — no library, no build step. Works
+controlled or on its own.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Array` | `null` | `v-model`; `null` = uncontrolled |
+| `items` | `Array` | `null` | Read-only list when uncontrolled |
+| `labelKey` | `String` | `'label'` | Property read for the default row text |
+| `itemKey` | `String` | `'id'` | Stable identity for the `v-for` key |
+| `handle` | `Boolean` | `true` | Show the grip affordance |
+| `removable` | `Boolean` | `false` | Per-row ✕ |
+| `tag` | `String` | `'ul'` | Rows become `<li>` for `ul`/`ol`, `<div>` otherwise |
+| `label` / `helperText` / `emptyText` | `String` | `''` / `''` / `'Nothing to sort.'` | |
+| `disabled` | `Boolean` | `false` | No drag, no keyboard reorder |
+
+Emits: `update:modelValue`, `reorder({ from, to, items })`, `move(item, to)`,
+`remove(item, index)`.
+Slots: default (whole row) and `item` — scoped `{ item, index, dragging }`.
+
+**Controlled and uncontrolled are the same code path.** `modelValue ?? items` is
+the list; a reorder always emits `update:modelValue` **and** `reorder`, and only
+the first one is ignored when the component is uncontrolled. One implementation,
+so the two modes cannot drift apart.
+
+**Drag is pointer-only, so there is a keyboard equivalent, with no "grab" step.**
+<kbd>Tab</kbd> reaches a row, the arrows move it immediately and focus follows,
+<kbd>Esc</kbd> restores the order from before the first move.
+
+The direct model is deliberate. An earlier version required <kbd>Space</kbd> to
+pick a row up before the arrows did anything, which reads as a modal gesture
+rather than a shortcut — and since nothing on screen said the row had to be
+grabbed first, a swallowed arrow key is indistinguishable from a broken list.
+Escape covers the one case the direct model gives up: several moves in a row that
+the reader did not mean.
+
+**`itemKey` is a real requirement.** With no stable identity, `v-for` falls back
+to the array index, so reordering an array that contains the same objects
+re-patches every row instead of moving two, and a focused row jumps.
+
+```
+<ph-sortable v-model="fields" removable label="Form fields" />
+<ph-sortable :items="rows" @reorder="({ items }) => save(items)" />
+
+<template #item="{ item, index, dragging }">
+  <div :class="{ 'opacity-50': dragging }">{{ index + 1 }}. {{ item.label }}</div>
+</template>
 ```
 
 ### `<ph-description-list>`
@@ -1591,7 +1792,7 @@ Emits: `dismiss(id)`.
 | `remove` | `remove(id)` | Manual dismiss, with a fade-out |
 | `clear` | `clear()` | Drops the whole stack |
 
-`variant`: `info` \| `success` \| `warning` \| `error`. Hovering a toast pauses
+`variant`: `info` | `success` | `warning` | `error`. Hovering a toast pauses
 its countdown, so a long message stays readable.
 
 ```
@@ -1797,6 +1998,66 @@ No emits. Slots: `default` (the trigger — any element, not just a button),
 
 > The tip is linked with `aria-describedby` **only while visible**, so assistive
 > tech reads the trigger's own label until there is a description to read.
+
+### `<ph-command-palette>`
+
+⌘K / Ctrl+K overlay search: a teleported panel with a real combobox, ranked
+results, grouped headings and full arrow-key navigation.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | `v-model` for the open state |
+| `items` | `Array` | `[]` | `{ label, group?, hint?, icon?, shortcut?, keywords?, active?, disabled? }` |
+| `placeholder` | `String` | `'Type a command or search…'` | |
+| `label` | `String` | `'Command palette'` | Accessible name for the dialog |
+| `emptyText` | `String` | `'No matches.'` | Shown when the query filters everything out |
+| `shortcut` | `Boolean` | `true` | Bind the shortcut internally |
+| `shortcutKey` | `String` | `'k'` | The key, without the modifier |
+| `groupKey` | `String` | `'group'` | Property holding the group heading |
+| `limit` | `Number` | `50` | Max results kept |
+| `error` | `String` | `''` | Red message above the list |
+| `disabled` | `Boolean` | `false` | Blocks the overlay **and** the shortcut |
+
+Emits: `update:modelValue`, `select(entry)`, `search(query)`, `open`,
+`close(reason)`.
+
+**Results are ranked, not filtered.** A label prefix beats a label substring,
+which beats a keyword hit, which beats a hint. Without that ordering, typing
+`ta` floats an item whose label merely happens to contain those two letters —
+above the one the user actually meant.
+
+**The arrow key wraps.** Holding ↓ cycles rather than sticking at the last row,
+which is what a list of two dozen commands needs.
+
+**Focus is deferred a tick.** The input does not exist until the teleport has
+rendered, so focusing it synchronously would target a detached node.
+
+**The chord is configurable.** `shortcut-key` is the key without the modifier, so
+a page that already owns Ctrl/⌘+K can move the palette instead of fighting it:
+
+```
+<ph-command-palette v-model="open" shortcut-key="l" :items="commands" />
+```
+
+**`shortcut: false` hands the chord back to the caller** for pages that drive the
+palette themselves. When two of them share a page, the first handler to call
+`preventDefault()` wins and the other stands down, so one keypress is never
+actioned twice.
+
+**The highlight is driven from the field, not from the rows.** Clicking a row
+does not move focus — `@mousedown.prevent` keeps the caret in the input — so the
+arrows keep working after a click instead of dying with the focus.
+
+```
+<ph-command-palette v-model="open" :items="commands" @select="run" />
+
+<!-- drive it yourself -->
+<ph-command-palette v-model="open" :items="commands" :shortcut="false" />
+```
+
+The input is a `role="combobox"` with `aria-controls` / `aria-expanded`, and each
+row is a `role="option"` with `aria-selected`, so the arrow-key highlight is
+announced rather than being a purely visual affordance.
 
 ---
 
