@@ -31,7 +31,7 @@
 import { useId } from "vue";
 
 
-const TIP_Z = 1100;
+const TIP_Z = 1080;
 const TIP_OFFSET = 8;
 const VIEWPORT_MARGIN = 8;
 
@@ -99,7 +99,7 @@ export default {
     },
     tipStyle() {
       const style = {
-        position: 'fixed',
+        position: 'absolute',
         zIndex: TIP_Z,
         whiteSpace: 'normal',
         width: 'max-content',
@@ -143,8 +143,13 @@ export default {
       left = this.clamp(left, VIEWPORT_MARGIN, vw - w - VIEWPORT_MARGIN);
       top = this.clamp(top, VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN);
 
-      style.left = `${left}px`;
-      style.top = `${top}px`;
+      // The measurement above is in viewport coordinates; the element is placed in
+      // document space, so the scroll offset has to be added back.
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+
+      style.left = `${left + scrollX}px`;
+      style.top = `${top + scrollY}px`;
 
       return style;
     }
