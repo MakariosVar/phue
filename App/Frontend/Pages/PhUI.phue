@@ -81,7 +81,8 @@ $navItems = [
         'components' => [
             ['id' => 'text', 'label' => 'Text'],
             ['id' => 'heading', 'label' => 'Heading'],
-            ['id' => 'box', 'label' => 'Box']
+            ['id' => 'box', 'label' => 'Box'],
+            ['id' => 'stack', 'label' => 'Stack'],
         ]
     ],
     [
@@ -450,16 +451,18 @@ return [
                     <h3 class="fw-semibold mb-3">Content & Layout</h3>
                     <div class="row g-4">
                         <span id="text">
-                            <example-ph-text />
+                            <example-ph-text @setAnchor="scrollTo('text')"/>
                         </span>
                         <span id="heading">
-                            <example-ph-heading />
+                            <example-ph-heading @setAnchor="scrollTo('heading')"/>
                         </span>
                         <span id="box">
-                            <example-ph-box />
+                            <example-ph-box @setAnchor="scrollTo('box')"/>
+                        </span>
+                        <span id="stack">
+                            <example-ph-stack @setAnchor="scrollTo('stack')"/>
                         </span>
                         <!--
-                        <ExamplePhStack />
                         <ExamplePhFlex />
                         <ExamplePhRow />
                         <ExamplePhCol />
