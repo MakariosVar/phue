@@ -93,7 +93,10 @@ $navItems = [
     [
         'id' => 'ssr',
         'label' => 'Server-Side',
-        'components' => []
+        'components' => [
+            ['id' => 'main_navigation', 'label' => 'Navigation'],
+            ['id' => 'markdown', 'label' => 'Markdown'],
+        ]
     ],
 ];
 
@@ -124,6 +127,28 @@ if ($sectionId === null) {
     $location = 'index';
 }
 
+// The Server-Side section documents components that are NOT Vue components: they
+// are partials rendered on the server into finished markup. The partial renderer
+// is a service of the *layout*, not of a page, so a page must not render a
+// partial from inside its own render — the showcase runs the markdown through
+// the very same parser the partial uses instead, so the demo is real output
+// without re-entering the renderer.
+$markdownSource = <<<'MARKDOWN'
+# Server-rendered
+
+This block was parsed **on the server** and injected as static HTML — no client
+JS ships for it.
+
+- Headings, **bold**, _italic_ and `inline code`
+- Fenced code blocks and [links](/phui)
+- > Blockquotes
+
+Content is escaped before formatting and `javascript:` / `data:` link schemes are
+neutralised, so a `.md` file cannot inject script.
+MARKDOWN;
+
+$markdownHtml = (new \Phue\Core\Utils\MarkdownParser())->parse($markdownSource);
+
 return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
@@ -132,6 +157,7 @@ return [
         'searchQuery' => '',
         'shellHeight' => 'calc(100dvh - 4.75rem)',
         'navItems' => $navItems,
+        'markdownHtml' => $markdownHtml,
     ],
 ];
 </php>
@@ -488,9 +514,13 @@ return [
                 <!-- Server-Side -->
                 <section v-if="activeSection === 'ssr'" id="ssr" class="mb-5">
                     <h2 class="h4 fw-semibold mb-3">Server-Side</h2>
-                    <div class="row g-4">
-                        <!-- <ExamplePhNavigation />
-                        <ExamplePhMarkdown /> -->
+                    <div class="d-flex flex-column gap-2">
+                        <span id="main_navigation">
+                            <example-ssr-navigation @setAnchor="scrollTo('main_navigation')" />
+                        </span>
+                        <span id="markdown">
+                            <example-ph-markdown :html="markdownHtml" @setAnchor="scrollTo('markdown')" />
+                        </span>
                     </div>
                 </section>
             </div>
@@ -560,6 +590,7 @@ export default function mountApp(injectedContext = null) {
                 activeAnchor: initState.activeAnchor ?? '',
                 searchQuery: initState.searchQuery ?? '',
                 navItems: [],
+                markdownHtml: initState.markdownHtml ?? '',
             });
 
             const shellEl = ref(null);

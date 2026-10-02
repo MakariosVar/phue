@@ -1,0 +1,104 @@
+<template>
+  <example-factory
+    tag="&lt;ph-markdown&gt;"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Server-side markdown renderer. Its PHP block parses the markdown and
+        returns it as a static <code>html</code> payload —
+        <b>zero client JS, no hydration</b>.
+      </p>
+      <p class="mb-0">
+        It is <b>not</b> a Vue component: you never write
+        <code>&lt;ph-markdown&gt;</code> in a template, you render it as a partial
+        with <code>$partialRenderer-&gt;renderPartial()</code>. The block below
+        was produced by the very same <code>MarkdownParser</code>, on the server.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="ph-markdown-body" v-html="html"></div>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="php" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Params</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          These are <b>partial params</b> (the array you pass to
+          <code>renderPartial()</code>), not Vue props — there is no client
+          template to bind them to. <code>markdown</code> wins when both are
+          given; a missing <code>src</code> file renders an empty string rather
+          than throwing. The parser escapes content before formatting and
+          neutralises <code>javascript:</code> / <code>data:</code> link schemes,
+          so a <code>.md</code> file cannot inject script.
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhMarkdown",
+  emits: ['setAnchor'],
+  props: {
+    html: {
+      type: String,
+      default: '',
+    },
+  },
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `// In a page or layout PHP block:
+$guideHtml = $partialRenderer->renderPartial('PhMarkdown', [
+    'src' => 'docs/Core.md',            // base-relative file
+]);
+
+// ...or inline markdown:
+$inlineHtml = $partialRenderer->renderPartial('PhMarkdown', [
+    'markdown' => '**bold** and \`inline code\`',
+]);
+
+// The result is a finished HTML string — print it, do not bind it:
+return [
+    'title' => 'Guide',
+    'html'  => $guideHtml,
+    'state' => [],
+];`,
+      propsData: [
+        {
+          name: "markdown",
+          type: "String",
+          default: "null",
+          notes: "Raw markdown; parsed server-side",
+        },
+        {
+          name: "src",
+          type: "String",
+          default: "null",
+          notes: "Base-relative file path (e.g. docs/Core.md); used when markdown is absent",
+        }
+      ]
+    };
+  },
+};
+</script>
