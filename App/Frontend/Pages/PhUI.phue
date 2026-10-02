@@ -224,8 +224,9 @@ return [
 
             <div v-if="!isMobile || sidebarOpen" class="px-4 mb-3">
                 <ph-search-input
+                    id="phui-search-input"
                     v-model="searchQuery"
-                    placeholder="Search…"
+                    placeholder="Search… (Ctrl+K)"
                     size="sm"
                     :clearable="true"
                 />
@@ -1078,6 +1079,33 @@ export default function mountApp(injectedContext = null) {
                 if (event.key === 'Escape' && sidebarOpen.value) {
                     sidebarOpen.value = false;
                 }
+
+                // Ctrl/Cmd+K focuses the component search, the same shortcut the docs
+                // page binds. The search only exists above `lg` or in an open drawer,
+                // so a shortcut press has to open the sidebar first or there is
+                // nothing to focus and the browser's own "open search" UI takes over.
+                if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
+                    return;
+                }
+                if (event.key.toLowerCase() !== 'k') {
+                    return;
+                }
+
+                if (isMobile.value && !sidebarOpen.value) {
+                    sidebarOpen.value = true;
+                }
+
+                // The field is behind v-if on the drawer, so it does not exist yet on
+                // the tick the shortcut is pressed; nextTick lands after the render.
+                nextTick(() => {
+                    const search = document.getElementById('phui-search-input');
+                    if (!search) {
+                        return;
+                    }
+                    event.preventDefault();
+                    search.focus();
+                    search.select();
+                });
             }
 
             onMounted(() => {
