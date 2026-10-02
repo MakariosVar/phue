@@ -1,0 +1,483 @@
+<template>
+  <div
+    :id="carouselId"
+    data-phui="carousel"
+    class="position-relative overflow-hidden rounded"
+    :class="rootClasses"
+    :style="frameStyle"
+    role="region"
+    aria-roledescription="carousel"
+    :aria-label="label"
+    :aria-live="playing ? 'off' : 'polite'"
+    @mouseenter="pause"
+    @mouseleave="resume"
+    @focusin="pause"
+    @focusout="resume"
+  >
+    <!--
+      The track is a flex row translated on the inline axis; every slide is a
+      full-width, non-shrinking cell. Bootstrap's own `.carousel-item` and
+      `.carousel-fade` are NOT used: `.carousel-item` is `display:none` unless it
+      is `.active` and floats with a `-100%` margin, and `.carousel-fade .carousel-item`
+      is keyed to the same class — that is the plugin's slide model, and it
+      collapses the moment the transform is ours. `.carousel-indicators`,
+      `.carousel-caption` and `.carousel-control-*` ARE used, because they are
+      pure CSS paint (indicator bars, caption band, chevrons) with no behaviour
+      attached.
+    -->
+    <div ref="track" class="d-flex" :style="trackStyle" @touchstart="onTouchStart" @touchend="onTouchEnd">
+      <div
+        v-for="(item, index) in slides"
+        :id="slideId(index)"
+        :key="slideKey(item, index)"
+        class="w-100"
+        :style="slideStyle(index)"
+        role="group"
+        aria-roledescription="slide"
+        :aria-label="slideLabel(index)"
+        :aria-hidden="index === active ? null : 'true'"
+      >
+        <slot name="slide" :item="item" :index="index" :active="index === active">
+          <ph-image
+            :src="item?.src"
+            :alt="item?.alt || ''"
+            :fit="fit"
+            :height="height || undefined"
+          />
+        </slot>
+
+        <!--
+          Only when the caller did NOT take over the slide. The `slide` slot replaces
+          the whole rendering of a slide, caption included — emitting this block on top
+          of slot content prints the caption a second time, once from the slot and once
+          from here, stacked on each other.
+        -->
+        <div
+          v-if="item?.caption && !$slots.slide"
+          class="carousel-caption d-none d-md-block"
+          :style="captionStyle"
+        >
+          <h3 class="h5">{{ item.title || item.caption }}</h3>
+          <p v-if="item.text" class="mb-0">{{ item.text }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="indicators && slides.length > 1"
+      class="carousel-indicators"
+      :style="indicatorStyle"
+    >
+      <button
+        v-for="(item, index) in slides"
+        :key="'bar-' + slideKey(item, index)"
+        type="button"
+        :data-bs-target="'#' + carouselId"
+        :class="index === active ? 'active' : ''"
+        :aria-label="indicatorLabel(index)"
+        :aria-current="index === active ? 'true' : null"
+        @click="goTo(index, true)"
+      ></button>
+    </div>
+
+    <button
+      v-if="controls && slides.length > 1"
+      type="button"
+      class="carousel-control-prev"
+      @click="previous"
+    >
+      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Previous slide</span>
+    </button>
+
+    <button
+      v-if="controls && slides.length > 1"
+      type="button"
+      class="carousel-control-next"
+      @click="next"
+    >
+      <span class="carousel-control-next-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Next slide</span>
+    </button>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+
+/** Horizontal travel, in px, past which a touch counts as a swipe and not a tap. */
+const SWIPE_THRESHOLD = 40;
+
+export default {
+  name: 'PhCarousel',
+  props: {
+    modelValue: {
+      type: Number,
+      default: 0
+    },
+    /** `{ src, alt, caption?, title?, text? }` — or use the `slide` slot. */
+    slides: {
+      type: Array,
+      default: () => []
+    },
+    /** Frame height. A number is px; a string is raw CSS (`50vh`, `20rem`). */
+    height: {
+      type: [String, Number],
+      default: 0
+    },
+    fit: {
+      type: String,
+      default: 'cover'
+    },
+    /** Ms between slides. `0` disables autoplay. */
+    interval: {
+      type: Number,
+      default: 0
+    },
+    indicators: {
+      type: Boolean,
+      default: true
+    },
+    controls: {
+      type: Boolean,
+      default: true
+    },
+    /** Wrap around at both ends. Without it the first/last control is disabled instead. */
+    loop: {
+      type: Boolean,
+      default: true
+    },
+    /** Crossfade instead of a horizontal slide. */
+    fade: {
+      type: Boolean,
+      default: false
+    },
+    /** Stop the timer while the pointer or the focus is inside. */
+    pauseOnHover: {
+      type: Boolean,
+      default: true
+    },
+    /**
+     * Polarity of the chevrons and indicator bars. `light` = dark glyphs, which is what
+     * reads on a page background; `dark` = white glyphs, for slides that carry
+     * their own dark background.
+     */
+    variant: {
+      type: String,
+      default: 'light',
+      validator: (val) => ['light', 'dark'].includes(val)
+    },
+    label: {
+      type: String,
+      default: 'Carousel'
+    },
+    /** Ms of the slide/crossfade transition. */
+    duration: {
+      type: Number,
+      default: 600
+    }
+  },
+  emits: ['update:modelValue', 'change', 'prev', 'next'],
+  setup() {
+    return { uid: 'ph-carousel-' + useId() };
+  },
+  data() {
+    return {
+      index: this.clampIndex(this.modelValue),
+      hovering: false,
+      // Set while the tab is hidden: a background timer keeps the document index
+      // from being zero, and every autoplaying carousel on the page jumps a slide
+      // on return.
+      hidden: false,
+      timer: null,
+      touchStartX: null
+    };
+  },
+  computed: {
+    active() {
+      return this.index;
+    },
+    /**
+     * The target the indicator bars point at.
+     *
+     * It has to be the real root id. `data-bs-target` is what Bootstrap's
+     * `.carousel-indicators [data-bs-target]` selector keys on, and a made-up
+     * placeholder value is a selector that matches nothing on the page: the bars
+     * render correctly and the attribute lies about what it drives.
+     */
+    carouselId() {
+      return `ph-carousel-${this.uid}`;
+    },
+    playing() {
+      return this.interval > 0 && !this.hovering && !this.hidden;
+    },
+    frameStyle() {
+      const style = { background: 'var(--bs-secondary-bg)' };
+      if (typeof this.height === 'number' && this.height > 0) {
+        style.height = `${this.height}px`;
+      } else if (typeof this.height === 'string' && this.height !== '') {
+        style.height = this.height;
+      }
+      return style;
+    },
+    trackStyle() {
+      // NO translation in fade mode. The track is the flex row every slide lives in,
+      // so translating it moves the ACTIVE slide out of the frame with everything
+      // else — while the inactive ones, being absolutely positioned against the root,
+      // stay put at `opacity: 0`. The visible result is a frame that goes blank on
+      // every slide after the first. Fade is an opacity crossfade, not a move.
+      const transform = this.fade ? 'none' : `translateX(-${this.index * 100}%)`;
+
+      return {
+        transform,
+        transition: this.fade ? 'none' : `transform ${this.duration}ms ease-in-out`,
+        // Without this the track is only as tall as its tallest slide's CONTENT, so
+        // `align-items: stretch` stretches nothing and the slide sits in the top-left
+        // of a frame the controls are already spanning. `100%` against an auto-height
+        // root resolves to `auto`, so this is a no-op when no height is given.
+        height: '100%'
+      };
+    },
+    rootClasses() {
+      return {
+        // Bootstrap inverts the control glyphs and the indicator bars under
+        // `carousel-dark`; that is exactly the light/dark polarity switch.
+        'carousel-dark': this.variant === 'light'
+      };
+    },
+    indicatorStyle() {
+      // Bootstrap's `.carousel-indicators` carries `margin-bottom: 1rem` on top of
+      // `bottom: 0`, which drops the bars into the caption band. Both are overridden
+      // so the two do not share the same strip of pixels.
+      return { bottom: '0.35rem', marginBottom: '0' };
+    },
+    captionStyle() {
+      return { textShadow: '0 1px 2px rgba(0, 0, 0, 0.6)' };
+    }
+  },
+  watch: {
+    modelValue(value) {
+      this.index = this.clampIndex(value);
+    },
+    playing(isPlaying) {
+      if (isPlaying) {
+        this.startTimer();
+      } else {
+        this.stopTimer();
+      }
+    },
+    interval() {
+      this.restartTimer();
+    }
+  },
+  mounted() {
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.restartTimer();
+  },
+  beforeUnmount() {
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.stopTimer();
+  },
+  methods: {
+    clampIndex(value) {
+      const total = this.slides.length;
+      if (total === 0) {
+        return 0;
+      }
+
+      const asNumber = Number(value);
+      if (!Number.isFinite(asNumber)) {
+        return 0;
+      }
+
+      // Wrapping here rather than in `next()` means a `modelValue` written by a
+      // parent is normalised too — an out-of-range index would otherwise leave
+      // the track translated past the last slide with no way back.
+      const wrapped = Math.floor(asNumber) % total;
+      return wrapped < 0 ? wrapped + total : wrapped;
+    },
+    slideKey(item, index) {
+      return (item && (item.key || item.id)) || index;
+    },
+    slideId(index) {
+      return `ph-carousel-slide-${this.uid}-${index}`;
+    },
+    slideLabel(index) {
+      const item = this.slides[index];
+      const caption = item && (item.title || item.caption);
+      return caption
+        ? `${caption} (${index + 1} of ${this.slides.length})`
+        : `Slide ${index + 1} of ${this.slides.length}`;
+    },
+    indicatorLabel(index) {
+      const item = this.slides[index];
+      const caption = item && (item.title || item.caption);
+      return caption ? `Go to ${caption}` : `Go to slide ${index + 1}`;
+    },
+    /**
+     * Fade keeps every slide in the box: the active one is in flow and therefore
+     * sets the frame height, the rest are taken out of it and cross-faded. The
+     * alternative — one slide per column, like the sliding mode — would leave a
+     * collapsed frame when the active image has not loaded yet.
+     */
+    slideStyle(index) {
+      const isActive = index === this.index;
+
+      if (!this.fade) {
+        // `position: relative` is load-bearing, not cosmetic. `.carousel-caption` is
+        // `position: absolute` from Bootstrap's CSS, so without a positioned slide the
+        // caption resolves against the ROOT — and every slide's caption then lands in
+        // the same corner of the frame, stacked on top of each other.
+        return { flexShrink: 0, position: 'relative' };
+      }
+
+      return {
+        // `relative`, not `static`: a relative box is still IN FLOW, so the active
+        // slide still gives the frame its height, while the caption has a positioned
+        // ancestor to resolve against.
+        position: isActive ? 'relative' : 'absolute',
+        inset: isActive ? null : '0',
+        width: '100%',
+        opacity: isActive ? 1 : 0,
+        zIndex: isActive ? 1 : 0,
+        pointerEvents: isActive ? null : 'none',
+        transition: `opacity ${this.duration}ms ease-in-out`
+      };
+    },
+    /** Returns whether the slide actually changed. */
+    goTo(index, userInitiated) {
+      const total = this.slides.length;
+      if (total === 0) {
+        return false;
+      }
+
+      let next = index;
+      if (next < 0 || next >= total) {
+        if (!this.loop) {
+          return false;
+        }
+        next = ((next % total) + total) % total;
+      }
+
+      if (next === this.index) {
+        return false;
+      }
+
+      this.index = next;
+      this.$emit('update:modelValue', next);
+      this.$emit('change', next);
+
+      if (userInitiated) {
+        // Restarting the timer is what makes a manual pick behave: without it the
+        // next tick fires from the old position and skips the slide after it.
+        this.restartTimer();
+      }
+
+      return true;
+    },
+    next() {
+      const target = this.index + 1;
+
+      if (target >= this.slides.length && !this.loop) {
+        return false;
+      }
+
+      // Announced only on a real move. A single-slide carousel, or one sitting at
+      // the last slide with `loop`, resolves to the same index — and an event that
+      // says "moved" when nothing did is worse than no event.
+      if (!this.goTo(target, true)) {
+        return false;
+      }
+
+      this.$emit('next');
+
+      return true;
+    },
+    previous() {
+      const target = this.index - 1;
+
+      if (target < 0 && !this.loop) {
+        return false;
+      }
+
+      if (!this.goTo(target, true)) {
+        return false;
+      }
+
+      this.$emit('prev');
+
+      return true;
+    },
+    prefersReducedMotion() {
+      return typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    },
+    startTimer() {
+      this.stopTimer();
+
+      // Autoplay is motion the user did not ask for, so it is off entirely under
+      // `prefers-reduced-motion` rather than merely slowed.
+      if (this.interval <= 0 || this.slides.length < 2 || this.prefersReducedMotion()) {
+        return;
+      }
+
+      this.timer = setInterval(() => this.goTo(this.index + 1, false), this.interval);
+    },
+    stopTimer() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+    },
+    restartTimer() {
+      this.stopTimer();
+      if (this.playing) {
+        this.startTimer();
+      }
+    },
+    pause() {
+      if (!this.pauseOnHover) {
+        return;
+      }
+      this.hovering = true;
+    },
+    resume() {
+      if (!this.pauseOnHover) {
+        return;
+      }
+      this.hovering = false;
+    },
+    onVisibilityChange() {
+      this.hidden = typeof document !== 'undefined' && document.hidden === true;
+    },
+    onTouchStart(event) {
+      const touch = event.changedTouches && event.changedTouches[0];
+      this.touchStartX = touch ? touch.clientX : null;
+    },
+    onTouchEnd(event) {
+      const start = this.touchStartX;
+      this.touchStartX = null;
+      if (start === null) {
+        return;
+      }
+
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch) {
+        return;
+      }
+
+      const travel = touch.clientX - start;
+      if (Math.abs(travel) < SWIPE_THRESHOLD) {
+        return;
+      }
+
+      if (travel < 0) {
+        this.next();
+      } else {
+        this.previous();
+      }
+    }
+  }
+};
+</script>
