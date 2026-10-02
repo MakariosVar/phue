@@ -188,8 +188,6 @@ return [
 
 <template>
 <div class="d-flex flex-column gap-4 p-4">
-    <ph-breadcrumb :items="[{ label: 'Home', href: '/' }, { label: 'Docs' }]" />
-
     <doc-section
         :id="docKey"
         :title="docTitle"
