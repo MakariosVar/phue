@@ -1,0 +1,251 @@
+<template>
+  <example-factory
+    tag="&lt;ph-image&gt;"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Image with a box reserved before the bytes arrive, an aspect ratio, a fit
+        mode, a placeholder and an optional lightbox.
+      </p>
+      <p class="mb-0">
+        Reserving the box is the point: without it a grid of images reflows as
+        each one decodes, which is the largest single source of layout shift on
+        an image-heavy page.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">aspect</ph-text>
+        <ph-flex wrap="wrap" gap="md" class="my-2">
+          <ph-box
+            v-for="a in aspects"
+            :key="a"
+            padding="none"
+            bg="light"
+            border
+            style="width: 120px;"
+          >
+            <ph-image src="/Phue.svg" :alt="a" :aspect="a" rounded />
+          </ph-box>
+        </ph-flex>
+
+        <ph-text size="xs" weight="semibold" color="secondary">fit</ph-text>
+        <ph-flex wrap="wrap" gap="md" class="my-2">
+          <ph-box
+            v-for="f in ['cover', 'contain']"
+            :key="f"
+            padding="none"
+            bg="light"
+            border
+            style="width: 150px;"
+          >
+            <ph-image src="/Phue.svg" :alt="f" aspect="4x3" :fit="f" />
+            <ph-text size="xs" color="secondary" class="text-center p-1">fit=&quot;{{ f }}&quot;</ph-text>
+          </ph-box>
+        </ph-flex>
+
+        <ph-text size="xs" weight="semibold" color="secondary">rounded · circle · placeholder</ph-text>
+        <ph-flex align="center" gap="md" class="my-2">
+          <ph-image src="/Phue.svg" alt="Rounded" :width="72" :height="72" rounded />
+          <ph-image src="/Phue.svg" alt="Circle" :width="72" :height="72" circle />
+          <ph-image src="/Phue.svg" alt="Placeholder" :width="72" :height="72" rounded placeholder />
+        </ph-flex>
+
+        <ph-text size="xs" weight="semibold" color="secondary">lightbox — click to open, Esc closes</ph-text>
+        <ph-flex align="center" gap="md" class="my-2">
+          <ph-image
+            src="/Phue.svg"
+            alt="Click to enlarge"
+            :width="96"
+            :height="96"
+            rounded
+            lightbox
+            previewable
+          />
+        </ph-flex>
+
+        <ph-text size="xs" weight="semibold" color="secondary">broken src</ph-text>
+        <ph-flex align="center" gap="md" class="my-2">
+          <ph-image src="/Phue-missing.png" alt="Broken" :width="72" :height="72" rounded />
+          <ph-text size="xs" color="secondary">
+            falls back to an icon, never the browser's torn-image glyph
+          </ph-text>
+        </ph-flex>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          The ratio is a real <code>aspect-ratio</code>, not the padding-top
+          hack: the hack reserves space but leaves the box no usable height, so
+          <code>fit="contain"</code> ends up sized by its content instead of by
+          the frame. <code>lightbox</code> alone does nothing —
+          <code>previewable</code> is what arms the click, so a plain
+          informational image never becomes interactive by accident.
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhImage",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      aspects: ['1x1', '4x3', '16x9', '21x9'],
+      snippet: `<ph-text class="mt-2" size="xs" weight="semibold" color="secondary">aspect</ph-text>
+<ph-flex wrap="wrap" gap="md" class="my-2">
+  <ph-box
+    v-for="a in aspects"
+    :key="a"
+    padding="none"
+    bg="light"
+    border
+    style="width: 120px;"
+  >
+    <ph-image src="/Phue.svg" :alt="a" :aspect="a" rounded />
+  </ph-box>
+</ph-flex>
+
+<ph-text size="xs" weight="semibold" color="secondary">fit</ph-text>
+<ph-flex wrap="wrap" gap="md" class="my-2">
+  <ph-box
+    v-for="f in ['cover', 'contain']"
+    :key="f"
+    padding="none"
+    bg="light"
+    border
+    style="width: 150px;"
+  >
+    <ph-image src="/Phue.svg" :alt="f" aspect="4x3" :fit="f" />
+    <ph-text size="xs" color="secondary" class="text-center p-1">fit=&quot;{{ f }}&quot;</ph-text>
+  </ph-box>
+</ph-flex>
+
+<ph-text size="xs" weight="semibold" color="secondary">rounded · circle · placeholder</ph-text>
+<ph-flex align="center" gap="md" class="my-2">
+  <ph-image src="/Phue.svg" alt="Rounded" :width="72" :height="72" rounded />
+  <ph-image src="/Phue.svg" alt="Circle" :width="72" :height="72" circle />
+  <ph-image src="/Phue.svg" alt="Placeholder" :width="72" :height="72" rounded placeholder />
+</ph-flex>
+
+<ph-text size="xs" weight="semibold" color="secondary">lightbox — click to open, Esc closes</ph-text>
+<ph-flex align="center" gap="md" class="my-2">
+  <ph-image
+    src="/Phue.svg"
+    alt="Click to enlarge"
+    :width="96"
+    :height="96"
+    rounded
+    lightbox
+    previewable
+  />
+</ph-flex>
+
+<ph-text size="xs" weight="semibold" color="secondary">broken src</ph-text>
+<ph-flex align="center" gap="md" class="my-2">
+  <ph-image src="/Phue-missing.png" alt="Broken" :width="72" :height="72" rounded />
+  <ph-text size="xs" color="secondary">
+    falls back to an icon, never the browser's torn-image glyph
+  </ph-text>
+</ph-flex>`,
+      propsData: [
+        {
+          name: "src",
+          type: "String",
+          default: "required",
+          notes: "Image URL",
+        },
+        {
+          name: "alt",
+          type: "String",
+          default: "''",
+          notes: "Native alt text",
+        },
+        {
+          name: "width",
+          type: "String | Number",
+          default: "''",
+          notes: "Reserves the box; a number is px",
+        },
+        {
+          name: "height",
+          type: "String | Number",
+          default: "''",
+          notes: "Reserves the box; a number is px",
+        },
+        {
+          name: "aspect",
+          type: "String",
+          default: "''",
+          notes: "1x1 | 4x3 | 16x9 | 21x9",
+        },
+        {
+          name: "fit",
+          type: "String",
+          default: "'cover'",
+          notes: "cover | contain | fill | none | scale-down",
+        },
+        {
+          name: "rounded",
+          type: "Boolean",
+          default: "false",
+          notes: "Rounded corners",
+        },
+        {
+          name: "circle",
+          type: "Boolean",
+          default: "false",
+          notes: "Circular clip; wins over rounded",
+        },
+        {
+          name: "lazy",
+          type: "Boolean",
+          default: "true",
+          notes: "loading=\"lazy\"",
+        },
+        {
+          name: "placeholder",
+          type: "Boolean",
+          default: "false",
+          notes: "Skeleton block until load",
+        },
+        {
+          name: "lightbox",
+          type: "Boolean",
+          default: "false",
+          notes: "Full-screen preview; also needs previewable",
+        },
+        {
+          name: "previewable",
+          type: "Boolean",
+          default: "false",
+          notes: "Arms the click handler",
+        }
+      ]
+    };
+  }
+};
+</script>
