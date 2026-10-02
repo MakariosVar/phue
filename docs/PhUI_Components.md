@@ -183,6 +183,68 @@ contract.
 
 ---
 
+## 1.5 Overlay layers and positioning
+
+Every component that floats above the page competes in the **root** stacking
+context once it is teleported, and the numbers only mean something there. These
+two tables are the contract for all of them.
+
+### The layer table
+
+| Layer | Value | Used by |
+|---|---|---|
+| sticky page chrome | `1020` | — (the floor a float must beat) |
+| dropdown menu | `1040` | `<ph-dropdown>` |
+| drawer panel | `1045` | `<ph-drawer>` |
+| drawer backdrop | `1046` | `<ph-drawer>` |
+| modal | `1055` | `<ph-modal>`, `<ph-confirm-dialog>` |
+| popover | `1070` | `<ph-popover>` |
+| tooltip | `1080` | `<ph-tooltip>` |
+| toast region | `1090` | `<ph-toast>` |
+
+The order is not decorative. A tooltip sits **below** toasts so a tip on a button
+inside a toast stays inside its toast, and everything in a dropdown sits below the
+layers that are genuinely overlays — a dropdown **inside** a modal has to stay in
+the modal's layer.
+
+**A float must beat `1020`.** Bootstrap's own `1000` loses to sticky chrome, which
+is exactly the layer a float exists to cover.
+
+### The positioning families
+
+There are two, and mixing them is the bug.
+
+| Family | Anchoring | Repositions on scroll | Must teleport |
+|---|---|---|---|
+| **Document-space** — `position: absolute` at `rect + scrollX/scrollY` | measured | yes, capture phase | yes |
+| **Centred overlay** — full-viewport, no anchor | not anchored | no | yes |
+
+A **document-space** float is the only one that stays attached to its trigger
+through a page scroll *and* escapes an ancestor's `overflow`. A viewport-`fixed`
+float escapes the clip but detaches from the trigger on scroll; an **in-flow**
+`position: absolute` stays attached and is **clipped by every scrolling ancestor**.
+
+> **The clip cannot be escaped with a `z-index`.** Any ancestor with
+> `overflow: hidden|auto` clips the panel, and `overflow-y: auto` alone is enough:
+> per CSS, an axis left `visible` next to a non-visible one computes to `auto`, so
+> a scrolling column also clips horizontally. A panel that opens below a control
+> inside such an ancestor **must** teleport.
+
+### The rules
+
+1. **A panel anchored to a control teleports to `body`.** Centred overlays
+   (`<ph-modal>`, `<ph-drawer>`, `<ph-confirm-dialog>`, `<ph-command-palette>`,
+   `<ph-toast>`) teleport because they must escape the same clipping.
+2. **No float uses viewport `position: fixed` to escape a clip.** It escapes the
+   clip and loses the trigger. Use document space.
+3. **An anchored float re-measures on scroll, in the capture phase.** A plain
+   `scroll` listener does not fire for nested scrollers, which is where the
+   interesting ones are.
+4. **No component owns a layer number.** They come from the shared table, so a new
+   overlay cannot silently land under sticky chrome or over the toasts.
+
+---
+
 ## 2. Form Controls
 
 ### `<ph-button>`
@@ -2653,7 +2715,8 @@ the layers that are genuinely overlays:
 | sticky 1020, fixed 1030 | modal 1055, popover 1070, tooltip 1080, toast 1090 |
 
 The second column is deliberate: those are overlays that *should* sit above page
-content, and a dropdown inside a modal has to stay in the modal's layer.
+content, and a dropdown inside a modal has to stay in the modal's layer. The full
+table and the positioning families are in **§1.5**.
 
 
 | Prop | Type | Default | Notes |
