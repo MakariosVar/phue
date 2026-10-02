@@ -1,22 +1,22 @@
 <template>
   <div
     data-phui="stat"
-    class="ph-stat d-flex align-items-start gap-3 p-3"
+    class="d-flex align-items-start gap-3 p-3"
     :class="[
       bordered ? 'border rounded' : '',
       variant ? `border-${variant}-subtle bg-${variant}-subtle` : ''
     ]"
   >
-    <div class="ph-stat-icon" v-if="icon || $slots.icon">
+    <div  v-if="icon || $slots.icon">
       <ph-icon v-if="icon" :name="icon" :size="iconSize" :variant="iconVariant" />
       <slot name="icon" />
     </div>
-    <div class="ph-stat-content flex-grow-1 min-w-0">
-      <div class="ph-stat-label text-body-secondary small" v-if="label">{{ label }}</div>
-      <div class="ph-stat-value fw-bold" :class="valueClass">
+    <div class="flex-grow-1">
+      <div class="text-body-secondary small" v-if="label">{{ label }}</div>
+      <div class="fw-bold" :class="valueClass">
         <slot name="default">{{ value }}</slot>
       </div>
-      <div class="ph-stat-delta d-flex align-items-center gap-1 mt-1" v-if="delta != null">
+      <div class="d-flex align-items-center gap-1 mt-1" v-if="delta != null">
         <ph-icon
           v-if="trend !== 'neutral'"
           :name="trendIcon"

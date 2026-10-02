@@ -2,7 +2,7 @@
   <div
     v-if="hasItems"
     data-phui="timeline"
-    class="ph-timeline d-flex"
+    class="d-flex"
     :class="vertical ? 'flex-column' : 'flex-row'"
     :style="rootStyle"
     :role="interactive ? null : 'list'"
@@ -11,7 +11,7 @@
       :is="itemTag(item)"
       v-for="(item, index) in ordered"
       :key="itemKey(item, index)"
-      class="ph-timeline-item position-relative"
+      class="position-relative"
       :class="itemClasses(item)"
       :style="[itemBoxStyle(item), interactionStyle(item, index)]"
       :role="interactive ? null : 'listitem'"
@@ -35,14 +35,14 @@
       -->
       <span
         v-if="index < ordered.length - 1 && lineStyle !== 'none'"
-        class="ph-timeline-line position-absolute"
+        class="position-absolute"
         :style="lineStyleFor(item)"
         aria-hidden="true"
       ></span>
 
       <!-- marker: dot / icon / index number -->
       <span
-        class="ph-timeline-marker position-absolute d-inline-flex align-items-center justify-content-center rounded-circle border"
+        class="position-absolute d-inline-flex align-items-center justify-content-center rounded-circle border"
         :class="markerClasses(item)"
         :style="markerStyle(item)"
         aria-hidden="true"
@@ -53,35 +53,35 @@
           :size="iconSize"
           :variant="markerIconVariant(item)"
         />
-        <span v-else-if="showIndex(item)" class="ph-timeline-index fw-semibold">
+        <span v-else-if="showIndex(item)" class="fw-semibold">
           {{ item.label != null ? item.label : index + 1 }}
         </span>
       </span>
 
       <!-- content -->
-      <div class="ph-timeline-content" :class="contentClasses(item)">
+      <div  :class="contentClasses(item)">
         <div
           v-if="item.time || item.badge || item.meta"
-          class="ph-timeline-head d-flex align-items-center gap-2 flex-wrap mb-1"
+          class="d-flex align-items-center gap-2 flex-wrap mb-1"
         >
           <time
             v-if="item.time"
-            class="ph-timeline-time text-body-secondary small text-nowrap"
+            class="text-body-secondary small text-nowrap"
             :datetime="item.dateTime || null"
           >{{ item.time }}</time>
 
-          <span v-if="item.badge" class="ph-timeline-badge badge" :class="badgeClasses(item)">
+          <span v-if="item.badge" class="badge" :class="badgeClasses(item)">
             {{ badgeLabel(item) }}
           </span>
 
-          <span v-if="item.meta" class="ph-timeline-meta text-body-secondary small">{{ item.meta }}</span>
+          <span v-if="item.meta" class="text-body-secondary small">{{ item.meta }}</span>
         </div>
 
-        <div v-if="item.title" class="ph-timeline-title fw-semibold" :class="titleClasses(item)">
+        <div v-if="item.title" class="fw-semibold" :class="titleClasses(item)">
           {{ item.title }}
         </div>
 
-        <div v-if="item.body" class="ph-timeline-body text-body-secondary small" :class="bodyClasses(item)">
+        <div v-if="item.body" class="text-body-secondary small" :class="bodyClasses(item)">
           {{ item.body }}
         </div>
 
@@ -94,7 +94,7 @@
   <div
     v-else
     data-phui="timeline"
-    class="ph-timeline-empty text-body-secondary text-center small"
+    class="text-body-secondary text-center small"
     :style="rootStyle"
   >
     <slot name="empty">{{ emptyText }}</slot>

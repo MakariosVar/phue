@@ -1,7 +1,7 @@
 <template>
   <dl
     data-phui="description-list"
-    class="ph-description-list row"
+    class="row"
     :class="{ 'row-cols-1': !columns, 'row-cols-2': columns === 2, 'row-cols-3': columns === 3 }"
   >
     <template v-for="(item, index) in items" :key="item.key || index">

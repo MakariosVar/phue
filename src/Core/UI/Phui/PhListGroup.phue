@@ -1,7 +1,7 @@
 <template>
   <div
     data-phui="list-group"
-    class="ph-list-group"
+    
     :class="[
       flush ? 'list-group-flush' : '',
       horizontal ? `list-group-horizontal${horizontal !== true ? `-${horizontal}` : ''}` : ''
@@ -10,7 +10,7 @@
     <template v-for="(item, index) in items" :key="item.key || index">
       <template v-if="item.header">
         <div
-          class="list-group-item list-group-item-header px-0"
+          class="list-group-item px-0"
           :class="{ active: item.active }"
         >
           {{ item.label }}

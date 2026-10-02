@@ -1,0 +1,233 @@
+<template>
+  <div
+    data-phui="image"
+    :class="rootClasses"
+    :style="rootStyle"
+  >
+    <!--
+      The <img> is never removed from the tree. Swapping it for a fallback the
+      moment `error` fires changes the element structure *after* hydration, which
+      Vue reports as a node mismatch — and a dead asset can only be discovered on
+      the client, so the mismatch was unavoidable. Overlaying the fallback keeps
+      one stable shape: the image, then an absolutely-positioned cover on top.
+    -->
+    <img
+      :src="src"
+      :alt="alt"
+      :loading="lazy ? 'lazy' : 'eager'"
+      :class="[imageClasses, failed ? 'd-none' : '']"
+      :style="imageStyle"
+      @load="onLoad"
+      @error="onError"
+      @click="onImageClick"
+    />
+
+    <!-- A dead asset must not leave the browser's torn-image glyph in a card. -->
+    <div
+      v-if="failed"
+      class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body-tertiary text-body-secondary"
+    >
+      <ph-icon name="image" size="lg" variant="muted" />
+    </div>
+
+    <span
+      v-if="placeholder && !loaded && !failed"
+      class="position-absolute top-0 start-0 w-100 h-100 bg-body-secondary"
+      aria-hidden="true"
+    ></span>
+
+    <!-- v-if on the teleport, as PhModal does: a teleport that exists during SSR
+         emits anchors the client cannot hydrate against, so it must not exist
+         until the lightbox is actually opened (which can only happen client-side). -->
+    <teleport to="body" v-if="lightboxOpen">
+      <div
+        class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image preview"
+        tabindex="-1"
+        :style="overlayStyle"
+        @click.self="closeLightbox"
+        @keydown.esc="closeLightbox"
+      >
+        <img
+          :src="src"
+          :alt="alt"
+          class="img-fluid rounded shadow"
+          :style="lightboxImageStyle"
+        />
+        <button
+          type="button"
+          class="btn-close btn-close-white position-absolute top-0 end-0 m-3"
+          aria-label="Close preview"
+          @click="closeLightbox"
+        ></button>
+      </div>
+    </teleport>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhImage',
+  props: {
+    src: {
+      type: String,
+      required: true
+    },
+    alt: {
+      type: String,
+      default: ''
+    },
+    width: {
+      type: [String, Number],
+      default: ''
+    },
+    height: {
+      type: [String, Number],
+      default: ''
+    },
+    aspect: {
+      type: String,
+      default: '',
+      validator: (val) => ['', '1x1', '4x3', '16x9', '21x9'].includes(val)
+    },
+    fit: {
+      type: String,
+      default: 'cover',
+      validator: (val) => ['cover', 'contain', 'fill', 'none', 'scale-down'].includes(val)
+    },
+    rounded: {
+      type: Boolean,
+      default: false
+    },
+    circle: {
+      type: Boolean,
+      default: false
+    },
+    lazy: {
+      type: Boolean,
+      default: true
+    },
+    placeholder: {
+      type: Boolean,
+      default: false
+    },
+    lightbox: {
+      type: Boolean,
+      default: false
+    },
+    previewable: {
+      type: Boolean,
+      default: false
+    }
+  },
+  emits: ['load', 'error', 'open'],
+  data() {
+    return {
+      loaded: false,
+      failed: false,
+      lightboxOpen: false
+    };
+  },
+  computed: {
+    rootClasses() {
+      // circle wins over rounded: `rounded` on a square would round the corners
+      // of something the caller explicitly asked to be a circle.
+      return [
+        'position-relative',
+        'overflow-hidden',
+        this.circle ? 'rounded-circle' : (this.rounded ? 'rounded' : '')
+      ];
+    },
+    rootStyle() {
+      const style = {};
+      const width = this.length(this.width);
+      const height = this.length(this.height);
+      if (width) style.width = width;
+      if (height) style.height = height;
+      // A real aspect-ratio, not the padding-top hack: the hack reserves space
+      // but leaves the box no usable height, so object-fit has nothing to fit
+      // inside and `contain` ends up sized by its content instead.
+      if (this.aspect) {
+        const [w, h] = this.aspect.split('x');
+        style.aspectRatio = `${w} / ${h}`;
+      }
+      if (this.circle && !height) {
+        style.height = 'auto';
+      }
+      return style;
+    },
+    imageClasses() {
+      // No cursor-* utility: this Bootstrap build ships none (they are docs-only),
+      // so the affordance has to be an inline style or it is silently dead.
+      return this.fixedBox ? 'w-100 h-100' : 'w-100';
+    },
+    imageStyle() {
+      const style = {};
+      if (this.fit) {
+        style.objectFit = this.fit;
+      }
+      if (!this.fixedBox) {
+        style.height = 'auto';
+      }
+      if (this.canPreview) {
+        style.cursor = 'zoom-in';
+      }
+      return style;
+    },
+    /** A box exists only if something constrained one, so w-100/h-100 is safe. */
+    fixedBox() {
+      return Boolean(this.height || this.aspect || this.circle);
+    },
+    canPreview() {
+      return this.lightbox && this.previewable && !this.failed;
+    },
+    overlayStyle() {
+      // Dimmed scrim: opaque enough to kill the page behind it, light enough
+      // that the image keeps its contrast.
+      return {
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        zIndex: '1055'
+      };
+    },
+    lightboxImageStyle() {
+      return { maxHeight: '90vh', maxWidth: '90vw', objectFit: 'contain' };
+    }
+  },
+  watch: {
+    src() {
+      this.loaded = false;
+      this.failed = false;
+      this.lightboxOpen = false;
+    }
+  },
+  methods: {
+    length(value) {
+      if (value === '' || value === null || value === undefined) {
+        return null;
+      }
+      return typeof value === 'number' ? `${value}px` : value;
+    },
+    onLoad(event) {
+      this.loaded = true;
+      this.$emit('load', event);
+    },
+    onError(event) {
+      this.failed = true;
+      this.loaded = false;
+      this.$emit('error', event);
+    },
+    onImageClick() {
+      if (!this.canPreview) {
+        return;
+      }
+      this.lightboxOpen = true;
+      this.$emit('open', this.src);
+    },
+    closeLightbox() {
+      this.lightboxOpen = false;
+    }
+  }
+};
+</script>

@@ -7,12 +7,13 @@
             <th
               v-for="col in columns"
               :key="col.key"
-              :class="{ 'cursor-pointer user-select-none': col.sortable }"
+              :class="col.sortable ? 'user-select-none' : ''"
+              :style="col.sortable ? { cursor: 'pointer' } : null"
               @click="col.sortable ? handleSort(col.key) : null"
             >
-              <span class="th-content">
+              <span >
                 <span>{{ col.label || col.key }}</span>
-                <span v-if="col.sortable" class="sort-icon ms-1">
+                <span v-if="col.sortable" class="ms-1">
                   <template v-if="sortKey === col.key">
                     {{ sortOrder === 'asc' ? '▲' : '▼' }}
                   </template>

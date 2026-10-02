@@ -1,7 +1,7 @@
 <template>
   <div
     data-phui="range"
-    class="ph-range"
+    
   >
     <label v-if="label" :for="labelFor" class="form-label">
       {{ label }}
@@ -22,20 +22,20 @@
       />
       <div
         v-else
-        class="ph-range-slider"
+        
         :style="sliderStyle"
         @pointerdown="onPointerDown"
       >
         <div
           ref="rail"
-          class="ph-range-slider__rail"
+          
           :style="railStyle"
         >
-          <div class="ph-range-slider__fill" :style="fillStyle" aria-hidden="true"></div>
+          <div  :style="fillStyle" aria-hidden="true"></div>
           <span
             v-for="side in sides"
             :key="`thumb-${side}`"
-            class="ph-range-slider__thumb"
+            
             :style="thumbStyle(side)"
             :data-thumb="side"
             aria-hidden="true"
@@ -48,7 +48,7 @@
           :id="side === 'low' ? lowId : highId"
           :name="name ? name + '-' + side : null"
           type="range"
-          class="ph-range-slider__input"
+          
           :style="inputStyle"
           :min="min"
           :max="max"
@@ -61,7 +61,7 @@
           @blur="focused = null"
         />
       </div>
-      <span v-if="showValue" class="ph-range-value text-body-secondary small fw-monospace" style="min-width: 4rem;">
+      <span v-if="showValue" class="text-body-secondary small font-monospace" style="min-width: 4rem;">
         {{ displayValue }}
       </span>
     </div>

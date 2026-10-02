@@ -11,7 +11,7 @@
     @click="$emit('click', $event)"
   >
     <span v-if="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-    <span class="btn__content">
+    <span data-phui="button-content">
       <slot />
     </span>
   </button>

@@ -1,0 +1,418 @@
+<template>
+  <div
+    ref="root"
+    data-phui="calendar"
+    :class="rootClasses"
+  >
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+      <div class="d-flex align-items-center gap-1">
+        <button
+          v-if="selectable"
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :aria-label="`Previous year, ${monthLabel}`"
+          @click="shiftYear(-1)"
+        >
+          <ph-icon name="chevron-bar-left" size="sm" />
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :aria-label="`Previous month, ${monthLabel}`"
+          @click="shiftMonth(-1)"
+        >
+          <ph-icon name="chevron-left" size="sm" />
+        </button>
+      </div>
+
+      <strong class="small" aria-live="polite">{{ monthLabel }}</strong>
+
+      <div class="d-flex align-items-center gap-1">
+        <button
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :aria-label="`Next month, ${monthLabel}`"
+          @click="shiftMonth(1)"
+        >
+          <ph-icon name="chevron-right" size="sm" />
+        </button>
+        <button
+          v-if="selectable"
+          type="button"
+          class="btn btn-sm btn-link text-body p-1"
+          :aria-label="`Next year, ${monthLabel}`"
+          @click="shiftYear(1)"
+        >
+          <ph-icon name="chevron-bar-right" size="sm" />
+        </button>
+      </div>
+    </div>
+
+    <div class="d-grid mb-1" :style="gridStyle" role="row">
+      <span
+        v-for="day in weekDays"
+        :key="day"
+        class="text-center text-body-secondary fw-semibold"
+        role="columnheader"
+        :aria-label="day"
+      >
+        <span aria-hidden="true">{{ day.slice(0, 1) }}</span>
+        <span class="visually-hidden">{{ day }}</span>
+      </span>
+    </div>
+
+    <div
+      class="d-grid"
+      :style="gridStyle"
+      role="grid"
+      :aria-label="monthLabel"
+      @keydown="onGridKeydown"
+    >
+      <button
+        v-for="day in cells"
+        :key="day.iso"
+        type="button"
+        class="btn p-1 border-0 d-flex flex-column align-items-center justify-content-center gap-1"
+        :class="dayClasses(day)"
+        :style="dayStyles(day)"
+        :disabled="day.disabled"
+        :aria-label="dayAria(day)"
+        :aria-current="day.isToday ? 'date' : null"
+        :aria-selected="isSelected(day) ? 'true' : null"
+        :tabindex="day.iso === focusIso ? 0 : -1"
+        @click="select(day)"
+      >
+        <span>{{ day.day }}</span>
+        <span v-if="day.events.length" class="d-flex align-items-center gap-1">
+          <span
+            v-for="(event, eventIndex) in day.events.slice(0, maxDots)"
+            :key="eventIndex"
+            class="rounded-circle d-inline-block"
+            :style="dotStyle(colorOf(event))"
+            aria-hidden="true"
+          ></span>
+          <span v-if="day.events.length > maxDots" class="small">
+            +{{ day.events.length - maxDots }}
+          </span>
+        </span>
+      </button>
+    </div>
+
+    <div
+      v-if="showLegend && legend.length"
+      class="d-flex flex-wrap gap-3 mt-2 pt-2 border-top"
+    >
+      <span
+        v-for="entry in legend"
+        :key="entry.label"
+        class="d-inline-flex align-items-center gap-1 small text-body-secondary"
+      >
+        <span
+          class="rounded-circle d-inline-block"
+          :style="dotStyle(entry.color)"
+          aria-hidden="true"
+        ></span>
+        {{ entry.label }}
+      </span>
+    </div>
+  </div>
+</template>
+
+<script>
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export default {
+  name: 'PhCalendar',
+  props: {
+    modelValue: {
+      type: Array,
+      default: () => []
+    },
+    events: {
+      type: Array,
+      default: () => []
+    },
+    month: {
+      type: String,
+      default: ''
+    },
+    weekStart: {
+      type: Number,
+      default: 1
+    },
+    selectable: {
+      type: Boolean,
+      default: false
+    },
+    multiple: {
+      type: Boolean,
+      default: true
+    },
+    min: {
+      type: String,
+      default: ''
+    },
+    max: {
+      type: String,
+      default: ''
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
+    maxDots: {
+      type: Number,
+      default: 3
+    },
+    showLegend: {
+      type: Boolean,
+      default: true
+    },
+    highlightToday: {
+      type: Boolean,
+      default: true
+    },
+    eventColorKey: {
+      type: String,
+      default: 'color'
+    },
+    eventLabelKey: {
+      type: String,
+      default: 'label'
+    }
+  },
+  emits: ['update:modelValue', 'select', 'day-click', 'month-change', 'event-click'],
+  data() {
+    const today = new Date();
+    return {
+      viewYear: today.getFullYear(),
+      viewMonth: today.getMonth(),
+      focusIso: this.isoOf(today)
+    };
+  },
+  computed: {
+    rootClasses() {
+      return this.size === 'sm' ? 'small' : '';
+    },
+    weekDays() {
+      const start = ((this.weekStart % 7) + 7) % 7;
+      return DAY_LABELS.slice(start).concat(DAY_LABELS.slice(0, start));
+    },
+    monthLabel() {
+      return `${MONTH_LABELS[this.viewMonth]} ${this.viewYear}`;
+    },
+    gridStyle() {
+      const gap = this.size === 'sm' ? '1px' : '2px';
+      return { gridTemplateColumns: 'repeat(7, 1fr)', gap };
+    },
+    eventsByIso() {
+      // Grouped once per render: 42 cells would otherwise scan the whole list
+      // once each.
+      const map = {};
+      for (const event of this.events || []) {
+        const iso = this.eventIso(event);
+        if (!iso) {
+          continue;
+        }
+        if (!map[iso]) {
+          map[iso] = [];
+        }
+        map[iso].push(event);
+      }
+      return map;
+    },
+    /** Always 42 cells, so the height never jumps between months. */
+    cells() {
+      const first = new Date(this.viewYear, this.viewMonth, 1);
+      // weekStart is a weekday index on the same axis as getDay(), so the
+      // difference is exactly how many blanks precede the 1st. Deriving it by
+      // looking the weekday up in a label array can return -1 and shift the
+      // whole grid a week.
+      const start = ((this.weekStart % 7) + 7) % 7;
+      const offset = (first.getDay() - start + 7) % 7;
+      const from = new Date(this.viewYear, this.viewMonth, 1 - offset);
+      const todayIso = this.isoOf(new Date());
+
+      const cells = [];
+      for (let i = 0; i < 42; i++) {
+        const date = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
+        const iso = this.isoOf(date);
+        cells.push({
+          iso,
+          date,
+          day: date.getDate(),
+          outside: date.getMonth() !== this.viewMonth,
+          isToday: this.highlightToday && iso === todayIso,
+          disabled: this.isDisabled(iso),
+          events: this.eventsByIso[iso] || []
+        });
+      }
+      return cells;
+    },
+    legend() {
+      const seen = {};
+      const entries = [];
+      for (const event of this.events || []) {
+        const color = this.colorOf(event);
+        if (color && !seen[color]) {
+          seen[color] = true;
+          entries.push({ color, label: event[this.eventLabelKey] || color });
+        }
+      }
+      return entries.slice(0, 6);
+    }
+  },
+  watch: {
+    month(value) {
+      const parsed = this.parseIso(value);
+      if (!parsed) {
+        return;
+      }
+      this.viewYear = parsed.getFullYear();
+      this.viewMonth = parsed.getMonth();
+    }
+  },
+  methods: {
+    isoOf(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    },
+    parseIso(value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+      if (!match) {
+        return null;
+      }
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    },
+    eventIso(event) {
+      if (!event) {
+        return '';
+      }
+      if (typeof event === 'string') {
+        return event.slice(0, 10);
+      }
+      const parsed = this.parseIso(event.date ?? event.start ?? event.iso ?? '');
+      return parsed ? this.isoOf(parsed) : '';
+    },
+    colorOf(event) {
+      if (!event || typeof event === 'string') {
+        return 'var(--bs-primary)';
+      }
+      return event[this.eventColorKey] || 'var(--bs-primary)';
+    },
+    dotStyle(color) {
+      const size = this.size === 'sm' ? '4px' : '5px';
+      return { width: size, height: size, backgroundColor: color };
+    },
+    isSelected(day) {
+      return (this.modelValue || []).includes(day.iso);
+    },
+    isDisabled(iso) {
+      if (this.min && iso < this.min.slice(0, 10)) {
+        return true;
+      }
+      if (this.max && iso > this.max.slice(0, 10)) {
+        return true;
+      }
+      return false;
+    },
+    dayAria(day) {
+      const base = day.date.toLocaleDateString('en-GB', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+      return day.events.length ? `${base}, ${day.events.length} event(s)` : base;
+    },
+    dayClasses(day) {
+      const selected = this.isSelected(day);
+      return {
+        // A selected day owns its own foreground, so it also skips text-* and
+        // the bg-* that the unselected states set.
+        [selected ? 'btn-primary' : 'btn-light']: true,
+        'text-body-secondary': !selected && day.outside,
+        'opacity-50': !selected && day.outside && !day.events.length,
+        'fw-semibold': day.isToday && !selected
+      };
+    },
+    dayStyles(day) {
+      const style = {};
+      const pad = this.size === 'sm' ? '0.1rem' : '0.2rem';
+      style.padding = pad;
+      style.minHeight = this.size === 'lg' ? '2.75rem' : (this.size === 'sm' ? '1.5rem' : '2rem');
+      if (this.highlightToday && day.isToday) {
+        // Bootstrap has no `.ring`, so the focus-ring token is reused: it stays
+        // correct in dark mode and for every theme colour.
+        style.boxShadow = `0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color)`;
+      }
+      return style;
+    },
+    select(day) {
+      if (day.disabled || !this.selectable) {
+        this.$emit('day-click', day.iso, day.events);
+        return;
+      }
+      const current = this.modelValue || [];
+      let next;
+      if (this.isSelected(day)) {
+        next = current.filter((iso) => iso !== day.iso);
+      } else if (this.multiple) {
+        next = [...current, day.iso].sort();
+      } else {
+        next = [day.iso];
+      }
+      this.$emit('update:modelValue', next);
+      this.$emit('select', next, day.iso);
+      this.focusIso = day.iso;
+    },
+    onGridKeydown(event) {
+      const index = this.cells.findIndex((day) => day.iso === this.focusIso);
+      if (index === -1) {
+        return;
+      }
+      const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      const delta = moves[event.key];
+      if (delta === undefined) {
+        return;
+      }
+      event.preventDefault();
+      const target = this.cells[index + delta];
+      if (!target || target.disabled) {
+        return;
+      }
+      this.focusIso = target.iso;
+      this.follow(target);
+    },
+    follow(day) {
+      if (day.outside) {
+        this.viewMonth = day.date.getMonth();
+        this.viewYear = day.date.getFullYear();
+      }
+    },
+    shiftMonth(delta) {
+      const next = new Date(this.viewYear, this.viewMonth + delta, 1);
+      this.viewMonth = next.getMonth();
+      this.viewYear = next.getFullYear();
+      this.announceMonth();
+    },
+    shiftYear(delta) {
+      this.viewYear += delta;
+      this.announceMonth();
+    },
+    announceMonth() {
+      this.$emit('month-change', `${this.viewYear}-${String(this.viewMonth + 1).padStart(2, '0')}`);
+      // Keep the roving tabindex on a cell that exists in the new month.
+      const first = this.cells.find((day) => !day.outside);
+      if (first) {
+        this.focusIso = first.iso;
+      }
+    }
+  }
+};
+</script>

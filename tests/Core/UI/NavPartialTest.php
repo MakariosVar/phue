@@ -141,7 +141,7 @@ final class NavPartialTest extends TestCase
 
         $this->assertSame(1, substr_count($html, '>Learn<'));
         $this->assertStringContainsString(
-            '<h6 class="phue-nav-group sidebar-heading px-3 mt-3 mb-1 text-muted text-uppercase small">Learn</h6>',
+            '<h6 data-phui="nav-group" class="px-3 mt-3 mb-1 text-muted text-uppercase small">Learn</h6>',
             $html
         );
         $this->assertMatchesRegularExpression(
@@ -187,7 +187,7 @@ final class NavPartialTest extends TestCase
         ];
         $html = $this->render($items, '/docs', 'horizontal');
 
-        $this->assertStringNotContainsString('phue-nav-group', $html);
+        $this->assertStringNotContainsString('data-phui="nav-group"', $html);
         $this->assertStringContainsString(
             '<li class="nav-item dropdown">',
             $html

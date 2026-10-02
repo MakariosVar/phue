@@ -1,0 +1,328 @@
+<template>
+  <div ref="root" data-phui="color-picker" class="position-relative">
+    <label v-if="label" :for="inputId" class="form-label">
+      {{ label }}
+      <span v-if="required" class="text-danger">*</span>
+    </label>
+
+    <div class="d-flex align-items-center gap-2" :class="{ 'pe-none': disabled }">
+      <button
+        type="button"
+        class="btn p-0 border flex-shrink-0"
+        :style="triggerStyle"
+        :disabled="disabled"
+        :aria-label="triggerLabel"
+        aria-haspopup="dialog"
+        :aria-expanded="open ? 'true' : null"
+        @click="toggle"
+      ></button>
+
+      <input
+        v-if="hex"
+        :id="inputId"
+        type="text"
+        class="form-control form-control-sm font-monospace"
+        :class="{ 'is-invalid': !!error }"
+        :value="modelValue"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        spellcheck="false"
+        autocomplete="off"
+        @input="onHexInput"
+      />
+
+      <input
+        v-if="alpha"
+        type="range"
+        class="form-range flex-grow-1"
+        min="0"
+        max="100"
+        :value="alphaPercent"
+        :disabled="disabled"
+        :aria-label="`Alpha ${alphaPercent}%`"
+        @input="onAlphaInput"
+      />
+    </div>
+
+    <div
+      v-if="open"
+      class="dropdown-menu show p-2"
+      role="dialog"
+      aria-label="Colour picker"
+      :style="popoverStyle"
+    >
+      <div class="d-grid gap-2" :style="swatchGridStyle">
+        <button
+          v-for="color in palette"
+          :key="color"
+          type="button"
+          class="btn p-0 border"
+          :style="swatchStyle(color)"
+          :aria-label="color"
+          :aria-pressed="isSelected(color) ? 'true' : 'false'"
+          :disabled="disabled"
+          @click="selectSwatch(color)"
+        ></button>
+      </div>
+
+      <div v-if="recent.length" class="mt-2 pt-2 border-top">
+        <div class="small text-body-secondary mb-1">Recent</div>
+        <div class="d-flex flex-wrap gap-1">
+          <button
+            v-for="color in recent"
+            :key="'r' + color"
+            type="button"
+            class="btn p-0 border"
+            :style="swatchStyle(color)"
+            :aria-label="color"
+            :disabled="disabled"
+            @click="selectSwatch(color)"
+          ></button>
+        </div>
+      </div>
+
+      <div v-if="!swatchesOnly" class="mt-2 pt-2 border-top d-flex align-items-center gap-2">
+        <input
+          type="text"
+          class="form-control form-control-sm font-monospace"
+          :value="modelValue"
+          :disabled="disabled"
+          aria-label="Hex value"
+          spellcheck="false"
+          @input="onHexInput"
+        />
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary flex-shrink-0"
+          :disabled="disabled"
+          @click="clear"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+import { useId } from 'vue';
+
+/** Bootstrap's own palette, so a swatch and a `text-*` class are the same colour. */
+const DEFAULT_PALETTE = [
+  '#000000', '#6c757d', '#dc3545', '#fd7e14', '#ffc107', '#198754',
+  '#20c997', '#0dcaf0', '#0d6efd', '#6f42c1', '#d63384', '#adb5bd'
+];
+
+const SWATCH = { width: '1.5rem', height: '1.5rem', borderRadius: '50%' };
+
+export default {
+  name: 'PhColorPicker',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    id: {
+      type: String,
+      default: null
+    },
+    name: {
+      type: String,
+      default: ''
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: '#000000'
+    },
+    palette: {
+      type: Array,
+      default: () => DEFAULT_PALETTE
+    },
+    swatchesOnly: {
+      type: Boolean,
+      default: false
+    },
+    hex: {
+      type: Boolean,
+      default: true
+    },
+    alpha: {
+      type: Boolean,
+      default: false
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    },
+    maxRecent: {
+      type: Number,
+      default: 6
+    }
+  },
+  emits: ['update:modelValue', 'change', 'open', 'close'],
+  data() {
+    return {
+      open: false,
+      recent: []
+    };
+  },
+  computed: {
+    inputId() {
+      return this.id || `ph-color-picker-${useId()}`;
+    },
+    triggerLabel() {
+      return this.modelValue ? `Colour ${this.modelValue}` : 'Pick a colour';
+    },
+    triggerStyle() {
+      return {
+        ...SWATCH,
+        backgroundColor: this.modelValue || 'transparent',
+        cursor: this.disabled ? 'not-allowed' : 'pointer'
+      };
+    },
+    popoverStyle() {
+      return {
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        zIndex: 1000,
+        display: 'block',
+        minWidth: '13rem'
+      };
+    },
+    swatchGridStyle() {
+      return { gridTemplateColumns: `repeat(${Math.min(this.palette.length, 6)}, auto)` };
+    },
+    alphaPercent() {
+      const match = /^#?([0-9a-f]{6})([0-9a-f]{2})$/i.exec(this.modelValue || '');
+      if (!match) {
+        return 100;
+      }
+      return Math.round((parseInt(match[2], 16) / 255) * 100);
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.onDocumentClick);
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.onDocumentClick);
+    document.removeEventListener('keydown', this.onKeydown);
+  },
+  methods: {
+    /** Normalises anything the user can type into `#rrggbb` (or `#rrggbbaa`). */
+    normalize(value) {
+      let hex = String(value || '').trim();
+      if (!hex) {
+        return '';
+      }
+      if (!hex.startsWith('#')) {
+        hex = `#${hex}`;
+      }
+      if (/^#[0-9a-f]{3}$/i.test(hex)) {
+        hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+      }
+      if (!/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(hex)) {
+        return null;
+      }
+      return hex.toLowerCase();
+    },
+    swatchStyle(color) {
+      const style = { ...SWATCH, backgroundColor: color, cursor: 'pointer' };
+      if (this.isSelected(color)) {
+        // The focus-ring token instead of a hard-coded border colour, so the
+        // selection ring follows the active theme.
+        style.boxShadow = '0 0 0 2px var(--bs-body-bg), 0 0 0 4px var(--bs-primary)';
+      }
+      return style;
+    },
+    isSelected(color) {
+      const a = this.normalize(color);
+      const b = this.normalize(this.modelValue);
+      if (!a || !b) {
+        return false;
+      }
+      return this.alpha ? a.slice(0, 7) === b.slice(0, 7) : a === b;
+    },
+    selectSwatch(color) {
+      this.commit(color);
+    },
+    onHexInput(event) {
+      const raw = event.target.value;
+      const normalised = this.normalize(raw);
+      if (normalised === null) {
+        // Still mid-typing (e.g. "#ab"): pass the raw text through so the
+        // field keeps showing what is being written, but do not announce a
+        // change until it is a real colour.
+        this.$emit('update:modelValue', raw);
+        return;
+      }
+      this.commit(normalised);
+    },
+    onAlphaInput(event) {
+      const base = this.normalize(this.modelValue) || this.normalize(this.placeholder) || '#000000';
+      const rgb = base.slice(0, 7);
+      const alpha = Math.round((Number(event.target.value) / 100) * 255);
+      this.commit(`${rgb}${alpha.toString(16).padStart(2, '0')}`);
+    },
+    commit(color) {
+      this.$emit('update:modelValue', color);
+      this.$emit('change', color);
+      this.remember(color);
+    },
+    remember(color) {
+      const value = this.normalize(color);
+      if (!value) {
+        return;
+      }
+      this.recent = [value, ...this.recent.filter((c) => c !== value)].slice(0, this.maxRecent);
+    },
+    clear() {
+      this.$emit('update:modelValue', '');
+      this.$emit('change', '');
+    },
+    toggle() {
+      if (this.disabled) {
+        return;
+      }
+      this.open = !this.open;
+    },
+    onDocumentClick(event) {
+      const root = this.$refs.root;
+      if (!root || !this.open || root.contains(event.target)) {
+        return;
+      }
+      this.open = false;
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape' && this.open) {
+        this.open = false;
+      }
+    }
+  },
+  watch: {
+    open(value) {
+      this.$emit(value ? 'open' : 'close');
+    }
+  }
+};
+</script>

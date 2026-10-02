@@ -345,7 +345,7 @@ final class PhCodeTest extends TestCase
         $this->assertStringContainsString('align="end"', $this->template);
 
         $this->assertLessThan(
-            strpos($this->template, 'ph-code-copy'),
+            strpos($this->template, 'data-phui="code-copy"'),
             strpos($this->template, '<ph-dropdown'),
             'The theme picker is placed before the copy icon, not after it.',
         );
@@ -562,7 +562,7 @@ final class PhCodeTest extends TestCase
         $component = $loader->load('PhCode');
 
         $this->assertSame('Code Block', $component->title);
-        $this->assertStringContainsString('ph-code', $component->view->getTemplate());
+        $this->assertStringContainsString('data-phui="code"', $component->view->getTemplate());
         $this->assertStringContainsString('highlightElement', (string) $component->view->getInlineScript());
         $this->assertNull($component->view->getHtml(), 'PhCode is a client component, not an HTML-first partial.');
     }

@@ -112,7 +112,7 @@ final class BunSidecarIntegrationTest extends TestCase
         $this->assertStringContainsString('type="button"', $html);
         $this->assertStringContainsString('class="btn btn-primary"', $html);
         $this->assertStringContainsString(
-            '<span class="btn__content"><!--[-->Save<!--]--></span></button>',
+            '<span data-phui="button-content"><!--[-->Save<!--]--></span></button>',
             $html
         );
     }

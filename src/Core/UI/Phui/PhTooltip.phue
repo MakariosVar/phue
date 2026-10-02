@@ -2,7 +2,7 @@
   <span
     ref="root"
     data-phui="tooltip"
-    class="ph-tooltip position-relative d-inline-block"
+    class="position-relative d-inline-block"
     :aria-describedby="visible ? tipId : null"
     @mouseenter="onEnter"
     @mouseleave="onLeave"

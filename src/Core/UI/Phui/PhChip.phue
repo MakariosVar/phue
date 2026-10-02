@@ -1,12 +1,12 @@
 <template>
   <span :class="['badge rounded-pill d-flex align-items-center', variantClass, { 'opacity-50 pe-none': disabled }]">
-    <span class="chip__content">
+    <span >
       <slot>{{ label }}</slot>
     </span>
     <button
       v-if="removable && !disabled"
       type="button"
-      class="btn-close btn-close-sm ms-1 chip__remove"
+      class="btn-close ms-1"
       aria-label="Remove"
       @click.stop="$emit('remove')"
     ></button>

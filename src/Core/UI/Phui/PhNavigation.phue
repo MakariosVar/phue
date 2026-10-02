@@ -5,9 +5,10 @@
     <!-- Sidebar Mode -->
     <template v-if="isSidebar">
         <template v-for="(item, idx) in items" :key="idx">
-          <h6 
+          <h6
+            data-phui="nav-group"
             v-if="item.group && item.group !== (items[idx - 1]?.group)" 
-            class="phue-nav-group sidebar-heading px-3 mt-3 mb-1 text-muted text-uppercase small"
+            class="px-3 mt-3 mb-1 text-muted text-uppercase small"
           >
             {{ item.group }}
           </h6>

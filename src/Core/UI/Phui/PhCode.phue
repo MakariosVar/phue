@@ -1,14 +1,14 @@
 <template>
   <div
-    class="ph-code border rounded position-relative bg-body-secondary"
+    class="border rounded position-relative bg-body-secondary"
     data-phui="code"
     :data-ph-theme-scope="scopeId"
   >
     <div
       v-if="language || copyable || themeSwitcher"
-      class="ph-code-header d-flex justify-content-between align-items-center px-3 py-2 border-bottom rounded-top bg-body-tertiary"
+      class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom rounded-top bg-body-tertiary"
     >
-      <span class="ph-code-language text-body-secondary small text-uppercase fw-semibold">{{ languageLabel }}</span>
+      <span class="text-body-secondary small text-uppercase fw-semibold">{{ languageLabel }}</span>
       <div class="d-flex align-items-center gap-2">
         <ph-dropdown
           v-if="themeSwitcher"
@@ -21,7 +21,8 @@
           <template #trigger="{ open, toggle }">
             <button
               type="button"
-              class="btn btn-link btn-sm d-inline-flex align-items-center text-body-secondary theme-picker"
+              data-phui="theme-picker"
+              class="btn btn-link btn-sm d-inline-flex align-items-center text-body-secondary"
               :aria-expanded="open ? 'true' : 'false'"
               title="Code theme"
               @click="toggle"
@@ -40,7 +41,8 @@
         <button
           v-if="copyable"
           type="button"
-          class="btn btn-link btn-sm ph-code-copy"
+          class="btn btn-link btn-sm"
+          data-phui="code-copy"
           @click="copy"
           :disabled="copying"
           :aria-label="copied ? 'Copied' : 'Copy to clipboard'"
@@ -51,7 +53,8 @@
       </div>
     </div>
     <pre
-      class="ph-code-pre m-0 p-3 overflow-auto rounded-bottom font-monospace small mb-0"
+      data-phui="code-pre"
+      class="m-0 p-3 overflow-auto rounded-bottom font-monospace small mb-0"
       :class="[codeClasses, { 'line-numbers': lineNumbers }]"
       :style="preStyles"
     ><code

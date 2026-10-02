@@ -1,7 +1,7 @@
 <template>
   <div
     data-phui="accordion"
-    class="accordion ph-accordion"
+    class="accordion"
     :class="{ 'accordion-flush': flush }"
   >
     <div

@@ -1,16 +1,16 @@
 <template>
   <div
     data-phui="popover"
-    class="ph-popover position-relative d-inline-block"
+    class="position-relative d-inline-block"
   >
-    <div class="ph-popover-trigger" @click="toggle" @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle" tabindex="0" :aria-expanded="open">
+    <div  @click="toggle" @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle" tabindex="0" :aria-expanded="open">
       <slot name="trigger">
         <ph-button variant="outline-secondary" size="sm">{{ triggerLabel }}</ph-button>
       </slot>
     </div>
     <teleport to="body" v-if="open">
       <div
-        class="ph-popover-content popover"
+        class="popover"
         :class="[
           'show',
           placementClass,
@@ -29,7 +29,7 @@
           <slot name="content">{{ content }}</slot>
         </div>
       </div>
-      <div class="ph-popover-backdrop" @click="close"></div>
+      <div  @click="close"></div>
     </teleport>
   </div>
 </template>

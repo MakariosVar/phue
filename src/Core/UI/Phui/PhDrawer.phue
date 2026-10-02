@@ -2,13 +2,13 @@
   <teleport to="body" v-if="mounted && modelValue">
     <div
       data-phui="drawer"
-      class="ph-drawer"
+      
       :style="backdropStyle"
       @click="onBackdropClick"
     >
       <div
         ref="panel"
-        class="ph-drawer__panel d-flex flex-column"
+        class="d-flex flex-column"
         role="dialog"
         aria-modal="true"
         :aria-label="title || null"
@@ -16,7 +16,7 @@
         tabindex="-1"
         @click.stop
       >
-        <div class="ph-drawer__header d-flex align-items-center border-bottom px-3 py-2">
+        <div class="d-flex align-items-center border-bottom px-3 py-2">
           <slot name="header">
             <h5 class="mb-0 me-auto">{{ title }}</h5>
           </slot>
@@ -30,13 +30,13 @@
         </div>
 
         <div
-          class="ph-drawer__body flex-grow-1 px-3 py-3"
+          class="flex-grow-1 px-3 py-3"
           :style="{ overflowY: scrollable ? 'auto' : 'visible' }"
         >
           <slot />
         </div>
 
-        <div v-if="$slots.footer" class="ph-drawer__footer border-top px-3 py-2">
+        <div v-if="$slots.footer" class="border-top px-3 py-2">
           <slot name="footer" />
         </div>
       </div>

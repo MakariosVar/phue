@@ -1,6 +1,6 @@
 <template>
   <li
-    class="ph-tree-node"
+    
     :class="nodeClasses"
     role="treeitem"
     :aria-selected="isSelected ? 'true' : 'false'"
@@ -12,7 +12,7 @@
     @click.stop="onRowClick"
   >
     <div
-      class="ph-tree-node-content d-flex align-items-center gap-2 py-1 pe-2"
+      class="d-flex align-items-center gap-2 py-1 pe-2"
       :style="rowStyle"
     >
       <!--
@@ -28,18 +28,18 @@
       <button
         v-if="hasChildren"
         type="button"
-        class="ph-tree-toggle btn p-0 d-inline-flex align-items-center"
+        class="btn p-0 d-inline-flex align-items-center"
         tabindex="-1"
         :aria-label="isExpanded ? 'Collapse' : 'Expand'"
         @click.stop="$emit('toggle', payload)"
       >
         <ph-icon :name="isExpanded ? 'chevron-down' : 'chevron-right'" size="xs" />
       </button>
-      <span v-else class="ph-tree-spacer d-inline-flex align-items-center" aria-hidden="true">
+      <span v-else class="d-inline-flex align-items-center" aria-hidden="true">
         <ph-icon name="chevron-right" size="xs" style="visibility: hidden;" />
       </span>
 
-      <label v-if="checkable" class="ph-tree-checkbox d-flex align-items-center mb-0 flex-shrink-0">
+      <label v-if="checkable" class="d-flex align-items-center mb-0 flex-shrink-0">
         <input
           :ref="checkboxRef"
           type="checkbox"
@@ -59,14 +59,14 @@
         class="flex-shrink-0"
       />
 
-      <span class="ph-tree-label flex-grow-1 text-truncate" :class="labelClasses">
+      <span class="flex-grow-1 text-truncate" :class="labelClasses">
         {{ node.label }}
       </span>
 
       <slot :name="`node-${node.key}`" :node="node" />
     </div>
 
-    <ul v-if="hasChildren && isExpanded" class="ph-tree-children list-unstyled mb-0" role="group">
+    <ul v-if="hasChildren && isExpanded" class="list-unstyled mb-0" role="group">
       <ph-tree-node
         v-for="(child, index) in node.children"
         :key="child.key || index"

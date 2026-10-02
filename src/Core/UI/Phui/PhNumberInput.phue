@@ -1,7 +1,7 @@
 <template>
   <div
     data-phui="number-input"
-    class="ph-number-input"
+    
   >
     <label v-if="label" :for="inputId" class="form-label">
       {{ label }}

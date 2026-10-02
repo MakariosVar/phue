@@ -259,7 +259,7 @@ final class AppLayoutTest extends TestCase
 
         $this->assertStringContainsString('<aside class="app-sidebar', $html);
         $this->assertStringContainsString('<nav class="nav nav-pills flex-column gap-1">', $html);
-        $this->assertStringContainsString('<h6 class="phue-nav-group', $html);
+        $this->assertStringContainsString('<h6 data-phui="nav-group"', $html);
         $this->assertStringContainsString('>Learn<', $html);
         $this->assertStringContainsString('>Shop<', $html);
         $this->assertMatchesRegularExpression('/<a class="navbar-brand[^"]*"/', $html);

@@ -1,8 +1,8 @@
 <template>
   <div>
     <div v-if="showValue || label" class="d-flex justify-content-between mb-1">
-      <span v-if="label" class="progress-label">{{ label }}</span>
-      <span v-if="showValue" class="progress-value">{{ normalizedValue }}%</span>
+      <span v-if="label" >{{ label }}</span>
+      <span v-if="showValue" >{{ normalizedValue }}%</span>
     </div>
     <div :class="['progress', sizeClass]" :style="trackStyles">
       <div

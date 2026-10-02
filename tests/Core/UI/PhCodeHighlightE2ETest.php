@@ -481,7 +481,7 @@ if (mode === 'picker') {
     const code = () => document.querySelector('code');
     const snapshot = () => ({
         themeLinks: themeLinks(),
-        trigger: (document.querySelector('.theme-picker') || {}).textContent?.trim() || null,
+        trigger: (document.querySelector('[data-phui="theme-picker"]') || {}).textContent?.trim() || null,
         checked: menuItems().filter((el) => el.querySelector('.bi-check-lg')).map((el) => el.textContent.trim()),
         highlighted: code() ? code().getAttribute('data-ph-highlighted') : null,
         tokenCount: code() ? code().querySelectorAll('span.token').length : -1,
@@ -490,9 +490,9 @@ if (mode === 'picker') {
 
     const steps = { closed: snapshot() };
 
-    const trigger = document.querySelector('.theme-picker');
+    const trigger = document.querySelector('[data-phui="theme-picker"]');
     if (!trigger) {
-        steps.error = 'no .theme-picker trigger rendered';
+        steps.error = 'no theme-picker trigger rendered';
     } else {
         click(trigger);
         await wait(40);
@@ -504,7 +504,7 @@ if (mode === 'picker') {
 
         const pick = async (label) => {
             if (!document.querySelector('.dropdown-menu')) {
-                click(document.querySelector('.theme-picker'));
+                click(document.querySelector('[data-phui="theme-picker"]'));
                 await wait(40);
             }
             const item = menuItems().find((el) => el.textContent.trim() === label);
@@ -516,7 +516,7 @@ if (mode === 'picker') {
             await wait(350);
             // The dropdown closes on select; reopen it so the next assertion can
             // see which item carries the active check.
-            click(document.querySelector('.theme-picker'));
+            click(document.querySelector('[data-phui="theme-picker"]'));
             await wait(40);
         };
 

@@ -1,12 +1,11 @@
 <template>
   <div
     data-phui="tree-view"
-    class="ph-tree-view"
-    :class="{ 'ph-tree-view-checkable': checkable }"
+    
   >
     <ul
       ref="rootEl"
-      class="ph-tree-node-list list-unstyled mb-0"
+      class="list-unstyled mb-0"
       role="tree"
       :aria-multiselectable="isMultiSelect ? 'true' : 'false'"
       :aria-label="ariaLabel"

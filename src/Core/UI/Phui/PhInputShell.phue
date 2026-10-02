@@ -9,7 +9,7 @@
   >
     <span
       v-if="$slots.prefix"
-      class="ph-input-shell__affix d-inline-flex align-items-center flex-shrink-0"
+      class="d-inline-flex align-items-center flex-shrink-0"
     >
       <slot name="prefix" />
     </span>
@@ -23,7 +23,7 @@
 
     <span
       v-if="$slots.suffix"
-      class="ph-input-shell__affix d-inline-flex align-items-center flex-shrink-0"
+      class="d-inline-flex align-items-center flex-shrink-0"
     >
       <slot name="suffix" />
     </span>

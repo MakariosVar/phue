@@ -1,7 +1,7 @@
 <template>
   <div
     data-phui="empty-state"
-    class="ph-empty-state text-center py-5"
+    class="text-center py-5"
     :class="[
       variant ? `text-${variant}-emphasis` : '',
       flush ? 'border-0 rounded-0' : 'border rounded'
@@ -11,17 +11,17 @@
       borderColor: variant ? `var(--bs-${variant}-border-subtle)` : 'var(--bs-border-color)'
     }"
   >
-    <div class="ph-empty-state-icon mb-3" v-if="icon || $slots.icon">
+    <div class="mb-3" v-if="icon || $slots.icon">
       <ph-icon v-if="icon" :name="icon" :size="iconSize" :variant="variant" />
       <slot name="icon" />
     </div>
-    <h4 class="ph-empty-state-title mb-2" v-if="title || $slots.default">
+    <h4 class="mb-2" v-if="title || $slots.default">
       <slot name="default">{{ title }}</slot>
     </h4>
-    <p class="ph-empty-state-message text-body-secondary mb-3" v-if="message">
+    <p class="text-body-secondary mb-3" v-if="message">
       {{ message }}
     </p>
-    <div class="ph-empty-state-action" v-if="actionLabel || $slots.action">
+    <div  v-if="actionLabel || $slots.action">
       <ph-button
         v-if="actionLabel"
         :variant="actionVariant"

@@ -1,0 +1,312 @@
+<template>
+  <div
+    ref="root"
+    data-phui="sortable"
+    :class="{ 'pe-none': disabled }"
+    @dragover.prevent="onDragOver"
+    @drop.prevent="onDrop"
+  >
+    <p v-if="label" class="form-label">{{ label }}</p>
+
+    <component
+      :is="tag"
+      :class="listClasses"
+    >
+      <component
+        :is="tag === 'ul' || tag === 'ol' ? 'li' : 'div'"
+        v-for="(item, index) in list"
+        :key="keyOf(item, index)"
+        :class="itemClasses(index)"
+        :data-sortable-index="index"
+        :draggable="!disabled"
+        :aria-grabbed="draggingIndex === index ? 'true' : 'false'"
+        :tabindex="disabled ? -1 : 0"
+        @dragstart="onDragStart(index, $event)"
+        @dragend="onDragEnd"
+        @dragenter="onDragEnter(index)"
+        @keydown="onItemKeydown(index, $event)"
+      >
+        <slot name="item" :item="item" :index="index" :dragging="draggingIndex === index">
+          <div class="d-flex align-items-center gap-2">
+            <span
+              v-if="handle"
+              class="text-body-secondary"
+              :style="{ cursor: disabled ? 'default' : 'move' }"
+              aria-hidden="true"
+            >
+              <ph-icon name="grip-vertical" size="sm" variant="muted" />
+            </span>
+
+            <div class="flex-grow-1">
+              <slot :item="item" :index="index">{{ labelOf(item) }}</slot>
+            </div>
+
+            <button
+              v-if="removable"
+              type="button"
+              class="btn btn-sm btn-link text-body-secondary p-0"
+              :disabled="disabled"
+              :aria-label="`Remove ${labelOf(item)}`"
+              @click="remove(index)"
+            >
+              <ph-icon name="x-lg" size="sm" />
+            </button>
+          </div>
+        </slot>
+      </component>
+    </component>
+
+    <p v-if="list.length === 0" class="form-text mb-0">{{ emptyText }}</p>
+    <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'PhSortable',
+  props: {
+    modelValue: {
+      type: Array,
+      default: null
+    },
+    items: {
+      type: Array,
+      default: null
+    },
+    labelKey: {
+      type: String,
+      default: 'label'
+    },
+    itemKey: {
+      type: String,
+      default: 'id'
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    handle: {
+      type: Boolean,
+      default: true
+    },
+    removable: {
+      type: Boolean,
+      default: false
+    },
+    tag: {
+      type: String,
+      default: 'ul'
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    emptyText: {
+      type: String,
+      default: 'Nothing to sort.'
+    }
+  },
+  emits: ['update:modelValue', 'reorder', 'remove', 'move'],
+  data() {
+    return {
+      draggingIndex: null,
+      overIndex: null,
+      // The order as it was when the keyboard first took hold of the list, so
+      // Escape has something to go back to.
+      snapshot: null
+    };
+  },
+  computed: {
+    /** Controlled when `modelValue` is given, uncontrolled otherwise. */
+    list() {
+      return this.modelValue ?? this.items ?? [];
+    },
+    isControlled() {
+      return this.modelValue !== null;
+    },
+    listClasses() {
+      return ['list-unstyled', 'd-flex flex-column gap-1 mb-0'];
+    },
+    // Returns a function of the row index, not the class list itself: the
+    // template calls itemClasses(index) once per row, so the index has to be a
+    // parameter rather than a value captured here.
+    itemClasses() {
+      return index => {
+        const dragging = this.draggingIndex === index;
+        const over = this.overIndex === index && this.draggingIndex !== null && !dragging;
+        return {
+          // The dragged row fades so the drop target is unambiguous, and the row
+          // under the pointer takes the primary border.
+          'd-flex align-items-center p-2 border rounded bg-body': true,
+          'opacity-50': dragging,
+          'border-primary': over
+        };
+      };
+    }
+  },
+  methods: {
+    labelOf(item) {
+      if (item === null || item === undefined) {
+        return '';
+      }
+      if (typeof item === 'object') {
+        return String(item[this.labelKey] ?? '');
+      }
+      return String(item);
+    },
+    keyOf(item, index) {
+      if (item !== null && typeof item === 'object' && item[this.itemKey] !== undefined) {
+        return item[this.itemKey];
+      }
+      return index;
+    },
+    onDragStart(index, event) {
+      if (this.disabled) {
+        event.preventDefault();
+        return;
+      }
+      this.draggingIndex = index;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        // Firefox refuses to start a drag without payload.
+        event.dataTransfer.setData('text/plain', String(index));
+      }
+    },
+    onDragEnter(index) {
+      if (this.draggingIndex !== null && this.draggingIndex !== index) {
+        this.overIndex = index;
+      }
+    },
+    onDragOver(event) {
+      if (this.disabled) {
+        return;
+      }
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+      }
+    },
+    onDrop() {
+      this.commit();
+      this.overIndex = null;
+    },
+    onDragEnd() {
+      this.overIndex = null;
+      this.draggingIndex = null;
+    },
+    /** The single place a reorder is written, so every path agrees. */
+    commit() {
+      const from = this.draggingIndex;
+      const to = this.overIndex;
+      if (from === null || to === null || from === to) {
+        this.draggingIndex = null;
+        this.overIndex = null;
+        return;
+      }
+
+      if (this.snapshot === null) {
+        this.snapshot = this.list.slice();
+      }
+
+      this.moveTo(from, to);
+
+      this.draggingIndex = null;
+      this.overIndex = null;
+    },
+    remove(index) {
+      if (this.disabled) {
+        return;
+      }
+      const next = this.list.slice();
+      const [removed] = next.splice(index, 1);
+      if (this.isControlled) {
+        this.$emit('update:modelValue', next);
+      }
+      this.$emit('remove', removed, index);
+    },
+    /**
+     * Keyboard parity with the pointer — the arrows move the focused row, Escape
+     * puts the whole list back.
+     *
+     * There is deliberately no "grab" step. Requiring Space before the arrows
+     * do anything is invisible: nothing on screen says so, and an arrow key that
+     * is silently swallowed is indistinguishable from a broken list. Moving
+     * directly is what the reader is trying to do, and Escape covers the one
+     * case the direct model loses — several moves in a row they did not mean.
+     */
+    onItemKeydown(index, event) {
+      if (this.disabled) {
+        return;
+      }
+
+      const last = this.list.length - 1;
+      let target = null;
+
+      if (event.key === 'ArrowUp' && index > 0) {
+        target = index - 1;
+      } else if (event.key === 'ArrowDown' && index < last) {
+        target = index + 1;
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.restoreOrder();
+        return;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+
+      // The snapshot is taken on the first move, so Escape returns to what the
+      // reader saw before they touched anything — not to an intermediate step.
+      if (this.snapshot === null) {
+        this.snapshot = this.list.slice();
+      }
+
+      this.moveTo(index, target);
+      this.focusRow(target);
+    },
+
+    /** The single reorder path, shared by the pointer drop and the arrows. */
+    moveTo(from, to) {
+      const next = this.list.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+
+      if (this.isControlled) {
+        this.$emit('update:modelValue', next);
+      }
+      this.$emit('reorder', { from, to, items: next });
+      this.$emit('move', moved, to);
+
+      return next;
+    },
+
+    /** Focus has to follow the row, or the next arrow moves the wrong one. */
+    focusRow(index) {
+      this.$nextTick(() => {
+        const root = this.$refs.root;
+        const row = root ? root.querySelector(`[data-sortable-index="${index}"]`) : null;
+        if (row && typeof row.focus === 'function') {
+          row.focus();
+        }
+      });
+    },
+
+    restoreOrder() {
+      if (this.snapshot === null) {
+        return;
+      }
+      const next = this.snapshot;
+      this.snapshot = null;
+
+      if (this.isControlled) {
+        this.$emit('update:modelValue', next);
+      }
+      this.$emit('reorder', { from: null, to: null, items: next });
+    },
+  }
+};
+</script>
