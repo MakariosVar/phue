@@ -81,6 +81,7 @@ $navItems = [
         'components' => [
             ['id' => 'text', 'label' => 'Text'],
             ['id' => 'heading', 'label' => 'Heading'],
+            ['id' => 'icon', 'label' => 'Icon'],
             ['id' => 'box', 'label' => 'Box'],
             ['id' => 'stack', 'label' => 'Stack'],
             ['id' => 'flex', 'label' => 'Flex'],
@@ -487,6 +488,9 @@ return [
                         </span>
                         <span id="heading">
                             <example-ph-heading @setAnchor="scrollTo('heading')"/>
+                        </span>
+                        <span id="icon">
+                            <example-ph-icon @setAnchor="scrollTo('icon')"/>
                         </span>
                         <span id="box">
                             <example-ph-box @setAnchor="scrollTo('box')"/>
