@@ -2124,6 +2124,37 @@ No emits.
 <ph-heading :level="2" color="primary">Section title</ph-heading>
 ```
 
+### `<ph-icon>`
+
+Bootstrap Icons renderer — the primitive every other PhUI `icon` prop renders
+through. `name` maps to the `bi-<name>` class.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `name` | `String` | **required** | Icon name, e.g. `check`, `trash` |
+| `size` | `String \| Number` | `'md'` | Token (`xs`..`2xl`), a pixel number, or a raw CSS length |
+| `variant` | `String` | `''` | `primary` \| `secondary` \| `success` \| `warning` \| `danger` \| `error` \| `info` \| `muted` \| `neutral` \| `light` \| `dark` |
+| `color` | `String` | `''` | Raw CSS color; overrides `variant` |
+| `spin` | `Boolean` | `false` | Animated rotation (reuses Bootstrap's spinner animation) |
+| `label` | `String` | `''` | When set → `role="img"` + `aria-label`; otherwise `aria-hidden` |
+
+No emits or slots.
+
+```
+<ph-icon name="check" />
+<ph-icon name="gear" size="lg" variant="primary" />
+<ph-icon name="arrow-repeat" spin label="Refreshing" />
+<ph-icon name="chevron-down" :size="16" />
+```
+
+An icon with no `label` is `aria-hidden`, so it disappears from the accessibility
+tree — correct for a decorative glyph next to real text. Pass `label` whenever the
+icon is the *only* content of a control, or the control has no accessible name.
+
+An unknown `name` still emits `bi-<name>`, so a typo renders an empty box rather
+than throwing. `error` and `neutral` are aliases onto `danger` and `secondary`, so
+a variant name is never silently dropped.
+
 ### `<ph-box>`
 
 Themed spacing/radius/border/background div.
@@ -2356,37 +2387,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 
 ---
 
-## 8. Icons, Overlays & Advanced Inputs
-
-### `<ph-icon>`
-
-Bootstrap Icons renderer. `name` maps to the `bi-<name>` class.
-
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `name` | `String` | **required** | Icon name, e.g. `check`, `trash` |
-| `size` | `String \| Number` | `'md'` | Token (`xs`..`2xl`) or pixels |
-| `variant` | `String` | `''` | Bootstrap text-color variant |
-| `color` | `String` | `''` | Raw CSS color override |
-| `spin` | `Boolean` | `false` | Animated rotation |
-| `label` | `String` | `''` | When set → `role="img"` + `aria-label`; otherwise `aria-hidden` |
-
-No emits or slots.
-
-```
-<ph-icon name="check" />
-<ph-icon name="gear" size="lg" variant="primary" />
-<ph-icon name="arrow-repeat" spin label="Refreshing" />
-<ph-icon name="chevron-down" :size="12" />
-```
-
-An icon with no `label` is `aria-hidden`, so it disappears from the accessibility
-tree — correct for a decorative glyph next to real text. Pass `label` whenever the
-icon is the *only* content of a control, or the control has no accessible name.
-
----
-
-## 9. Component index
+## 8. Component index
 
 | Component | Tag | Kind |
 |---|---|---|
