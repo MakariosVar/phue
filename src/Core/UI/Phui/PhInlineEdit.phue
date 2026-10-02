@@ -1,0 +1,344 @@
+<template>
+  <span data-phui="inline-edit" class="d-inline-block align-middle">
+    <!--
+      IDLE
+
+      The trigger is a real <button>, not a <div @click>. A click-only affordance
+      is unreachable by keyboard and invisible to a screen reader, which makes the
+      whole component unusable for both — the failure is invisible in a screenshot.
+      It is then styled back into looking like plain content with a bound style,
+      because a button does not inherit font or colour from its parent.
+    -->
+    <button
+      v-if="!editing"
+      type="button"
+      class="btn p-0 border-0 align-baseline"
+      :class="triggerClasses"
+      :style="triggerStyle"
+      :disabled="disabled"
+      :aria-label="triggerAriaLabel"
+      :aria-busy="saving ? 'true' : null"
+      @click="edit"
+    >
+      <slot name="display" :value="modelValue" :edit="edit">
+        <span v-if="!hasValue" class="fst-italic">{{ emptyText }}</span>
+        <span v-else><slot :value="modelValue">{{ modelValue }}</slot></span>
+      </slot>
+    </button>
+
+    <!-- EDITING -->
+    <span
+      v-else
+      class="d-inline-flex align-items-center gap-2"
+      :style="{ verticalAlign: 'baseline' }"
+    >
+      <input
+        ref="field"
+        :id="fieldId"
+        type="text"
+        class="form-control"
+        :class="inputSizeClass"
+        :style="inputStyle"
+        :value="draft"
+        :placeholder="placeholder"
+        :maxlength="maxlength > 0 ? maxlength : null"
+        :disabled="disabled"
+        :aria-invalid="hasError ? 'true' : null"
+        :aria-describedby="hasError || helperText ? describedBy : null"
+        @input="onInput"
+        @keydown="onKeydown"
+        @blur="onBlur"
+      />
+
+      <button
+        type="button"
+        class="btn btn-sm btn-link p-0 align-baseline"
+        style="text-decoration: none;"
+        :disabled="disabled || saving"
+        aria-label="Save"
+        @click="commit"
+      >
+        <ph-spinner v-if="saving" size="sm" />
+        <ph-icon v-else name="check-lg" />
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-sm btn-link p-0 align-baseline text-body-secondary"
+        style="text-decoration: none;"
+        :disabled="saving"
+        aria-label="Cancel"
+        @click="cancel"
+      >
+        <ph-icon name="x-lg" />
+      </button>
+
+      <span
+        v-if="hasError || helperText"
+        :id="describedBy"
+        class="small"
+        :class="hasError ? 'text-danger' : 'text-body-secondary'"
+      >
+        {{ hasError ? validationMessage : helperText }}
+      </span>
+    </span>
+  </span>
+</template>
+
+<script>
+import { useId } from "vue";
+
+export default {
+  name: 'PhInlineEdit',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    /** Idle placeholder shown when the value is empty, so the row still has a target. */
+    emptyText: {
+      type: String,
+      default: 'Click to edit'
+    },
+    /** `plain` looks like content, `underline` hints at editability, `badge` reads as a chip. */
+    variant: {
+      type: String,
+      default: 'plain',
+      validator: (val) => ['plain', 'underline', 'badge'].includes(val)
+    },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
+    /** Width of the editing field. A number is px; a string is raw CSS. */
+    fieldWidth: {
+      type: [String, Number],
+      default: 0
+    },
+    maxlength: {
+      type: Number,
+      default: 0
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    /** Caller-owned pending state, e.g. while an async save is in flight. */
+    loading: {
+      type: Boolean,
+      default: false
+    },
+    /** Return a message to refuse the commit, or a falsy value to accept it. */
+    validate: {
+      type: Function,
+      default: null
+    },
+    /** Server-side message. `validate` and this are merged, `validate` first. */
+    error: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    /** Commit when the field loses focus. Clicking Save also blurs, so the commit path is guarded. */
+    saveOnBlur: {
+      type: Boolean,
+      default: true
+    },
+    /** Accessible name of the idle trigger, before the value. */
+    editLabel: {
+      type: String,
+      default: 'Edit'
+    }
+  },
+  emits: ['update:modelValue', 'save', 'cancel', 'edit'],
+  setup() {
+    return { uid: 'ph-inline-edit-' + useId() };
+  },
+  data() {
+    return {
+      editing: false,
+      draft: '',
+      validationMessage: '',
+      // A blur fires before the click on Save/Cancel reaches the button, so an
+      // unguarded `saveOnBlur` would commit the value the user just cancelled.
+      // Every commit/cancel path flips this, and blur checks it.
+      settling: false
+    };
+  },
+  computed: {
+    saving() {
+      return this.loading === true;
+    },
+    hasValue() {
+      return String(this.modelValue ?? '').length > 0;
+    },
+    fieldId() {
+      return `${this.uid}-field`;
+    },
+    describedBy() {
+      return `${this.uid}-message`;
+    },
+    hasError() {
+      return this.validationMessage !== '' || this.error !== '';
+    },
+    /**
+     * The idle button has no text of its own once the slot is used for markup, so
+     * the name is assembled here rather than left to the content. A bare "Edit"
+     * repeated down a column is useless; "Edit: Ada Lovelace" is not.
+     */
+    triggerAriaLabel() {
+      return this.hasValue
+        ? `${this.editLabel}: ${this.modelValue}`
+        : this.editLabel;
+    },
+    triggerClasses() {
+      return {
+        'text-decoration-underline': this.variant === 'underline',
+        'bg-body-tertiary': this.variant === 'badge'
+      };
+    },
+    triggerStyle() {
+      // A <button> does not inherit font or colour; without these the trigger
+      // renders in the UA font at the inherited size, so "inline" edit is not inline.
+      const style = {
+        font: 'inherit',
+        lineHeight: 'inherit',
+        textAlign: 'left',
+        cursor: this.disabled ? 'default' : 'pointer',
+        maxWidth: '100%'
+      };
+
+      if (this.variant === 'badge') {
+        style.color = 'var(--bs-body-color)';
+        style.padding = '0.125rem 0.5rem';
+        style.borderRadius = 'var(--bs-border-radius-pill)';
+      } else {
+        style.color = 'inherit';
+        style.padding = '0';
+        style.textDecoration = this.variant === 'underline' ? 'underline' : 'none';
+      }
+
+      if (this.disabled) {
+        style.opacity = '0.65';
+        style.cursor = 'default';
+      }
+
+      return style;
+    },
+    inputSizeClass() {
+      if (this.size === 'sm') return 'form-control-sm';
+      if (this.size === 'lg') return 'form-control-lg';
+      return '';
+    },
+    inputStyle() {
+      const style = { display: 'inline-block', width: 'auto' };
+      const width = this.fieldWidth;
+
+      if (typeof width === 'number' && width > 0) {
+        style.width = `${width}px`;
+      } else if (typeof width === 'string' && width !== '') {
+        style.width = width;
+      } else {
+        // The field has to be able to grow, or long values are edited in a box
+        // that shows six characters of them.
+        style.minWidth = '8rem';
+        style.width = `${Math.max(8, String(this.draft || '').length + 1)}ch`;
+      }
+
+      return style;
+    }
+  },
+  methods: {
+    edit() {
+      if (this.disabled || this.editing) return;
+      this.draft = String(this.modelValue ?? '');
+      this.validationMessage = '';
+      this.editing = true;
+      this.$emit('edit', this.draft);
+      this.$nextTick(() => {
+        const field = this.$refs.field;
+        if (field) {
+          field.focus();
+          field.select();
+        }
+      });
+    },
+    onInput(event) {
+      this.draft = event.target.value;
+      // Clear a stale refusal as soon as the value changes, or the message
+      // describes a value the field no longer holds.
+      if (this.validationMessage !== '') {
+        this.validationMessage = '';
+      }
+    },
+    onKeydown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.commit();
+        return;
+      }
+      if (event.key === 'Escape') {
+        // Handled here and not on a document listener: a document-level Escape
+        // would also catch the Escape of any dialog opened from inside the slot.
+        event.preventDefault();
+        event.stopPropagation();
+        this.cancel();
+      }
+    },
+    onBlur(event) {
+      if (!this.saveOnBlur || this.settling) return;
+
+      // Focus moving to Save/Cancel is the same interaction as clicking them;
+      // committing here too would fire `save` twice and re-enter commit().
+      const next = event.relatedTarget;
+      if (next && this.$el && this.$el.contains(next)) return;
+
+      this.commit();
+    },
+    commit() {
+      if (this.settling || this.disabled) return;
+      this.settling = true;
+
+      let refusal = '';
+      if (typeof this.validate === 'function') {
+        refusal = this.validate(this.draft) || '';
+      }
+
+      if (refusal) {
+        // Stay open. The caller is told nothing was saved, and the reason is
+        // shown next to the field the user is still looking at.
+        this.validationMessage = String(refusal);
+        this.settling = false;
+        return;
+      }
+
+      this.validationMessage = '';
+      const value = this.draft;
+      this.editing = false;
+      this.settling = false;
+
+      if (value !== String(this.modelValue ?? '')) {
+        this.$emit('update:modelValue', value);
+      }
+      this.$emit('save', value);
+    },
+    cancel() {
+      if (this.settling) return;
+      this.settling = true;
+      this.editing = false;
+      this.validationMessage = '';
+      this.draft = String(this.modelValue ?? '');
+      this.settling = false;
+      this.$emit('cancel');
+    }
+  }
+};
+</script>
