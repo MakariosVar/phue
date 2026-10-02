@@ -87,6 +87,7 @@ $navItems = [
             ['id' => 'row', 'label' => 'Row'],
             ['id' => 'col', 'label' => 'Column'],
             ['id' => 'spacer', 'label' => 'Spacer'],
+            ['id' => 'divider', 'label' => 'Divider'],
         ]
     ],
     [
@@ -478,9 +479,9 @@ return [
                         <span id="spacer">
                             <example-ph-spacer @setAnchor="scrollTo('spacer')"/>
                         </span>
-                        <!--
-                        <ExamplePhDivider />
-                        -->
+                        <span id="divider">
+                            <example-ph-divider @setAnchor="scrollTo('divider')"/>
+                        </span>
                     </div>
                 </section>
 
