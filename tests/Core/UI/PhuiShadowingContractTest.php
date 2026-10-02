@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\UI;
 
 use Phue\Core\UI\PhueTemplateParser;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
+#[Group('unit')]
 /**
  * PhuiShadowingContractTest — a computed or method may not take a prop's name.
  *
