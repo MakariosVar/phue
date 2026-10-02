@@ -27,7 +27,10 @@ $navItems = [
             ['id' => 'segmented-control', 'label' => 'Segmented Control'],
             ['id' => 'form', 'label' => 'Form'],
             ['id' => 'form-field', 'label' => 'Form Field'],
-            ['id' => 'input-shell', 'label' => 'Input Shell']
+            ['id' => 'inline-edit', 'label' => 'Inline Edit'],
+            ['id' => 'input-shell', 'label' => 'Input Shell'],
+            ['id' => 'otp-input', 'label' => 'OTP Input'],
+            ['id' => 'rich-text', 'label' => 'Rich Text']
         ]
     ],
     [
@@ -39,6 +42,7 @@ $navItems = [
             ['id' => 'chip', 'label' => 'Chip'],
             ['id' => 'avatar', 'label' => 'Avatar'],
             ['id' => 'image', 'label' => 'Image'],
+            ['id' => 'carousel', 'label' => 'Carousel'],
             ['id' => 'card', 'label' => 'Card'],
             ['id' => 'empty-state', 'label' => 'Empty State'],
             ['id' => 'stat', 'label' => 'Stat'],
@@ -48,7 +52,8 @@ $navItems = [
             ['id' => 'timeline', 'label' => 'Timeline'],
             ['id' => 'code', 'label' => 'Code'],
             ['id' => 'tree-view', 'label' => 'Tree View'],
-            ['id' => 'accordion', 'label' => 'Accordion']
+            ['id' => 'accordion', 'label' => 'Accordion'],
+            ['id' => 'collapse', 'label' => 'Collapse']
         ]
     ],
     [
@@ -418,8 +423,17 @@ return [
                         <span id="form-field">
                             <example-ph-form-field @setAnchor="scrollTo('form-field')"/>
                         </span>
+                        <span id="inline-edit">
+                            <example-ph-inline-edit @setAnchor="scrollTo('inline-edit')"/>
+                        </span>
                         <span id="input-shell">
                             <example-ph-input-shell @setAnchor="scrollTo('input-shell')"/>
+                        </span>
+                        <span id="otp-input">
+                            <example-ph-otp-input @setAnchor="scrollTo('otp-input')"/>
+                        </span>
+                        <span id="rich-text">
+                            <example-ph-rich-text @setAnchor="scrollTo('rich-text')"/>
                         </span>
                     </div>
                 </section>
@@ -442,6 +456,9 @@ return [
                         </span>
                         <span id="image">
                             <example-ph-image @setAnchor="scrollTo('image')"/>
+                        </span>
+                        <span id="carousel">
+                            <example-ph-carousel @setAnchor="scrollTo('carousel')"/>
                         </span>
                         <span id="card">
                             <example-ph-card @setAnchor="scrollTo('card')"/>
@@ -472,6 +489,9 @@ return [
                         </span>
                         <span id="accordion">
                             <example-ph-accordion @setAnchor="scrollTo('accordion')"/>
+                        </span>
+                        <span id="collapse">
+                            <example-ph-collapse @setAnchor="scrollTo('collapse')"/>
                         </span>
                     </div>
                     

@@ -1,0 +1,131 @@
+<template>
+  <example-factory
+    tag="<ph-collapse />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        One show/hide section — the primitive
+        <code>&lt;ph-accordion&gt;</code> is built out of. Works unwired, or with
+        <code>v-model</code>.
+      </p>
+      <p class="text-muted small mb-0">
+        Use it for an "Advanced options" panel that opens on its own, instead of an
+        accordion with <code>multiple</code> hardcoded on and the open keys tracked
+        by hand.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Unwired
+        </h6>
+        <ph-collapse title="Advanced options" icon="sliders">
+          <p class="mb-0">Nothing to wire: it opens and closes on its own.</p>
+        </ph-collapse>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Controlled, with <code>lazy</code>
+        </h6>
+        <ph-collapse v-model="open" title="Billing details" lazy>
+          <ph-stack gap="sm">
+            <ph-input v-model="vat" label="VAT number" placeholder="EL123456789" />
+            <ph-input v-model="company" label="Company" />
+            <code class="d-block small">open = {{ open }}</code>
+          </ph-stack>
+        </ph-collapse>
+        <p class="text-body-secondary small mt-2 mb-0">
+          The panel above is not mounted until it is first opened.
+        </p>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+
+        <strong>Emits</strong>
+        <ul>
+          <li><code>update:modelValue(open)</code> — wire with <code>v-model</code></li>
+          <li><code>change(open)</code> — after the state changed</li>
+        </ul>
+
+        <strong>Methods</strong>
+        <ul>
+          <li><code>openPanel()</code> / <code>closePanel()</code> — a parent needs no template ref</li>
+        </ul>
+
+        <strong>Slots</strong>
+        <ul>
+          <li><code>header</code> — scoped <code>{ open, toggle }</code>. Falls back to <code>title</code></li>
+          <li><code>default</code> — scoped <code>{ open }</code></li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhCollapse",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+
+      open: false,
+      vat: "",
+      company: "",
+
+      snippet: `<!-- Unwired: opening and closing is internal -->
+<ph-collapse title="Advanced options" icon="sliders">
+  <ph-input name="retries" label="Retries" />
+</ph-collapse>
+
+<!-- Controlled -->
+<ph-collapse v-model="open" title="Billing details">
+  <ph-input v-model="vat" label="VAT number" />
+</ph-collapse>
+
+<!-- A heavy form inside a collapsed section: do not mount it until it is shown -->
+<ph-collapse v-model="open" title="Billing details" lazy>
+  <ph-stack gap="sm">
+    <ph-input v-model="vat" label="VAT number" />
+    <ph-input v-model="company" label="Company" />
+  </ph-stack>
+</ph-collapse>
+
+// Example state
+// open: false`,
+
+      propsData: [
+        { name: "modelValue", type: "Boolean", default: "false", notes: "Open state — wire it with <code>v-model</code>, or leave it unwired" },
+        { name: "title", type: "String", default: "''", notes: "Toggle text. The <code>header</code> slot wins over it" },
+        { name: "icon", type: "String", default: "''", notes: "Bootstrap Icons name in front of the title" },
+        { name: "disabled", type: "Boolean", default: "false", notes: "" },
+        { name: "bordered", type: "Boolean", default: "true", notes: "<code>false</code> → <code>border-0</code> with a <code>bg-body-secondary</code> header" },
+        { name: "lazy", type: "Boolean", default: "false", notes: "Do not mount the panel until it is first opened — for a heavy form inside it" },
+        { name: "duration", type: "Number", default: "350", notes: "Ms. Overrides Bootstrap's hard-coded <code>.collapsing</code> transition" },
+      ],
+    };
+  },
+};
+</script>

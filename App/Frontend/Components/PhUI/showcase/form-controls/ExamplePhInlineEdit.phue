@@ -1,0 +1,175 @@
+<template>
+  <example-factory
+    tag="<ph-inline-edit />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Click-to-edit text, in place. The idle state <em>is</em> the content; a
+        click swaps in a field plus Save/Cancel.
+      </p>
+      <p class="text-muted small mb-0">
+        The idle state is a real <code>&lt;button&gt;</code> styled back into
+        looking like text — a <code>&lt;div @click&gt;</code> renders identically
+        and is unreachable by keyboard. Its name is
+        <code>"{editLabel}: {value}"</code>.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          Three flavours
+        </h6>
+        <ph-stack gap="md">
+          <div class="d-flex align-items-center gap-3">
+            <span class="text-body-secondary small" style="width: 7rem;">plain</span>
+            <ph-inline-edit v-model="name" :edit-label="'Edit the name'" />
+          </div>
+
+          <div class="d-flex align-items-center gap-3">
+            <span class="text-body-secondary small" style="width: 7rem;">underline</span>
+            <ph-inline-edit v-model="title" variant="underline" :field-width="260" />
+          </div>
+
+          <div class="d-flex align-items-center gap-3">
+            <span class="text-body-secondary small" style="width: 7rem;">empty</span>
+            <ph-inline-edit v-model="nickname" variant="badge" empty-text="Click to set" />
+          </div>
+        </ph-stack>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          With a <code>validate</code> that refuses
+        </h6>
+        <ph-inline-edit
+          v-model="handle"
+          variant="underline"
+          empty-text="Set a handle"
+          :validate="requireValue"
+        />
+        <p class="text-body-secondary small mt-2 mb-0">
+          A refusal keeps the field open and keeps the typed text — try clearing the
+          field and pressing Save.
+        </p>
+
+        <hr class="my-4" />
+
+        <h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+          A slot for the idle rendering
+        </h6>
+        <ph-inline-edit v-model="owner" variant="badge">
+          <template #display="{ value }">
+            <span class="d-inline-flex align-items-center gap-2">
+              <ph-avatar :name="value || 'Nobody'" size="sm" />
+              {{ value || 'Unassigned' }}
+            </span>
+          </template>
+        </ph-inline-edit>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="520px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+
+        <strong>Emits</strong>
+        <ul>
+          <li><code>update:modelValue(value)</code> — only when the value actually changed</li>
+          <li><code>save(value)</code> — on every commit, changed or not</li>
+          <li><code>cancel</code>, <code>edit</code></li>
+        </ul>
+
+        <strong>Methods</strong>
+        <ul>
+          <li><code>edit()</code>, <code>commit()</code>, <code>cancel()</code></li>
+        </ul>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhInlineEdit",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+
+      name: "Mak Var",
+      title: "Release 4.2",
+      nickname: "",
+      handle: "",
+      owner: "Ada Lovelace",
+
+      snippet: `<!-- A row of edits -->
+<ph-stack gap="md">
+  <ph-inline-edit v-model="name" />
+  <ph-inline-edit v-model="title" variant="underline" />
+</ph-stack>
+
+<!-- Unwired: it opens and commits on its own -->
+<ph-inline-edit v-model="name" />
+
+<ph-inline-edit v-model="title" variant="underline" :field-width="260" />
+
+<!-- Refuse an empty value; the field stays open and the typed text survives -->
+<ph-inline-edit v-model="handle" :validate="v => (v ? '' : 'Required.')" />
+
+<!-- The idle rendering is the caller's -->
+<ph-inline-edit v-model="owner" variant="badge">
+  <template #display="{ value }">
+    <ph-avatar :name="value" size="sm" /> {{ value }}
+  </template>
+</ph-inline-edit>
+
+// Example state
+// name: "Mak Var"
+// title: "Release 4.2"
+// nickname: ""
+// handle: ""
+// owner: "Ada Lovelace"`,
+
+      propsData: [
+        { name: "modelValue", type: "String", default: "''", notes: "" },
+        { name: "placeholder", type: "String", default: "''", notes: "Placeholder of the <strong>editing</strong> field" },
+        { name: "emptyText", type: "String", default: "'Click to edit'", notes: "Idle placeholder when the value is empty, so an empty row still has a target" },
+        { name: "variant", type: "String", default: "'plain'", notes: "<code>plain</code> \\| <code>underline</code> \\| <code>badge</code>" },
+        { name: "size", type: "String", default: "'md'", notes: "<code>sm</code> \\| <code>md</code> \\| <code>lg</code>" },
+        { name: "fieldWidth", type: "String | Number", default: "0", notes: "A number is px. <code>0</code> sizes the field to its content" },
+        { name: "maxlength", type: "Number", default: "0", notes: "<code>0</code> = unlimited" },
+        { name: "disabled", type: "Boolean", default: "false", notes: "" },
+        { name: "loading", type: "Boolean", default: "false", notes: "Caller-owned pending state. Shows a spinner, keeps the field open" },
+        { name: "validate", type: "Function", default: "null", notes: "<code>(value) =&gt; string \\| falsy</code>. A returned message <strong>refuses the commit</strong>" },
+        { name: "error", type: "String", default: "''", notes: "Server-side message, shown after <code>validate</code>" },
+        { name: "helperText", type: "String", default: "''", notes: "" },
+        { name: "saveOnBlur", type: "Boolean", default: "true", notes: "Commit when the field loses focus" },
+        { name: "editLabel", type: "String", default: "'Edit'", notes: "Prefix of the trigger's accessible name" },
+      ],
+    };
+  },
+  methods: {
+    /** Refuses an empty value; anything else passes. */
+    requireValue(value) {
+      return String(value || '').trim() === '' ? 'A handle is required.' : '';
+    },
+  },
+};
+</script>

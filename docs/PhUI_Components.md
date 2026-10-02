@@ -889,6 +889,69 @@ Slots: default. No emits.
 ```
 
 
+### `<ph-inline-edit>`
+
+Click-to-edit text, in place. The idle state *is* the content; a click swaps in a
+field plus Save/Cancel. Works unwired, or with `v-model` (see §1.4).
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | |
+| `placeholder` | `String` | `''` | Placeholder of the **editing** field |
+| `emptyText` | `String` | `'Click to edit'` | Idle placeholder when the value is empty, so an empty row still has a target |
+| `variant` | `String` | `'plain'` | `plain` \| `underline` (hints at editability) \| `badge` |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — the editing field's `form-control` scale |
+| `fieldWidth` | `String \| Number` | `0` | Editing field width; a number is px, a string is raw CSS. `0` sizes it to the content |
+| `maxlength` | `Number` | `0` | `0` = unlimited |
+| `disabled` | `Boolean` | `false` | Never opens |
+| `loading` | `Boolean` | `false` | Caller-owned pending state (e.g. an async save). Shows a spinner, keeps the field open |
+| `validate` | `Function` | `null` | `(value) => string \| falsy`. A returned message **refuses the commit** |
+| `error` | `String` | `''` | Server-side message, shown after `validate` |
+| `helperText` | `String` | `''` | Shown when there is no error |
+| `saveOnBlur` | `Boolean` | `true` | Commit when the field loses focus |
+| `editLabel` | `String` | `'Edit'` | Prefix of the trigger's accessible name |
+
+Emits: `update:modelValue(value)` (only when the value actually changed),
+`save(value)` (always, on a commit), `cancel`, `edit`. Methods: `edit()`,
+`commit()`, `cancel()` — so a parent needs no template ref.
+
+Slots: `display` — scoped `{ value, edit }`, replacing the idle rendering. The
+default slot renders the value inside it.
+
+```
+<ph-inline-edit v-model="name" />
+<ph-inline-edit v-model="title" variant="underline" :field-width="320" />
+
+<!-- refuse an empty value; the field stays open and the typed text survives -->
+<ph-inline-edit v-model="nickname" :validate="v => (v ? '' : 'Required.')" />
+
+<!-- a whole row, rendered by the caller -->
+<ph-inline-edit v-model="row.owner" variant="badge">
+  <template #display="{ value }">
+    <ph-avatar :name="value" size="sm" />
+  </template>
+</ph-inline-edit>
+```
+
+**The idle state is a real `<button>`, styled back into looking like text.** A
+`<div @click>` renders identically and is invisible to the next thing that
+matters: a keyboard user cannot reach it and a screen reader does not announce it.
+The button carries no text of its own once the slot is used for markup, so its
+name is assembled as `"{editLabel}: {value}"` — a bare "Edit" repeated down a
+column of rows tells the reader nothing about which row they are on.
+
+**A refusal keeps the field open and the text in it.** `validate` returning a
+message means nothing was saved; the field stays, the typed text stays, and the
+reason appears next to it. Closing on a refusal would throw the work away, and
+emitting nothing would leave the caller thinking it saved.
+
+**The blur race is guarded.** Clicking Save blurs the field *first*, so an
+unguarded `saveOnBlur` commits the value the user was about to cancel — and
+clicking Cancel saves it. Focus moves that land inside the component are ignored,
+and the commit path is single-shot. `Esc` is handled on the field itself, not on a
+document listener: a document-level handler would also catch the `Esc` of a dialog
+opened from inside the slot.
+
 ### `<ph-input-shell>`
 
 Shared bordered shell for composite controls: the magnifier/prefix icon, the
@@ -966,6 +1029,169 @@ caret lands where the user clicked.
 > disabled colour still come from Bootstrap. It also sets `appearance: none`,
 > without which `type="search"` lets the browser draw its own clear affordance
 > next to yours.
+
+### `<ph-otp-input>`
+
+One-time-code entry: `length` visible cells backed by a **single** input. Ideal for
+2FA, email verification and PIN entry.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | The code, as a string |
+| `length` | `Number` | `6` | Number of cells |
+| `type` | `String` | `'numeric'` | `numeric` \| `alphanumeric` |
+| `masked` | `Boolean` | `false` | Dots instead of characters — for a secret that must not be read |
+| `autocomplete` | `Boolean` | `true` | Sets `autocomplete="one-time-code"`, which is what makes platform autofill work. Turn it off for a code that is not one |
+| `size` | `String` | `'md'` | `sm` \| `md` \| `lg` — the cell box |
+| `id` | `String` | `''` | Falls back to a generated id |
+| `name` | `String` | `''` | Forwarded to the real input, so `<ph-form>` can validate and submit it |
+| `label` | `String` | `''` | |
+| `ariaLabel` | `String` | `'Verification code'` | Accessible name, used only when no visible `label` is rendered |
+| `helperText` / `error` | `String` | `''` | |
+| `required` | `Boolean` | `false` | |
+| `disabled` | `Boolean` | `false` | |
+| `autofocus` | `Boolean` | `false` | |
+
+Emits: `update:modelValue(code)`, `complete(code)` — **once**, on the transition
+into a full value — and `paste-rejected(original)`. Methods: `focus()`,
+`clear()`.
+
+```
+<ph-otp-input v-model="code" @complete="verify(code)" />
+<ph-otp-input v-model="pin" :length="4" label="PIN" />
+<ph-otp-input v-model="secret" :length="8" type="alphanumeric" masked />
+<ph-otp-input v-model="code" name="verification_code" :autocomplete="false" />
+```
+
+**One input, not `length` inputs.** The obvious shape — `length` real `<input>`
+elements — is unusable with a screen reader (six anonymous single-character
+textboxes) and turns every paste, `Backspace` and caret move into a cell-navigation
+state machine. A single field means the browser's own editing model does the work:
+there is no cell navigation to get wrong. It is `visually-hidden`, and the cells
+are `aria-hidden` presentation, so the whole control is **one labelled textbox**.
+
+Autofill on iOS and Android needs the real field to carry
+`autocomplete="one-time-code"`, which a fake cell grid can never do.
+
+**Separators are dropped, not rejected.** A code pasted as `123 456` or `123-456`
+lands in the right cells. The paste is handled explicitly rather than left to the
+browser, because `maxlength` truncates *after* the invalid characters are in — the
+naive path lands `12` out of `12ab34` and silently drops the rest. A paste of pure
+junk emits `paste-rejected` rather than doing nothing visible.
+
+**The value is a string, deliberately.** A `Number` conversion anywhere in the
+chain turns `007` into `7` and the code stops matching.
+
+**The caret is drawn on a cell.** The field is invisible, so without a marked cell
+the keyboard user is typing into something they cannot see.
+
+### `<ph-rich-text>`
+
+Rich-text editor with a formatting toolbar, and **two output modes**: a sanitised
+HTML string, or Markdown. No editor library, no sanitizer library — the allow-list
+sanitizer and the Markdown converter are part of the component.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `String` | `''` | The document, **in the current `mode`** |
+| `mode` | `String` | `'html'` | `html` \| `markdown`. Switching it converts the content (see below) |
+| `label` | `String` | `''` | |
+| `name` | `String` | `''` | Forwarded to a hidden input of the same name, so `<ph-form>` can validate and submit it. The editing surface is a `contenteditable` div, which is not labelable and cannot carry a `name` itself |
+| `ariaLabel` | `String` | `'Rich text'` | Accessible name, used only when no visible `label` is rendered |
+| `placeholder` | `String` | `''` | Drawn on the first cell while the document is empty |
+| `helperText` / `error` | `String` | `''` | |
+| `readonly` | `Boolean` | `false` | Renders the content with no toolbar and no editing surface |
+| `disabled` | `Boolean` | `false` | |
+| `required` | `Boolean` | `false` | |
+| `spellcheck` | `Boolean` | `true` | |
+| `toolbar` | `Boolean` | `true` | |
+| `toolbarItems` | `Array` | `null` | Command keys to show, in order. Omit for the full default surface |
+| `showModeToggle` | `Boolean` | `true` | The HTML/Markdown switch |
+| `minHeight` | `String \| Number` | `0` | Editing surface height; a number is px |
+| `maxWidth` | `String \| Number` | `0` | |
+
+Emits: `update:modelValue(value)`, `change(value)`, `focus`, `blur`,
+`mode-change`. Methods: `sanitize(html)`, `toMarkdown(html)`, `fromMarkdown(md)`,
+`setMode(next)`.
+
+Toolbar keys: `bold`, `italic`, `underline`, `strike`, `inline-code`, `divider`,
+`p`, `h2`, `h3`, `ul`, `ol`, `quote`, `pre`, `link`, `hr`, `clear`.
+
+```
+<!-- HTML value -->
+<ph-rich-text v-model="body" name="description" label="Description" />
+
+<!-- Markdown value: store it as source, diff it, review it -->
+<ph-rich-text v-model="body" mode="markdown" label="Release notes" />
+
+<!-- a shorter toolbar, no mode switch -->
+<ph-rich-text v-model="comment" :toolbar-items="['bold', 'italic', 'link']"
+              :show-mode-toggle="false" :min-height="120" />
+
+<!-- render only -->
+<ph-rich-text :model-value="body" mode="markdown" readonly />
+```
+
+**It is a form control, so it behaves like one.** The editing surface is a
+`contenteditable` div — not a labelable element — so `name` is forwarded to a
+hidden input of the same name. Without that, `<ph-form>` (which enumerates
+`form.elements` and reads `name` off each control) would neither validate it nor
+put it in the payload: a control that cannot be submitted is a widget, not a form
+control.
+
+**Every value is sanitised, on every path.** The sanitizer is an **allow-list**:
+`p div br hr strong em u s code pre blockquote a ul ol li h1`–`h6`, no attributes
+at all except `href`/`title`/`target`/`rel` on a link. Anything unrecognised is
+*unwrapped* — its text survives, its tag does not — and anything that can carry
+script or a remote reference is dropped **with its content**: `script`, `style`,
+`iframe`, `object`, `embed`, `svg`, `math`, `form`, `input`, `button`, `template`,
+`noscript`. `class` and `style` never survive; a `style` attribute is a
+positioning and an exfiltration channel, and it would not survive the editor's own
+output either.
+
+Link schemes are limited to `http`, `https`, `mailto` and `tel` plus relative
+URLs. The scheme check runs on a copy with every control character removed, because
+browsers strip those from a URL before resolving it — `java&#9;script:` navigates,
+and a check on the raw string passes it. `target="_blank"` is forced to carry
+`rel="noopener noreferrer"`; the author does not get that choice.
+
+**The paste is filtered before it reaches the document.** Sanitising the *emitted*
+value afterwards would be too late: an `<img onerror>` fires the moment it lands.
+
+**The sanitizer has no DOM dependency.** That is why it is written by hand rather
+than with `DOMParser`, and it is what lets the value be sanitised identically on
+the server during SSR, in the test harness, and in the browser.
+
+**`styleWithCSS` is turned off.** It is what makes bold produce `<strong>` instead
+of an inline `font-weight` — and a `style` attribute is stripped by the sanitizer,
+so without it the formatting would vanish on the very next pass.
+
+**`div` survives sanitisation on purpose.** Chrome's contenteditable inserts `<div>`
+where Firefox inserts `<br>` on Enter; normalising `div` away would fuse every
+paragraph in the document into one line of Markdown. The Markdown converter treats
+a `div` as a paragraph boundary.
+
+**Underline is dropped by the Markdown serializer.** Markdown cannot express it,
+and emitting `<u>` would make the Markdown value claim a formatting the source
+cannot express. Losing the underline is the smaller lie.
+
+**Switching `mode` converts the content, it does not reinterpret the value.** The
+component reads its own editor DOM, converts, and emits the new representation; a
+prop change to `mode` converges on the same path. Reinterpreting the old value
+would render `# Title` as literal text the moment you switch to Markdown. The
+switch is a click, so the click is authoritative (§1.4): it emits whether or not
+the parent passes the new mode back.
+
+**The vdom is never written back while typing.** `html` is the value `v-html`
+renders; patching it mid-keystroke would reset the caret to the start of the
+document. The DOM is already correct, so the emitted value is computed from it and
+the mirror is left alone until an external change arrives.
+
+**The Markdown parser is small on purpose.** Headings, hr, blockquote, lists,
+fenced code, paragraphs, and the inline set — it is the inverse of the serializer
+plus the punctuation a person types, so `markdown → html → markdown` is a fixed
+point and nothing else in the document can introduce markup. It is not CommonMark
+and does not pretend to be.
 
 ---
 
@@ -1054,7 +1280,7 @@ word initials, or the first two characters of a single-word name. Falls back to
 No emits.
 
 ```
-<ph-avatar name="Makarios Varos" size="lg" shape="circle" />
+<ph-avatar name="Mak Var" size="lg" shape="circle" />
 <ph-avatar src="/uploads/u.png" name="Ada Lovelace" alt="Ada" />
 ```
 
@@ -1099,6 +1325,73 @@ accident, and the cursor only changes where the click actually does something.
 <ph-image src="/uploads/cover.jpg" aspect="4x3" placeholder />
 <ph-image src="/uploads/photo.jpg" alt="Photo" lightbox previewable />
 ```
+
+### `<ph-carousel>`
+
+Slideshow. **There is no Bootstrap JS behind it** — Bootstrap's carousel is 100%
+JavaScript, so every behaviour here is the component's own.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Number` | `0` | Active index. Out-of-range and negative values are wrapped, not trusted |
+| `slides` | `Array` | `[]` | `{ src, alt, caption?, title?, text? }`. The `slide` slot overrides the rendering |
+| `height` | `String \| Number` | `0` | Frame height; a number is px, a string is raw CSS |
+| `fit` | `String` | `'cover'` | Passed to `<ph-image>` |
+| `interval` | `Number` | `0` | Autoplay in ms. `0` disables it |
+| `indicators` | `Boolean` | `true` | Indicator **bars** (Bootstrap's `carousel-indicators`, which are 30×3px bars, not v4's dots) |
+| `controls` | `Boolean` | `true` | Prev/next chevrons |
+| `loop` | `Boolean` | `true` | `false` makes the ends dead rather than wrapping |
+| `fade` | `Boolean` | `false` | Crossfade instead of a horizontal slide |
+| `pauseOnHover` | `Boolean` | `true` | Stop the timer on pointer **or focus** inside |
+| `variant` | `String` | `'light'` | Glyph polarity: `light` = dark chevrons (reads on a page background), `dark` = white, for dark slides |
+| `label` | `String` | `'Carousel'` | Accessible name of the region |
+| `duration` | `Number` | `600` | Ms of the transition |
+
+Emits: `update:modelValue(index)`, `change(index)`, `next`, `prev`.
+Slots: `slide` — scoped `{ item, index, active }`.
+
+```
+<ph-carousel :slides="slides" :interval="5000" height="320px" />
+<ph-carousel :slides="slides" fade :indicators="false" />
+<ph-carousel :slides="slides" :loop="false" variant="dark" />
+
+<ph-carousel :slides="slides">
+  <template #slide="{ item, active }">
+    <ph-card :class="active ? 'border-primary' : ''">
+      <h5 class="mb-1">{{ item.title }}</h5>
+      <p class="mb-0">{{ item.text }}</p>
+    </ph-card>
+  </template>
+</ph-carousel>
+```
+
+**Bootstrap's `.carousel-item` is deliberately not used.** It is `display: none`
+unless `.active` and floats with a `-100%` margin — it works only because
+bootstrap.js adds and removes `.active`, which does not exist here. The track is
+instead a flex row translated on the inline axis, with every slide a full-width
+non-shrinking cell. `.carousel-indicators`, `.carousel-caption` and
+`.carousel-control-*` **are** used: those are pure CSS paint with no behaviour
+attached.
+
+**Autoplay is off under `prefers-reduced-motion`,** not merely slowed. It is
+motion the reader did not ask for. It also stops on hover, on keyboard focus
+inside, and while the tab is hidden — a background timer keeps counting, and every
+autoplaying carousel on the page jumps a slide on return.
+
+**The region is `aria-live="off"` while rotating** and `polite` when paused. An
+auto-rotating live region interrupts the screen reader on every tick. Each slide
+carries `role="group"`, `aria-roledescription="slide"` and its own
+`"N of M"`, the indicator bars and the two glyph-only chevrons get their names from
+`visually-hidden` labels.
+
+**The index is normalised, never trusted.** A `modelValue` written by a parent is
+wrapped into range, so an out-of-range index cannot translate the track past the
+last slide with no way back. `next`/`prev` are emitted only when a slide actually
+changed — a single-slide carousel resolves to the same index, and an event that
+says "moved" when nothing did is worse than no event.
+
+**`fade` keeps the active slide in the flow** so it gives the frame its height.
+Taking every slide out of the flow would collapse the box until the image decodes.
 
 ### `<ph-card>`
 
@@ -1601,6 +1894,59 @@ break each other's `aria-controls`.
 > `value.slice is not a function` inside the watcher and take the whole SSR
 > render down with it. A wrong type now degrades quietly instead, but the array
 > is still the contract.
+
+### `<ph-collapse>`
+
+A single show/hide section. The primitive `<ph-accordion>` is built out of: use it
+for an "Advanced options" panel that opens and closes on its own, rather than an
+accordion with `multiple` hardcoded on and the open keys tracked by hand.
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `modelValue` | `Boolean` | `false` | Open state — wire with `v-model`, or leave unwired |
+| `title` | `String` | `''` | Toggle text. The `header` slot wins over it |
+| `icon` | `String` | `''` | Bootstrap Icons name in front of the title |
+| `disabled` | `Boolean` | `false` | |
+| `bordered` | `Boolean` | `true` | `false` → `border-0` with a `bg-body-secondary` header |
+| `lazy` | `Boolean` | `false` | Do not mount the panel until it is first opened |
+| `duration` | `Number` | `350` | Ms. Overrides Bootstrap's hard-coded `.collapsing` transition |
+
+Emits: `update:modelValue(open)`, `change(open)`. Methods: `openPanel()`,
+`closePanel()` — so a parent needs no template ref.
+Slots: `header` (scoped `{ open, toggle }`), default (scoped `{ open }`).
+
+```
+<!-- unwired: opening and closing is internal -->
+<ph-collapse title="Advanced options">
+  <ph-input name="retries" label="Retries" />
+</ph-collapse>
+
+<!-- controlled -->
+<ph-collapse v-model="open" title="Show the raw payload">
+  <pre>{{ payload }}</pre>
+</ph-collapse>
+
+<!-- a heavy form inside a collapsed section: do not mount it until it is shown -->
+<ph-collapse v-model="open" title="Billing details" lazy>
+  <ph-input name="vat" label="VAT number" />
+</ph-collapse>
+```
+
+**`lazy` is about the FIRST open, not about visibility.** An initially-open panel
+is mounted from the start — otherwise the SSR markup would be an empty shell for
+content the reader can see. Closing does not unmount either: that would throw away
+the scroll position and every field the user filled in.
+
+**The animation drives Bootstrap's own `collapsing` class** through `<Transition>`
+hooks, exactly as `<ph-accordion>` does — there is no bootstrap.js here to add it.
+The `collapse` class is deliberately **not** used: `.collapse:not(.show)` sets
+`display: none`, which fights `v-show` and makes the panel flicker on the first
+toggle. The chevron is free too: `accordion-button`'s `::after` rotates as soon as
+`collapsed` is present.
+
+Header and panel ids are prefixed per instance via `useId()`, so they survive
+hydration and two collapses on one page cannot emit duplicate ids and break each
+other's `aria-controls`.
 
 ---
 
@@ -2660,10 +3006,12 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhBreadcrumb | `<ph-breadcrumb>` | Navigation |
 | PhButton | `<ph-button>` | Action |
 | PhCard | `<ph-card>` | Data display |
+| PhCarousel | `<ph-carousel>` | Data display |
 | PhCheckbox | `<ph-checkbox>` | Form control |
 | PhChip | `<ph-chip>` | Data display |
 | PhCode | `<ph-code>` | Data display |
 | PhCol | `<ph-col>` | Layout |
+| PhCollapse | `<ph-collapse>` | Data display |
 | PhConfirmDialog | `<ph-confirm-dialog>` | Feedback — **one per page**, self-registers on `window.confirm` |
 | PhDataTable | `<ph-data-table>` | Data display |
 | PhDatePicker | `<ph-date-picker>` | Form control |
@@ -2679,6 +3027,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhHeading | `<ph-heading>` | Typography |
 | PhIcon | `<ph-icon>` | Data display |
 | PhInput | `<ph-input>` | Form control |
+| PhInlineEdit | `<ph-inline-edit>` | Form control |
 | PhInputShell | `<ph-input-shell>` | Form control (bordered shell primitive for composite controls) |
 | PhLink | `<ph-link>` | Navigation |
 | PhListGroup | `<ph-list-group>` | Data display |
@@ -2687,11 +3036,13 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhNavigation | `<ph-navigation>` | Navigation (hybrid SSR partial + client Vue) |
 | PhNumberInput | `<ph-number-input>` | Form control |
 | PhPagination | `<ph-pagination>` | Navigation |
+| PhOtpInput | `<ph-otp-input>` | Form control |
 | PhPopover | `<ph-popover>` | Feedback |
 | PhProgressBar | `<ph-progress-bar>` | Feedback |
 | PhRadio | `<ph-radio>` | Form control |
 | PhRange | `<ph-range>` | Form control |
 | PhRow | `<ph-row>` | Layout |
+| PhRichText | `<ph-rich-text>` | Form control (sanitised HTML / Markdown editor and renderer) |
 | PhSearchInput | `<ph-search-input>` | Form control |
 | PhSelect | `<ph-select>` | Form control |
 | PhSelect3 | `<ph-select3>` | Form control |
