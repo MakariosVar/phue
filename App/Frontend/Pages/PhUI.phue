@@ -78,7 +78,9 @@ $navItems = [
     [
         'id' => 'content',
         'label' => 'Content & Layout',
-        'components' => []
+        'components' => [
+            ['id' => 'text', 'label' => 'Text'],
+        ]
     ],
     [
         'id' => 'ssr',
@@ -443,9 +445,12 @@ return [
 
                 <!-- Content & Layout -->
                 <section v-if="activeSection === 'content'" id="content" class="mb-5">
-                    <h2 class="h4 fw-semibold mb-3">Content & Layout</h2>
+                    <h3 class="fw-semibold mb-3">Content & Layout</h3>
                     <div class="row g-4">
-                        <!-- <ExamplePhText />
+                        <span id="text">
+                            <example-ph-text />
+                        </span>
+                        <!--
                         <ExamplePhHeading />
                         <ExamplePhBox />
                         <ExamplePhStack />
