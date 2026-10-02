@@ -101,21 +101,53 @@ export default {
       showProps: true,
       sizes: ['xs', 'sm', 'md', 'lg', 'xl', '2xl'],
       variants: ['primary', 'secondary', 'success', 'warning', 'danger', 'info', 'muted', 'light', 'dark'],
-      snippet: `<!-- decorative: aria-hidden, sits next to real text -->
-<ph-button variant="primary">
-  <ph-icon name="download" class="me-1" />
-  Download
-</ph-button>
+      snippet: `<ph-text class="mt-2" size="xs" weight="semibold" color="muted">Size</ph-text>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-icon v-for="s in sizes" :key="s" name="star-fill" :size="s" />
+  <ph-text size="xs" color="muted">xs → 2xl</ph-text>
+</div>
+<div class="mt-2 d-flex align-items-center gap-3">
+  <ph-icon name="chevron-down" :size="16" />
+  <ph-icon name="chevron-down" :size="'2.5rem'" />
+</div>
+<ph-text size="xs" color="muted">a number is pixels, a string is raw CSS</ph-text>
 
-<!-- icon-only: label gives the control an accessible name -->
-<ph-button variant="primary" size="sm" aria-label="Save">
-  <ph-icon name="check-lg" />
-</ph-button>
+<ph-text class="mt-2" size="xs" weight="semibold" color="muted">Variant</ph-text>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-icon v-for="v in variants" :key="v" name="circle-fill" :variant="v" size="lg" />
+</div>
 
-<!-- sizes: token or pixels, variants for colour, spin for a loader -->
-<ph-icon name="star-fill" size="xl" variant="warning" />
-<ph-icon name="arrow-repeat" size="lg" spin label="Refreshing" />
-<ph-icon name="gem" color="#6f42c1" />`,
+<ph-text class="mt-2" size="xs" weight="semibold" color="muted">Spin</ph-text>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-icon name="arrow-repeat" spin size="lg" label="Refreshing" />
+</div>
+<ph-text size="xs" color="muted">reuses Bootstrap's spinner animation</ph-text>
+
+<ph-text class="mt-2" size="xs" weight="semibold" color="muted">Accessibility</ph-text>
+<ph-text size="xs" color="muted" class="mt-1 mb-2">
+  With no <code>label</code> the icon is <code>aria-hidden</code> — a decorative
+  glyph next to real text. Pass <code>label</code> when the icon is the only
+  content of a control, or the control has no accessible name.
+</ph-text>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-button variant="primary" size="sm" aria-label="Save">
+    <ph-icon name="check-lg" />
+  </ph-button>
+  <ph-text size="xs" color="muted">label="Save" → role="img" + aria-label</ph-text>
+</div>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-button variant="primary" size="sm">
+    <ph-icon name="download" class="me-1" />
+    Download
+  </ph-button>
+  <ph-text size="xs" color="muted">no label → hidden from the a11y tree</ph-text>
+</div>
+
+<ph-text class="mt-2" size="xs" weight="semibold" color="muted">Color — raw CSS override</ph-text>
+<div class="my-2 d-flex align-items-center gap-3">
+  <ph-icon name="gem" size="xl" color="#6f42c1" />
+  <ph-text size="xs" color="muted">color="#6f42c1" beats variant</ph-text>
+</div>`,
       propsData: [
         {
           name: "name",

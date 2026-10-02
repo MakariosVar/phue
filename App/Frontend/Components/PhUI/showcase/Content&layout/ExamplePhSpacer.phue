@@ -61,8 +61,22 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
-      snippet: `<ph-spacer size="lg" class="bg-secondary" />
-<ph-spacer size="sm" class="bg-secondary" horizontal />`,
+      snippet: `<ph-row>
+  <ph-col span="6">
+    <ph-stack gap="none">
+      <span>Above the gap</span>
+      <ph-spacer size="lg" class="bg-secondary" />
+      <span>Below the gap</span>
+    </ph-stack>
+  </ph-col>
+  <ph-col span="6">
+    <ph-flex justify="center" align="center" class="h-100">
+      <span>Left from gap</span>
+      <ph-spacer size="sm" class="bg-secondary" horizontal />
+      <span>Right from gap</span>
+    </ph-flex>
+  </ph-col>
+</ph-row>`,
       propsData: [
         {
           name: "size",

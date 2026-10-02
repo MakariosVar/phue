@@ -72,7 +72,15 @@ export default {
       showDemo: true,
       showProps: true,
       emptyState: false,
-      snippet: `<ph-data-table
+      snippet: `<div class="row">
+  <div class="col-md-12 d-flex justify-content-end">
+    <ph-checkbox 
+      v-model="emptyState"
+      label="Empty State"
+    />
+  </div>
+</div>
+<ph-data-table
   :columns="[
     { key: 'name', label: 'Product', sortable: false },
     { key: 'price', label: 'Price', sortable: true },

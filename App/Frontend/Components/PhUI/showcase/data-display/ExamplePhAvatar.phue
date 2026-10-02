@@ -20,7 +20,7 @@
         <ph-card v-if="showDemo">
           <div class="d-flex align-items-center gap-2 my-1">
             <ph-avatar name="Mak Var" size="lg" shape="rounded" alt="Mak" />
-            <ph-avatar src="/uploads/u.png" name="Mak Var" alt="MV" />
+            <ph-avatar src="/Phue.svg" name="Mak Var" alt="MV" />
             <ph-avatar name="Mak Var" size="sm" shape="square" alt="Mak" />
             <ph-avatar name="Mak Var" size="xs" alt="Mak" />
           </div>
@@ -50,7 +50,7 @@ export default {
       showDemo: true,
       showProps: true,
       snippet: `<ph-avatar name="Mak Var" size="lg" shape="rounded" alt="Mak" />
-<ph-avatar src="/uploads/u.png" name="Mak Var" alt="MV" />
+<ph-avatar src="Phue.svg" name="Mak Var" alt="MV" />
 <ph-avatar name="Mak Var" size="sm" shape="square" alt="Mak" />
 <ph-avatar name="Mak Var" size="xs" alt="Mak" />`,
       propsData: [

@@ -96,16 +96,22 @@ export default {
   </ul>
   <div class="ms-lg-auto d-flex align-items-center gap-2">…actions…</div>
 </div>`,
-      snippet: `// In a layout PHP block — AppLayout.phue does exactly this:
-$navHtml = $partialRenderer->renderPartial('PhNavigation', [
-    'items'       => $navItems,     // { label, href, disabled?, group? }
-    'actions'     => $actions,
-    'activeRoute' => $uri,
-    'orientation' => 'sidebar',      // or 'horizontal'
-]);
+      snippet: `<ph-text class="mt-2" size="xs" weight="semibold" color="muted">orientation="sidebar" — what it emits</ph-text>
+<ph-code class="mt-2" language="html" :code="sidebarMarkup" />
 
-// The partial seeds window.__NAV_STATE__; the client takes over the
-// same markup on mount, so there is no FOUC and no duplicate DOM.`,
+<ph-text class="mt-3" size="xs" weight="semibold" color="muted">orientation="horizontal" — what it emits</ph-text>
+<ph-code class="mt-2" language="html" :code="topbarMarkup" />
+
+<ph-text class="mt-3" size="xs" weight="semibold" color="muted">Active detection</ph-text>
+<ph-text size="sm" color="muted" class="mt-1">
+  The item whose normalised href equals <code>activeRoute</code> — or is a
+  prefix of it — gets <code>.active</code> and
+  <code>aria-current="page"</code>; the root <code>/</code> matches only
+  when <code>activeRoute === '/'</code>. Group headings render in sidebar
+  mode only and are keyed to <em>consecutive</em> items, so a group split
+  by an unrelated item renders two headings. Disabled items render as
+  <code>span.nav-link.disabled</code>, not links.
+</ph-text>`,
       propsData: [
         {
           name: "items",

@@ -58,6 +58,7 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
+      lastAction: null,
       snippet: `<ph-empty-state
   icon="inbox"
   title="No messages"
@@ -123,5 +124,13 @@ export default {
       ]
     };
   },
+  methods: {
+    // The demo wired @action="compose" with no method behind it, so Vue warned
+    // "Property compose was accessed during render but is not defined" on every
+    // render of the showcase.
+    compose() {
+      this.lastAction = 'compose';
+    }
+  }
 };
 </script>

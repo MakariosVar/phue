@@ -18,7 +18,7 @@
     </template>
     <template #demo>
       <ph-card v-if="showDemo">
-        <ph-form-field label="Email"  :error="email ? '' : `Email is required.`" helper-text="We'll never share your email.">
+        <ph-form-field label="Email"  :error="emailError" helper-text="We'll never share your email.">
           <ph-input v-model="email" placeholder="you@example.com" required />
         </ph-form-field>
       </ph-card>
@@ -46,8 +46,9 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
+      emailError: '',
       email: '',
-      snippet: `<ph-form-field label="Email"  :error="email ? '' : \`Email is required.\`" helper-text="We'll never share your email.">
+      snippet: `<ph-form-field label="Email"  :error="emailError" helper-text="We'll never share your email.">
   <ph-input v-model="email" placeholder="you@example.com" required />
 </ph-form-field>`,
       propsData: [

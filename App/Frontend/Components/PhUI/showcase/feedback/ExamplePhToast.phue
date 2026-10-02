@@ -81,17 +81,19 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
-      snippet: `<!-- Once per page, high in the tree. It teleports to body itself. -->
-<ph-toast position="top-right" :duration="5000" :max="5" />
-
-<!-- Anywhere in your code, no ref, no import -->
-window.toast.push('Saved.');
-window.toast.push({ variant: 'success', title: 'Saved', message: 'Changes persisted.' });
-window.toast.push({ variant: 'error', title: 'Failed', message: 'Try again.', duration: 8000 });
-
-const id = window.toast.push('Working…');
-window.toast.remove(id);
-window.toast.clear();`,
+      snippet: `<div class="d-flex flex-wrap gap-2">
+  <ph-button size="sm" variant="primary" @click="pushPlain">Plain message</ph-button>
+  <ph-button size="sm" variant="success" @click="pushSuccess">Success + title</ph-button>
+  <ph-button size="sm" variant="warning" @click="pushWarning">Warning</ph-button>
+  <ph-button size="sm" variant="danger" @click="pushError">Error</ph-button>
+  <ph-button size="sm" variant="info" @click="pushCustom">Custom 2s duration</ph-button>
+  <ph-button size="sm" variant="outline-secondary" @click="pushBurst">Burst past max</ph-button>
+  <ph-button size="sm" variant="ghost" @click="clearAll">Clear all</ph-button>
+</div>
+<p class="text-muted small mt-3 mb-0">
+  <code>push()</code> returns the toast id. Hovering a toast pauses its
+  countdown, so a long message stays readable.
+</p>`,
       propsData: [
         {
           name: "position",

@@ -101,36 +101,15 @@ export default {
       showDemo: true,
       showProps: true,
       lastAnswer: "—",
-      snippet: `<!-- Once per page. It takes over window.confirm. -->
-<ph-confirm-dialog />
-
-<!-- Ordinary control flow: the answer is a boolean. -->
-async function remove(id) {
-  const ok = await window.confirm({
-    title: 'Delete this project?',
-    message: 'It also deletes its deployments. This cannot be undone.',
-    confirmText: 'Delete',
-    cancelText: 'Keep it',
-    variant: 'danger',
-    icon: 'exclamation-triangle',
-  });
-
-  if (!ok) return;
-  await api.delete(id);
-}
-
-// Hold it open while the server works, so the user cannot dismiss mid-flight.
-async function save() {
-  const ok = await window.confirm({ title: 'Save changes?', message: 'Drafts are included.' });
-  if (!ok) return;
-
-  window.confirm.setLoading(true);
-  try {
-    await api.save();
-  } finally {
-    window.confirm.setLoading(false);
-  }
-}`,
+      snippet: `<div class="d-flex flex-wrap gap-2">
+  <ph-button size="sm" variant="primary" @click="askSimple">Simple</ph-button>
+  <ph-button size="sm" variant="danger" @click="askDanger">Destructive</ph-button>
+  <ph-button size="sm" variant="warning" @click="askWithIcon">With icon</ph-button>
+  <ph-button size="sm" variant="info" @click="askBlocking">Blocking (setLoading)</ph-button>
+</div>
+<p class="text-muted small mt-3 mb-0">
+  Last answer: <code>{{ lastAnswer }}</code>
+</p>`,
       optionProps: [
         {
           field: "title",

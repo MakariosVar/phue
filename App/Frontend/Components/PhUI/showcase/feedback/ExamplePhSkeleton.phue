@@ -122,20 +122,76 @@ export default {
       showDemo: true,
       showProps: true,
       loading: true,
-      snippet: `<!-- text: one line tall by default, so no height needed -->
-<ph-skeleton width="100%" />
-<ph-skeleton width="75%" />
-<ph-skeleton :width="240" />          <!-- a number is px -->
+      snippet: `<h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+  Text
+</h6>
+<div class="d-flex flex-column gap-2">
+  <ph-skeleton width="100%" />
+  <ph-skeleton width="75%" />
+  <ph-skeleton :width="240" />
+  <ph-skeleton width="100%" :height="12" />
+</div>
 
-<!-- circular is a disc, rectangular is a plain block -->
-<ph-skeleton variant="circular" :width="48" />
-<ph-skeleton variant="rectangular" :width="200" :height="120" />
+<hr class="my-4" />
 
-<!-- animated defaults to true; turn it off for a still placeholder -->
-<ph-skeleton width="100%" :animated="false" />
+<h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+  Circular and rectangular
+</h6>
+<div class="d-flex align-items-center gap-4">
+  <ph-skeleton variant="circular" :width="48" />
+  <ph-skeleton variant="circular" :width="32" />
+  <ph-skeleton variant="rectangular" :width="200" :height="120" />
+</div>
 
-<!-- Any CSS length works, and a class lands on the outer span -->
-<ph-skeleton width="100%" :height="12" class="mt-2" />`,
+<hr class="my-4" />
+
+<h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+  Animated on (default) vs off
+</h6>
+<div class="d-flex flex-column gap-2">
+  <div class="d-flex align-items-center gap-3">
+    <span class="small text-body-secondary" style="width: 72px;">animated</span>
+    <ph-skeleton width="100%" />
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <span class="small text-body-secondary" style="width: 72px;">still</span>
+    <ph-skeleton width="100%" :animated="false" />
+  </div>
+</div>
+
+<hr class="my-4" />
+
+<h6 class="text-body-secondary text-uppercase small fw-semibold mb-2">
+  In context
+</h6>
+
+<div v-if="loading" class="d-flex align-items-center gap-3">
+  <ph-skeleton variant="circular" :width="40" />
+  <div class="flex-grow-1">
+    <ph-skeleton width="40%" :height="14" />
+    <ph-skeleton width="70%" :height="10" class="mt-2" />
+  </div>
+</div>
+
+<div v-else class="d-flex align-items-center gap-3">
+  <ph-avatar name="Makarios Varis" size="md" />
+  <div class="flex-grow-1">
+    <div class="fw-semibold">Makarios Varis</div>
+    <div class="text-body-secondary small">Same shape, real content.</div>
+  </div>
+</div>
+
+<button
+  type="button"
+  class="btn btn-sm btn-outline-primary mt-3"
+  @click="loading = !loading"
+>
+  {{ loading ? "Show the content" : "Show the skeletons" }}
+</button>
+<p class="text-muted small mt-2 mb-0">
+  The placeholder has to occupy the space the content will, which is
+  the whole point of matching its dimensions.
+</p>`,
       propsData: [
         {
           name: "variant",
