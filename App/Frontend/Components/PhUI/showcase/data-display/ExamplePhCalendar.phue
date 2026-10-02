@@ -1,0 +1,207 @@
+<template>
+  <example-factory
+    tag="&lt;ph-calendar&gt;"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Month grid with events. Unlike <code>&lt;ph-date-picker&gt;</code>, which
+        is a <b>control</b> returning one ISO date, this is a <b>view</b> of a
+        whole month — with <code>selectable</code> it also returns the days you
+        click.
+      </p>
+      <p class="mb-0">
+        Always a fixed 6&times;7 grid, so the height never jumps between months,
+        and the arrow keys walk it in two axes. Stepping past a month edge moves
+        the view to follow.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-row gutter="4">
+          <ph-col span="12" lg="8">
+            <ph-calendar
+              v-model="selected"
+              month="2026-10"
+              :events="events"
+              selectable
+            />
+            <ph-text size="sm" color="muted" class="mt-2">
+              Selected: <strong>{{ selected.length ? selected.join(', ') : '—' }}</strong>
+            </ph-text>
+          </ph-col>
+
+          <ph-col span="12" lg="4">
+            <ph-text size="xs" weight="semibold" color="muted">size="sm"</ph-text>
+            <ph-calendar month="2026-10" :events="events" size="sm" class="mt-2" />
+
+            <ph-text size="xs" weight="semibold" color="muted" class="mt-3">week-start="0"</ph-text>
+            <ph-calendar month="2026-10" size="sm" :week-start="0" class="mt-2" />
+          </ph-col>
+        </ph-row>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          An <code>event</code> is any object with a date-ish field
+          (<code>date</code>, <code>start</code> or <code>iso</code>), a
+          <code>label</code> and an optional <code>color</code> — or a bare ISO
+          string, coloured with the primary token. Events are grouped by ISO once
+          per render, so a cell is an O(1) lookup instead of a scan of the whole
+          list for each of the 42 cells.
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhCalendar",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      // month is pinned: without it the grid opens on today, so the events below
+      // only lined up by coincidence.
+      selected: ['2026-10-14'],
+      events: [
+        { date: '2026-10-02', label: 'Sprint review', color: 'var(--bs-primary)' },
+        { date: '2026-10-02', label: 'Retro', color: 'var(--bs-secondary)' },
+        { date: '2026-10-14', label: 'Release', color: 'var(--bs-success)' },
+        { date: '2026-10-14', label: 'QA pass', color: 'var(--bs-warning)' },
+        { date: '2026-10-14', label: 'Deploy', color: 'var(--bs-danger)' },
+        { date: '2026-10-14', label: 'Announce', color: 'var(--bs-info)' },
+        { date: '2026-10-14', label: 'Postmortem', color: 'var(--bs-secondary)' },
+        { date: '2026-10-27', label: 'Planning', color: 'var(--bs-primary)' }
+      ],
+      snippet: `<ph-row gutter="4">
+  <ph-col span="12" lg="8">
+    <ph-calendar
+      v-model="selected"
+      month="2026-10"
+      :events="events"
+      selectable
+    />
+    <ph-text size="sm" color="muted" class="mt-2">
+      Selected: <strong>{{ selected.length ? selected.join(', ') : '—' }}</strong>
+    </ph-text>
+  </ph-col>
+
+  <ph-col span="12" lg="4">
+    <ph-text size="xs" weight="semibold" color="muted">size="sm"</ph-text>
+    <ph-calendar month="2026-10" :events="events" size="sm" class="mt-2" />
+
+    <ph-text size="xs" weight="semibold" color="muted" class="mt-3">week-start="0"</ph-text>
+    <ph-calendar month="2026-10" size="sm" :week-start="0" class="mt-2" />
+  </ph-col>
+</ph-row>`,
+      propsData: [
+        {
+          name: "modelValue",
+          type: "Array",
+          default: "[]",
+          notes: "Selected ISO dates (v-model)",
+        },
+        {
+          name: "events",
+          type: "Array",
+          default: "[]",
+          notes: "{ date|start|iso, label?, color? } or bare ISO strings",
+        },
+        {
+          name: "month",
+          type: "String",
+          default: "''",
+          notes: "ISO month to open; defaults to today",
+        },
+        {
+          name: "weekStart",
+          type: "Number",
+          default: "1",
+          notes: "0 = Sunday, 1 = Monday",
+        },
+        {
+          name: "selectable",
+          type: "Boolean",
+          default: "false",
+          notes: "Emit selection changes",
+        },
+        {
+          name: "multiple",
+          type: "Boolean",
+          default: "true",
+          notes: "Range vs single selection",
+        },
+        {
+          name: "min",
+          type: "String",
+          default: "''",
+          notes: "ISO lower bound; earlier days disabled",
+        },
+        {
+          name: "max",
+          type: "String",
+          default: "''",
+          notes: "ISO upper bound; later days disabled",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg",
+        },
+        {
+          name: "maxDots",
+          type: "Number",
+          default: "3",
+          notes: "Dots per day before the +n overflow",
+        },
+        {
+          name: "showLegend",
+          type: "Boolean",
+          default: "true",
+          notes: "Colour key under the grid",
+        },
+        {
+          name: "highlightToday",
+          type: "Boolean",
+          default: "true",
+          notes: "aria-current + focus-ring on today",
+        },
+        {
+          name: "eventColorKey",
+          type: "String",
+          default: "'color'",
+          notes: "Property read for the dot colour",
+        },
+        {
+          name: "eventLabelKey",
+          type: "String",
+          default: "'label'",
+          notes: "Property read for the legend text",
+        }
+      ]
+    };
+  }
+};
+</script>
