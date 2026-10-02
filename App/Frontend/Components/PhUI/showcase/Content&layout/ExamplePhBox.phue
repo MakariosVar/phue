@@ -1,0 +1,108 @@
+<template>
+  <example-factory
+    tag="<ph-box />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Themed spacing/radius/border/background div.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <div class="d-flex gap-3">
+          <ph-box padding="lg" radius="lg" bg="success">
+            Surfaced, rounded box.
+            </ph-box>
+          <ph-box padding="lg" radius="md" border bg="warning">
+            Surfaced, rounded box.
+          </ph-box>
+          <ph-box padding="lg" radius="none" bg="danger">
+            Surfaced, rounded box.
+          </ph-box>
+          <ph-box padding="lg" radius="full" border bg="surface">
+            Surfaced, rounded box.
+          </ph-box>
+        </div>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhBox",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-box padding="lg" radius="lg" bg="success">
+  Surfaced, rounded box.
+  </ph-box>
+<ph-box padding="lg" radius="md" border bg="warning">
+  Surfaced, rounded box.
+</ph-box>
+<ph-box padding="lg" radius="none" bg="danger">
+  Surfaced, rounded box.
+</ph-box>
+<ph-box padding="lg" radius="full" border bg="surface">
+  Surfaced, rounded box.
+</ph-box>`,
+      propsData: [
+        {
+          name: "padding",
+          type: "String | Number",
+          default: "'md'",
+          notes: "Scale token, px, or raw CSS",
+        },
+        {
+          name: "margin",
+          type: "String | Number",
+          default: "'0'",
+          notes: "Same; '0' stays unset",
+        },
+        {
+          name: "border",
+          type: "Boolean",
+          default: "false",
+          notes: "",
+        },
+        {
+          name: "radius",
+          type: "String",
+          default: "'md'",
+          notes: "none | sm | md | lg | full",
+        },
+        {
+          name: "bg",
+          type: "String",
+          default: "'surface'",
+          notes: "Named: primary | secondary | success | danger | warning | light | dark | white | transparent; any other string → inline background-color (e.g. 'surface', 'info')",
+        }
+      ]
+    };
+  }
+};
+</script>
