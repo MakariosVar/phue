@@ -22,6 +22,8 @@ $navItems = [
             ['id' => 'range', 'label' => 'Range'],
             ['id' => 'file-input', 'label' => 'File Input'],
             ['id' => 'date-picker', 'label' => 'Date Picker'],
+            ['id' => 'calendar', 'label' => 'Calendar'],
+            ['id' => 'color-picker', 'label' => 'Color Picker'],
             ['id' => 'segmented-control', 'label' => 'Segmented Control'],
             ['id' => 'form', 'label' => 'Form'],
             ['id' => 'form-field', 'label' => 'Form Field'],
@@ -36,10 +38,12 @@ $navItems = [
             ['id' => 'badge', 'label' => 'Badge'],
             ['id' => 'chip', 'label' => 'Chip'],
             ['id' => 'avatar', 'label' => 'Avatar'],
+            ['id' => 'image', 'label' => 'Image'],
             ['id' => 'card', 'label' => 'Card'],
             ['id' => 'empty-state', 'label' => 'Empty State'],
             ['id' => 'stat', 'label' => 'Stat'],
             ['id' => 'list-group', 'label' => 'List Group'],
+            ['id' => 'sortable', 'label' => 'Sortable'],
             ['id' => 'description-list', 'label' => 'Description List'],
             ['id' => 'timeline', 'label' => 'Timeline'],
             ['id' => 'code', 'label' => 'Code'],
@@ -151,6 +155,36 @@ MARKDOWN;
 
 $markdownHtml = (new \Phue\Core\Utils\MarkdownParser())->parse($markdownSource);
 
+// Prev/next for the section footer. Computed here, not in the script, because the
+// SSR renderer renders from THIS state object — a field the script adds later is
+// undefined on the server, so the footer silently vanished and the client then
+// hydrated a <nav> against an empty placeholder. syncFooter() in the script keeps
+// the pair current as the reader moves between sections.
+$footerPrev = null;
+$footerNext = null;
+$sectionPosition = array_search($sectionId, array_column($navItems, 'id'), true);
+
+if ($sectionPosition !== false && count($navItems) > 1) {
+    // Every nav group is a section, including Overview, which has no components
+    // of its own. Arriving at a section should land on its first component when
+    // it has one, so the reader is not dropped on a bare heading.
+    $pickFooterTarget = static function (array $group): array {
+        $first = $group['components'][0] ?? null;
+
+        return [
+            'id' => $first['id'] ?? $group['id'],
+            'label' => $group['label'],
+        ];
+    };
+
+    if ($sectionPosition > 0) {
+        $footerPrev = $pickFooterTarget($navItems[$sectionPosition - 1]);
+    }
+    if ($sectionPosition < count($navItems) - 1) {
+        $footerNext = $pickFooterTarget($navItems[$sectionPosition + 1]);
+    }
+}
+
 return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
@@ -159,7 +193,21 @@ return [
         'searchQuery' => '',
         'shellHeight' => 'calc(100dvh - 4.75rem)',
         'navItems' => $navItems,
+        // The sidebar is rendered from STATE, not from a computed. The SSR engine
+        // runs `createSSRApp({ template, data })` (ssr/server.ts) — setup(),
+        // computeds and methods never execute on the server, so a `v-for` over a
+        // computed renders nothing there and the client then hydrates a full nav
+        // against an empty one. The query only exists client-side, so the server's
+        // answer is always the unfiltered list.
+        'visibleNav' => $navItems,
+        // Likewise: the active group must start open on the server, or its sub-
+        // links appear only after hydration. An array of open ids rather than an
+        // object keyed by id — it serialises predictably and toggling it is a
+        // filter, not a mutation of a JSON object that arrived as a plain object.
+        'openSections' => $sectionId === 'index' ? [] : [$sectionId],
         'markdownHtml' => $markdownHtml,
+        'footerPrev' => $footerPrev,
+        'footerNext' => $footerNext,
     ],
 ];
 </php>
@@ -229,13 +277,14 @@ return [
                     id="phui-search-input"
                     v-model="searchQuery"
                     placeholder="Search… (Ctrl+K)"
+                    clearable
                     size="sm"
                     :clearable="true"
                 />
             </div>
 
             <div v-if="!isMobile || sidebarOpen" class="flex-column px-3 pb-3" style="gap: 0.1rem; min-height: 0;">
-                <div style="display: contents;" v-for="nav in filteredNavItems" :key="nav.id">
+                <div style="display: contents;" v-for="nav in visibleNav" :key="nav.id">
                     <!-- Main Nav Link -->
                     <button
                         type="button"
@@ -257,7 +306,7 @@ return [
                             cursor: 'pointer'
                         }"
                         :aria-current="activeSection === nav.id ? 'true' : null"
-                        :aria-expanded="expandedSections[nav.id] ? 'true' : 'false'"
+                        :aria-expanded="openSections.includes(nav.id) ? 'true' : 'false'"
                         @click.stop="nav.components.length ? toggleSection(nav.id) : scrollTo(nav.id)"
                     >
                         <span style="flex: 1;">{{ nav.label }}</span>
@@ -265,7 +314,7 @@ return [
                             v-if="nav.components.length"
                             class="small d-inline-flex align-items-center"
                             :style="{
-                                transform: expandedSections[nav.id] ? 'none' : 'rotate(-90deg)',
+                                transform: openSections.includes(nav.id) ? 'none' : 'rotate(-90deg)',
                                 transition: 'transform 0.15s ease',
                                 cursor: 'pointer'
                             }"
@@ -274,7 +323,7 @@ return [
 
                     <!-- Sub Links -->
                     <a
-                        v-for="comp in (expandedSections[nav.id] ? nav.components : [])"
+                        v-for="comp in (openSections.includes(nav.id) ? nav.components : [])"
                         :key="comp.id"
                         :href="'#' + comp.id"
                         class="phue-nav-sub-link d-flex align-items-center ms-4 p-1"
@@ -353,6 +402,12 @@ return [
                         <span id="date-picker">
                             <example-ph-date-picker @setAnchor="scrollTo('date-picker')"/>
                         </span>
+                        <span id="calendar">
+                            <example-ph-calendar @setAnchor="scrollTo('calendar')"/>
+                        </span>
+                        <span id="color-picker">
+                            <example-ph-color-picker @setAnchor="scrollTo('color-picker')"/>
+                        </span>
                         <span id="segmented-control">
                             <example-ph-segmented-control @setAnchor="scrollTo('segmented-control')"/>
                         </span>
@@ -384,6 +439,9 @@ return [
                         <span id="avatar">
                             <example-ph-avatar @setAnchor="scrollTo('avatar')"/>
                         </span>
+                        <span id="image">
+                            <example-ph-image @setAnchor="scrollTo('image')"/>
+                        </span>
                         <span id="card">
                             <example-ph-card @setAnchor="scrollTo('card')"/>
                         </span>
@@ -395,6 +453,9 @@ return [
                         </span>
                         <span id="list-group">
                             <example-ph-list-group @setAnchor="scrollTo('list-group')"/>
+                        </span>
+                        <span id="sortable">
+                            <example-ph-sortable @setAnchor="scrollTo('sortable')"/>
                         </span>
                         <span id="description-list">
                             <example-ph-description-list @setAnchor="scrollTo('description-list')"/>
@@ -534,35 +595,35 @@ return [
                      keeps only one of them mounted. scrollTo() already expands the nav
                      entry and rewrites ?section=, so it is the same trip as the sidebar. -->
                 <nav
-                    v-if="hasSectionNeighbours"
+                    v-if="navItems.length"
                     class="d-flex justify-content-between align-items-center gap-2 mt-4 pt-3 border-top"
                     aria-label="Section navigation"
                 >
                     <a
-                        v-if="sectionNeighbours.previous"
-                        :href="'?section=' + sectionNeighbours.previous.id"
+                        v-if="footerPrev"
+                        :href="'?section=' + footerPrev.id"
                         class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 text-decoration-none"
                         data-no-spa
-                        @click.prevent="scrollTo(sectionNeighbours.previous.id)"
+                        @click.prevent="scrollTo(footerPrev.id)"
                     >
                         <span aria-hidden="true">&larr;</span>
                         <span class="text-start">
                             <small class="d-block text-body-secondary">Previous</small>
-                            {{ sectionNeighbours.previous.label }}
+                            {{ footerPrev.label }}
                         </span>
                     </a>
                     <span v-else></span>
 
                     <a
-                        v-if="sectionNeighbours.next"
-                        :href="'?section=' + sectionNeighbours.next.id"
+                        v-if="footerNext"
+                        :href="'?section=' + footerNext.id"
                         class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 text-decoration-none ms-auto"
                         data-no-spa
-                        @click.prevent="scrollTo(sectionNeighbours.next.id)"
+                        @click.prevent="scrollTo(footerNext.id)"
                     >
                         <span class="text-end">
                             <small class="d-block text-body-secondary">Next</small>
-                            {{ sectionNeighbours.next.label }}
+                            {{ footerNext.label }}
                         </span>
                         <span aria-hidden="true">&rarr;</span>
                     </a>
@@ -633,7 +694,23 @@ export default function mountApp(injectedContext = null) {
                 activeSection: initState.activeSection ?? DEFAULT_SECTION,
                 activeAnchor: initState.activeAnchor ?? '',
                 searchQuery: initState.searchQuery ?? '',
-                navItems: [],
+                // Seeded from the server's answer rather than left empty. The SSR
+                // renderer reads the PHP state, so it renders the sidebar and the
+                // footer; a client store that started empty would hydrate them
+                // against comment nodes. hydrateNavData() used to be the only
+                // filler, but it is deferred to onMounted (the `.phue-sidebar nav`
+                // probe never matches — this sidebar is built from divs), so
+                // hydration ran with an empty list.
+                navItems: (initState.navItems ?? []).map((nav) => ({
+                    ...nav,
+                    components: nav.components ?? [],
+                })),
+                // Same reason. Note the state serializer drops nulls, so a null
+                // neighbour arrives as undefined — hence the `?? null`.
+                visibleNav: initState.visibleNav ?? [],
+                openSections: initState.openSections ?? [],
+                footerPrev: initState.footerPrev ?? null,
+                footerNext: initState.footerNext ?? null,
                 markdownHtml: initState.markdownHtml ?? '',
             });
 
@@ -641,7 +718,6 @@ export default function mountApp(injectedContext = null) {
             const mainEl = ref(null);
             const contentEl = ref(null);
             const shellHeight = ref(initState.shellHeight ?? SHELL_FALLBACK_HEIGHT);
-            const expandedSections = reactive({});
 
             // Below `lg` the sidebar is a drawer: it must be out of the flow, so it
             // cannot be laid out by CSS alone (there is no stylesheet to put a media
@@ -709,8 +785,9 @@ export default function mountApp(injectedContext = null) {
             function setActiveSection(id, expand = true) {
                 if (!id || !isSectionId(id) || state.activeSection === id) return;
                 state.activeSection = id;
+                syncFooter();
                 if (!expand) return;
-                expandedSections[id] = true;
+                state.openSections = openWith(id);
             }
 
             /** Moves the highlight onto a component. The only thing the spy writes. */
@@ -767,46 +844,52 @@ export default function mountApp(injectedContext = null) {
                 syncUrl(id, { push: true });
             }
 
-            function toggleSection(id) {
-                expandedSections[id] = !expandedSections[id];
+            /** Adds an id without duplicating it. */
+            function openWith(id) {
+                return state.openSections.includes(id) ? state.openSections : [...state.openSections, id];
             }
 
-            // Only one section is mounted at a time, so the footer can live once,
-            // after them all: it renders against whichever section is active. The
-            // order comes from navItems, so the two can never disagree.
-            /** The active section's neighbours, or null at either end. */
-            const sectionNeighbours = computed(() => {
+            function toggleSection(id) {
+                state.openSections = state.openSections.includes(id)
+                    ? state.openSections.filter((s) => s !== id)
+                    : [...state.openSections, id];
+            }
+
+            /**
+             * The prev/next footer is driven by plain `state` fields, not by a
+             * computed. The SSR renderer resolves state bindings but returns
+             * undefined for a computed ref used inside a `v-if` — it silently
+             * dropped the whole `<nav>` on the server, so the client hydrated a
+             * `nav` against a `<!-- -->` placeholder.
+             */
+            function syncFooter() {
                 // Every nav group is a section, including Overview, which has no
-                // components of its own — filtering on `components` would drop it and
-                // strand the reader on the first page.
+                // components of its own — filtering on `components` would drop it
+                // and strand the reader on the first page.
                 const sections = state.navItems;
                 const index = sections.findIndex((nav) => nav.id === state.activeSection);
-                if (index === -1) return { previous: null, next: null };
+
+                if (index === -1 || sections.length < 2) {
+                    state.footerPrev = null;
+                    state.footerNext = null;
+                    return;
+                }
 
                 const pick = (offset) => {
                     const target = sections[index + offset];
                     if (!target) return null;
 
-                    // Land on the section's first component when it has one: arriving
-                    // at "Form Controls" should put the reader in front of Button, not
-                    // at a heading with nothing under it. A section with no components
-                    // (Overview) is its own destination.
+                    // Land on the section's first component when it has one:
+                    // arriving at "Form Controls" should put the reader in front
+                    // of Button, not at a heading with nothing under it. A
+                    // section with no components is its own destination.
                     const first = target.components?.[0];
                     return { id: first ? first.id : target.id, label: target.label };
                 };
 
-                return { previous: pick(-1), next: pick(1) };
-            });
-
-            // Flat, not derived from sectionNeighbours: the SSR renderer evaluates a
-            // v-if from setup's bindings only, and a computed that reads another
-            // computed comes back undefined and the block is dropped.
-            const hasSectionNeighbours = computed(() => {
-                const sections = state.navItems;
-                const index = sections.findIndex((nav) => nav.id === state.activeSection);
-                if (index === -1) return true;
-                return index > 0 || index < sections.length - 1;
-            });
+                state.footerPrev = pick(-1);
+                state.footerNext = pick(1);
+            }
 
             // URL as the single source of truth for "where am I": one ?section= id
             // replaced the server param and the client-written #fragment, which disagreed.
@@ -986,19 +1069,33 @@ export default function mountApp(injectedContext = null) {
                 const activeGroup = parentGroupOf(state.activeSection);
                 for (const nav of state.navItems) {
                     if (nav.id === activeGroup) {
-                        expandedSections[nav.id] = true;
+                        if (!state.openSections.includes(nav.id)) {
+                            state.openSections = [...state.openSections, nav.id];
+                        }
                         continue;
                     }
                     if (!query) continue;
-                    expandedSections[nav.id] = nav.label.toLowerCase().includes(query)
-                        || nav.components.some((comp) => comp.label.toLowerCase().includes(query));
+                    if (!state.openSections.includes(nav.id)
+                        && (nav.label.toLowerCase().includes(query)
+                            || nav.components.some((comp) => comp.label.toLowerCase().includes(query)))) {
+                        state.openSections = [...state.openSections, nav.id];
+                    }
                 }
             }
 
-            const filteredNavItems = computed(() => {
+            /**
+             * The search filter writes into `visibleNav` state rather than being a
+             * computed the template reads: the server has no query, so its state
+             * already holds the unfiltered list, and a computed would render as
+             * `undefined` there and take the whole sidebar with it.
+             */
+            function syncVisibleNav() {
                 const query = String(state.searchQuery || '').trim().toLowerCase();
-                if (!query) return state.navItems;
-                return state.navItems
+                if (!query) {
+                    state.visibleNav = state.navItems;
+                    return;
+                }
+                state.visibleNav = state.navItems
                     .map((nav) => ({
                         ...nav,
                         components: nav.components.filter((comp) =>
@@ -1008,7 +1105,7 @@ export default function mountApp(injectedContext = null) {
                     .filter((nav) =>
                         nav.label.toLowerCase().includes(query) || nav.components.length > 0,
                     );
-            });
+            }
 
             // Hydration mismatch avoider logic
             const hydrateNavData = () => {
@@ -1016,6 +1113,8 @@ export default function mountApp(injectedContext = null) {
                     ...nav,
                     components: nav.components ?? [],
                 }));
+                syncVisibleNav();
+                syncFooter();
                 invalidateElementCache();
                 syncExpandedSections();
             };
@@ -1042,6 +1141,7 @@ export default function mountApp(injectedContext = null) {
 
             watch(() => state.searchQuery, () => {
                 invalidateElementCache();
+                syncVisibleNav();
                 syncExpandedSections();
             });
 
@@ -1180,14 +1280,10 @@ export default function mountApp(injectedContext = null) {
                 mainEl,
                 contentEl,
                 shellHeight,
-                filteredNavItems,
-                expandedSections,
                 isMobile,
                 sidebarOpen,
                 toggleSection,
-                scrollTo,
-                sectionNeighbours,
-                hasSectionNeighbours
+                scrollTo
             };
         }
     });
