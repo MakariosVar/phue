@@ -198,6 +198,7 @@ two tables are the contract for all of them.
 | drawer panel | `1045` | `<ph-drawer>` |
 | drawer backdrop | `1046` | `<ph-drawer>` |
 | modal | `1055` | `<ph-modal>`, `<ph-confirm-dialog>` |
+| popover backdrop | `1069` | `<ph-popover>` — the click-to-close surface |
 | popover | `1070` | `<ph-popover>` |
 | tooltip | `1080` | `<ph-tooltip>` |
 | toast region | `1090` | `<ph-toast>` |
