@@ -189,12 +189,23 @@ export default {
   },
   emits: ['update:modelValue', 'select', 'day-click', 'month-change', 'event-click'],
   data() {
-    const today = new Date();
+    const now = new Date();
+    const todayIso = now.toISOString().slice(0, 10);
+    const today = new Date(`${todayIso}T00:00:00`);
+
     return {
+      todayIso,
       viewYear: today.getFullYear(),
       viewMonth: today.getMonth(),
-      focusIso: this.isoOf(today)
+      focusIso: todayIso
     };
+  },
+  mounted() {
+    const local = this.isoOf(new Date());
+    if (local !== this.todayIso) {
+      this.todayIso = local;
+      this.focusIso = local;
+    }
   },
   computed: {
     rootClasses() {
@@ -237,7 +248,7 @@ export default {
       const start = ((this.weekStart % 7) + 7) % 7;
       const offset = (first.getDay() - start + 7) % 7;
       const from = new Date(this.viewYear, this.viewMonth, 1 - offset);
-      const todayIso = this.isoOf(new Date());
+      const todayIso = this.todayIso;
 
       const cells = [];
       for (let i = 0; i < 42; i++) {
