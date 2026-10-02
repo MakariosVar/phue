@@ -1,0 +1,76 @@
+<template>
+  <example-factory
+    tag="<ph-heading />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Semantic <code>h1</code> – <code>h6</code> through the <code>level</code> prop.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-heading :level="1" color="primary">Section title 1</ph-heading>
+        <ph-heading :level="2" color="secondary" align="center">Section title 2</ph-heading>
+        <ph-heading :level="3" color="danger" align="right">Section title 3</ph-heading>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhHeading",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-heading :level="1" color="primary">Section title 1</ph-heading>
+<ph-heading :level="2" color="secondary" align="center">Section title 2</ph-heading>
+<ph-heading :level="3" color="danger" align="right">Section title 3</ph-heading>`,
+      propsData: [
+        {
+          name: "level",
+          type: "String | Number",
+          default: "1",
+          notes: "1–6",
+        },
+        {
+          name: "color",
+          type: "String",
+          default: "'default'",
+          notes: "default | muted | primary | secondary | danger",
+        },
+        {
+          name: "align",
+          type: "String",
+          default: "'left'",
+          notes: "left | center | right | justify",
+        }
+      ]
+    };
+  }
+};
+</script>

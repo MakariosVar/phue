@@ -80,6 +80,8 @@ $navItems = [
         'label' => 'Content & Layout',
         'components' => [
             ['id' => 'text', 'label' => 'Text'],
+            ['id' => 'heading', 'label' => 'Heading'],
+            ['id' => 'box', 'label' => 'Box']
         ]
     ],
     [
@@ -450,9 +452,13 @@ return [
                         <span id="text">
                             <example-ph-text />
                         </span>
+                        <span id="heading">
+                            <example-ph-heading />
+                        </span>
+                        <span id="box">
+                            <example-ph-box />
+                        </span>
                         <!--
-                        <ExamplePhHeading />
-                        <ExamplePhBox />
                         <ExamplePhStack />
                         <ExamplePhFlex />
                         <ExamplePhRow />
