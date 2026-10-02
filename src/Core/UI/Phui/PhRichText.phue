@@ -1,0 +1,1600 @@
+<template>
+  <div data-phui="rich-text" :style="rootStyle">
+    <label
+      v-if="label"
+      :id="labelId"
+      class="form-label"
+      :style="{ display: 'block' }"
+    >
+      {{ label }}<span v-if="required" aria-hidden="true"> *</span>
+    </label>
+
+    <div
+      v-if="editable && toolbar && activeToolbar.length"
+      class="d-flex align-items-center justify-content-between gap-2 mb-1"
+    >
+      <div class="d-flex flex-wrap align-items-center gap-1" role="toolbar" aria-label="Formatting" :aria-controls="editorId">
+        <template v-for="item in activeToolbar" :key="item.key">
+          <button
+            v-if="item.kind !== 'mode' && item.kind !== 'divider'"
+            type="button"
+            class="btn btn-sm btn-outline-secondary"
+            :style="toolButtonStyle"
+            :aria-label="item.label"
+            :title="item.title || item.label"
+            :aria-pressed="stateFor(item)"
+            :disabled="disabled"
+            @mousedown.prevent
+            @click="run(item)"
+          >
+            <ph-icon v-if="item.icon" :name="item.icon" size="sm" />
+            <span v-else>{{ item.text }}</span>
+          </button>
+
+          <span
+            v-else-if="item.kind === 'divider'"
+            class="d-inline-block"
+            :style="{ width: '1px', alignSelf: 'stretch', margin: '0 0.25rem', background: 'var(--bs-border-color)' }"
+            aria-hidden="true"
+          ></span>
+        </template>
+      </div>
+
+      <!-- Mode is a switch, not a command: it changes what the VALUE is, not the markup. -->
+      <div v-if="showModeToggle" class="btn-group btn-group-sm" role="group" aria-label="Output format">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          :class="activeMode === 'html' ? 'active' : ''"
+          :aria-pressed="activeMode === 'html' ? 'true' : 'false'"
+          :disabled="disabled"
+          @click="setMode('html')"
+        >HTML</button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          :class="activeMode === 'markdown' ? 'active' : ''"
+          :aria-pressed="activeMode === 'markdown' ? 'true' : 'false'"
+          :disabled="disabled"
+          @click="setMode('markdown')"
+        >Markdown</button>
+      </div>
+    </div>
+
+    <!--
+      The link target row lives in the toolbar rather than in a prompt(): a native
+      prompt is a blocking, unstyleable dialog, it cannot show the current href,
+      and it cannot ask about `_blank`.
+    -->
+    <div
+      v-if="editable && linkOpen"
+      class="d-flex align-items-center gap-2 mb-2"
+      role="group"
+      aria-label="Link target"
+    >
+      <input
+        ref="linkField"
+        type="text"
+        class="form-control form-control-sm"
+        :value="linkValue"
+        placeholder="https://example.com/page"
+        :aria-label="linkValue ? 'Edit link target' : 'Link target'"
+        @input="linkValue = $event.target.value"
+        @keydown="onLinkKeydown"
+      />
+      <button
+        type="button"
+        class="btn btn-sm btn-primary"
+        :disabled="disabled"
+        @click="applyLink"
+      >Apply</button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        :disabled="disabled"
+        aria-label="Cancel link"
+        @click="closeLink"
+      >Cancel</button>
+    </div>
+
+    <div
+      ref="editor"
+      :id="editorId"
+      class="border rounded"
+      :class="editable ? 'p-3' : ''"
+      :style="editorStyle"
+      :role="editable ? 'textbox' : null"
+      :contenteditable="editable"
+      :tabindex="editable ? 0 : null"
+      :spellcheck="spellcheck ? 'true' : 'false'"
+      :aria-multiline="editable ? 'true' : null"
+      :aria-labelledby="label ? labelId : null"
+      :aria-label="label ? null : ariaLabel"
+      :aria-describedby="hasMessage ? describedBy : null"
+      :aria-invalid="hasError ? 'true' : null"
+      :aria-required="required ? 'true' : null"
+      :aria-readonly="editable ? null : 'true'"
+      v-html="html"
+      @input="onInput"
+      @blur="onBlur"
+      @keyup="saveRange"
+      @mouseup="saveRange"
+      @paste="onPaste"
+    ></div>
+
+    <span
+      v-if="editable && isEmpty && placeholder"
+      class="d-block small fst-italic"
+      :style="placeholderStyle"
+      aria-hidden="true"
+    >{{ placeholder }}</span>
+
+    <!--
+      The editing surface is a contenteditable div, which is not a labelable
+      element: `<ph-form>` enumerates `form.elements` and reads `name` off each
+      control, so a component that swallows `name` is invisible to it — it neither
+      validates nor appears in the payload. A hidden input of the same name is the
+      honest bridge, and it is the reason this belongs with the form controls
+      rather than with the layout primitives.
+    -->
+    <input
+      v-if="name"
+      type="hidden"
+      :name="name"
+      :value="modelValue"
+    />
+
+    <div
+      v-if="hasMessage"
+      :id="describedBy"
+      class="form-text"
+      :class="hasError ? 'text-danger' : ''"
+      :role="hasError ? 'alert' : null"
+    >
+      {{ hasError ? error : helperText }}
+    </div>
+  </div>
+</template>
+
+<script>
+import { useId } from "vue";
+
+// ---------------------------------------------------------------------------
+// Allow-list HTML sanitizer
+//
+// Written by hand, and deliberately so. A hand-written tokenizer has one
+// advantage here that decides everything: it has NO DOM. So it runs unchanged on
+// the server during SSR, inside the bun test harness, and in any browser — and
+// the value that goes through it is the value that was emitted, on every path.
+//
+// The rules are an allow-list, never a block-list. Anything not named is
+// unwrapped (its text survives, its tag does not) and anything that can carry
+// script or a remote reference is dropped with its content.
+// ---------------------------------------------------------------------------
+
+/** Elements that never have a closing tag. */
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr'
+]);
+
+/** Elements whose content is text, not markup, and cannot contain a `>`. */
+const RAW_TEXT_TAGS = new Set([
+  'script', 'style', 'textarea', 'title', 'xmp', 'iframe',
+  'noembed', 'noframes', 'plaintext'
+]);
+
+/**
+ * Dropped WITH their content. Unwrapping these would be the vulnerability: a
+ * `<style>`'s text and a `<title>`'s text become visible text, and a `<svg>`
+ * carries `<script>` inside it — which is exactly why SVG and MathML are here
+ * rather than relying on a `script` block-list.
+ */
+const DROP_WITH_CONTENT = new Set([
+  'script', 'style', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet',
+  'link', 'meta', 'base', 'form', 'input', 'button', 'select', 'option',
+  'optgroup', 'textarea', 'label', 'fieldset', 'svg', 'math', 'noscript',
+  'template', 'head', 'title', 'video', 'audio', 'source', 'track', 'canvas',
+  'dialog', 'slot', 'picture', 'marquee', 'portal'
+]);
+
+/** The tags that survive sanitisation, with no attributes except on `<a>`. */
+const ALLOWED_TAGS = new Set([
+  'p', 'div', 'br', 'hr',
+  'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'ins',
+  'code', 'pre', 'blockquote',
+  'a', 'ul', 'ol', 'li',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+]);
+
+/** Normalised output names, so the two spellings of the same emphasis collapse. */
+const TAG_MAP = {
+  b: 'strong',
+  strong: 'strong',
+  i: 'em',
+  em: 'em',
+  strike: 's',
+  del: 's',
+  s: 's',
+  ins: 'u',
+  u: 'u'
+};
+
+/** URL schemes a link may carry. Anything else — `javascript:`, `data:`, `vbscript:` — is dropped. */
+const SAFE_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+
+/** Start tags that implicitly close an open element of the same kind. */
+const IMPLICIT_CLOSE = {
+  li: new Set(['li']),
+  p: new Set(['p']),
+  dt: new Set(['dt', 'dd']),
+  dd: new Set(['dt', 'dd']),
+  option: new Set(['option']),
+  optgroup: new Set(['optgroup', 'option']),
+  thead: new Set(['thead', 'tbody', 'tfoot']),
+  tbody: new Set(['thead', 'tbody', 'tfoot']),
+  tfoot: new Set(['thead', 'tbody', 'tfoot'])
+};
+
+const NAMED_ENTITIES = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–'
+};
+
+function escapeText(value) {
+  const text = String(value ?? '');
+  return text
+    // A `&` that already starts an entity is left alone, so escaping twice does
+    // not turn `&amp;` into `&amp;amp;`.
+    .replace(/&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]{1,31};)/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeAttr(value) {
+  return escapeText(value).replace(/"/g, '&quot;');
+}
+
+function decodeEntities(value) {
+  return String(value ?? '').replace(
+    /&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]{1,31});/g,
+    (match, body) => {
+      if (body.charAt(0) === '#') {
+        const hex = body.charAt(1) === 'x' || body.charAt(1) === 'X';
+        const code = parseInt(hex ? body.slice(2) : body.slice(1), hex ? 16 : 10);
+        // A code point outside the valid range throws in fromCodePoint, and a
+        // surrogate half is not a character at all.
+        if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) {
+          return match;
+        }
+        try {
+          return String.fromCodePoint(code);
+        } catch (error) {
+          return match;
+        }
+      }
+      const named = NAMED_ENTITIES[body.toLowerCase()];
+      return named === undefined ? match : named;
+    }
+  );
+}
+
+/**
+ * Returns the URL when it is safe to put in an `href`, or '' when it is not.
+ *
+ * The scheme check runs on a copy with every control character and space
+ * removed, because browsers strip those from a URL before resolving it:
+ * `java\tscript:alert(1)` navigates, so checking the raw string would pass it.
+ */
+function safeUrl(raw) {
+  const value = String(raw ?? '').trim();
+  if (value === '') {
+    return '';
+  }
+
+  const probe = value.replace(/[\u0000-\u0020\u007f-\u00a0]/g, '');
+  const colon = probe.indexOf(':');
+  if (colon === -1) {
+    return value; // relative URL
+  }
+
+  const slash = probe.indexOf('/');
+  const question = probe.indexOf('?');
+  const hash = probe.indexOf('#');
+
+  const hasScheme = (slash === -1 || colon < slash)
+    && (question === -1 || colon < question)
+    && (hash === -1 || colon < hash);
+
+  if (!hasScheme) {
+    return value; // a colon inside the path, not a scheme
+  }
+
+  const scheme = probe.slice(0, colon);
+  if (!/^[a-z][a-z0-9+.-]*$/i.test(scheme) || !SAFE_SCHEMES.has(scheme.toLowerCase())) {
+    return '';
+  }
+
+  return value;
+}
+
+/**
+ * Reads one start tag and its attributes.
+ *
+ * Written as a character walk rather than a regex because the closing `>` may sit
+ * inside a quoted attribute value — `<a title="a > b">` is legal HTML, and a
+ * regex that stops at the first `>` cuts the tag in half and leaks the rest into
+ * the text stream where it becomes visible content.
+ */
+function scanStartTag(html, start) {
+  let index = start + 1;
+  let name = '';
+
+  while (index < html.length && /[a-zA-Z0-9:_-]/.test(html.charAt(index))) {
+    name += html.charAt(index);
+    index += 1;
+  }
+
+  if (name === '') {
+    return null;
+  }
+
+  const attrs = {};
+  let selfClosing = false;
+
+  while (index < html.length) {
+    while (index < html.length && /\s/.test(html.charAt(index))) {
+      index += 1;
+    }
+
+    if (index >= html.length) {
+      break;
+    }
+
+    if (html.charAt(index) === '>') {
+      index += 1;
+      break;
+    }
+
+    if (html.charAt(index) === '/' && html.charAt(index + 1) === '>') {
+      selfClosing = true;
+      index += 2;
+      break;
+    }
+
+    if (html.charAt(index) === '/') {
+      index += 1;
+      continue;
+    }
+
+    let attrName = '';
+    while (index < html.length && !/[\s=/>]/.test(html.charAt(index))) {
+      attrName += html.charAt(index);
+      index += 1;
+    }
+
+    if (attrName === '') {
+      index += 1;
+      continue;
+    }
+
+    while (index < html.length && /\s/.test(html.charAt(index))) {
+      index += 1;
+    }
+
+    let value = '';
+    if (html.charAt(index) === '=') {
+      index += 1;
+      while (index < html.length && /\s/.test(html.charAt(index))) {
+        index += 1;
+      }
+
+      const quote = html.charAt(index);
+      if (quote === '"' || quote === "'") {
+        index += 1;
+        const close = html.indexOf(quote, index);
+        if (close === -1) {
+          value = html.slice(index);
+          index = html.length;
+        } else {
+          value = html.slice(index, close);
+          index = close + 1;
+        }
+      } else {
+        while (index < html.length && !/[\s>]/.test(html.charAt(index))) {
+          value += html.charAt(index);
+          index += 1;
+        }
+      }
+    }
+
+    attrs[attrName.toLowerCase()] = value;
+  }
+
+  return { name: name.toLowerCase(), attrs, selfClosing, end: index };
+}
+
+function tokenize(html) {
+  const source = String(html ?? '');
+  const tokens = [];
+  let index = 0;
+
+  const text = (value) => {
+    if (value !== '') {
+      tokens.push({ type: 'text', value });
+    }
+  };
+
+  while (index < source.length) {
+    const lt = source.indexOf('<', index);
+
+    if (lt === -1) {
+      text(source.slice(index));
+      break;
+    }
+
+    if (lt > index) {
+      text(source.slice(index, lt));
+    }
+
+    if (source.startsWith('<!--', lt)) {
+      const end = source.indexOf('-->', lt + 4);
+      index = end === -1 ? source.length : end + 3;
+      continue;
+    }
+
+    // Doctype, CDATA and processing instructions carry no content and no meaning here.
+    if (source.startsWith('<!', lt) || source.startsWith('<?', lt)) {
+      const end = source.indexOf('>', lt);
+      index = end === -1 ? source.length : end + 1;
+      continue;
+    }
+
+    if (source.startsWith('</', lt)) {
+      const end = source.indexOf('>', lt);
+      if (end === -1) {
+        text(source.slice(lt));
+        break;
+      }
+      tokens.push({
+        type: 'close',
+        name: source.slice(lt + 2, end).trim().toLowerCase()
+      });
+      index = end + 1;
+      continue;
+    }
+
+    const tag = scanStartTag(source, lt);
+    if (tag === null) {
+      // A bare `<` that starts no tag is literal text, not markup.
+      text('<');
+      index = lt + 1;
+      continue;
+    }
+
+    tokens.push({
+      type: 'open',
+      name: tag.name,
+      attrs: tag.attrs,
+      selfClosing: tag.selfClosing
+    });
+    index = tag.end;
+
+    if (RAW_TEXT_TAGS.has(tag.name) && !tag.selfClosing) {
+      // The content is emitted as an inert token and immediately closed, so the
+      // tag cannot swallow the rest of the document when the element is never
+      // closed. The closing tag is assembled from a splice rather than written
+      // out, because `PhueTemplateParser` counts every literal script-closing
+      // tag inside a `<script>` block and rejects the file on the second one.
+      const closer = new RegExp('</\\s*' + tag.name + '\\s*>', 'i');
+      const match = closer.exec(source.slice(index));
+      tokens.push({ type: 'raw', value: match ? source.slice(index, index + match.index) : source.slice(index) });
+      tokens.push({ type: 'close', name: tag.name });
+      index = match ? index + match.index + match[0].length : source.length;
+    }
+  }
+
+  return tokens;
+}
+
+function buildTree(tokens) {
+  const root = { tag: null, attrs: {}, children: [] };
+  const stack = [root];
+
+  for (const token of tokens) {
+    const parent = stack[stack.length - 1];
+
+    if (token.type === 'text') {
+      parent.children.push({ tag: null, attrs: {}, text: token.value, children: [] });
+      continue;
+    }
+
+    if (token.type === 'raw') {
+      // Carried so the element that owns it can be dropped; never rendered.
+      parent.children.push({ tag: null, attrs: {}, raw: token.value, children: [] });
+      continue;
+    }
+
+    if (token.type === 'close') {
+      // A close tag with no matching open is dropped rather than allowed to
+      // unwind the stack: `<b>a</i></b>` must not silently unbalance the tree.
+      let depth = -1;
+      for (let i = stack.length - 1; i > 0; i -= 1) {
+        if (stack[i].tag === token.name) {
+          depth = i;
+          break;
+        }
+      }
+      if (depth === -1) {
+        continue;
+      }
+      stack.length = depth;
+      continue;
+    }
+
+    // open
+    const closers = IMPLICIT_CLOSE[token.name];
+    while (closers && stack.length > 1 && closers.has(stack[stack.length - 1].tag)) {
+      stack.pop();
+    }
+
+    const node = { tag: token.name, attrs: token.attrs, children: [] };
+    (stack[stack.length - 1]).children.push(node);
+
+    if (!VOID_TAGS.has(token.name) && !token.selfClosing) {
+      stack.push(node);
+    }
+  }
+
+  return root.children;
+}
+
+/** The only attributes any surviving element keeps. Everything else is discarded. */
+function filterAttrs(tag, attrs) {
+  const source = attrs || {};
+  const out = {};
+
+  if (tag !== 'a') {
+    // No class, no style, no data-*, no on*: a style attribute is a positioning
+    // and an exfiltration channel, and an event handler is script by another name.
+    return out;
+  }
+
+  const href = safeUrl(source.href);
+  if (href !== '') {
+    out.href = href;
+  }
+  if (source.title) {
+    out.title = decodeEntities(source.title);
+  }
+
+  if (String(source.target || '').trim().toLowerCase() === '_blank') {
+    out.target = '_blank';
+    // Not optional: without `noopener` the opened page has a live
+    // `window.opener` handle on this one, and without `noreferrer` it gets the
+    // referrer. Both are set by us, never by the author.
+    out.rel = 'noopener noreferrer';
+  }
+
+  return out;
+}
+
+function cleanNodes(nodes) {
+  const out = [];
+
+  for (const node of nodes || []) {
+    if (node.tag === null) {
+      if (node.raw !== undefined) {
+        continue; // raw text of a dropped element
+      }
+      if (node.text !== undefined && node.text !== '') {
+        out.push(node);
+      }
+      continue;
+    }
+
+    if (DROP_WITH_CONTENT.has(node.tag)) {
+      continue;
+    }
+
+    const kids = cleanNodes(node.children);
+    const name = TAG_MAP[node.tag] || node.tag;
+
+    if (ALLOWED_TAGS.has(name)) {
+      out.push({ tag: name, attrs: filterAttrs(name, node.attrs), children: kids });
+      continue;
+    }
+
+    // Unknown but harmless: keep the text, drop the element.
+    for (const kid of kids) {
+      out.push(kid);
+    }
+  }
+
+  return out;
+}
+
+function serialize(nodes) {
+  let html = '';
+
+  for (const node of nodes || []) {
+    if (node.tag === null) {
+      html += escapeText(node.text);
+      continue;
+    }
+
+    html += '<' + node.tag;
+    for (const name of Object.keys(node.attrs || {})) {
+      html += ' ' + name + '="' + escapeAttr(node.attrs[name]) + '"';
+    }
+    html += '>';
+
+    if (!VOID_TAGS.has(node.tag)) {
+      html += serialize(node.children);
+      html += '</' + node.tag + '>';
+    }
+  }
+
+  return html;
+}
+
+/**
+ * The only way markup enters this component. Everything else — the initial
+ * value, a paste, the value produced by the editor itself — goes through here
+ * before it is stored, emitted or written back.
+ */
+function sanitizeHtml(html) {
+  return serialize(cleanNodes(buildTree(tokenize(html))));
+}
+
+// ---------------------------------------------------------------------------
+// HTML -> Markdown
+// ---------------------------------------------------------------------------
+
+function escapeMdText(text) {
+  return String(text ?? '')
+    .replace(/([\\`*_[\]])/g, '\\$1')
+    // Only a construct that would start a NEW block needs escaping mid-paragraph.
+    .replace(/^(\s*)(#{1,6}\s|[-+]\s|>\s|\d+[.)]\s)/, '$1\\$2');
+}
+
+function escapeMdUrl(url) {
+  const value = String(url || '');
+  if (value === '') {
+    return '';
+  }
+  // A bare URL breaks the link syntax itself on whitespace or parens; angle
+  // brackets are the CommonMark escape for exactly that.
+  return /[\s()]/.test(value) ? '<' + value + '>' : value;
+}
+
+function wrapMd(inner, marker) {
+  if (inner === '') {
+    return inner;
+  }
+  const first = inner.charAt(0);
+  const last = inner.charAt(inner.length - 1);
+  if (first === marker.charAt(0) || last === marker.charAt(marker.length - 1)) {
+    // `**a *b* c**` does not parse the way it reads; a space does.
+    return marker + ' ' + inner + ' ' + marker;
+  }
+  return marker + inner + marker;
+}
+
+function mdInline(nodes) {
+  let out = '';
+
+  for (const node of nodes || []) {
+    if (node.tag === null) {
+      out += escapeMdText(decodeEntities(node.text));
+      continue;
+    }
+
+    const kids = mdInline(node.children);
+
+    switch (node.tag) {
+      case 'strong':
+        out += wrapMd(kids, '**');
+        break;
+      case 'em':
+        out += wrapMd(kids, '_');
+        break;
+      case 's':
+        out += wrapMd(kids, '~~');
+        break;
+      case 'u':
+        // Markdown has no underline. Dropping the marker loses less than
+        // emitting a `<u>` the reader's renderer may not allow.
+        out += kids;
+        break;
+      case 'code': {
+        // The RAW text, not the inline-escaped `kids`: inside a code span the
+        // backslash escapes must not survive, and the fence has to be longer than
+        // the longest backtick run in the content or the span closes early.
+        const raw = textContent(node.children);
+        if (raw === '') {
+          break;
+        }
+        let longest = 0;
+        for (const run of raw.match(/`+/g) || []) {
+          longest = Math.max(longest, run.length);
+        }
+        const fence = '`'.repeat(longest + 1);
+        const pad = raw.charAt(0) === '`' || raw.charAt(raw.length - 1) === '`' ? ' ' : '';
+        out += fence + pad + raw + pad + fence;
+        break;
+      }
+      case 'a': {
+        const href = node.attrs && node.attrs.href ? node.attrs.href : '';
+        out += kids === '' ? '' : '[' + kids + '](' + escapeMdUrl(href) + ')';
+        break;
+      }
+      case 'br':
+        out += '  \n';
+        break;
+      default:
+        out += kids;
+    }
+  }
+
+  return out;
+}
+
+function textContent(nodes) {
+  let out = '';
+  for (const node of nodes || []) {
+    out += node.tag === null ? decodeEntities(node.text || '') : textContent(node.children);
+  }
+  return out;
+}
+
+function mdListItems(listNode, ordered) {
+  const out = [];
+  let counter = 1;
+
+  for (const child of listNode.children || []) {
+    if (child.tag !== 'li') {
+      continue;
+    }
+
+    const nested = (child.children || []).filter((c) => c.tag === 'ul' || c.tag === 'ol');
+    const own = (child.children || []).filter((c) => c.tag !== 'ul' && c.tag !== 'ol');
+
+    let text = mdBlock(own).trim();
+    if (text === '') {
+      text = mdInline(own).trim();
+    }
+
+    // An item whose only content is a nested list has no line of its own: emitting
+    // the marker anyway produces a dangling "- " that reparses as an empty item
+    // and shifts every following line one level in.
+    if (text !== '') {
+      const marker = ordered ? counter + '.' : '-';
+      out.push(marker + ' ' + text.replace(/\n/g, '\n  '));
+    }
+    counter += 1;
+
+    for (const sub of nested) {
+      for (const line of mdListItems(sub, sub.tag === 'ol')) {
+        out.push('  ' + line);
+      }
+    }
+  }
+
+  return out;
+}
+
+function mdBlock(nodes) {
+  const parts = [];
+
+  for (const node of nodes || []) {
+    if (node.tag === null) {
+      const text = node.text || '';
+      const trimmed = text.replace(/\s+/g, ' ').trim();
+      if (trimmed !== '') {
+        parts.push(escapeMdText(trimmed));
+      }
+      continue;
+    }
+
+    switch (node.tag) {
+      case 'p':
+      // `div` is a paragraph here on purpose. Chrome's contenteditable inserts
+      // `<div>` where Firefox inserts `<br>` on Enter, so unwrapping a div would
+      // fuse every paragraph in the document into one line of Markdown.
+      case 'div': {
+        const text = mdInline(node.children).replace(/\s+$/, '').trim();
+        if (text !== '') {
+          parts.push(text);
+        }
+        break;
+      }
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6': {
+        const level = Number(node.tag.charAt(1));
+        const text = mdInline(node.children).trim();
+        if (text !== '') {
+          parts.push('#'.repeat(level) + ' ' + text);
+        }
+        break;
+      }
+      case 'hr':
+        parts.push('---');
+        break;
+      case 'pre': {
+        const text = textContent(node.children).replace(/\s+$/, '');
+        parts.push('```\n' + text + '\n```');
+        break;
+      }
+      case 'blockquote': {
+        const inner = mdBlock(node.children).trim();
+        if (inner !== '') {
+          parts.push(inner.split('\n').map((line) => '> ' + line).join('\n'));
+        }
+        break;
+      }
+      case 'ul':
+      case 'ol': {
+        const lines = mdListItems(node, node.tag === 'ol');
+        if (lines.length) {
+          parts.push(lines.join('\n'));
+        }
+        break;
+      }
+      case 'br':
+        // A top-level break is spacing, not a line break inside a paragraph.
+        parts.push('');
+        break;
+      default: {
+        // `mdInline([node])`, not `mdInline(node.children)`: an inline element at
+        // block level — a document that is nothing but a link, which is what a
+        // `p` -less paste gives — would otherwise lose its wrapper and come out
+        // as bare text with the URL gone.
+        const text = mdInline([node]).trim();
+        if (text !== '') {
+          parts.push(text);
+        }
+      }
+    }
+  }
+
+  return parts.join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function htmlToMarkdown(html) {
+  return mdBlock(cleanNodes(buildTree(tokenize(html)))).trim();
+}
+
+// ---------------------------------------------------------------------------
+// Markdown -> HTML
+// ---------------------------------------------------------------------------
+
+const SENTINEL = '\u0000';
+
+function mdCodeSpans(source) {
+  const codes = [];
+  const masked = String(source ?? '').replace(/`([^`]+)`/g, (match, inner) => {
+    codes.push(inner);
+    return SENTINEL + (codes.length - 1) + SENTINEL;
+  });
+  return { masked, codes };
+}
+
+function restoreCodeSpans(source, codes) {
+  return source.replace(
+    new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'),
+    (match, index) => '<code>' + escapeText(codes[Number(index)]) + '</code>'
+  );
+}
+
+function mdInlineToHtml(source) {
+  const { masked, codes } = mdCodeSpans(source);
+
+  // Escaped FIRST, so raw HTML in the Markdown is inert text and the tags the
+  // replacements below insert are the only tags that exist.
+  let html = escapeText(masked);
+
+  html = html.replace(
+    /\[([^\]]*)\]\(([^)\s]+)\)/g,
+    (match, label, href) => {
+      const url = safeUrl(decodeEntities(href));
+      return url === '' ? label : '<a href="' + escapeAttr(url) + '">' + label + '</a>';
+    }
+  );
+
+  html = html
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+    .replace(/(^|[^_])_([^_]+)_/g, '$1<em>$2</em>')
+    .replace(/~~([^~]+)~~/g, '<s>$1</s>')
+    .replace(/ {2,}\n/g, '<br>')
+    .replace(/\n/g, ' ');
+
+  return restoreCodeSpans(html, codes);
+}
+
+/**
+ * A deliberately small block parser: headings, hr, blockquote, lists, fenced
+ * code, paragraphs. It is not CommonMark, and it does not pretend to be — it is
+ * the inverse of `htmlToMarkdown` plus the punctuation a person types, so
+ * `markdown -> html -> markdown` is stable and nothing else in the document can
+ * introduce markup.
+ */
+function markdownToHtml(markdown) {
+  const lines = String(markdown ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const html = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (/^```/.test(line)) {
+      const buffer = [];
+      index += 1;
+      while (index < lines.length && !/^```/.test(lines[index])) {
+        buffer.push(lines[index]);
+        index += 1;
+      }
+      index += 1;
+      html.push('<pre><code>' + escapeText(buffer.join('\n')) + '</code></pre>');
+      continue;
+    }
+
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      html.push('<hr>');
+      index += 1;
+      continue;
+    }
+
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      // `heading[1]` is the run of `#`, not a level: `<` + heading[1] + `>` would
+      // emit `<#>`, which is not an element, so the sanitizer unwrapped the whole
+      // heading and the title arrived as the escaped text `&#x3c;#&gt;Title`.
+      const tag = 'h' + heading[1].length;
+      html.push('<' + tag + '>' + mdInlineToHtml(heading[2]) + '</' + tag + '>');
+      index += 1;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      const buffer = [];
+      while (index < lines.length && /^>\s?/.test(lines[index])) {
+        buffer.push(lines[index].replace(/^>\s?/, ''));
+        index += 1;
+      }
+      html.push('<blockquote>' + markdownToHtml(buffer.join('\n')) + '</blockquote>');
+      continue;
+    }
+
+    const bullet = /^\s*([-*+]|\d+[.)])\s+\S/.exec(line);
+    if (bullet) {
+      const ordered = /\d/.test(bullet[1]);
+      const items = [];
+
+      while (index < lines.length) {
+        const match = /^\s*([-*+]|\d+[.)])\s+(\S.*)$/.exec(lines[index]);
+        if (!match || /\d/.test(match[1]) !== ordered) {
+          break;
+        }
+
+        let text = match[2];
+        index += 1;
+
+        // A wrapped list item continues while the next line is indented and is
+        // not itself a bullet, otherwise `- a\n  - b` would lose the nesting.
+        while (index < lines.length
+          && /^\s{2,}\S/.test(lines[index])
+          && !/^\s*([-*+]|\d+[.)])\s/.test(lines[index])) {
+          text += '\n' + lines[index].trim();
+          index += 1;
+        }
+
+        items.push(text);
+      }
+
+      const tag = ordered ? 'ol' : 'ul';
+      html.push('<' + tag + '>' + items
+        .map((item) => '<li>' + markdownToHtml(item) + '</li>')
+        .join('') + '</' + tag + '>');
+      continue;
+    }
+
+    if (line.trim() === '') {
+      index += 1;
+      continue;
+    }
+
+    const paragraph = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current.trim() === ''
+        || /^#{1,6}\s/.test(current)
+        || /^>\s?/.test(current)
+        || /^```/.test(current)
+        || /^\s*([-*+]|\d+[.)])\s+/.test(current)) {
+        break;
+      }
+      paragraph.push(current);
+      index += 1;
+    }
+
+    if (paragraph.length) {
+      html.push('<p>' + mdInlineToHtml(paragraph.join('\n')) + '</p>');
+    }
+  }
+
+  return html.join('\n');
+}
+
+/** One direction, one function: what the current value has to become. */
+function valueToHtml(value, mode) {
+  if (mode === 'markdown') {
+    return sanitizeHtml(markdownToHtml(value));
+  }
+  return sanitizeHtml(value);
+}
+
+function htmlToValue(html, mode) {
+  return mode === 'markdown' ? htmlToMarkdown(html) : html;
+}
+
+function isBlankHtml(html) {
+  return String(html ?? '')
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim() === '';
+}
+
+/** The toolbar surface. `toolbarItems` filters and orders it by command name. */
+const TOOLBAR_DEFAULTS = [
+  { key: 'bold', kind: 'command', command: 'bold', icon: 'type-bold', label: 'Bold' },
+  { key: 'italic', kind: 'command', command: 'italic', icon: 'type-italic', label: 'Italic' },
+  { key: 'underline', kind: 'command', command: 'underline', icon: 'type-underline', label: 'Underline' },
+  { key: 'strike', kind: 'command', command: 'strikeThrough', icon: 'type-strikethrough', label: 'Strikethrough' },
+  { key: 'inline-code', kind: 'inlineCode', icon: 'code-slash', label: 'Inline code' },
+  { key: 'divider-1', kind: 'divider' },
+  { key: 'p', kind: 'command', command: 'formatBlock', value: 'p', icon: 'text-paragraph', label: 'Paragraph' },
+  { key: 'h2', kind: 'command', command: 'formatBlock', value: 'h2', text: 'H2', label: 'Heading 2' },
+  { key: 'h3', kind: 'command', command: 'formatBlock', value: 'h3', text: 'H3', label: 'Heading 3' },
+  { key: 'divider-2', kind: 'divider' },
+  { key: 'ul', kind: 'command', command: 'insertUnorderedList', icon: 'list-ul', label: 'Bulleted list' },
+  { key: 'ol', kind: 'command', command: 'insertOrderedList', icon: 'list-ol', label: 'Numbered list' },
+  { key: 'quote', kind: 'command', command: 'formatBlock', value: 'blockquote', icon: 'blockquote-left', label: 'Quote' },
+  { key: 'pre', kind: 'command', command: 'formatBlock', value: 'pre', icon: 'code-square', label: 'Code block' },
+  { key: 'divider-3', kind: 'divider' },
+  { key: 'link', kind: 'link', icon: 'link-45deg', label: 'Insert link' },
+  { key: 'hr', kind: 'command', command: 'insertHorizontalRule', icon: 'hr', label: 'Divider line' },
+  { key: 'clear', kind: 'command', command: 'removeFormat', icon: 'eraser', label: 'Clear formatting' }
+];
+
+export default {
+  name: 'PhRichText',
+  props: {
+    modelValue: {
+      type: String,
+      default: ''
+    },
+    /**
+     * What `modelValue` IS. `html` keeps a sanitised HTML string; `markdown`
+     * keeps Markdown, so the value is storable and diffable as source. Switching
+     * it converts the current content — it does not reinterpret the old value.
+     */
+    mode: {
+      type: String,
+      default: 'html',
+      validator: (val) => ['html', 'markdown'].includes(val)
+    },
+    label: {
+      type: String,
+      default: ''
+    },
+    ariaLabel: {
+      type: String,
+      default: 'Rich text'
+    },
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    helperText: {
+      type: String,
+      default: ''
+    },
+    error: {
+      type: String,
+      default: ''
+    },
+    /**
+     * Forwarded to a hidden input of the same name, so `<ph-form>` can validate and
+     * submit this control. The editing surface is a contenteditable div, which is
+     * not labelable and therefore cannot carry a `name` itself.
+     */
+    name: {
+      type: String,
+      default: ''
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    required: {
+      type: Boolean,
+      default: false
+    },
+    spellcheck: {
+      type: Boolean,
+      default: true
+    },
+    toolbar: {
+      type: Boolean,
+      default: true
+    },
+    /** Command keys to show, in order. Omit for the full default surface. */
+    toolbarItems: {
+      type: Array,
+      default: null
+    },
+    showModeToggle: {
+      type: Boolean,
+      default: true
+    },
+    /** Min height of the editing surface. A number is px; a string is raw CSS. */
+    minHeight: {
+      type: [String, Number],
+      default: 0
+    },
+    maxWidth: {
+      type: [String, Number],
+      default: 0
+    }
+  },
+  emits: ['update:modelValue', 'change', 'focus', 'blur', 'mode-change'],
+  setup() {
+    return { uid: 'ph-rich-text-' + useId() };
+  },
+  data() {
+    // The sanitised HTML is seeded here, not in `mounted`, so the server renders
+    // the content: the sanitizer has no DOM dependency, which is the whole point
+    // of writing it by hand.
+    return {
+      html: valueToHtml(this.modelValue, this.mode),
+      // Mirrors the `mode` prop but is writable by the toolbar's own switch.
+      currentMode: this.mode,
+      // The editor's own DOM is the source of truth while the user types, so the
+      // vdom never touches it — writing back on each keystroke moves the caret.
+      editing: false,
+      linkOpen: false,
+      linkValue: '',
+      range: null
+    };
+  },
+  computed: {
+    activeMode() {
+      return this.currentMode;
+    },
+    editable() {
+      return !this.readonly && !this.disabled;
+    },
+    editorId() {
+      return `${this.uid}-editor`;
+    },
+    labelId() {
+      return `${this.uid}-label`;
+    },
+    describedBy() {
+      return `${this.uid}-message`;
+    },
+    hasError() {
+      return this.error !== '';
+    },
+    hasMessage() {
+      return this.hasError || this.helperText !== '';
+    },
+    isEmpty() {
+      return isBlankHtml(this.html);
+    },
+    /**
+     * NOT `toolbarItems`: a computed cannot shadow a prop. On the render proxy the
+     * prop wins, so a computed of the same name is unreachable from the template —
+     * which is not a silent failure when the template reads `toolbarItems.length`
+     * and the prop's default is `null`: it throws on every render.
+     */
+    activeToolbar() {
+      const available = TOOLBAR_DEFAULTS;
+      if (!Array.isArray(this.toolbarItems)) {
+        return available;
+      }
+      const wanted = this.toolbarItems;
+      return available.filter((item) => wanted.indexOf(item.key) !== -1);
+    },
+    editorStyle() {
+      const style = {
+        position: 'relative',
+        overflowY: 'auto',
+        background: 'var(--bs-body-bg)',
+        color: 'var(--bs-body-color)'
+      };
+
+      if (typeof this.minHeight === 'number' && this.minHeight > 0) {
+        style.minHeight = `${this.minHeight}px`;
+      } else if (typeof this.minHeight === 'string' && this.minHeight !== '') {
+        style.minHeight = this.minHeight;
+      }
+
+      if (!this.editable) {
+        style.border = '0';
+        style.padding = '0';
+      }
+
+      return style;
+    },
+    /** The root is the positioning context, so the placeholder can sit inside
+     *  the editor box without a negative margin that has to guess its padding. */
+    rootStyle() {
+      const style = { position: 'relative' };
+      if (typeof this.maxWidth === 'number' && this.maxWidth > 0) {
+        style.maxWidth = `${this.maxWidth}px`;
+      } else if (typeof this.maxWidth === 'string' && this.maxWidth !== '') {
+        style.maxWidth = this.maxWidth;
+      }
+      return style;
+    },
+    placeholderStyle() {
+      // 1px border + `p-3` (1rem), measured from the root's padding box.
+      return {
+        position: 'absolute',
+        top: '1.05rem',
+        left: '1.05rem',
+        pointerEvents: 'none',
+        opacity: '0.6'
+      };
+    },
+    toolButtonStyle() {
+      // Bootstrap's btn has a min-width and a padding sized for text; for a
+      // glyph-only button that reads as a hole in the toolbar.
+      return { minWidth: '2rem', padding: '0.125rem 0.375rem' };
+    }
+  },
+  watch: {
+    modelValue(value) {
+      if (this.editing) {
+        return;
+      }
+      this.html = valueToHtml(String(value ?? ''), this.currentMode);
+    },
+    mode(next, previous) {
+      if (next === previous || next === this.currentMode) {
+        return;
+      }
+      this.currentMode = next;
+      this.convert(next);
+    }
+  },
+  mounted() {
+    this.editing = true;
+    this.configureHost();
+  },
+  beforeUnmount() {
+    this.range = null;
+  },
+  methods: {
+    /** The public sanitizer, so the same guarantee is available to a caller. */
+    sanitize(html) {
+      return sanitizeHtml(html);
+    },
+    toMarkdown(html) {
+      return htmlToMarkdown(html);
+    },
+    fromMarkdown(markdown) {
+      return sanitizeHtml(markdownToHtml(markdown));
+    },
+
+    /**
+     * `styleWithCSS = false` is what makes bold produce `<b>`/`<strong>` instead
+     * of an inline `font-weight` style — a `style` attribute is stripped by the
+     * sanitizer, so without this the formatting would vanish on the very next
+     * pass.
+     */
+    configureHost() {
+      if (typeof document === 'undefined' || typeof document.execCommand !== 'function') {
+        return;
+      }
+      try {
+        document.execCommand('styleWithCSS', false, false);
+        document.execCommand('defaultParagraphSeparator', false, 'p');
+      } catch (error) {
+        // An engine without these still edits; it just produces different tags.
+      }
+    },
+
+    saveRange() {
+      if (typeof window === 'undefined' || !window.getSelection || !this.$refs.editor) {
+        return;
+      }
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      if (this.$refs.editor.contains(range.commonAncestorContainer)) {
+        this.range = range.cloneRange();
+      }
+    },
+
+    restoreSelection() {
+      const editor = this.$refs.editor;
+      if (!editor || typeof window === 'undefined' || !window.getSelection) {
+        return;
+      }
+      editor.focus();
+      if (!this.range) {
+        return;
+      }
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(this.range);
+    },
+
+    stateFor(item) {
+      if (item.kind !== 'command' || !item.command || typeof document === 'undefined') {
+        return null;
+      }
+      if (typeof document.queryCommandState !== 'function') {
+        return null;
+      }
+      try {
+        return document.queryCommandState(item.command) ? 'true' : 'false';
+      } catch (error) {
+        return null;
+      }
+    },
+
+    run(item) {
+      if (!this.editable || item.kind === 'divider') {
+        return;
+      }
+
+      if (item.kind === 'link') {
+        this.openLink();
+        return;
+      }
+
+      if (item.kind === 'inlineCode') {
+        this.applyInlineCode();
+        return;
+      }
+
+      this.restoreSelection();
+      if (typeof document === 'undefined' || typeof document.execCommand !== 'function') {
+        return;
+      }
+      try {
+        if (item.command === 'formatBlock') {
+          document.execCommand(item.command, false, item.value);
+        } else {
+          document.execCommand(item.command, false, null);
+        }
+      } catch (error) {
+        return;
+      }
+      this.onInput();
+      this.saveRange();
+    },
+
+    applyInlineCode() {
+      this.restoreSelection();
+
+      const selection = typeof window !== 'undefined' ? window.getSelection() : null;
+      const selected = selection ? String(selection.toString()) : '';
+      if (selected === '' || typeof document === 'undefined' || typeof document.execCommand !== 'function') {
+        return;
+      }
+
+      // `insertHTML` is fed a string we built, and the result goes back through
+      // the sanitizer on the next `onInput` — the one place a raw HTML string is
+      // ever handed to the document.
+      document.execCommand('insertHTML', false, '<code>' + escapeText(selected) + '</code>');
+      this.onInput();
+      this.saveRange();
+    },
+
+    openLink() {
+      // The selection is saved and re-applied first, because the current
+      // selection is what tells us whether the user is editing an existing link
+      // — and the link field's own focus would otherwise have already collapsed it.
+      this.saveRange();
+      this.restoreSelection();
+
+      const anchor = this.closestAnchor();
+
+      this.linkValue = anchor ? anchor.getAttribute('href') || '' : '';
+      this.linkOpen = true;
+      this.$nextTick(() => {
+        const field = this.$refs.linkField;
+        if (field) {
+          field.focus();
+          field.select();
+        }
+      });
+    },
+
+    /** The `<a>` the current selection sits inside, if any. */
+    closestAnchor() {
+      const selection = typeof window !== 'undefined' ? window.getSelection() : null;
+      if (!selection || selection.rangeCount === 0) {
+        return null;
+      }
+      let node = selection.getRangeAt(0).startContainer;
+      while (node && node.nodeType !== 1) {
+        node = node.parentNode;
+      }
+      while (node) {
+        if (node.tagName === 'A') {
+          return node;
+        }
+        node = node.parentNode;
+      }
+      return null;
+    },
+
+    closeLink() {
+      this.linkOpen = false;
+      this.linkValue = '';
+      this.restoreSelection();
+    },
+
+    onLinkKeydown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.applyLink();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeLink();
+      }
+    },
+
+    applyLink() {
+      const url = safeUrl(this.linkValue);
+      if (url === '') {
+        // Refused, not silently ignored: the typed target stays in the field so
+        // it can be corrected, and the editor keeps focus.
+        return;
+      }
+
+      this.restoreSelection();
+      if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+        try {
+          document.execCommand('createLink', false, url);
+        } catch (error) {
+          return;
+        }
+      }
+      this.onInput();
+      this.saveRange();
+      this.closeLink();
+    },
+
+    onInput() {
+      const editor = this.$refs.editor;
+      if (!editor) {
+        return;
+      }
+
+      // `html` is deliberately NOT updated here: it is the value v-html renders,
+      // and patching it mid-keystroke resets the caret to the start. The DOM is
+      // already correct, and the next external change re-syncs from the prop.
+      this.saveRange();
+
+      const next = htmlToValue(this.sanitize(editor.innerHTML), this.currentMode);
+      if (next !== this.modelValue) {
+        this.$emit('update:modelValue', next);
+        this.$emit('change', next);
+      }
+    },
+
+    onPaste(event) {
+      const clipboard = event.clipboardData;
+      if (!clipboard) {
+        return;
+      }
+
+      // Never let the browser insert unfiltered markup: an `<img onerror>` in a
+      // paste would fire before the value is ever read, so sanitising the emitted
+      // value afterwards would be too late to matter.
+      event.preventDefault();
+
+      const html = String(clipboard.getData('text/html') || '');
+      const text = String(clipboard.getData('text/plain') || '');
+
+      let insertion;
+      if (html !== '') {
+        insertion = sanitizeHtml(html);
+      } else if (text !== '') {
+        insertion = escapeText(text).replace(/\r?\n/g, '<br>');
+      } else {
+        return;
+      }
+
+      this.restoreSelection();
+      if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+        try {
+          document.execCommand('insertHTML', false, insertion);
+        } catch (error) {
+          return;
+        }
+      }
+      this.onInput();
+      this.saveRange();
+    },
+
+    onBlur(event) {
+      // The range is NOT cleared here. Opening the link row focuses a field
+      // outside the editor, and the range is what `createLink` needs when the
+      // user presses Apply; dropping it on blur loses the selection that made
+      // the link in the first place.
+      this.$emit('blur', event);
+    },
+
+    /**
+     * The mode switch is a click, so the click is authoritative (§1.4): it
+     * converts and emits whether or not the parent ever passes the new mode back.
+     * A parent that DOES control `mode` gets there through the watcher, which
+     * converges on the same `convert()`.
+     */
+    setMode(next) {
+      if (next !== 'html' && next !== 'markdown') {
+        return;
+      }
+      if (next === this.currentMode) {
+        return;
+      }
+      this.currentMode = next;
+      this.$emit('mode-change', next);
+      this.convert(next);
+    },
+
+    /**
+     * Converts the CONTENT, never the old value. The editor's own DOM is read
+     * first, because `html` is a vdom-side mirror and is behind whatever the
+     * user has typed since the last external change.
+     */
+    convert(next) {
+      const editor = this.$refs.editor;
+      if (editor) {
+        this.html = this.sanitize(editor.innerHTML);
+      }
+
+      const value = htmlToValue(this.html, next);
+
+      if (next === 'markdown') {
+        // Round-trip so the rendered surface and the stored value are the same
+        // document: the value goes through the parser that will read it back.
+        this.html = sanitizeHtml(markdownToHtml(value));
+      }
+
+      this.linkOpen = false;
+      this.$emit('update:modelValue', value);
+      this.$emit('change', value);
+    }
+  }
+};
+</script>
