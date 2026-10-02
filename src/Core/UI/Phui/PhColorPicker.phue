@@ -44,8 +44,10 @@
       />
     </div>
 
+    <teleport to="body" v-if="open">
     <div
-      v-if="open"
+      ref="panel"
+      data-phui="color-picker-panel"
       class="dropdown-menu show p-2"
       role="dialog"
       aria-label="Colour picker"
@@ -101,6 +103,7 @@
         </button>
       </div>
     </div>
+    </teleport>
 
     <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
     <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
@@ -182,7 +185,11 @@ export default {
   data() {
     return {
       open: false,
-      recent: []
+      recent: [],
+      // The trigger's viewport rect and the panel's measured height: the panel is
+      // positioned by measurement now that it is outside the root's clipping.
+      triggerRect: null,
+      panelHeight: 0
     };
   },
   computed: {
@@ -200,13 +207,36 @@ export default {
       };
     },
     popoverStyle() {
-      return {
+      // Document space, measured from the trigger, with a flip. Moving the panel
+      // out of the flow changed three things at once: the coordinates, the width
+      // (`100%` would now resolve against the body), and the ability to flip above
+      // the trigger at all — it never measured before.
+      const base = {
         position: 'absolute',
-        top: '100%',
-        left: '0',
-        zIndex: 1000,
         display: 'block',
-        minWidth: '13rem'
+        minWidth: '13rem',
+        zIndex: 1040,
+        width: '0px'
+      };
+
+      if (!this.triggerRect || typeof window === 'undefined') {
+        return { ...base, visibility: 'hidden' };
+      }
+
+      const r = this.triggerRect;
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const gap = 4;
+      const vh = document.documentElement.clientHeight;
+      const height = this.panelHeight || 0;
+      const above = height > 0 && (vh - r.bottom) < height + gap && r.top > (vh - r.bottom);
+
+      return {
+        ...base,
+        width: `${Math.max(r.width, 208)}px`,
+        left: `${r.left + scrollX}px`,
+        top: `${(above ? r.top - height - gap : r.bottom + gap) + scrollY}px`,
+        visibility: 'visible'
       };
     },
     swatchGridStyle() {
@@ -306,12 +336,59 @@ export default {
       }
       this.open = !this.open;
     },
+    /**
+     * Outside-click has to test BOTH the trigger and the teleported panel. The
+     * panel is no longer inside the root, so a click on a swatch would read as
+     * "outside" and close the picker before the click could pick anything.
+     */
     onDocumentClick(event) {
       const root = this.$refs.root;
-      if (!root || !this.open || root.contains(event.target)) {
+      const panel = this.$refs.panel;
+
+      if (!this.open) {
         return;
       }
+      if (root && root.contains(event.target)) {
+        return;
+      }
+      if (panel && panel.contains(event.target)) {
+        return;
+      }
+
       this.open = false;
+    },
+
+    measure() {
+      const trigger = this.$refs.root;
+      if (trigger) {
+        this.triggerRect = trigger.getBoundingClientRect();
+      }
+
+      const panel = this.$refs.panel;
+      if (panel) {
+        this.panelHeight = panel.offsetHeight;
+      }
+    },
+
+    /**
+     * Re-measure while the panel is open so it stays attached to its trigger.
+     * Capture phase, because a plain `scroll` listener never fires for nested
+     * scrollers — which is where a picker inside a scrolling form panel lives.
+     */
+    trackViewport() {
+      if (typeof window === 'undefined') return;
+      this.releaseViewport();
+      window.addEventListener('scroll', this.onViewportChange, true);
+      window.addEventListener('resize', this.onViewportChange);
+    },
+    releaseViewport() {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+    },
+    onViewportChange() {
+      if (!this.open) return;
+      this.measure();
     },
     onKeydown(event) {
       if (event.key === 'Escape' && this.open) {
