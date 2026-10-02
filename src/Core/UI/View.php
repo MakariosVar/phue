@@ -22,6 +22,7 @@ class View
      * @param string|null $html             Fully resolved server-rendered HTML markup (HTML-first / SSR mode).
      * @param array<int, string> $styles    External CSS style URLs to be enqueued.
      * @param string|null $style            Component-scoped CSS string extracted from the <style> block.
+     * @param bool $isVueTemplate           Discriminator flag indicating whether $template contains Vue directives/syntax.
      */
     public function __construct(
         private string $template,
@@ -30,7 +31,8 @@ class View
         private ?string $inlineScript = null,
         private ?string $html = null,
         private array $styles = [],
-        private ?string $style = null
+        private ?string $style = null,
+        private bool $isVueTemplate = false
     ) {}
 
     /**
@@ -41,6 +43,16 @@ class View
     public function getTemplate(): string
     {
         return $this->template;
+    }
+
+    /**
+     * Indicates whether the template contains Vue directives/syntax and must not be dumped as raw static markup.
+     *
+     * @return bool True if template contains Vue directives (e.g., v-if, {{ }}), false if pure static HTML.
+     */
+    public function isVueTemplate(): bool
+    {
+        return $this->isVueTemplate;
     }
 
     /**

@@ -758,7 +758,8 @@ class PhueComponentLoader
             styles: $styles,
             inlineScript: $structure['script'],
             html: $html,
-            style: $structure['style'] ?? null
+            style: $structure['style'] ?? null,
+            isVueTemplate: true
         );
 
         return new PhueComponent($title, $view);

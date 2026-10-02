@@ -165,12 +165,14 @@ class ComponentRenderer
     {
         $uri = is_callable($this->uriResolver) ? ($this->uriResolver)() : '/';
 
-        // 1a: Compute transitive dependency graph upfront for both SSR and Client modulepreloads
+        // Compute transitive dependency graph upfront for both SSR and Client modulepreloads
         $deps = [];
         if ($this->loaderRegistry !== null && $componentName !== null) {
             $discoverer = new ComponentDiscoverer($this->loaderRegistry, $this->logger);
             $deps = $discoverer->resolveTransitiveDependencies($componentName);
         }
+
+        $ssrFailed = false;
 
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
             $state = $view->getState();
@@ -215,6 +217,13 @@ class ComponentRenderer
                     styles: $view->getStyles(),
                     style: $view->getStyle()
                 );
+            } else {
+                $ssrFailed = true;
+                $this->logger?->error('SSR rendering failed for component; falling back to client-side rendering with empty content', [
+                    'component' => $componentName,
+                    'template'  => $view->getTemplate(),
+                    'uri'       => $uri,
+                ]);
             }
         }
 
@@ -233,9 +242,12 @@ class ComponentRenderer
             $styleTag = "<style {$scopeAttr}>" . $view->getStyle() . "</style>";
         }
 
-        $rawMarkup = $view->hasHtml() ? $view->getHtml() : $view->getTemplate();
-        $pageMarkup = $styleTag . $rawMarkup;
+        // When the SSR fails ($ssrFailed === true), we return an empty string ('') instead of the unprocessed template
+        $rawMarkup = $view->hasHtml() 
+            ? $view->getHtml() 
+            : (($ssrFailed || $view->isVueTemplate()) ? '' : $view->getTemplate());
 
+        $pageMarkup = $styleTag . $rawMarkup;
         $request = is_callable($this->requestResolver) ? ($this->requestResolver)() : null;
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
 

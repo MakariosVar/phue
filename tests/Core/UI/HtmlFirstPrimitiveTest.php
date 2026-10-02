@@ -139,6 +139,11 @@ PHUE);
 
     public function testTemplateModeRenderPathIsUnchanged(): void
     {
+        // A `.phue` component is flagged `isVueTemplate`, so with no engine the
+        // container is EMPTY rather than holding `{{ n }}` as page text. That is the
+        // intended behaviour and ComponentRendererSsrTest covers the other branch
+        // (a hand-built View is still inlined); what matters here is that the state
+        // still ships, because without it the client has nothing to render.
         $this->writeComponent('Plain', <<<'PHUE'
 <php>
 return ['title' => 'Plain', 'state' => ['n' => 42]];
@@ -151,11 +156,10 @@ PHUE);
 
         $html = $this->renderer->render('Plain')->getContent();
 
-        $this->assertStringContainsString(
-            '<div id="app"><div class="vanilla">{{ n }}</div></div>',
-            $html,
-        );
+        $this->assertStringNotContainsString('{{ n }}', $html, 'a Vue template must never be served as raw page content');
+        $this->assertStringContainsString('id="app"', $html);
         $this->assertStringContainsString('window.__INITIAL_STATE__', $html);
+        $this->assertStringContainsString('42', $html, 'the state must still reach the client');
     }
 
     public function testHtmlTakesPrecedenceOverDeclaredTemplate(): void

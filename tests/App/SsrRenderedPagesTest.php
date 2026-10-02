@@ -154,6 +154,82 @@ final class SsrRenderedPagesTest extends TestCase
         $this->assertStringNotContainsString('{{', $container);
     }
 
+    public function testEveryPageActuallyServerRenders(): void
+    {
+        // The empty-string result is the failure mode that hid for hours: when the
+        // SSR engine returns null, the renderer emits an EMPTY mount container and
+        // the client renders the page anyway. Nothing is broken from the outside —
+        // the page works — so every existing assertion passed while every page had
+        // silently stopped server rendering.
+        //
+        // `ComponentRenderer` degrading to empty content is correct behaviour, but
+        // it must be LOUD here. These pages are the SSR smoke test for the whole
+        // pipeline, and a framework that quietly stops SSR is not a framework that
+        // works.
+        foreach (['/', '/docs?doc=getting-started', '/phui', '/phui?section=forms'] as $uri) {
+            $response = $this->app->handle(new Request('GET', $uri));
+            $this->assertSame(200, $response->getStatusCode(), $uri);
+
+            $container = (string) $this->mountContainer($response->getContent());
+
+            $this->assertNotSame(
+                '',
+                trim($container),
+                sprintf(
+                    '%s returned an EMPTY mount container. SSR did not run, and the page is only '
+                    . 'rendering because the client happens to mount. Check the SSR engine logs — '
+                    . 'ComponentRenderer degrades to empty content on purpose, which makes a '
+                    . 'pipeline failure invisible.',
+                    $uri
+                )
+            );
+        }
+    }
+
+    public function testServerRenderedPagesCarryNoVueDirectives(): void
+    {
+        // A server render that leaked the template's own source is the one failure
+        // mode the client cannot survive: hydration mismatches against text nodes
+        // and the page never becomes interactive.
+        //
+        // The scan is restricted to INSIDE tags, because a directive as an attribute
+        // means a leaked template, while a directive as TEXT means something
+        // entirely legitimate: <ph-code> and <ph-markdown> exist to display escaped
+        // Vue source, so their output necessarily contains `v-if=` and `@click=`.
+        // Matching anywhere in the container flagged the showcase page for rendering
+        // its own documentation examples.
+        foreach (['/', '/phui', '/phui?section=data'] as $uri) {
+            $container = (string) $this->mountContainer(
+                (string) $this->app->handle(new Request('GET', $uri))->getContent()
+            );
+
+            $this->assertDoesNotMatchRegularExpression(
+                '/<[a-zA-Z][^>]*\s(?:v-if|v-show|v-for|v-model|v-once|@click|:style|:class|ref)=/',
+                $container,
+                sprintf(
+                    '%s rendered a template directive as a live attribute — the raw template was '
+                    . 'served as markup instead of being server rendered.',
+                    $uri
+                )
+            );
+        }
+    }
+
+    public function testEscapedCodeSamplesStillShowVueDirectivesAsText(): void
+    {
+        // The counterpart to the assertion above, and the reason it is scoped to
+        // tags: a documentation page that renders a Vue snippet must SHOW that
+        // snippet. If the escaped directives ever stopped appearing, the showcase
+        // would be silently dropping its own examples — and the directive scan would
+        // still pass, because it would have nothing left to find.
+        $container = (string) $this->mountContainer(
+            (string) $this->app->handle(new Request('GET', '/phui?section=index'))->getContent()
+        );
+
+        $this->assertStringContainsString('&lt;ph-button', $container);
+        $this->assertStringContainsString('&quot;', $container, 'the code sample must stay HTML-escaped');
+    }
+
     /**
      * Extracts the deep content of `<div id="app">…</div>` (layout shell is
      * nested inside the mount container, so a plain non-greedy match is NOT

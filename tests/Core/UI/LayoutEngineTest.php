@@ -102,8 +102,12 @@ PHUE);
         $renderer = $this->makeRenderer('AppLayout', fn () => '/products/42');
         $html = $renderer->render('Page')->getContent();
 
+        // The page is a `.phue` with no SSR engine, so its mount container is
+        // empty — the client renders it. What this test is about is the LAYOUT:
+        // the wrapper, the header, the uri, and that the page's own template was
+        // not used as the layout's.
         $this->assertStringContainsString(
-            '<div class="wrap" data-uri="/products/42"><header>NAV</header><main><div id="app"><h1>PageContent</h1></div></main></div>',
+            '<div class="wrap" data-uri="/products/42"><header>NAV</header><main><div id="app"></div></main></div>',
             $html,
         );
         $this->assertStringNotContainsString('this literal template is ignored', $html);
@@ -199,7 +203,12 @@ PHUE);
 
         $html = $renderer->render('Page')->getContent();
 
-        $this->assertStringContainsString('<div id="app"><div class="page">{{ data }}</div></div>', $html);
+        // No SSR engine is configured, and a `.phue` is a Vue template: the
+        // container is empty and the client renders it. What this test is about is
+        // the LAYOUT — that no wrapper was applied — so it asserts the container
+        // exists rather than what is inside it.
+        $this->assertStringContainsString('id="app"', $html);
+        $this->assertStringNotContainsString('{{ data }}', $html);
         $this->assertStringNotContainsString('wrap', $html);
     }
 

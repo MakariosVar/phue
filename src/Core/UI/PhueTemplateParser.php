@@ -69,7 +69,8 @@ class PhueTemplateParser
             state: $state,
             scripts: $scripts,
             inlineScript: $structure['script'],
-            style: $structure['style']
+            style: $structure['style'],
+            isVueTemplate: true
         );
 
         return new PhueComponent($title, $view);

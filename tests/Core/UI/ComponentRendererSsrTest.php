@@ -305,41 +305,131 @@ PHUE);
         }
     }
 
-    public function testEngineReturningNullFailsOpenToTemplatePath(): void
+    public function testEngineReturningNullFailsOpenToAnEmptyMountContainer(): void
     {
+        // When the SSR engine returns null the renderer must NOT put the template
+        // in the response. That path used to be the "fails open" behaviour, and it
+        // is the single worst failure mode in the pipeline: the client then
+        // hydrates Vue against its own source text, reports a node mismatch on
+        // every component, and the page never becomes interactive.
+        //
+        // An empty mount container is strictly better — the client mounts and
+        // renders normally, so the reader gets a working page and the only loss is
+        // the server render.
         $engine = RecordingSsrEngine::returning(null);
         $renderer = $this->renderer($engine);
 
-        $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello']);
+        $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello'], isVueTemplate: true);
 
         $response = $renderer->render('Demo', $view);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(1, $engine->calls);
-        $this->assertStringContainsString('<div>{{ msg }}</div>', $response->getContent());
+
+        $content = $response->getContent();
+
+        $this->assertStringNotContainsString(
+            '{{ msg }}',
+            $content,
+            'an SSR failure must never ship the unrendered template as page content'
+        );
+        $this->assertStringContainsString(
+            'id="app"></div>',
+            $content,
+            'the mount container must be EMPTY so the client renders it, rather than holding '
+            . 'text the client then has to hydrate against'
+        );
     }
 
-    public function testRendererWithoutEngineFallsBackToTemplatePath(): void
+    public function testAVueTemplateWithoutEngineLeavesTheMountContainerEmpty(): void
     {
+        // No engine configured is the same situation as a failed render: there is
+        // nothing to hydrate against, so the container must stay empty.
+        //
+        // The `isVueTemplate` flag is what separates this from the plain-View case
+        // below. It is set by the loader, not inferred from the string, so a hand
+        // built view containing `{{ msg }}` is still inlined — which is right: the
+        // caller handed over markup, not a template.
         $renderer = $this->renderer();
 
-        $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello']);
+        $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello'], isVueTemplate: true);
 
         $response = $renderer->render('Demo', $view);
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('<div>{{ msg }}</div>', $response->getContent());
+        $this->assertStringNotContainsString('{{ msg }}', $response->getContent());
+        $this->assertStringContainsString('id="app"></div>', $response->getContent());
     }
 
-    public function testNullSsrEngineFallsBackToTemplatePath(): void
+    public function testAPlainViewWithoutEngineIsStillInlined(): void
     {
+        // The counterpart, and a feature rather than a bug: a caller that hands the
+        // renderer finished HTML with no engine gets that HTML served.
+        // ComponentRendererTest::testRendersShellWithInlinedTemplateTitleAndState
+        // asserts the same thing; it is repeated here so the two branches of the
+        // `isVueTemplate` decision sit next to each other.
+        $renderer = $this->renderer();
+
+        $view = new View('<div class="container"><h2>Hello</h2></div>', ['products' => []]);
+
+        $response = $renderer->render('Demo', $view);
+
+        $this->assertStringContainsString(
+            '<div class="container"><h2>Hello</h2></div>',
+            $response->getContent()
+        );
+    }
+
+    public function testAFailedEngineOnAVueTemplateLeavesTheMountContainerEmpty(): void
+    {
+        $renderer = $this->renderer(RecordingSsrEngine::returning(null));
+
+        $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello'], isVueTemplate: true);
+
+        $html = $renderer->render('Demo', $view)->getContent();
+
+        $this->assertStringNotContainsString('{{ msg }}', $html);
+        $this->assertStringContainsString('id="app"></div>', $html);
+    }
+
+    public function testTheStateSurvivesEveryNonRenderedPath(): void
+    {
+        // Whatever the renderer decides not to render, the client cannot render
+        // without the state — so it has to be serialised on every branch.
+        foreach ([
+            'no engine, Vue template' => [$this->renderer(), true],
+            'failed engine, Vue template' => [$this->renderer(RecordingSsrEngine::returning(null)), true],
+            'no engine, plain view' => [$this->renderer(), false],
+        ] as $label => [$renderer, $isVueTemplate]) {
+            $html = $renderer->render(
+                'Demo',
+                new View('<div>{{ msg }}</div>', ['msg' => 'hello'], isVueTemplate: $isVueTemplate)
+            )->getContent();
+
+            $this->assertStringContainsString(
+                'hello',
+                $html,
+                "the initial state must still be serialised on the `{$label}` path"
+            );
+        }
+    }
+
+    public function testNullSsrEngineLeavesTheMountContainerEmpty(): void
+    {
+        // `NullSsrEngine` is what an app gets when SSR is switched off on purpose.
+        // It is therefore the REFERENCE for what a non-SSR page looks like: an
+        // empty mount container plus the state the client needs.
         $renderer = $this->renderer(new NullSsrEngine());
 
         $view = new View('<div>{{ msg }}</div>', ['msg' => 'hello']);
 
         $html = $renderer->render('Demo', $view)->getContent();
 
-        $this->assertStringContainsString('<div>{{ msg }}</div>', $html);
+        $this->assertStringNotContainsString('{{ msg }}', $html);
+
+        // The state is what makes the client render at all, so it must survive the
+        // loss of SSR.
+        $this->assertStringContainsString('hello', $html, 'the initial state must still be serialised');
     }
 
     private function removeTree(string $dir): void
