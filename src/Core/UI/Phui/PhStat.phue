@@ -20,7 +20,7 @@
         <ph-icon
           v-if="trend !== 'neutral'"
           :name="trendIcon"
-          :size="xs"
+          :size="deltaIconSize"
           :variant="trendVariant"
         />
         <span class="small" :class="deltaClass">{{ delta }}</span>
@@ -58,6 +58,11 @@ export default {
       type: [String, Number],
       default: 'lg'
     },
+    size: {
+      type: String,
+      default: 'md',
+      validator: (val) => ['sm', 'md', 'lg'].includes(val)
+    },
     iconVariant: {
       type: String,
       default: ''
@@ -73,6 +78,16 @@ export default {
     }
   },
   computed: {
+    /**
+     * The trend glyph reads at the label's own scale, not the icon's: it sits
+     * inside the `delta` line next to `.small` text, and at the icon default it
+     * towers over the number it belongs to. This used to bind an undeclared
+     * `xs`, so Vue warned on every render and the size fell through to
+     * PhIcon's default by accident.
+     */
+    deltaIconSize() {
+      return this.size === 'sm' ? 'xs' : 'sm';
+    },
     trendIcon() {
       return this.trend === 'up' ? 'arrow-up' : 'arrow-down';
     },

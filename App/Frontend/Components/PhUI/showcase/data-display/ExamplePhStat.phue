@@ -143,7 +143,13 @@ export default {
           name: "iconSize",
           type: "String | Number",
           default: "'lg'",
-          notes: "",
+          notes: "Size of the leading icon",
+        },
+        {
+          name: "size",
+          type: "String",
+          default: "'md'",
+          notes: "sm | md | lg — card scale; sizes the trend glyph",
         },
         {
           name: "iconVariant",
