@@ -25,6 +25,7 @@ $navItems = [
             ['id' => 'segmented-control', 'label' => 'Segmented Control'],
             ['id' => 'form', 'label' => 'Form'],
             ['id' => 'form-field', 'label' => 'Form Field'],
+            ['id' => 'input-shell', 'label' => 'Input Shell']
         ]
     ],
     [
