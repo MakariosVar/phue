@@ -100,7 +100,21 @@ export default {
       startsAt: null,
       publishedOn: null,
       publishedAt: '2023-29-02',
-      snippet: `<!-- Date only, bounded -->
+      snippet: `<!-- Laid out on the grid, like any other form control -->
+<ph-row gutter="4">
+  <ph-col span="12" md="6">
+    <ph-date-picker
+      v-model="dueOn"
+      :label="\`Due date\` + (dueOn ? \` (\${dueOn})\` : '')"
+      mode="date"
+      min="2026-01-01"
+      max="2026-12-31"
+      helper-text="Within the current year."
+    />
+  </ph-col>
+</ph-row>
+
+<!-- Date only, bounded -->
 <ph-date-picker
   v-model="dueOn"
   :label="\`Due date\` + (dueOn ? \` (\${dueOn})\` : '')"
