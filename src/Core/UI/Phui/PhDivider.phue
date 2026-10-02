@@ -1,28 +1,24 @@
 <template>
-  <span
-    v-if="orientation === 'vertical'"
-    data-phui="divider"
-    class="vr"
-    :class="[spacingClass, colorClass]"
-  ></span>
-
   <div
-    v-else-if="label"
     data-phui="divider"
-    class="d-flex align-items-center gap-2"
-    :class="spacingClass"
+    :class="[spacingClass, rootClass]"
   >
-    <span class="flex-grow-1 border-top" :class="borderClass"></span>
-    <span class="text-body-secondary text-nowrap" :class="colorClass">{{ label }}</span>
-    <span class="flex-grow-1 border-top" :class="borderClass"></span>
+    <span
+      v-if="showLabel"
+      class="flex-grow-1 border-top"
+      :class="borderClass"
+    ></span>
+    <span
+      v-if="showLabel"
+      class="text-body-secondary text-nowrap"
+      :class="colorClass"
+    >{{ label }}</span>
+    <span
+      v-if="showLabel"
+      class="flex-grow-1 border-top"
+      :class="borderClass"
+    ></span>
   </div>
-
-  <div
-    v-else
-    data-phui="divider"
-    class="border-top"
-    :class="[spacingClass, borderClass]"
-  ></div>
 </template>
 
 <script>
@@ -49,6 +45,17 @@ export default {
     }
   },
   computed: {
+    showLabel() {
+      return this.orientation === 'horizontal' && this.label !== '';
+    },
+    // One root for all three shapes: the renderer's template compiler assumes a
+    // single top-level element, so branching on sibling roots silently drops
+    // every branch but the first and the v-else.
+    rootClass() {
+      if (this.orientation === 'vertical') return 'vr';
+      if (this.showLabel) return 'd-flex align-items-center gap-2';
+      return 'border-top';
+    },
     // .vr paints with currentcolor, so a vertical rule needs a *color* class.
     colorClass() {
       return this.variant ? `text-${this.variant}` : '';
@@ -58,9 +65,14 @@ export default {
       return this.variant ? `border-${this.variant}` : '';
     },
     spacingClass() {
-      const map = { none: 'my-0', xs: 'my-1', sm: 'my-2', md: 'my-3', lg: 'my-4', xl: 'my-5' };
-      if (typeof this.spacing === 'number') return `my-${this.spacing}`;
-      return map[this.spacing] ?? this.spacing;
+      const map = { none: 0, xs: 1, sm: 2, md: 3, lg: 4, xl: 5 };
+      const step = typeof this.spacing === 'number' ? this.spacing : map[this.spacing];
+      // A vertical rule is sized by its flex parent (align-self: stretch), so
+      // vertical margins would shrink it and offset it away from the text it
+      // is supposed to divide. Only the inline axis is ours to space.
+      if (step === undefined) return this.spacing;
+      if (this.orientation === 'vertical') return `mx-${step}`;
+      return `my-${step}`;
     }
   }
 };
