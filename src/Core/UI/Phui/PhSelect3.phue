@@ -63,50 +63,53 @@
       </span>
     </div>
 
-    <div
-      v-if="open"
-      :id="listId"
-      class="dropdown-menu show w-100"
-      role="listbox"
-      :style="listStyle"
-    >
-      <div v-if="searchable" class="px-2 pb-2">
-        <input
-          ref="search"
-          type="text"
-          class="form-control form-control-sm"
-          :value="query"
-          placeholder="Search…"
-          @input="onSearchInput"
-        />
-      </div>
-
-      <button
-        v-for="(opt, index) in filteredOptions"
-        :id="optionId(index)"
-        :key="opt.value"
-        ref="options"
-        type="button"
-        class="dropdown-item d-flex align-items-center"
-        :class="{ active: index === activeIndex, disabled: opt.disabled }"
-        role="option"
-        :aria-selected="isSelected(opt.value) ? 'true' : 'false'"
-        :disabled="opt.disabled"
-        @click="select(opt)"
-        @mouseenter="activeIndex = index"
+    <teleport to="body" v-if="open">
+      <div
+        :id="listId"
+        ref="list"
+        data-phui="select3-list"
+        class="dropdown-menu show p-0"
+        role="listbox"
+        :style="listStyle"
       >
-        <span class="me-2 d-inline-block" style="width: 1rem;">
-          <ph-icon v-if="isSelected(opt.value)" name="check" size="sm" />
-        </span>
-        {{ opt.label }}
-      </button>
+        <div v-if="searchable" class="px-2 pb-2">
+          <input
+            ref="search"
+            type="text"
+            class="form-control form-control-sm"
+            :value="query"
+            placeholder="Search…"
+            @input="onSearchInput"
+          />
+        </div>
 
-      <div v-if="filteredOptions.length === 0" class="dropdown-item-text text-body-secondary">
-        No results
+        <button
+          v-for="(opt, index) in filteredOptions"
+          :id="optionId(index)"
+          :key="opt.value"
+          ref="options"
+          type="button"
+          class="dropdown-item d-flex align-items-center"
+          :class="{ active: index === activeIndex, disabled: opt.disabled }"
+          role="option"
+          :aria-selected="isSelected(opt.value) ? 'true' : 'false'"
+          :disabled="opt.disabled"
+          @click="select(opt)"
+          @mouseenter="activeIndex = index"
+        >
+          <span class="me-2 d-inline-block" style="width: 1rem;">
+            <ph-icon v-if="isSelected(opt.value)" name="check" size="sm" />
+          </span>
+          {{ opt.label }}
+        </button>
+
+        <div v-if="filteredOptions.length === 0" class="dropdown-item-text text-body-secondary">
+          No results
+        </div>
+
+        <slot name="footer" :close="close" />
       </div>
-
-      <slot name="footer" :close="close" />
-    </div>
+    </teleport>
 
     <p v-if="error" class="form-text text-danger mb-0">{{ error }}</p>
     <p v-else-if="helperText" class="form-text mb-0">{{ helperText }}</p>
@@ -177,7 +180,12 @@ export default {
     return {
       open: false,
       query: '',
-      activeIndex: 0
+      activeIndex: 0,
+      // The control's viewport rect, and the panel's measured height. Both are
+      // needed on every render now that the panel is positioned by measurement
+      // rather than by being the control's in-flow sibling.
+      triggerRect: null,
+      listHeight: 0
     };
   },
   computed: {
@@ -242,30 +250,64 @@ export default {
       return option && !option.disabled ? this.optionId(this.activeIndex) : null;
     },
     listStyle() {
-      return {
+      const base = {
         position: 'absolute',
-        top: '100%',
-        left: '0',
-        right: '0',
-        zIndex: 1000,
         display: 'block',
         maxHeight: '16rem',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        zIndex: 1040,
+        // The layer of an anchored float: it opens over page content, and staying
+        // under the modal layer is what keeps a select inside a modal in that modal.
+        width: '0px'
+      };
+
+      if (!this.triggerRect || typeof window === 'undefined') {
+        // Unmeasured. Hidden rather than painted at 0,0 — the server never knows the
+        // control's position, so claiming one would flash the list in the corner.
+        return { ...base, visibility: 'hidden' };
+      }
+
+      const r = this.triggerRect;
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const gap = 4;
+      const vh = document.documentElement.clientHeight;
+      const height = this.listHeight || 0;
+
+      const roomBelow = vh - r.bottom;
+      const roomAbove = r.top;
+      const above = height > 0 && roomBelow < height + gap && roomAbove > roomBelow;
+
+      return {
+        ...base,
+        width: `${r.width}px`,
+        left: `${r.left + scrollX}px`,
+        top: `${(above ? r.top - height - gap : r.bottom + gap) + scrollY}px`,
+        visibility: 'visible'
       };
     }
   },
   watch: {
     open(value) {
       this.$emit(value ? 'open' : 'close');
+
       if (value) {
         this.activeIndex = this.firstEnabled();
+        this.measure();
+        this.trackViewport();
+
+        // Two ticks: the first renders the teleported panel, the second measures it.
+        // Measuring on the first tick reads a node that does not exist yet.
         this.$nextTick(() => {
+          this.measure();
           if (this.searchable && this.$refs.search) {
             this.$refs.search.focus();
           }
         });
       } else {
         this.query = '';
+        this.releaseViewport();
+        this.triggerRect = null;
       }
     },
     filteredOptions() {
@@ -287,6 +329,7 @@ export default {
     window.addEventListener('keydown', this.onKeydown, true);
   },
   beforeUnmount() {
+    this.releaseViewport();
     document.removeEventListener('click', this.onDocumentClick);
     window.removeEventListener('keydown', this.onKeydown, true);
   },
@@ -480,11 +523,55 @@ export default {
       this.$emit('update:modelValue', this.multiple ? [] : '');
       this.$emit('clear');
     },
+    /**
+     * Outside-click has to test BOTH the control and the teleported panel.
+     *
+     * The panel is no longer a descendant of the root, so a click on an option, on
+     * the search field or inside the `footer` slot all read as "outside" — which
+     * closed the list before the click could do anything, and made the search input
+     * unusable the moment you clicked it.
+     */
     onDocumentClick(event) {
       if (!this.open) return;
-      if (this.$refs.root && !this.$refs.root.contains(event.target)) {
-        this.close();
+
+      const target = event.target;
+      if (this.$refs.root && this.$refs.root.contains(target)) return;
+      if (this.$refs.list && this.$refs.list.contains(target)) return;
+
+      this.close();
+    },
+
+    measure() {
+      const control = this.$refs.control;
+      if (control) {
+        this.triggerRect = control.getBoundingClientRect();
       }
+
+      const list = this.$refs.list;
+      if (list) {
+        this.listHeight = list.offsetHeight;
+      }
+    },
+
+    /**
+     * Re-measure while the panel is open, so it stays attached to its control.
+     * Capture phase, because a plain `scroll` listener never fires for nested
+     * scrollers — which is where a select inside a scrolling form panel lives.
+     */
+    trackViewport() {
+      if (typeof window === 'undefined') return;
+      this.releaseViewport();
+      window.addEventListener('scroll', this.onViewportChange, true);
+      window.addEventListener('resize', this.onViewportChange);
+    },
+    releaseViewport() {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+    },
+    onViewportChange() {
+      if (!this.open) return;
+      this.measure();
     }
   }
 };
