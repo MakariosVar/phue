@@ -3,7 +3,24 @@
     data-phui="popover"
     class="position-relative d-inline-block"
   >
-    <div  @click="toggle" @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle" tabindex="0" :aria-expanded="open">
+    <!--
+      `data-phui` here is load-bearing, not decoration: updateTriggerRect() measures
+      this element by it. The attribute was missing entirely, so the rect was always
+      null, popoverStyle returned {}, and the panel fell back to its static position
+      — which read as "positioned fine" while the panel was viewport-fixed, and
+      became "invisible" the moment it moved to document space.
+
+      It is `data-phui` and not a `class`: the kit ships no stylesheet, so a
+      `ph-*` class would be styling with nowhere to live.
+    -->
+    <div
+      data-phui="popover-trigger"
+      @click="toggle"
+      @keydown.space.prevent="toggle"
+      @keydown.enter.prevent="toggle"
+      tabindex="0"
+      :aria-expanded="open"
+    >
       <slot name="trigger">
         <ph-button variant="outline-secondary" size="sm">{{ triggerLabel }}</ph-button>
       </slot>
@@ -29,7 +46,16 @@
           <slot name="content">{{ content }}</slot>
         </div>
       </div>
-      <div  @click="close"></div>
+      <!--
+        A real backdrop. It was an empty div with no styles, so it had no height
+        and covered nothing: the documented "a click on the backdrop closes it"
+        had never worked. `position: fixed` + inset is what makes it a surface.
+      -->
+      <div
+        data-phui="popover-backdrop"
+        style="position: fixed; inset: 0; z-index: 1069;"
+        @click="close"
+      ></div>
     </teleport>
   </div>
 </template>
@@ -127,23 +153,29 @@ export default {
       const clampX = (x) => Math.min(Math.max(x, half), Math.max(half, vw - half));
       const clampY = (y) => Math.min(Math.max(y, half), Math.max(half, vh - half));
 
-      const styles = { position: 'fixed', zIndex: 1070 };
+
+      const styles = { position: 'absolute', zIndex: 1070 };
+
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
 
       if (this.placement.startsWith('top')) {
-        styles.bottom = `${vh - r.top + offset}px`;
-        styles.left = `${clampX(r.left + r.width / 2)}px`;
-        styles.transform = 'translateX(-50%)';
+        styles.top = `${r.top + scrollY}px`;
+        styles.bottom = 'auto';
+        styles.left = `${clampX(r.left + scrollX + r.width / 2)}px`;
+        styles.transform = 'translateX(-50%) translateY(calc(-100% - ' + offset + 'px))';
       } else if (this.placement.startsWith('bottom')) {
-        styles.top = `${r.bottom + offset}px`;
-        styles.left = `${clampX(r.left + r.width / 2)}px`;
+        styles.top = `${r.bottom + offset + scrollY}px`;
+        styles.left = `${clampX(r.left + scrollX + r.width / 2)}px`;
         styles.transform = 'translateX(-50%)';
       } else if (this.placement.startsWith('start')) {
-        styles.right = `${vw - r.left + offset}px`;
-        styles.top = `${clampY(r.top + r.height / 2)}px`;
-        styles.transform = 'translateY(-50%)';
+        styles.left = `${r.left + scrollX}px`;
+        styles.right = 'auto';
+        styles.top = `${clampY(r.top + scrollY + r.height / 2)}px`;
+        styles.transform = 'translateY(-50%) translateX(calc(-100% - ' + offset + 'px))';
       } else {
-        styles.left = `${Math.min(r.right + offset, vw - half)}px`;
-        styles.top = `${clampY(r.top + r.height / 2)}px`;
+        styles.left = `${Math.min(r.right + scrollX + offset, vw + scrollX - half)}px`;
+        styles.top = `${clampY(r.top + scrollY + r.height / 2)}px`;
         styles.transform = 'translateY(-50%)';
       }
       return styles;
@@ -161,6 +193,15 @@ export default {
       // meant the first render ran with triggerRect still null, so popoverStyle
       // was {} and the popover painted unpositioned for a frame.
       this.$emit(val ? 'show' : 'hide');
+
+      // The viewport listeners live exactly as long as the panel is open: attached
+      // for the whole lifetime of the component they would re-measure a closed
+      // popover on every scroll event for nothing.
+      if (val) {
+        this.trackViewport();
+      } else {
+        this.releaseViewport();
+      }
     }
   },
   mounted() {
@@ -180,6 +221,7 @@ export default {
     document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
+    this.releaseViewport();
     document.removeEventListener('keydown', this.onKeydown);
     if (this.onEnter) this.$el.removeEventListener('mouseenter', this.onEnter);
     if (this.onEnter) this.$el.removeEventListener('focusin', this.onEnter);
@@ -198,8 +240,23 @@ export default {
       if (this.disabled) return;
       this.open = this.open ? false : true;
     },
+    trackViewport() {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+      window.addEventListener('scroll', this.onViewportChange, true);
+      window.addEventListener('resize', this.onViewportChange);
+    },
+    releaseViewport() {
+      if (typeof window === 'undefined') return;
+      window.removeEventListener('scroll', this.onViewportChange, true);
+      window.removeEventListener('resize', this.onViewportChange);
+    },
+    onViewportChange() {
+      this.updateTriggerRect();
+    },
     updateTriggerRect() {
-      const trigger = this.$el.querySelector('.ph-popover-trigger');
+      const trigger = this.$el.querySelector('[data-phui="popover-trigger"]');
       if (trigger) this.triggerRect = trigger.getBoundingClientRect();
     },
     onKeydown(event) {
