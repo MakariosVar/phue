@@ -18,23 +18,23 @@
 
     <template #demo>
       <ph-card v-if="showDemo">
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Gutters</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Gutters</ph-text>
         <ph-stack gap="sm" class="my-2">
           <ph-row v-for="g in ['0', '3', '5']" :key="g" :gutter="g" align="center">
             <ph-col span="6">
               <ph-box padding="xs" bg="light" border radius="md" style="text-align: center;">
-                <ph-text size="xs" color="muted">gutter="{{ g }}"</ph-text>
+                <ph-text size="xs" color="secondary">gutter="{{ g }}"</ph-text>
               </ph-box>
             </ph-col>
             <ph-col span="6">
               <ph-box padding="xs" bg="light" border radius="md" style="text-align: center;">
-                <ph-text size="xs" color="muted">gutter="{{ g }}"</ph-text>
+                <ph-text size="xs" color="secondary">gutter="{{ g }}"</ph-text>
               </ph-box>
             </ph-col>
           </ph-row>
         </ph-stack>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Cols — children auto-fill at equal widths</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Cols — children auto-fill at equal widths</ph-text>
         <ph-row :cols="{ cols: 1, md: 4 }" gutter="3" class="my-2">
           <ph-col v-for="n in 4" :key="n">
             <ph-box padding="sm" bg="primary" radius="md" style="text-align: center;">
@@ -43,13 +43,13 @@
           </ph-col>
         </ph-row>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Align &amp; justify</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Align &amp; justify</ph-text>
         <ph-row v-for="j in ['start', 'center', 'end']" :key="j" gutter="3" align="center" :justify="j" class="my-2">
           <ph-col span="4">
-            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">justify="{{ j }}"</ph-text></ph-box>
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="secondary">justify="{{ j }}"</ph-text></ph-box>
           </ph-col>
           <ph-col span="4">
-            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">2</ph-text></ph-box>
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="secondary">2</ph-text></ph-box>
           </ph-col>
         </ph-row>
       </ph-card>

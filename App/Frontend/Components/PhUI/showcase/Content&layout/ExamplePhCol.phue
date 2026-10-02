@@ -19,16 +19,16 @@
 
     <template #demo>
       <ph-card v-if="showDemo">
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Responsive spans — resize the window</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Responsive spans — resize the window</ph-text>
         <ph-row gutter="3" class="my-2">
           <ph-col v-for="n in 3" :key="`r${n}`" span="12" md="6" lg="4">
             <ph-box padding="sm" bg="light" border radius="md" style="text-align: center;">
-              <ph-text size="xs" color="muted">span=12 md=6 lg=4</ph-text>
+              <ph-text size="xs" color="secondary">span=12 md=6 lg=4</ph-text>
             </ph-box>
           </ph-col>
         </ph-row>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Auto width</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Auto width</ph-text>
         <ph-row gutter="3" align="end" class="my-2">
           <ph-col span="auto">
             <ph-box padding="sm" bg="primary" radius="md"><ph-text size="xs" color="inverse">span="auto"</ph-text></ph-box>
@@ -37,25 +37,25 @@
             <ph-box padding="sm" bg="secondary" radius="md"><ph-text size="xs" color="inverse">fits content</ph-text></ph-box>
           </ph-col>
           <ph-col>
-            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">bare → col (fills rest)</ph-text></ph-box>
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="secondary">bare → col (fills rest)</ph-text></ph-box>
           </ph-col>
         </ph-row>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Offset</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Offset</ph-text>
         <ph-row gutter="3" class="my-2">
           <ph-col span="4" offset="2">
             <ph-box padding="sm" bg="primary" radius="md"><ph-text size="xs" color="inverse">span=4 offset=2</ph-text></ph-box>
           </ph-col>
           <ph-col span="4" :offset="{ xs: 0, md: 2 }">
-            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">offset &#123; md: 2 &#125;</ph-text></ph-box>
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="secondary">offset &#123; md: 2 &#125;</ph-text></ph-box>
           </ph-col>
         </ph-row>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Order — markup stays 1-2-3, display does not</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Order — markup stays 1-2-3, display does not</ph-text>
         <ph-row gutter="3" class="my-2">
           <ph-col v-for="(label, i) in ['A', 'B', 'C']" :key="label" span="4" :order="3 - i">
             <ph-box padding="sm" bg="light" border radius="md" style="text-align: center;">
-              <ph-text size="xs" color="muted">{{ label }} → order={{ 3 - i }}</ph-text>
+              <ph-text size="xs" color="secondary">{{ label }} → order={{ 3 - i }}</ph-text>
             </ph-box>
           </ph-col>
         </ph-row>
@@ -105,7 +105,7 @@ export default {
 <!-- size to content, last cell soaks up the rest -->
 <ph-row align="end" gutter="3">
   <ph-col span="auto"><ph-button>Save</ph-button></ph-col>
-  <ph-col><ph-text size="sm" color="muted">…</ph-text></ph-col>
+  <ph-col><ph-text size="sm" color="secondary">…</ph-text></ph-col>
 </ph-row>
 
 <!-- indent and reorder -->

@@ -18,7 +18,7 @@
 
     <template #demo>
       <ph-card v-if="showDemo">
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Justify — main axis</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Justify — main axis</ph-text>
         <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
           <ph-box v-for="j in justifies" :key="j" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
             <ph-flex :justify="j" gap="xs">
@@ -26,22 +26,22 @@
               <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">2</ph-text></ph-box>
               <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">3</ph-text></ph-box>
             </ph-flex>
-            <ph-text size="xs" color="muted">{{ j }}</ph-text>
+            <ph-text size="xs" color="secondary">{{ j }}</ph-text>
           </ph-box>
         </ph-flex>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Align — cross axis</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Align — cross axis</ph-text>
         <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
           <ph-box v-for="a in aligns" :key="a" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
             <ph-flex :align="a" gap="xs" style="height: 60px;">
               <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">a</ph-text></ph-box>
               <ph-box padding="xs" bg="secondary" style="height: 40px;"><ph-text size="xs" color="inverse">b</ph-text></ph-box>
             </ph-flex>
-            <ph-text size="xs" color="muted">{{ a }}</ph-text>
+            <ph-text size="xs" color="secondary">{{ a }}</ph-text>
           </ph-box>
         </ph-flex>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Direction</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Direction</ph-text>
         <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
           <ph-box v-for="d in directions" :key="d" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
             <ph-flex :direction="d" gap="xs" justify="center" align="center" style="height: 72px;">
@@ -49,11 +49,11 @@
                 <ph-text as="span" size="xs" color="inverse">{{ n }}</ph-text>
               </ph-box>
             </ph-flex>
-            <ph-text as="span" size="xs" color="muted">{{ d }}</ph-text>
+            <ph-text as="span" size="xs" color="secondary">{{ d }}</ph-text>
           </ph-box>
         </ph-flex>
 
-        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Wrap</ph-text>
+        <ph-text class="mt-2" size="xs" weight="semibold" color="secondary">Wrap</ph-text>
         <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
           <ph-box v-for="w in ['nowrap', 'wrap']" :key="w" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
             <ph-flex :wrap="w" gap="xs" style="width: 90px;">
@@ -61,7 +61,7 @@
                 <ph-text as="span" size="xs" color="inverse">{{ n }}</ph-text>
               </ph-box>
             </ph-flex>
-            <ph-text as="span" size="xs" color="muted">{{ w }}</ph-text>
+            <ph-text as="span" size="xs" color="secondary">{{ w }}</ph-text>
           </ph-box>
         </ph-flex>
       </ph-card>
