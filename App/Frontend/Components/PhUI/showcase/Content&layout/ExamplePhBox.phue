@@ -19,13 +19,13 @@
       <ph-card v-if="showDemo">
         <div class="d-flex gap-3">
           <ph-box padding="lg" radius="lg" bg="success">
-            Surfaced, rounded box.
+            Success, lg radius.
             </ph-box>
           <ph-box padding="lg" radius="md" border bg="warning">
-            Surfaced, rounded box.
+            Warning, md radius.
           </ph-box>
           <ph-box padding="lg" radius="none" bg="danger">
-            Surfaced, rounded box.
+            Danger, no radius.
           </ph-box>
           <ph-box padding="lg" radius="full" border bg="surface">
             Surfaced, rounded box.
