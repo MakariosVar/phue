@@ -297,11 +297,22 @@ final class SsrKnownHashesTest extends TestCase
 
     public function testSidecarCacheMissForgetsHashesAndRetriesWithFullSource(): void
     {
+        $cache = new FileCache($this->cacheDir);
+        $components = $this->context(['PhButton' => 'AAA']);
+
+        // The hash the sidecar reports has to be one the engine can map back to a
+        // component. `context()` salts every source, so the hash is only knowable
+        // after the salt — a hardcoded one names nothing, and the engine then
+        // (correctly) refuses to re-send the whole map. That refusal is what the
+        // payload fix rests on, so it gets its own test below.
+        $missing = substr(hash('sha256', $components['components']['PhButton']), 0, 12);
+
         $cacheMiss = json_encode([
             'ok' => false,
             'error' => [
-                'code' => 'COMPILE_ERROR',
-                'message' => "Component hash 'abc123abc123' not found in sidecar cache and no source provided.",
+                'code' => 'CACHE_MISS',
+                'message' => "Component hash '{$missing}' not found in sidecar cache and no source provided.",
+                'missing' => [$missing],
             ],
         ], JSON_THROW_ON_ERROR);
 
@@ -309,9 +320,6 @@ final class SsrKnownHashesTest extends TestCase
             $cacheMiss,                                            // hash-only attempt, cold sidecar
             '{"ok":true,"html":"<div>recovered</div>"}',            // full-source retry succeeds
         ]);
-
-        $cache = new FileCache($this->cacheDir);
-        $components = $this->context(['PhButton' => 'AAA']);
 
         // Prime the cache so the first render is hash-only.
         (new BunSsrEngine(new RecordingSsrClient(), 512, $cache))->render('<ph-card />', [], $components);
@@ -325,6 +333,32 @@ final class SsrKnownHashesTest extends TestCase
             $client->fullSourceComponents(1),
             'The retry must re-transmit the source that the sidecar is missing.'
         );
+    }
+
+    public function testTheLegacyMessageOnlyCacheMissStillRecovers(): void
+    {
+        // The sidecar now answers with a `missing` array, but the message form is
+        // still parsed: an older sidecar paired with a newer engine must not fall
+        // back to "no SSR at all".
+        $cache = new FileCache($this->cacheDir);
+        $components = $this->context(['PhButton' => 'AAA']);
+        $missing = substr(hash('sha256', $components['components']['PhButton']), 0, 12);
+
+        $client = new RecordingSsrClient([
+            json_encode([
+                'ok' => false,
+                'error' => [
+                    'code' => 'COMPILE_ERROR',
+                    'message' => "Component hash '{$missing}' not found in sidecar cache and no source provided.",
+                ],
+            ], JSON_THROW_ON_ERROR),
+            '{"ok":true,"html":"<div>recovered</div>"}',
+        ]);
+
+        $html = (new BunSsrEngine($client, 512, $cache))->render('<ph-card />', [], $components);
+
+        $this->assertSame('<div>recovered</div>', $html);
+        $this->assertSame(['PhButton'], $client->fullSourceComponents(1));
     }
 
     public function testSidecarCacheMissRecoveryIsBoundedToASingleRetry(): void
@@ -386,16 +420,18 @@ final class SsrKnownHashesTest extends TestCase
 
     public function testHashesAreForgottenAfterAFailedCacheMissRecovery(): void
     {
+        $cache = new FileCache($this->cacheDir);
+        $components = $this->context(['PhButton' => 'AAA']);
+        $missing = substr(hash('sha256', $components['components']['PhButton']), 0, 12);
+
         $cacheMiss = json_encode([
             'ok' => false,
             'error' => [
-                'code' => 'COMPILE_ERROR',
-                'message' => "Component hash 'abc123abc123' not found in sidecar cache and no source provided.",
+                'code' => 'CACHE_MISS',
+                'message' => "Component hash '{$missing}' not found in sidecar cache and no source provided.",
+                'missing' => [$missing],
             ],
         ], JSON_THROW_ON_ERROR);
-
-        $cache = new FileCache($this->cacheDir);
-        $components = $this->context(['PhButton' => 'AAA']);
 
         (new BunSsrEngine(new RecordingSsrClient(), 512, $cache))->render('<ph-card />', [], $components);
 
@@ -410,6 +446,44 @@ final class SsrKnownHashesTest extends TestCase
             $next->fullSourceComponents(0),
             'Once the sidecar is known to be missing a hash, that hash must be evicted from PSR-16 — otherwise every '
             . 'subsequent request pays a doomed hash-only round trip before the retry.'
+        );
+    }
+
+    public function testAnUnmappableCacheMissDoesNotEvictTheWholeComponentMap(): void
+    {
+        // The eviction has to be surgical. Wiping every hash on one cache-miss is
+        // what made the next request re-send the entire component map — the 2.16 MB
+        // payload that broke the showcase page. A miss naming a hash we do not own
+        // must therefore evict nothing.
+        $cache = new FileCache($this->cacheDir);
+        $components = $this->context(['PhButton' => 'AAA', 'PhCard' => 'BBB']);
+
+        (new BunSsrEngine(new RecordingSsrClient(), 512, $cache))->render('<ph-card />', [], $components);
+
+        $unmappable = new RecordingSsrClient([
+            json_encode([
+                'ok' => false,
+                'error' => [
+                    'code' => 'CACHE_MISS',
+                    // A hash belonging to a component we never sent.
+                    'message' => "Component hash 'ffffffffffff' not found in sidecar cache and no source provided.",
+                    'missing' => ['ffffffffffff'],
+                ],
+            ], JSON_THROW_ON_ERROR),
+            '{"ok":true,"html":"<div>unreachable</div>"}',
+        ]);
+
+        $html = (new BunSsrEngine($unmappable, 512, $cache))->render('<ph-card />', [], $components);
+
+        $next = new RecordingSsrClient();
+        (new BunSsrEngine($next, 512, $cache))->render('<ph-card />', [], $components);
+
+        $this->assertNull($html, 'An unmappable hash must not trigger a full re-send.');
+        $this->assertSame(
+            [],
+            $next->fullSourceComponents(0),
+            'A miss we cannot attribute must evict nothing — a blanket eviction would make '
+            . 'the following request pay for the whole component map again.'
         );
     }
 
@@ -517,9 +591,19 @@ final class SsrKnownHashesTest extends TestCase
 
     public function testHashOnlyEnvelopeIsAtLeastAnOrderOfMagnitudeSmaller(): void
     {
+        // Measured on the DECODED bodies, because that is the property the cache
+        // buys: after a successful render the sidecar already holds the sources, so
+        // only a hash per component has to travel.
+        //
+        // The fixture is JavaScript-shaped, not `str_repeat('x', 10_000)`: a single
+        // repeated character gzips by three orders of magnitude, which made the
+        // wire-size ratio collapse and turned this test into a measurement of zlib
+        // rather than of the cache. Real component source compresses about 6x, and
+        // that is the ratio the fixture has to reproduce.
         $components = [];
         for ($i = 0; $i < 47; $i++) {
-            $components['ExamplePhDemo' . $i] = str_repeat('x', 10_000);
+            $line = 'export const __phueTemplate = "<div class=\"row g-' . $i . '\">' . $i . '</div>";';
+            $components['ExamplePhDemo' . $i] = str_repeat($line . "\n", 170);
         }
 
         $context = $this->context($components);
@@ -531,16 +615,32 @@ final class SsrKnownHashesTest extends TestCase
         $second = new RecordingSsrClient();
         (new BunSsrEngine($second, 512, $cache))->render('<ph-card />', [], $context);
 
-        $this->assertLessThan(
+        $fullDecoded = strlen($warm->decodedBody(0));
+        $hashOnlyDecoded = strlen($second->decodedBody(0));
+
+        $this->assertGreaterThan(
             524_288,
-            $warm->payloadSize(0),
+            $fullDecoded,
             'The shaping fixture must reproduce a payload the 512 KB cap would reject — otherwise this test proves nothing.'
         );
         $this->assertLessThan(
-            $warm->payloadSize(0) / 10,
-            $second->payloadSize(0),
+            $fullDecoded / 10,
+            $hashOnlyDecoded,
             'A hash-only envelope must be at least 10x smaller than the full-source one. On the real PhUI page the '
             . 'measured ratio is 37x (512.1 KB -> 13.9 KB).'
+        );
+
+        // And the wire comparison still holds after compression, which is what
+        // actually crosses a limit at runtime.
+        $this->assertLessThan(
+            $warm->payloadSize(0),
+            $second->payloadSize(0),
+            'the hash-only dispatch must also be smaller on the wire'
+        );
+        $this->assertLessThanOrEqual(
+            524_288,
+            $second->payloadSize(0),
+            'the warm dispatch must fit the cap without relying on compression'
         );
     }
 

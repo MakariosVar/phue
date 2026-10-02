@@ -49,18 +49,44 @@ final class RecordingSsrClient implements SsrClient
     public array $envelopes = [];
 
     /**
+     * Request headers of every dispatch, parallel to $payloads.
+     *
+     * Recorded because the compression contract is *about the headers*: an engine
+     * that gzips the body without announcing `Content-Encoding` produces a payload
+     * the sidecar cannot read, and every other assertion in the suite still passes.
+     *
+     * @var list<array<string, string>>
+     */
+    public array $headers = [];
+
+    /**
      * @param list<string|null> $script Responses to hand back, in order.
      */
     public function __construct(private array $script = ['{"ok":true,"html":"<div>ok</div>"}'])
     {
     }
 
-    public function send(string $method = 'POST', string $path = '/v1/render', string $payload = ''): ?string
-    {
+    public function send(
+        string $method = 'POST',
+        string $path = '/v1/render',
+        string $payload = '',
+        array $headers = []
+    ): ?string {
         $this->payloads[] = $payload;
         $this->paths[] = $path;
+        $this->headers[] = $headers;
 
-        $decoded = json_decode($payload, true);
+        // A compressed body is not JSON, so decode what the sidecar would see.
+        $wire = $payload;
+        $encoding = strtolower((string) ($headers['Content-Encoding'] ?? ''));
+        if ($encoding === 'gzip') {
+            $inflated = @gzdecode($payload);
+            if ($inflated !== false) {
+                $wire = $inflated;
+            }
+        }
+
+        $decoded = json_decode($wire, true);
         $this->envelopes[] = is_array($decoded) ? $decoded : [];
 
         $index = count($this->payloads) - 1;
@@ -93,6 +119,43 @@ final class RecordingSsrClient implements SsrClient
     public function payloadSize(int $index): int
     {
         return strlen($this->payloads[$index] ?? '');
+    }
+
+    /**
+     * Headers sent with the nth dispatch (0-indexed).
+     *
+     * @return array<string, string>
+     */
+    public function sentHeaders(int $index): array
+    {
+        return $this->headers[$index] ?? [];
+    }
+
+    /**
+     * The body the sidecar would have decoded for the nth dispatch — inflated when
+     * the dispatch was gzipped, verbatim otherwise.
+     */
+    public function decodedBody(int $index): string
+    {
+        $payload = $this->payloads[$index] ?? '';
+        $encoding = strtolower((string) ($this->headers[$index]['Content-Encoding'] ?? ''));
+
+        if ($encoding === 'gzip') {
+            $inflated = @gzdecode($payload);
+            if ($inflated !== false) {
+                return $inflated;
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * True when the nth dispatch announced a compressed body.
+     */
+    public function wasCompressed(int $index): bool
+    {
+        return strtolower((string) ($this->headers[$index]['Content-Encoding'] ?? '')) === 'gzip';
     }
 
     /**

@@ -20,8 +20,9 @@ interface SsrClient
      * @param string $path Target URI path (e.g., '/v1/render', '/v1/health').
      * @param string $payload Raw request body string.
      * @return string|null Raw response body string on success, or null on failure.
+     * @param array<string, string> $headers Additional HTTP headers to include in requests.
      */
-    public function send(string $method = 'POST', string $path = '/v1/render', string $payload = ''): ?string;
+    public function send(string $method = 'POST', string $path = '/v1/render', string $payload = '', array $headers = []): ?string;
 
     /**
      * Check whether the transport channel to the SSR service is available.

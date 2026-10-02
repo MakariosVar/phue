@@ -29,6 +29,14 @@ const CACHE_DIR = join(import.meta.dir, ".cache");
 // In-memory cache: hash -> module namespace object
 const moduleCache = new Map<string, any>();
 
+// Stub module returned when a component is missing so execution continues without throwing
+const STUB_MODULE = {
+    default: { render: () => null },
+    __phueSsrRender: () => null,
+    __phueRender: () => null,
+    __phueTemplate: "",
+};
+
 // Ensure temporary cache directory exists for module imports
 try {
     mkdirSync(CACHE_DIR, { recursive: true });
@@ -37,11 +45,35 @@ try {
 }
 
 /**
+ * Helper to parse JSON payload with optional gzip/deflate decompression.
+ */
+async function parseJsonPayload<T>(req: Request): Promise<T> {
+    const encoding = req.headers.get("content-encoding")?.toLowerCase();
+
+    if (encoding === "gzip") {
+        const arrayBuffer = await req.arrayBuffer();
+        const decompressed = Bun.gunzipSync(new Uint8Array(arrayBuffer));
+        const text = new TextDecoder().decode(decompressed);
+        return JSON.parse(text) as T;
+    }
+
+    if (encoding === "deflate") {
+        const arrayBuffer = await req.arrayBuffer();
+        const decompressed = Bun.inflateSync(new Uint8Array(arrayBuffer));
+        const text = new TextDecoder().decode(decompressed);
+        return JSON.parse(text) as T;
+    }
+
+    return (await req.json()) as T;
+}
+
+/**
  * Resolves a module from an exact source or pre-computed hash.
  * If source 's' is provided, compiles/caches it atomically under hash 'h'.
  * If only hash 'h' is provided, resolves from in-memory cache or disk.
+ * Accepts an optional missingHashes Set to collect misses instead of throwing instantly.
  */
-async function resolveModule(entry: ComponentEntry | string) {
+async function resolveModule(entry: ComponentEntry | string, missingHashes?: Set<string>) {
     let hash: string;
     let source: string | undefined;
 
@@ -68,6 +100,10 @@ async function resolveModule(entry: ComponentEntry | string) {
             renameSync(tempPath, filePath);
         }
     } else if (!existsSync(filePath)) {
+        if (missingHashes) {
+            missingHashes.add(hash);
+            return STUB_MODULE;
+        }
         throw new Error(`Component hash '${hash}' not found in sidecar cache and no source provided.`);
     }
 
@@ -98,7 +134,7 @@ Bun.serve({
         "/v1/compile-template": {
             async POST(req: Request) {
                 try {
-                    const payload = (await req.json()) as CompilePayload;
+                    const payload = await parseJsonPayload<CompilePayload>(req);
 
                     if (!payload || typeof payload.template !== "string") {
                         return Response.json(
@@ -125,7 +161,7 @@ Bun.serve({
         "/v1/render": {
             async POST(req: Request) {
                 try {
-                    const payload = (await req.json()) as RenderPayload;
+                    const payload = await parseJsonPayload<RenderPayload>(req);
 
                     if (!payload || typeof payload.template !== "string") {
                         return Response.json(
@@ -141,11 +177,14 @@ Bun.serve({
                         );
                     }
 
+                    // Context Set for collecting all missing hashes during render invocation
+                    const missingHashes = new Set<string>();
+
                     let app: any;
 
                     if (payload.components && payload.components["PhNavigation"]) {
                         const rawNav = payload.components["PhNavigation"];
-                        const mod = await resolveModule(rawNav);
+                        const mod = await resolveModule(rawNav, missingHashes);
 
                         const rootComponent: any = {
                             ...(mod.default || {}),
@@ -170,7 +209,7 @@ Bun.serve({
 
                     if (payload.components && typeof payload.components === "object") {
                         for (const [name, rawEntry] of Object.entries(payload.components)) {
-                            const mod = await resolveModule(rawEntry);
+                            const mod = await resolveModule(rawEntry, missingHashes);
 
                             const definition: any = {
                                 ...(mod.default || {}),
@@ -185,6 +224,19 @@ Bun.serve({
 
                             app.component(name, definition);
                         }
+                    }
+
+                    // If missing hashes are found, return immediately with the complete list without calling renderToString
+                    if (missingHashes.size > 0) {
+                        const missingArray = Array.from(missingHashes);
+                        return Response.json({
+                            ok: false,
+                            error: {
+                                code: "CACHE_MISS",
+                                message: `Component hashes not found in sidecar cache: ${missingArray.map(h => `'${h}'`).join(", ")}`,
+                                missing: missingArray,
+                            },
+                        });
                     }
 
                     const html = await renderToString(app);

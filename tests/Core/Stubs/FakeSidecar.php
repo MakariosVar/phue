@@ -85,7 +85,7 @@ final class FakeSidecar
         [$head, $body] = $this->splitRequest($request);
         [$method, $path] = $this->parseStartLine($head);
 
-        $response = $this->resolve($method, $path, $body);
+        $response = $this->resolve($method, $path, $body, $head);
 
         fwrite($client, $response);
         fclose($client);
@@ -151,6 +151,41 @@ final class FakeSidecar
     }
 
     /**
+     * Decodes a request body the way ssr/server.ts does, honouring Content-Encoding.
+     *
+     * This exists because the double's job is to BE the sidecar at the transport
+     * level. server.ts grew `parseJsonPayload()` when the engine started
+     * compressing; without this, the double kept accepting plain JSON only and the
+     * wire spec passed while the real sidecar returned
+     * `JSON Parse error: Unrecognized token`. A double that has drifted from what
+     * it doubles is worse than no double — it reports green for a broken protocol.
+     */
+    private function decodeBody(string $head, string $body): ?array
+    {
+        $encoding = '';
+
+        if (preg_match('/^Content-Encoding:\s*(\S+)\s*$/mi', $head, $matches) === 1) {
+            $encoding = strtolower($matches[1]);
+        }
+
+        $text = $body;
+
+        if ($encoding === 'gzip' || $encoding === 'deflate') {
+            $inflated = $encoding === 'gzip' ? @gzdecode($body) : @gzinflate($body);
+
+            if ($inflated === false) {
+                return null;
+            }
+
+            $text = $inflated;
+        }
+
+        $decoded = json_decode($text, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
      * Extracts method and path from the HTTP status line.
      *
      * @return array{0: string, 1: string}
@@ -172,10 +207,11 @@ final class FakeSidecar
      * @param string      $method HTTP method.
      * @param string      $path   Request path.
      * @param string|null $body   Raw request body, if any.
+     * @param string      $head   Raw request head, for Content-Encoding.
      *
      * @return string Full HTTP/1.1 response string.
      */
-    private function resolve(string $method, string $path, ?string $body): string
+    private function resolve(string $method, string $path, ?string $body, string $head = ''): string
     {
         if ($method === 'GET' && $path === '/v1/health') {
             return $this->http(
@@ -191,7 +227,7 @@ final class FakeSidecar
             );
         }
 
-        $payload = json_decode((string) $body, true);
+        $payload = $this->decodeBody($head, (string) $body);
 
         if (!is_array($payload) || !isset($payload['template']) || !is_string($payload['template'])) {
             return $this->http(

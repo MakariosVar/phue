@@ -220,16 +220,20 @@ final class ComponentSsrTest extends TestCase
             . '/*' . bin2hex(random_bytes(8)) . '*/';
 
         $context = ['components' => ['PhButton' => $source]];
+        $hash = substr(hash('sha256', $source), 0, 12);
         $cache = new FileCache($this->hashCacheDir());
 
+        // Seed the belief that the sidecar already holds this hash, so the first
+        // dispatch is hash-only — the exact situation the recovery path exists for.
         (new BunSsrEngine(new ScriptedSsrClient(['{"ok":true,"html":"<div>ok</div>"}']), 512, $cache))
             ->render(template: '<div><ph-button /></div>', state: [], context: $context);
 
         $cacheMiss = json_encode([
             'ok' => false,
             'error' => [
-                'code' => 'COMPILE_ERROR',
-                'message' => 'Component hash \'x\' not found in sidecar cache and no source provided.',
+                'code' => 'CACHE_MISS',
+                'message' => "Component hash '{$hash}' not found in sidecar cache and no source provided.",
+                'missing' => [$hash],
             ],
         ], JSON_THROW_ON_ERROR);
 
@@ -247,6 +251,41 @@ final class ComponentSsrTest extends TestCase
             ['PhButton'],
             $client->fullSourceComponents(1),
             'The retry must carry the source the sidecar is missing.'
+        );
+    }
+
+    public function testEngineGivesUpRatherThanReSendingEverythingWhenAHashCannotBeMapped(): void
+    {
+        // The narrowing the 2 MB payload fix rests on: when the sidecar names a
+        // hash the engine cannot map back to a component, re-sending the whole
+        // component map is exactly the 2.1 MB blow-up that broke the showcase
+        // page. Giving up (and letting the caller degrade to client-side render)
+        // is the correct trade, and this test is what keeps the old behaviour
+        // from creeping back in as a "helpful" fallback.
+        $source = 'export default {};' . '/*' . bin2hex(random_bytes(8)) . '*/';
+        $context = ['components' => ['PhButton' => $source]];
+
+        $client = new ScriptedSsrClient([
+            json_encode([
+                'ok' => false,
+                'error' => [
+                    'code' => 'CACHE_MISS',
+                    // A hash belonging to nothing we sent.
+                    'message' => "Component hash 'ffffffffffff' not found in sidecar cache and no source provided.",
+                    'missing' => ['ffffffffffff'],
+                ],
+            ], JSON_THROW_ON_ERROR),
+            '{"ok":true,"html":"<div>must not be reached</div>"}',
+        ]);
+
+        $html = (new BunSsrEngine($client, 512, null))
+            ->render(template: '<div><ph-button /></div>', state: [], context: $context);
+
+        $this->assertNull($html, 'An unmappable hash must not trigger a full re-send.');
+        $this->assertSame(
+            1,
+            $client->dispatchCount(),
+            'A second dispatch here would re-send every component source — the 2.1 MB path.'
         );
     }
 
@@ -382,9 +421,27 @@ final class RecordingSsrClient implements SsrClient
         $this->response = $response;
     }
 
-    public function send(string $method = 'POST', string $path = '/v1/render', string $payload = ''): ?string
-    {
-        $decoded = json_decode($payload, true);
+    /**
+     * `$headers` is declared so this double satisfies the interface once the engine
+     * passes a Content-Encoding. A gzipped body is inflated first, because the
+     * engine compresses anything above its threshold and `json_decode` on the wire
+     * bytes would silently yield an empty envelope.
+     */
+    public function send(
+        string $method = 'POST',
+        string $path = '/v1/render',
+        string $payload = '',
+        array $headers = []
+    ): ?string {
+        $wire = $payload;
+        if (strtolower((string) ($headers['Content-Encoding'] ?? '')) === 'gzip') {
+            $inflated = @gzdecode($payload);
+            if ($inflated !== false) {
+                $wire = $inflated;
+            }
+        }
+
+        $decoded = json_decode($wire, true);
 
         if (is_array($decoded)) {
             $this->payloads[] = $decoded;

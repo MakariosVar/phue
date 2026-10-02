@@ -28,7 +28,7 @@ class UnixSsrClient implements SsrClient
         private string $socket = "\0phue-ssr",
         private int $connectTimeoutMs = 200,
         private int $timeoutMs = 500,
-        private string $hostHeader = 'phue-ssr'
+        private string $hostHeader = 'phue-ssr',
     ) {}
 
     /**
@@ -37,10 +37,15 @@ class UnixSsrClient implements SsrClient
      * @param string $method HTTP Method (GET, POST, etc.)
      * @param string $path Target URI path (e.g., /v1/render, /v1/health)
      * @param string $payload Request body payload.
+     * @param array<string, string> $headers Additional HTTP headers to include in the request.
      * @return string|null Response content body string, or null on error/timeout.
      */
-    public function send(string $method = 'POST', string $path = '/v1/render', string $payload = ''): ?string
-    {
+    public function send(
+        string $method = 'POST', 
+        string $path = '/v1/render', 
+        string $payload = '', 
+        array $headers = []
+    ): ?string {
         try {
             $connectTimeoutSec = $this->connectTimeoutMs / 1000.0;
 
@@ -61,10 +66,19 @@ class UnixSsrClient implements SsrClient
             $microseconds = ($this->timeoutMs % 1000) * 1000;
             stream_set_timeout($client, $seconds, $microseconds);
 
-            // Construct HTTP/1.1 Request with custom path & Host header
+            // Construct HTTP/1.1 Request in order: Request Line -> Host -> Content-Type -> Custom Headers -> Content-Length -> Connection
             $request  = "{$method} {$path} HTTP/1.1\r\n";
             $request .= "Host: {$this->hostHeader}\r\n";
             $request .= "Content-Type: application/json\r\n";
+
+            // Append custom headers with header injection protection (\r and \n stripping)
+            foreach ($headers as $name => $value) {
+                $cleanName  = str_replace(["\r", "\n"], '', (string) $name);
+                $cleanValue = str_replace(["\r", "\n"], '', (string) $value);
+                $request   .= "{$cleanName}: {$cleanValue}\r\n";
+            }
+
+            // Calculate Content-Length based on final payload size (compressed or raw)
             $request .= "Content-Length: " . strlen($payload) . "\r\n";
             $request .= "Connection: close\r\n\r\n";
             $request .= $payload;
@@ -107,10 +121,10 @@ class UnixSsrClient implements SsrClient
                 return null;
             }
 
-            [$headers, $body] = $parts;
+            [$responseHeaders, $body] = $parts;
 
-            // Check HTTP status code (must be 200 OK)
-            if (preg_match('#^HTTP/1\.[01]\s+(\d+)#i', $headers, $matches)) {
+            // Check HTTP status code (must be 200 OK or acceptable error response)
+            if (preg_match('#^HTTP/1\.[01]\s+(\d+)#i', $responseHeaders, $matches)) {
                 $statusCode = (int) $matches[1];
                 
                 // Allow non-200 responses if they contain a valid JSON error payload (e.g., 413, 400, 500)
@@ -120,7 +134,7 @@ class UnixSsrClient implements SsrClient
             }
 
             // Enforce exact body size parsing if Content-Length header is present
-            if (preg_match('/Content-Length:\s*(\d+)/i', $headers, $matches)) {
+            if (preg_match('/Content-Length:\s*(\d+)/i', $responseHeaders, $matches)) {
                 $contentLength = (int) $matches[1];
                 return substr($body, 0, $contentLength);
             }
