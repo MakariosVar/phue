@@ -14,41 +14,51 @@
     </template>
     <template #demo>
         <ph-card v-if="showDemo">
-          <!-- Date only, bounded -->
-          <ph-date-picker
-            v-model="dueOn"
-            :label="`Due date` + (dueOn ? ` (${dueOn})` : '')"
-            mode="date" 
-            in="2026-01-01"
-            max="2026-12-31"
-            helper-text="Within the current year."
-            class="mb-3"
-          />
+          <ph-row>
+            <ph-col span="6">
+              <!-- Date only, bounded -->
+              <ph-date-picker
+                v-model="dueOn"
+                :label="`Due date` + (dueOn ? ` (${dueOn})` : '')"
+                mode="date" 
+                in="2026-01-01"
+                max="2026-12-31"
+                helper-text="Within the current year."
+                class="mb-3"
+              />
+            </ph-col>
 
-          <!-- Date + time + Sunday first -->
-          <ph-date-picker
-            v-model="startsAt"
-            :label="`Starts at` + (startsAt ? ` (${startsAt})` : '')"
-            class="mb-3"
-            :week-start="0"
-            mode="datetime"
-          />
+            <ph-col span="6">
+              <!-- Date + time + Sunday first -->
+              <ph-date-picker
+                v-model="startsAt"
+                :label="`Starts at` + (startsAt ? ` (${startsAt})` : '')"
+                class="mb-3"
+                :week-start="0"
+                mode="datetime"
+              />
+            </ph-col>
 
-          <!-- Native input -->
-          <ph-date-picker
-            v-model="publishedOn"
-            :label="`Native Picker` + (publishedOn ? ` (${publishedOn})` : '')"
-            class="mb-3"
-            native
-          />
+            <ph-col span="6">
+              <!-- Native input -->
+              <ph-date-picker
+                v-model="publishedOn"
+                :label="`Native Picker` + (publishedOn ? ` (${publishedOn})` : '')"
+                class="mb-3"
+                native
+              />
+            </ph-col>
 
-          <!-- Disabled and invalid input, -->
-          <ph-date-picker
-            v-model="publishedAt"
-            :label="`Native Picker` + (publishedAt ? ` (${publishedAt})` : '')"
-            disabled
-            :error="`Invalid date`"
-          />
+            <ph-col span="6">
+              <!-- Disabled and invalid input, -->
+              <ph-date-picker
+                v-model="publishedAt"
+                :label="`Native Picker` + (publishedAt ? ` (${publishedAt})` : '')"
+                disabled
+                :error="`Invalid date`"
+              />
+            </ph-col>
+          </ph-row>
         </ph-card>
     </template>
     <template #snippet>
