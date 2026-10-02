@@ -1,0 +1,157 @@
+<template>
+  <example-factory
+    tag="<ph-col />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Bootstrap 12-column grid column. span is <b>cumulative</b> with
+        breakpoint props — <code>span="12"</code> <code>md="6"</code>
+        renders <code>col-12</code> <code>col-md-6</code>.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Responsive spans — resize the window</ph-text>
+        <ph-row gutter="3" class="my-2">
+          <ph-col v-for="n in 3" :key="`r${n}`" span="12" md="6" lg="4">
+            <ph-box padding="sm" bg="light" border radius="md" style="text-align: center;">
+              <ph-text size="xs" color="muted">span=12 md=6 lg=4</ph-text>
+            </ph-box>
+          </ph-col>
+        </ph-row>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Auto width</ph-text>
+        <ph-row gutter="3" align="end" class="my-2">
+          <ph-col span="auto">
+            <ph-box padding="sm" bg="primary" radius="md"><ph-text size="xs" color="inverse">span="auto"</ph-text></ph-box>
+          </ph-col>
+          <ph-col span="auto">
+            <ph-box padding="sm" bg="secondary" radius="md"><ph-text size="xs" color="inverse">fits content</ph-text></ph-box>
+          </ph-col>
+          <ph-col>
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">bare → col (fills rest)</ph-text></ph-box>
+          </ph-col>
+        </ph-row>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Offset</ph-text>
+        <ph-row gutter="3" class="my-2">
+          <ph-col span="4" offset="2">
+            <ph-box padding="sm" bg="primary" radius="md"><ph-text size="xs" color="inverse">span=4 offset=2</ph-text></ph-box>
+          </ph-col>
+          <ph-col span="4" :offset="{ xs: 0, md: 2 }">
+            <ph-box padding="sm" bg="light" border radius="md"><ph-text size="xs" color="muted">offset &#123; md: 2 &#125;</ph-text></ph-box>
+          </ph-col>
+        </ph-row>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Order — markup stays 1-2-3, display does not</ph-text>
+        <ph-row gutter="3" class="my-2">
+          <ph-col v-for="(label, i) in ['A', 'B', 'C']" :key="label" span="4" :order="3 - i">
+            <ph-box padding="sm" bg="light" border radius="md" style="text-align: center;">
+              <ph-text size="xs" color="muted">{{ label }} → order={{ 3 - i }}</ph-text>
+            </ph-box>
+          </ph-col>
+        </ph-row>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          <code>span</code> + breakpoint props accumulate, so <code>&lt;ph-col span="12" md="6" lg="4"&gt;</code>
+          yields <code>col-12 col-md-6 col-lg-4</code>. <code>cols</code> is the object form of the same
+          set and can be combined with bare <code>span</code>. <code>offset</code> / <code>order</code> accept scalars,
+          "auto", or breakpoint objects (<code>offset-{md}-*</code>, <code>order-{md}-*</code>).
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhCol",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<!-- full width on phones, half on md, a third on lg -->
+<ph-row gutter="3">
+  <ph-col span="12" md="6" lg="4">
+    <ph-box padding="sm" bg="light" border>Chart</ph-box>
+  </ph-col>
+  <ph-col span="12" md="6" lg="4">
+    <ph-box padding="sm" bg="light" border>Table</ph-box>
+  </ph-col>
+</ph-row>
+
+<!-- size to content, last cell soaks up the rest -->
+<ph-row align="end" gutter="3">
+  <ph-col span="auto"><ph-button>Save</ph-button></ph-col>
+  <ph-col><ph-text size="sm" color="muted">…</ph-text></ph-col>
+</ph-row>
+
+<!-- indent and reorder -->
+<ph-row gutter="3">
+  <ph-col span="4" offset="2">indented</ph-col>
+  <ph-col span="4" :offset="{ xs: 0, md: 2 }">indented from md up</ph-col>
+</ph-row>`,
+      propsData: [
+        {
+          name: "tag",
+          type: "String",
+          default: "'div'",
+          notes: "Host element",
+        },
+        {
+          name: "span",
+          type: "String | Number | Boolean",
+          default: "null",
+          notes: "Base col-*; bare attr → col, \"auto\" → col-auto",
+        },
+        {
+          name: "xs…xxl",
+          type: "String | Boolean",
+          default: "null",
+          notes: "sm | md | lg | xl | xxl → col-md-*; bare → auto, \"auto\" → col-md-auto",
+        },
+        {
+          name: "cols",
+          type: "Object",
+          default: "{}",
+          notes: "Per-breakpoint spans, xs as base key ({ xs: 12, md: 6 } → col-12 col-md-6)",
+        },
+        {
+          name: "offset",
+          type: "String | Number | Object",
+          default: "null",
+          notes: "offset-*; per-breakpoint via object (xs base key, 0→offset-0)",
+        },
+        {
+          name: "order",
+          type: "String | Number | Object",
+          default: "null",
+          notes: "order-*; per-breakpoint via object, xs base key",
+        }
+      ]
+    };
+  }
+};
+</script>
