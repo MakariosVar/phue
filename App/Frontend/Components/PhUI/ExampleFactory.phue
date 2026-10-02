@@ -14,13 +14,15 @@
           <code>{{ tag }}</code>
         </h4>
         <div class="d-flex gap-2">
-          <ph-button
-            @click="toggleCode"
-            size="sm"
-            :variant="showCode ? 'secondary' : 'outline-secondary'"
-          >
-            Code
-          </ph-button>
+          <ph-tooltip content="Toggle Code.">
+            <ph-button
+              @click="toggleCode"
+              size="sm"
+              :variant="showCode ? 'secondary' : 'outline-secondary'"
+            >
+              <ph-icon name="code-slash" size="40" />
+            </ph-button>
+          </ph-tooltip>
         </div>
       </div>
       <slot name="description"></slot>
