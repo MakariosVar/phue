@@ -1,0 +1,156 @@
+<template>
+  <example-factory
+    tag="<ph-flex />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Full flex container via props — <code>direction</code>, <code>justify</code>,
+        <code>align</code>, <code>wrap</code> and <code>gap</code> map to flexbox.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Justify — main axis</ph-text>
+        <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
+          <ph-box v-for="j in justifies" :key="j" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
+            <ph-flex :justify="j" gap="xs">
+              <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">1</ph-text></ph-box>
+              <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">2</ph-text></ph-box>
+              <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">3</ph-text></ph-box>
+            </ph-flex>
+            <ph-text size="xs" color="muted">{{ j }}</ph-text>
+          </ph-box>
+        </ph-flex>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Align — cross axis</ph-text>
+        <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
+          <ph-box v-for="a in aligns" :key="a" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
+            <ph-flex :align="a" gap="xs" style="height: 60px;">
+              <ph-box padding="xs" bg="primary"><ph-text size="xs" color="inverse">a</ph-text></ph-box>
+              <ph-box padding="xs" bg="secondary" style="height: 40px;"><ph-text size="xs" color="inverse">b</ph-text></ph-box>
+            </ph-flex>
+            <ph-text size="xs" color="muted">{{ a }}</ph-text>
+          </ph-box>
+        </ph-flex>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Direction</ph-text>
+        <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
+          <ph-box v-for="d in directions" :key="d" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
+            <ph-flex :direction="d" gap="xs" justify="center" align="center" style="height: 72px;">
+              <ph-box v-for="n in 2" :key="n" padding="none" :bg="n === 1 ? 'primary' : 'secondary'" style="width: 34px; height: 22px; display: flex; align-items: center; justify-content: center;">
+                <ph-text as="span" size="xs" color="inverse">{{ n }}</ph-text>
+              </ph-box>
+            </ph-flex>
+            <ph-text as="span" size="xs" color="muted">{{ d }}</ph-text>
+          </ph-box>
+        </ph-flex>
+
+        <ph-text class="mt-2" size="xs" weight="semibold" color="muted">Wrap</ph-text>
+        <ph-flex wrap="wrap" gap="sm" align="flex-start" class="my-2">
+          <ph-box v-for="w in ['nowrap', 'wrap']" :key="w" padding="sm" bg="light" border radius="md" style="flex: 1 1 140px;">
+            <ph-flex :wrap="w" gap="xs" style="width: 90px;">
+              <ph-box v-for="n in 4" :key="n" padding="none" :bg="w === 'nowrap' ? 'primary' : 'success'" style="width: 24px; height: 22px; display: flex; align-items: center; justify-content: center;">
+                <ph-text as="span" size="xs" color="inverse">{{ n }}</ph-text>
+              </ph-box>
+            </ph-flex>
+            <ph-text as="span" size="xs" color="muted">{{ w }}</ph-text>
+          </ph-box>
+        </ph-flex>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhFlex",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<!-- toolbar: push the last action to the right -->
+<ph-flex justify="space-between" align="center" gap="sm">
+  <ph-text weight="semibold">Settings</ph-text>
+  <ph-button variant="primary">Save</ph-button>
+</ph-flex>
+
+<!-- centered stack -->
+<ph-flex direction="column" align="center" justify="center" gap="sm">
+  <ph-box padding="md" bg="light" border radius="md">...</ph-box>
+</ph-flex>
+
+<!-- responsive row that wraps -->
+<ph-flex wrap="wrap" gap="sm" align="center">
+  <ph-box v-for="item in items" :key="item.id" padding="sm" bg="light" border>
+    <ph-text size="sm">{{ item.label }}</ph-text>
+  </ph-box>
+</ph-flex>`,
+      directions: ['row', 'row-reverse', 'column', 'column-reverse'],
+      justifies: [
+        'flex-start',
+        'center',
+        'flex-end',
+        'space-between',
+        'space-around',
+        'space-evenly'
+      ],
+      aligns: ['stretch', 'flex-start', 'center', 'flex-end', 'baseline'],
+      propsData: [
+        {
+          name: "direction",
+          type: "String",
+          default: "'row'",
+          notes: "row | row-reverse | column | column-reverse",
+        },
+        {
+          name: "wrap",
+          type: "String",
+          default: "'nowrap'",
+          notes: "nowrap | wrap | wrap-reverse",
+        },
+        {
+          name: "align",
+          type: "String",
+          default: "'stretch'",
+          notes: "stretch | flex-start | center | flex-end | baseline",
+        },
+        {
+          name: "justify",
+          type: "String",
+          default: "'flex-start'",
+          notes: "flex-start | center | flex-end | space-between | space-around | space-evenly",
+        },
+        {
+          name: "gap",
+          type: "String | Number",
+          default: "'0'",
+          notes: "Scale / px / raw CSS",
+        }
+      ]
+    };
+  }
+};
+</script>
