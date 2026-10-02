@@ -1,0 +1,118 @@
+<template>
+  <example-factory
+    tag="<ph-row />"
+    :showCode="showCode"
+    :showDemo="showDemo"
+    :showProps="showProps"
+    @toggleCode="showCode = !showCode"
+    @toggleDemo="showDemo = !showDemo"
+    @toggleProps="showProps = !showProps"
+    @scrollToTag="$emit('setAnchor', $event)"
+  >
+    <template #description>
+      <p>
+        Bootstrap 12-column grid row: the container for <code>&lt;ph-col&gt;</code> grid cells.
+        Serves as its own (new) grid system, separate from <code>&lt;ph-flex&gt;</code>.
+      </p>
+    </template>
+
+    <template #demo>
+      <ph-card v-if="showDemo">
+        <ph-stack gap="lg" align="center">
+          <ph-row gutter="3" align="center">
+            <ph-col span="4">A</ph-col>
+            <ph-col span="4">B</ph-col>
+            <ph-col span="4">C</ph-col>
+          </ph-row>
+        </ph-stack>
+      </ph-card>
+    </template>
+
+    <template #snippet>
+      <div v-if="showCode" class="mt-3">
+        <ph-code language="vue" :code="snippet" maxHeight="450px" />
+      </div>
+    </template>
+
+    <template #props>
+      <ph-card class="mt-3" v-if="showProps">
+        <h4>Props</h4>
+        <props-table :items="propsData" />
+        <ph-text>
+          The <code>gutter</code> / <code>gutterX</code> / <code>gutterY</code> props accept Bootstrap's
+          named classes (<code>g-0</code>…<code>g-5</code>), raw spacing values like <code>'3rem'</code>
+          (→ inline <code>gap</code>), or legacy escape-grid values (<code>'2'</code>→<code>8px</code>,
+          <code>'90'</code>→<code>90px</code>). <code>cols</code> applies <code>row-cols-*</code>
+          so children auto-fill the row at equal widths. Breakpoints for <code>cols</code> come from
+          the object keys, with <code>cols</code> as the base key
+          (<code>{ cols: 2, md: 3 }</code> → <code>row-cols-2 row-cols-md-3</code>).
+        </ph-text>
+      </ph-card>
+    </template>
+  </example-factory>
+</template>
+
+<script>
+export default {
+  name: "ExamplePhRow",
+  emits: ['setAnchor'],
+  data() {
+    return {
+      showCode: false,
+      showDemo: true,
+      showProps: true,
+      snippet: `<ph-stack gap="lg" align="center">
+  <ph-row gutter="3" align="center">
+    <ph-col span="4">A</ph-col>
+    <ph-col span="4">B</ph-col>
+    <ph-col span="4">C</ph-col>
+  </ph-row>
+</ph-stack>`,
+      propsData: [
+        {
+          name: "tag",
+          type: "String",
+          default: "'div'",
+          notes: "Host element",
+        },
+        {
+          name: "gutter",
+          type: "String | Number",
+          default: "null",
+          notes: "g-* gutters (g-0…g-5, old 2-20/30-90 gutters also accepted)",
+        },
+        {
+          name: "gutterX",
+          type: "String | Number",
+          default: "null",
+          notes: "gx-* horizontal gutters",
+        },
+        {
+          name: "gutterY",
+          type: "String | Number",
+          default: "null",
+          notes: "gy-* vertical gutters",
+        },
+        {
+          name: "align",
+          type: "String",
+          default: "null",
+          notes: "start | end | center | baseline | stretch → align-items-*",
+        },
+        {
+          name: "justify",
+          type: "String",
+          default: "null",
+          notes: "start | end | center | between | around | evenly → justify-content-*",
+        },
+        {
+          name: "cols",
+          type: "String | Number | Object",
+          default: "null",
+          notes: "row-cols-*; per-breakpoint via object ({ cols: 2, md: 3 })",
+        }
+      ]
+    };
+  }
+};
+</script>
