@@ -1,15 +1,28 @@
 <template>
-  <div
+  <span
+    v-if="orientation === 'vertical'"
     data-phui="divider"
-    class="ph-divider"
-    :class="[
-      orientation === 'vertical' ? 'ph-divider-vertical' : 'ph-divider-horizontal',
-      variant ? `ph-divider-${variant}` : '',
-      label ? 'ph-divider-with-label' : ''
-    ]"
+    class="vr"
+    :class="[spacingClass, colorClass]"
+  ></span>
+
+  <div
+    v-else-if="label"
+    data-phui="divider"
+    class="d-flex align-items-center gap-2"
+    :class="spacingClass"
   >
-    <span v-if="label" class="ph-divider-label">{{ label }}</span>
+    <span class="flex-grow-1 border-top" :class="borderClass"></span>
+    <span class="text-body-secondary text-nowrap" :class="colorClass">{{ label }}</span>
+    <span class="flex-grow-1 border-top" :class="borderClass"></span>
   </div>
+
+  <div
+    v-else
+    data-phui="divider"
+    class="border-top"
+    :class="[spacingClass, borderClass]"
+  ></div>
 </template>
 
 <script>
@@ -33,6 +46,21 @@ export default {
     spacing: {
       type: [String, Number],
       default: 'md'
+    }
+  },
+  computed: {
+    // .vr paints with currentcolor, so a vertical rule needs a *color* class.
+    colorClass() {
+      return this.variant ? `text-${this.variant}` : '';
+    },
+    // Horizontal rules are real borders, so they take the border-color utilities.
+    borderClass() {
+      return this.variant ? `border-${this.variant}` : '';
+    },
+    spacingClass() {
+      const map = { none: 'my-0', xs: 'my-1', sm: 'my-2', md: 'my-3', lg: 'my-4', xl: 'my-5' };
+      if (typeof this.spacing === 'number') return `my-${this.spacing}`;
+      return map[this.spacing] ?? this.spacing;
     }
   }
 };

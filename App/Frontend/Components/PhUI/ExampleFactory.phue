@@ -23,7 +23,6 @@
           </ph-button>
         </div>
       </div>
-      <ph-divider variant="primary" />
       <slot name="description"></slot>
       <slot name="demo"></slot>
       <slot name="snippet"></slot>
