@@ -13,7 +13,11 @@
           </ph-link>
           <code>{{ tag }}</code>
         </h4>
-        <div class="d-flex gap-2">
+      </div>
+      <slot name="description"></slot>
+        <slot name="demo"></slot>
+      <span>
+        <div class="text-end mt-3">
           <ph-tooltip content="Toggle Code.">
             <ph-button
               @click="toggleCode"
@@ -24,10 +28,8 @@
             </ph-button>
           </ph-tooltip>
         </div>
-      </div>
-      <slot name="description"></slot>
-      <slot name="demo"></slot>
       <slot name="snippet"></slot>
+      </span>
       <slot name="props"></slot>
     </ph-card>
 </template>
