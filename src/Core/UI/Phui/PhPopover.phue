@@ -4,7 +4,7 @@
     class="position-relative d-inline-block"
   >
     <!--
-      `data-phui` here is load-bearing, not decoration: updateTriggerRect() measures
+      `data-phui` here is load-bearing, not decoration: measureAnchor() measures
       this element by it. The attribute was missing entirely, so the rect was always
       null, popoverStyle returned {}, and the panel fell back to its static position
       — which read as "positioned fine" while the panel was viewport-fixed, and
@@ -27,6 +27,7 @@
     </div>
     <teleport to="body" v-if="open">
       <div
+        ref="panel"
         class="popover"
         :class="[
           'show',
@@ -50,6 +51,12 @@
         A real backdrop. It was an empty div with no styles, so it had no height
         and covered nothing: the documented "a click on the backdrop closes it"
         had never worked. `position: fixed` + inset is what makes it a surface.
+
+        Click triggers only. A backdrop this size covers the trigger that is still
+        under the pointer, so the browser retargets to it and fires `mouseleave`
+        — the popover closed the instant it opened and re-opened on the next
+        hover, forever. A `hover`/`focus` popover closes by leaving the trigger,
+        which is the whole point of not putting a pointer-eater over it.
       -->
       <div
         data-phui="popover-backdrop"
@@ -63,8 +70,30 @@
 <script>
 import { useId } from "vue";
 
+// Breathing room between the panel and the trigger, and between a clamped panel
+// and the viewport edge.
+const PANEL_GAP = 8;
+const VIEWPORT_MARGIN = 8;
+
+// Bootstrap's compound placement (`top-start`) is one string; the composable
+// takes the two axes separately. The cross-axis token names the side the panel
+// hugs on that axis, so `top` and `start` both mean 'start' and `bottom` and
+// `end` both mean 'end'. An absent token means centred.
+const ALIGN_TOKENS = { top: 'start', bottom: 'end', start: 'start', end: 'end' };
+
+const OPPOSITE = { top: 'bottom', bottom: 'top', start: 'end', end: 'start' };
+
+function splitPlacement(placement) {
+  const parts = String(placement).split('-');
+  return {
+    placement: parts[0],
+    align: parts.length > 1 ? ALIGN_TOKENS[parts[1]] : 'center'
+  };
+}
+
 export default {
   name: 'PhPopover',
+  composables: ['position'],
   setup() {
     // `this._uid` is Vue 2 only — in Vue 3 it is undefined, so every popover on
     // the page rendered id="ph-popover-content-undefined" and aria-describedby
@@ -117,7 +146,15 @@ export default {
   data() {
     return {
       internalOpen: false,
-      triggerRect: null
+      anchorRect: null,
+      panelSize: { width: 0, height: 0 },
+      // { left, top, flipped }, written by reposition(). Keeping the resolved
+      // numbers in data rather than deriving them inside a computed is what lets
+      // placementClass follow the flip without the two computed properties
+      // invalidating each other.
+      panelPos: null,
+      positioned: false,
+      viewportHandle: null
     };
   },
   computed: {
@@ -128,56 +165,43 @@ export default {
         return this.modelValue === null ? this.internalOpen : this.modelValue;
       },
       set(value) {
+        // Deliberately nothing but the flag and the emit. Positioning cannot live
+        // here: `open` reads the prop whenever `model-value` is bound, so it only
+        // becomes true once the parent echoes the value back. Anything measured
+        // at this point would guard against an `open` that is still false, and a
+        // controlled popover would then never place its panel at all.
         this.internalOpen = value;
-        if (value) {
-          this.updateTriggerRect();
-        }
         this.$emit('update:modelValue', value);
       }
     },
     placementClass() {
-      const base = this.placement.split('-')[0];
-      return `bs-popover-${base}`;
+      // Follows the flip, not the prop. The class drives the arrow, so a panel
+      // that flipped below its trigger while still claiming `bs-popover-top`
+      // points its arrow up at empty space.
+      const base = splitPlacement(this.placement).placement;
+      const flipped = this.panelPos !== null && this.panelPos.flipped;
+      return `bs-popover-${flipped ? OPPOSITE[base] : base}`;
     },
     popoverStyle() {
-      if (!this.triggerRect) return {};
-      const offset = 8;
-      const r = this.triggerRect;
-      // clientWidth/clientHeight, not 100vw/100vh: those include the scrollbar,
-      // which pushed every `start`/`top` popover further off than it should be.
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
-      // Bootstrap's .popover is max-width 276px; clamping the anchor point by half
-      // of that keeps the whole box on screen instead of letting it hang off the edge.
-      const half = 138;
-      const clampX = (x) => Math.min(Math.max(x, half), Math.max(half, vw - half));
-      const clampY = (y) => Math.min(Math.max(y, half), Math.max(half, vh - half));
+      const styles = {
+        position: 'absolute',
+        zIndex: 1070,
+        top: '0px',
+        left: '0px',
+        // Bootstrap's placement classes set bottom/right; an explicit top/left
+        // has to clear them or the two fight over the same box.
+        bottom: 'auto',
+        right: 'auto'
+      };
 
-
-      const styles = { position: 'absolute', zIndex: 1070 };
-
-      const scrollX = window.scrollX || window.pageXOffset || 0;
-      const scrollY = window.scrollY || window.pageYOffset || 0;
-
-      if (this.placement.startsWith('top')) {
-        styles.top = `${r.top + scrollY}px`;
-        styles.bottom = 'auto';
-        styles.left = `${clampX(r.left + scrollX + r.width / 2)}px`;
-        styles.transform = 'translateX(-50%) translateY(calc(-100% - ' + offset + 'px))';
-      } else if (this.placement.startsWith('bottom')) {
-        styles.top = `${r.bottom + offset + scrollY}px`;
-        styles.left = `${clampX(r.left + scrollX + r.width / 2)}px`;
-        styles.transform = 'translateX(-50%)';
-      } else if (this.placement.startsWith('start')) {
-        styles.left = `${r.left + scrollX}px`;
-        styles.right = 'auto';
-        styles.top = `${clampY(r.top + scrollY + r.height / 2)}px`;
-        styles.transform = 'translateY(-50%) translateX(calc(-100% - ' + offset + 'px))';
-      } else {
-        styles.left = `${Math.min(r.right + scrollX + offset, vw + scrollX - half)}px`;
-        styles.top = `${clampY(r.top + scrollY + r.height / 2)}px`;
-        styles.transform = 'translateY(-50%)';
+      if (!this.positioned || !this.panelPos || typeof document === 'undefined') {
+        styles.visibility = 'hidden';
+        return styles;
       }
+
+      styles.left = `${this.panelPos.left}px`;
+      styles.top = `${this.panelPos.top}px`;
+
       return styles;
     },
     contentId() {
@@ -189,18 +213,22 @@ export default {
   },
   watch: {
     open(val) {
-      // Measured in the `open` setter, BEFORE the value flips — measuring here
-      // meant the first render ran with triggerRect still null, so popoverStyle
-      // was {} and the popover painted unpositioned for a frame.
       this.$emit(val ? 'show' : 'hide');
 
       // The viewport listeners live exactly as long as the panel is open: attached
       // for the whole lifetime of the component they would re-measure a closed
       // popover on every scroll event for nothing.
       if (val) {
+        // Measured before the render, so the first paint already has a rect; the
+        // panel's own size is not knowable until it exists, hence the tick.
+        this.measureAnchor();
+        this.$nextTick(() => this.reposition());
         this.trackViewport();
       } else {
         this.releaseViewport();
+        this.positioned = false;
+        this.anchorRect = null;
+        this.panelPos = null;
       }
     }
   },
@@ -240,24 +268,67 @@ export default {
       if (this.disabled) return;
       this.open = this.open ? false : true;
     },
+    measureAnchor() {
+      const trigger = this.$el.querySelector('[data-phui="popover-trigger"]');
+      this.anchorRect = trigger ? measureAnchor(trigger) : null;
+    },
+    measurePanel() {
+      const panel = this.$refs.panel;
+      if (panel) {
+        const rect = panel.getBoundingClientRect();
+        this.panelSize = { width: rect.width, height: rect.height };
+      }
+    },
+    reposition() {
+      // No `open` guard on purpose: this runs from the viewport handle and from a
+      // post-render tick, and a `model-value` bound popover can be mid-round-trip
+      // in either. The panel ref is the honest signal — without it there is
+      // nothing to place.
+      if (!this.$refs.panel || !this.anchorRect || typeof document === 'undefined') {
+        return;
+      }
+
+      this.measurePanel();
+
+      const { placement, align } = splitPlacement(this.placement);
+      const pos = positionFor(this.anchorRect, {
+        size: this.panelSize,
+        placement,
+        align,
+        offset: PANEL_GAP,
+        gap: PANEL_GAP,
+        allowFlip: true,
+        clamp: true,
+        // clientWidth/clientHeight, not 100vw/100vh or innerWidth: those include
+        // the scrollbar, which pushed every `start`/`top` popover further off
+        // than it should be.
+        viewport: {
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight
+        },
+        scroll: {
+          x: window.scrollX || window.pageXOffset || 0,
+          y: window.scrollY || window.pageYOffset || 0
+        }
+      });
+
+      // Last: `positioned` is what un-hides the panel, and both edges have to be
+      // known before that. The composable reports `measured: false` when it had
+      // nothing to measure against; believing it anyway placed the panel as if
+      // it had no size, which is worse than not placing it at all.
+      this.panelPos = pos;
+      this.positioned = pos.measured !== false
+        && (this.panelSize.width > 0 || this.panelSize.height > 0);
+    },
     trackViewport() {
-      if (typeof window === 'undefined') return;
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
-      window.addEventListener('scroll', this.onViewportChange, true);
-      window.addEventListener('resize', this.onViewportChange);
+      this.releaseViewport();
+      this.viewportHandle = trackViewport(this.reposition);
     },
     releaseViewport() {
-      if (typeof window === 'undefined') return;
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
-    },
-    onViewportChange() {
-      this.updateTriggerRect();
-    },
-    updateTriggerRect() {
-      const trigger = this.$el.querySelector('[data-phui="popover-trigger"]');
-      if (trigger) this.triggerRect = trigger.getBoundingClientRect();
+      if (this.viewportHandle) {
+        releaseViewport(this.viewportHandle);
+        this.viewportHandle = null;
+      }
     },
     onKeydown(event) {
       if (event.key === 'Escape') this.close();
