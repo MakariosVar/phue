@@ -138,30 +138,57 @@ final class WebControllerTest extends TestCase
         $this->assertArrayHasKey('sidebarItems', $decoded);
     }
 
-    public function testDocsRouteShipsGlobalSearchIndexWithHeadingAnchors(): void
+    /**
+     * The docs search has to work from any page with no round trip, which means the
+     * whole index ships in the initial state. It reaches the client as `paletteItems`
+     * now — the palette's own row shape — rather than the sidebar's raw index, and
+     * shipping both meant paying for the same text twice on every page load.
+     *
+     * So this asserts the palette's contract instead: the fields it reads, the guide
+     * it groups by, and the anchors that make a result deep-link rather than merely
+     * scroll.
+     */
+    public function testDocsRouteShipsPaletteRowsWithHeadingAnchors(): void
     {
         $content = $this->app->handle(new Request('GET', '/docs', ['doc' => 'phui']))->getContent();
         $state = $this->extractState($content);
 
-        $this->assertIsArray($state['searchIndex'] ?? null, 'Global docs search requires a searchIndex in state.');
-        $this->assertNotEmpty($state['searchIndex'], 'The search index must not be empty.');
+        $this->assertIsArray($state['paletteItems'] ?? null, 'Docs search requires paletteItems in state.');
+        $this->assertNotEmpty($state['paletteItems'], 'The palette must not be empty.');
+        $this->assertArrayNotHasKey(
+            'searchIndex',
+            $state,
+            'The raw index is no longer read by the client; shipping it as well doubles the payload.'
+        );
 
         $seenAnchor = false;
+        $guides = [];
 
-        foreach ($state['searchIndex'] as $entry) {
-            $this->assertIsArray($entry);
-            foreach (['doc', 'docKey', 'heading', 'href', 'text'] as $key) {
-                $this->assertArrayHasKey($key, $entry, "Search entry is missing '{$key}'.");
+        foreach ($state['paletteItems'] as $row) {
+            $this->assertIsArray($row);
+            // `id`, `label`, `group` and `hint` are the fields PhCommandPalette reads;
+            // `href` is what the page navigates to on select.
+            foreach (['id', 'label', 'group', 'hint', 'href'] as $key) {
+                $this->assertArrayHasKey($key, $row, "Palette row is missing '{$key}'.");
             }
 
-            $this->assertStringStartsWith('/docs?doc=', $entry['href']);
+            $this->assertNotSame('', trim((string) $row['label']), 'A palette row with an empty label is unselectable.');
+            $this->assertNotSame('', trim((string) $row['group']), 'Rows are grouped by guide; an empty group breaks the heading.');
+            $this->assertStringStartsWith('/docs?doc=', $row['href']);
 
-            if (str_contains($entry['href'], '#')) {
+            $guides[$row['group']] = true;
+
+            if (str_contains($row['href'], '#')) {
                 $seenAnchor = true;
             }
         }
 
-        $this->assertTrue($seenAnchor, 'Search entries must deep-link into heading anchors (…/docs?doc=x#slug).');
+        $this->assertTrue($seenAnchor, 'Palette rows must deep-link into heading anchors (…/docs?doc=x#slug).');
+        $this->assertGreaterThan(
+            1,
+            count($guides),
+            'The palette must span every guide, not just the one being viewed.'
+        );
     }
 
     public function testEverySearchAnchorResolvesToAHeadingInParsedContent(): void

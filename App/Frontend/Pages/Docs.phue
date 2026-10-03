@@ -169,12 +169,35 @@ if (!is_array($searchIndex)) {
     $indexCache->set($indexKey, $searchIndex);
 }
 
+// ---------------------------------------------------------------- palette rows
+// One row per indexed heading, grouped by guide. Built here rather than in the
+// script for the same reason as everything else in this block: the SSR renderer
+// reads this state object, so a computed would arrive on the server as undefined
+// and take the palette with it.
+//
+// The prose rides along as `hint`, which the palette also matches against at the
+// lowest weight — so a phrase from a paragraph still finds its heading, while only
+// headings are ever listed.
+$paletteItems = [];
+foreach ($searchIndex as $entry) {
+    $paletteItems[] = [
+        'id'    => $entry['href'],
+        'label' => $entry['heading'],
+        'group' => $entry['doc'],
+        'hint'  => $entry['text'],
+        'href'  => $entry['href'],
+    ];
+}
+
 return [
     'title' => 'Phue Docs — ' . $selected['label'],
     'styles' => ['/assets/app/styles/main.css'],
     'state' => [
         'sidebarItems' => $sidebarItems,
-        'searchIndex'  => $searchIndex,
+        // Only the palette's shape ships. `searchIndex` stayed in this payload after
+        // the sidebar stopped searching, and since `paletteItems` is a transformed
+        // copy of it the same text went over the wire twice on every docs load.
+        'paletteItems' => $paletteItems,
         'docKey'       => $docKey,
         'docTitle'     => $selected['label'],
         'docBadge'     => $selected['badge'],
@@ -188,6 +211,17 @@ return [
 
 <template>
 <div class="d-flex flex-column gap-4 p-4">
+    <!-- Ctrl/Cmd+K. The palette owns the shortcut itself (`shortcut` defaults to
+         true) and cleans the listener up on unmount, so the page wires no key
+         handler at all. -->
+    <ph-command-palette
+        v-model="paletteOpen"
+        :items="paletteItems"
+        placeholder="Search the documentation…"
+        label="Search the documentation"
+        @select="onPaletteSelect"
+    />
+
     <doc-section
         :id="docKey"
         :title="docTitle"
@@ -196,7 +230,11 @@ return [
         <ph-row>
             <ph-col span="12" lg="2">
                 <div class="position-sticky" style="top: 5rem;">
-                    <doc-sidebar :items="sidebarItems" :active="docKey" :search-index="searchIndex" />
+                    <doc-sidebar
+                    :items="sidebarItems"
+                    :active="docKey"
+                    @open-search="paletteOpen = true"
+                />
                 </div>
             </ph-col>
             <ph-col span="12" lg="10">
@@ -227,15 +265,45 @@ export default function mountApp() {
     window.__phueApp = createSSRApp({
         setup() {
             const sidebarItems = ref(window.__INITIAL_STATE__?.sidebarItems ?? []);
-            const searchIndex = ref(window.__INITIAL_STATE__?.searchIndex ?? []);
             const docKey = ref(window.__INITIAL_STATE__?.docKey ?? 'getting-started');
             const docTitle = ref(window.__INITIAL_STATE__?.docTitle ?? 'Docs');
             const docBadge = ref(window.__INITIAL_STATE__?.docBadge ?? '');
             const content = ref(window.__INITIAL_STATE__?.content ?? '');
             const prev = ref(window.__INITIAL_STATE__?.prev ?? null);
             const next = ref(window.__INITIAL_STATE__?.next ?? null);
+            const paletteItems = ref(window.__INITIAL_STATE__?.paletteItems ?? []);
+            const paletteOpen = ref(false);
 
-            return { sidebarItems, searchIndex, docKey, docTitle, docBadge, content, prev, next };
+            /**
+             * Sends the reader where the sidebar would have.
+             *
+             * The explorer's interception is click-only, so a programmatic
+             * `location.href` would drop the reader into a full page load while the
+             * sidebar beside it stays an SPA swap — the same destination, two very
+             * different waits. pushState plus a popstate event takes the route the
+             * Back button takes, which is the one the explorer already handles.
+             */
+            function onPaletteSelect(entry) {
+                if (!entry || !entry.href) {
+                    return;
+                }
+
+                history.pushState({ doc: entry.href }, '', entry.href);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+
+            return {
+                sidebarItems,
+                docKey,
+                docTitle,
+                docBadge,
+                content,
+                prev,
+                next,
+                paletteItems,
+                paletteOpen,
+                onPaletteSelect
+            };
         }
     });
 
@@ -289,31 +357,6 @@ export default function mountApp() {
         window.addEventListener('load', scrollToSection);
         window.addEventListener('pageshow', scrollToSection);
         window.addEventListener('popstate', scrollToSection);
-    }
-
-    // Ctrl/Cmd+K focuses the documentation search field. The listener lives on
-    // `window` (like the scroll handlers above) and is guarded so SPA remounts
-    // don't stack duplicates; it no-ops on any page without the search input.
-    if (!window.__phueDocsSearchShortcutBound) {
-        window.__phueDocsSearchShortcutBound = true;
-        window.addEventListener('keydown', (event) => {
-            if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
-                return;
-            }
-            if (event.key.toLowerCase() !== 'k') {
-                return;
-            }
-
-            const search = document.getElementById('doc-search-input');
-
-            if (!search) {
-                return;
-            }
-
-            event.preventDefault();
-            search.focus();
-            search.select();
-        });
     }
 
     scrollToSection();
