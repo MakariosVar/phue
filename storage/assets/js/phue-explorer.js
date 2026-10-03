@@ -171,7 +171,7 @@
 
       // 8. Handle Fragment Scrolling / Scroll Reset
       if (window.location.hash) {
-        const targetEl = document.querySelector(window.location.hash);
+        const targetEl = document.getElementById(window.location.hash.slice(1));
         if (targetEl) {
           targetEl.scrollIntoView();
         } else {
