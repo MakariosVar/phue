@@ -125,8 +125,17 @@
 <script>
 import { useId } from "vue";
 
+// Gap between the field and the calendar, on whichever side it opens.
+const PANEL_GAP = 4;
+// The calendar grid needs room of its own, so the panel is never narrower than
+// this even when the field is.
+const PANEL_MIN_WIDTH = 272;
+// Breathing room kept between the calendar and the viewport edge when clamping.
+const VIEWPORT_MARGIN = 8;
+
 export default {
   name: 'PhDatePicker',
+  composables: ['position'],
   props: {
     modelValue: {
       type: String,
@@ -196,11 +205,13 @@ export default {
       open: false,
       viewYear: new Date().getFullYear(),
       viewMonth: new Date().getMonth(),
-      // The trigger's viewport rect and the panel's measured height: the panel is
-      // positioned by measurement now that it lives outside the component's own
-      // stacking and clipping context.
-      triggerRect: null,
-      panelHeight: 0
+      /** Viewport-space field geometry; positionFor adds the scroll offset back. */
+      anchorRect: null,
+      /** Teleported panel size. Its height decides the flip, so it is measured. */
+      panelSize: { width: 0, height: 0 },
+      /** Output of positionFor(), or null while the panel is not yet placeable. */
+      panelPos: null,
+      viewportHandle: null
     };
   },
   computed: {
@@ -275,27 +286,18 @@ export default {
         width: '0px'
       };
 
-      if (!this.triggerRect || typeof window === 'undefined') {
+      const pos = this.panelPos;
+
+      if (!pos || !pos.measured || typeof window === 'undefined') {
         // Unmeasured: hidden rather than painted at the document origin.
         return { ...base, visibility: 'hidden' };
       }
 
-      const r = this.triggerRect;
-      const scrollX = window.scrollX || window.pageXOffset || 0;
-      const scrollY = window.scrollY || window.pageYOffset || 0;
-      const gap = 4;
-      const vh = document.documentElement.clientHeight;
-
-      const roomBelow = vh - r.bottom;
-      const roomAbove = r.top;
-      const height = this.panelHeight || 0;
-      const above = height > 0 && roomBelow < height + gap && roomAbove > roomBelow;
-
       return {
         ...base,
-        width: `${Math.max(r.width, 272)}px`,
-        left: `${r.left + scrollX}px`,
-        top: `${(above ? r.top - height - gap : r.bottom + gap) + scrollY}px`,
+        width: `${pos.width}px`,
+        left: `${pos.left}px`,
+        top: `${pos.top}px`,
         visibility: 'visible'
       };
     }
@@ -312,14 +314,12 @@ export default {
       this.$emit(value ? 'open' : 'close');
 
       if (value) {
-        this.measure();
-        this.trackViewport();
+        this.startTracking();
         // The panel teleports, so it does not exist on the first tick; measuring it
         // needs the second one.
-        this.$nextTick(() => this.measure());
+        this.$nextTick(() => this.reposition());
       } else {
-        this.releaseViewport();
-        this.triggerRect = null;
+        this.stopTracking();
       }
     }
   },
@@ -335,7 +335,7 @@ export default {
     document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
-    this.releaseViewport();
+    this.stopTracking();
     document.removeEventListener('click', this.onDocumentClick);
     document.removeEventListener('keydown', this.onKeydown);
   },
@@ -432,37 +432,94 @@ export default {
       this.close();
     },
 
-    /** The trigger is whichever of the input/button was used; both span the field. */
-    measure() {
-      const trigger = this.$refs.control || this.$refs.triggerButton || this.$refs.root;
-      if (trigger) {
-        this.triggerRect = trigger.getBoundingClientRect();
-      }
-
-      const panel = this.$refs.panel;
-      if (panel) {
-        this.panelHeight = panel.offsetHeight;
-      }
-    },
-
     /**
-     * Re-measure while the calendar is open so it stays attached to its trigger.
-     * Capture phase: a plain `scroll` listener never fires for nested scrollers.
+     * Viewport-space geometry of the field.
+     *
+     * Kept in viewport space on purpose: the scroll offset is passed to
+     * positionFor() instead of being folded in here, so one arithmetic identity
+     * owns the document-space conversion. The trigger is whichever of the
+     * input/button was used; all three span the field identically.
      */
-    trackViewport() {
-      if (typeof window === 'undefined') return;
-      this.releaseViewport();
-      window.addEventListener('scroll', this.onViewportChange, true);
-      window.addEventListener('resize', this.onViewportChange);
+    measureAnchor() {
+      this.anchorRect = measureAnchor(
+        this.$refs.control || this.$refs.triggerButton || this.$refs.root
+      );
     },
-    releaseViewport() {
-      if (typeof window === 'undefined') return;
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
+    measurePanel() {
+      const panel = this.$refs.panel;
+      if (!panel || typeof panel.getBoundingClientRect !== 'function') {
+        this.panelSize = { width: 0, height: 0 };
+        return;
+      }
+
+      const rect = panel.getBoundingClientRect();
+      this.panelSize = { width: rect.width, height: rect.height };
     },
-    onViewportChange() {
-      if (!this.open) return;
-      this.measure();
+    /**
+     * Recomputes the calendar position from freshly measured geometry.
+     *
+     * Both the field and the panel are re-measured: a nested scroller moves the
+     * field, and the panel's own height decides which side it opens on.
+     */
+    reposition() {
+      this.measureAnchor();
+      this.measurePanel();
+
+      if (!this.anchorRect || typeof window === 'undefined') {
+        this.panelPos = null;
+        return;
+      }
+
+      this.panelPos = positionFor(this.anchorRect, {
+        placement: 'bottom',
+        align: 'start',
+        size: this.panelSize,
+        // The grid needs room of its own; a narrow field would otherwise squeeze
+        // it to the field's width.
+        minWidth: PANEL_MIN_WIDTH,
+        viewport: {
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight
+        },
+        scroll: {
+          x: window.scrollX || window.pageXOffset || 0,
+          y: window.scrollY || window.pageYOffset || 0
+        },
+        offset: PANEL_GAP,
+        allowFlip: true,
+        // Unlike the select, the panel is usually WIDER than its field, so without
+        // this a date field near the right edge pushed the calendar off-screen —
+        // a third of realistic field placements. Clamping can only pull it back in
+        // here, because the flip already handles the vertical case whenever there
+        // is room for the grid on either side.
+        clamp: true,
+        margin: VIEWPORT_MARGIN
+      });
+    },
+    /**
+     * Subscribes to viewport changes through the shared composable.
+     *
+     * trackViewport() listens on scroll in the capture phase, which is what
+     * makes *nested* scrollers (a scrolling form column around the field) visible
+     * to it — scroll events do not bubble, so a bubbling listener would miss
+     * them. It also coalesces bursts into one rAF callback.
+     */
+    startTracking() {
+      if (this.viewportHandle) return;
+
+      this.measureAnchor();
+      this.viewportHandle = trackViewport(this.reposition);
+
+      this.$nextTick(() => {
+        this.reposition();
+      });
+    },
+    stopTracking() {
+      if (this.viewportHandle) {
+        releaseViewport(this.viewportHandle);
+        this.viewportHandle = null;
+      }
+      this.panelPos = null;
     },
     onKeydown(event) {
       if (event.key === 'Escape' && this.open) {
