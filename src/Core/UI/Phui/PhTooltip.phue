@@ -37,7 +37,7 @@ const VIEWPORT_MARGIN = 8;
 
 export default {
   name: 'PhTooltip',
-  composables: ['position'],
+  composables: ['position', 'overlay'],
   props: {
     content: {
       type: String,
@@ -83,7 +83,9 @@ export default {
       timer: null,
       anchorRect: null,
       tipSize: { width: 0, height: 0 },
-      viewportHandle: null
+      viewportHandle: null,
+      /** Slot in the shared Escape stack, held only while the panel is open. */
+      escapeHandle: null
     };
   },
   computed: {
@@ -109,7 +111,7 @@ export default {
         pointerEvents: 'none',
         top: '0',
         left: '0',
-       visibility: this.positioned ? 'visible' : 'hidden'
+       visibility: 'hidden'
       };
 
       if (!this.positioned || !this.anchorRect || typeof document === 'undefined') {
@@ -142,6 +144,9 @@ export default {
 
       style.left = `${pos.left}px`;
       style.top = `${pos.top}px`;
+      // A clamped tip whose trigger has scrolled away would otherwise stay pinned to
+      // the viewport edge, following nothing.
+      style.visibility = pos.offscreen ? 'hidden' : 'visible';
 
       return style;
     }
@@ -149,8 +154,10 @@ export default {
   watch: {
     visible(isVisible) {
       if (isVisible) {
+        this.claimEscape();
         this.trackViewport();
       } else {
+        this.releaseEscape();
         this.releaseViewport();
       }
     }
@@ -187,7 +194,6 @@ export default {
     trackViewport() {
       this.releaseViewport();
       this.viewportHandle = trackViewport(this.reposition);
-      document.addEventListener('keydown', this.onKeydown);
     },
     releaseViewport() {
       if (this.viewportHandle) {
@@ -195,12 +201,6 @@ export default {
         this.viewportHandle = null;
       }
       if (typeof document !== 'undefined') {
-        document.removeEventListener('keydown', this.onKeydown);
-      }
-    },
-    onKeydown(event) {
-     if (event.key === 'Escape' && this.visible) {
-        this.hide();
       }
     },
     clearTimer() {
@@ -221,6 +221,28 @@ export default {
     },
     show() {
       this.reveal();
+    },
+    /**
+     * Claims the shared Escape slot for as long as the tip is visible.
+     *
+     * The tip is teleported to `body`, so a tip inside a dialog is a sibling of that
+     * dialog rather than a child of it. Escape has to be claimed rather than
+     * inherited: the stack decides, and the topmost surface wins. A tip is the
+     * shortest-lived surface in the kit, so releasing on hide matters — a tip that
+     * held the slot would swallow the Escape meant for the dialog underneath.
+     */
+    claimEscape() {
+      this.releaseEscape();
+      this.escapeHandle = registerEscapeHandler((event) => {
+        event.stopPropagation();
+        this.hide();
+      }, this.$refs.root);
+    },
+    releaseEscape() {
+      if (this.escapeHandle && typeof this.escapeHandle.release === 'function') {
+        this.escapeHandle.release();
+      }
+      this.escapeHandle = null;
     },
     hide() {
       this.clearTimer();

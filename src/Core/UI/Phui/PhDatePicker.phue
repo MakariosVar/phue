@@ -149,7 +149,7 @@ const PANEL_Z = 1040;
 
 export default {
   name: 'PhDatePicker',
-  composables: ['position'],
+  composables: ['position', 'overlay'],
   props: {
     modelValue: {
       type: String,
@@ -232,7 +232,9 @@ export default {
        * render. Null when the trigger is not inside one.
        */
       overlayLayer: null,
-      viewportHandle: null
+      viewportHandle: null,
+      /** Slot in the shared Escape stack, held only while the panel is open. */
+      escapeHandle: null
     };
   },
   computed: {
@@ -309,7 +311,7 @@ export default {
 
       const pos = this.panelPos;
 
-      if (!pos || !pos.measured || typeof window === 'undefined') {
+      if (!pos || !pos.measured || pos.offscreen || typeof window === 'undefined') {
         // Unmeasured: hidden rather than painted at the document origin.
         return { ...base, visibility: 'hidden' };
       }
@@ -353,12 +355,10 @@ export default {
   },
   mounted() {
     document.addEventListener('click', this.onDocumentClick);
-    document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     this.stopTracking();
     document.removeEventListener('click', this.onDocumentClick);
-    document.removeEventListener('keydown', this.onKeydown);
   },
   methods: {
     toIso(date) {
@@ -529,6 +529,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.claimEscape();
       this.overlayLayer = overlayLayerFor((this.$refs.control || this.$refs.triggerButton || this.$refs.root), PANEL_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
@@ -541,14 +542,31 @@ export default {
         releaseViewport(this.viewportHandle);
         this.viewportHandle = null;
       }
+      this.releaseEscape();
       this.panelPos = null;
       this.overlayLayer = null;
     },
-    onKeydown(event) {
-      if (event.key === 'Escape' && this.open) {
+    /**
+     * Claims the shared Escape slot for as long as this panel is open.
+     *
+     * Registering is what makes Escape reach this panel instead of the dialog it
+     * sits in: the stack is ordered, and the modal's trap is underneath. The panel
+     * closes, the modal stays, and a second Escape closes the modal — which is what
+     * a reader expects from two stacked surfaces.
+     */
+    claimEscape() {
+      this.releaseEscape();
+      this.escapeHandle = registerEscapeHandler((event) => {
+        event.stopPropagation();
         this.close();
+      }, (this.$refs.control || this.$refs.triggerButton || this.$refs.root));
+    },
+    releaseEscape() {
+      if (this.escapeHandle && typeof this.escapeHandle.release === 'function') {
+        this.escapeHandle.release();
       }
-    }
+      this.escapeHandle = null;
+    },
   }
 };
 </script>

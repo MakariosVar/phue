@@ -145,7 +145,7 @@ const PANEL_Z = 1040;
 
 export default {
   name: 'PhColorPicker',
-  composables: ['position'],
+  composables: ['position', 'overlay'],
   props: {
     modelValue: {
       type: String,
@@ -222,7 +222,9 @@ export default {
        * render. Null when the trigger is not inside one.
        */
       overlayLayer: null,
-      viewportHandle: null
+      viewportHandle: null,
+      /** Slot in the shared Escape stack, held only while the panel is open. */
+      escapeHandle: null
     };
   },
   computed: {
@@ -254,7 +256,7 @@ export default {
 
       const pos = this.panelPos;
 
-      if (!pos || !pos.measured || typeof window === 'undefined') {
+      if (!pos || !pos.measured || pos.offscreen || typeof window === 'undefined') {
         return { ...base, visibility: 'hidden' };
       }
 
@@ -279,12 +281,10 @@ export default {
   },
   mounted() {
     document.addEventListener('click', this.onDocumentClick);
-    document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     this.stopTracking();
     document.removeEventListener('click', this.onDocumentClick);
-    document.removeEventListener('keydown', this.onKeydown);
   },
   methods: {
     /** Normalises anything the user can type into `#rrggbb` (or `#rrggbbaa`). */
@@ -365,6 +365,18 @@ export default {
       this.open = !this.open;
     },
     /**
+     * One way to close, so every caller agrees.
+     *
+     * Outside-click and the Escape slot both need it, and the Escape handler is
+     * registered code: a `this.close()` that does not exist throws *after* it has
+     * already stopped propagation, which leaves the panel open and every other
+     * keydown listener deafened — a failure that looks like "Escape does nothing"
+     * rather than like a missing method.
+     */
+    close() {
+      this.open = false;
+    },
+    /**
      * Outside-click has to test BOTH the trigger and the teleported panel. The
      * panel is no longer inside the root, so a click on a swatch would read as
      * "outside" and close the picker before the click could pick anything.
@@ -383,7 +395,7 @@ export default {
         return;
       }
 
-      this.open = false;
+      this.close();
     },
 
     /**
@@ -456,6 +468,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.claimEscape();
       this.overlayLayer = overlayLayerFor(this.$refs.root, PANEL_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
@@ -468,14 +481,32 @@ export default {
         releaseViewport(this.viewportHandle);
         this.viewportHandle = null;
       }
+      this.releaseEscape();
       this.panelPos = null;
       this.overlayLayer = null;
     },
-    onKeydown(event) {
-      if (event.key === 'Escape' && this.open) {
-        this.open = false;
+    /**
+     * Claims the shared Escape slot for as long as this panel is open.
+     *
+     * Registering is what makes Escape reach this panel instead of the dialog it
+     * sits in: the stack is ordered, and the modal's trap is underneath. The panel
+     * closes, the modal stays, and a second Escape closes the modal — which is what
+     * a reader expects from two stacked surfaces.
+     */
+    claimEscape() {
+      this.releaseEscape();
+      this.escapeHandle = registerEscapeHandler((event) => {
+        event.stopPropagation();
+        this.close();
+      }, this.$refs.root);
+    },
+    releaseEscape() {
+      if (this.escapeHandle && typeof this.escapeHandle.release === 'function') {
+        this.escapeHandle.release();
       }
-    }
+      this.escapeHandle = null;
+    },
+
   },
   watch: {
     open(value) {

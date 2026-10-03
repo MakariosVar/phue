@@ -94,7 +94,7 @@ function splitPlacement(placement) {
 
 export default {
   name: 'PhPopover',
-  composables: ['position'],
+  composables: ['position', 'overlay'],
   setup() {
     // `this._uid` is Vue 2 only — in Vue 3 it is undefined, so every popover on
     // the page rendered id="ph-popover-content-undefined" and aria-describedby
@@ -155,7 +155,9 @@ export default {
       // invalidating each other.
       panelPos: null,
       positioned: false,
-      viewportHandle: null
+      viewportHandle: null,
+      /** Slot in the shared Escape stack, held only while the panel is open. */
+      escapeHandle: null
     };
   },
   computed: {
@@ -226,6 +228,7 @@ export default {
         this.$nextTick(() => this.reposition());
         this.trackViewport();
       } else {
+        this.releaseEscape();
         this.releaseViewport();
         this.positioned = false;
         this.anchorRect = null;
@@ -247,11 +250,9 @@ export default {
       this.$el.addEventListener('focusin', this.onEnter);
       this.$el.addEventListener('focusout', this.onLeave);
     }
-    document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     this.releaseViewport();
-    document.removeEventListener('keydown', this.onKeydown);
     if (this.onEnter) this.$el.removeEventListener('mouseenter', this.onEnter);
     if (this.onEnter) this.$el.removeEventListener('focusin', this.onEnter);
     if (this.onLeave) this.$el.removeEventListener('mouseleave', this.onLeave);
@@ -268,6 +269,27 @@ export default {
     toggle() {
       if (this.disabled) return;
       this.open = this.open ? false : true;
+    },
+    /**
+     * Claims the shared Escape slot for as long as this surface is open.
+     *
+     * Registering is what makes Escape reach this surface instead of whatever it is
+     * nested in: the stack is ordered, so the topmost surface wins and the one below
+     * it waits its turn. Without the stack the surface below fired first and this one
+     * was left open on the floor.
+     */
+    claimEscape() {
+      this.releaseEscape();
+      this.escapeHandle = registerEscapeHandler((event) => {
+        event.stopPropagation();
+        this.close();
+      }, this.$refs.root);
+    },
+    releaseEscape() {
+      if (this.escapeHandle && typeof this.escapeHandle.release === 'function') {
+        this.escapeHandle.release();
+      }
+      this.escapeHandle = null;
     },
     measureAnchor() {
       const trigger = this.$el.querySelector('[data-phui="popover-trigger"]');
@@ -318,7 +340,11 @@ export default {
       // nothing to measure against; believing it anyway placed the panel as if
       // it had no size, which is worse than not placing it at all.
       this.panelPos = pos;
+      // `offscreen` joins the guard for the same reason the other floats carry it:
+      // a clamped panel whose trigger has scrolled away would otherwise stay pinned
+      // to the viewport edge, following nothing.
       this.positioned = pos.measured !== false
+        && pos.offscreen !== true
         && (this.panelSize.width > 0 || this.panelSize.height > 0);
     },
     trackViewport() {
@@ -331,9 +357,6 @@ export default {
         this.viewportHandle = null;
       }
     },
-    onKeydown(event) {
-      if (event.key === 'Escape') this.close();
-    }
   }
 };
 </script>

@@ -138,7 +138,7 @@ const PANEL_Z = 1040;
 
 export default {
   name: 'PhSelect3',
-  composables: ['position'],
+  composables: ['position', 'overlay'],
   props: {
     modelValue: {
       type: [String, Number, Array, null],
@@ -205,7 +205,9 @@ export default {
       panelSize: { width: 0, height: 0 },
       /** Output of positionFor(), or null while the list is not yet placeable. */
       panelPos: null,
-      viewportHandle: null
+      viewportHandle: null,
+      /** Slot in the shared Escape stack, held only while the list is open. */
+      escapeHandle: null
     };
   },
   computed: {
@@ -283,7 +285,7 @@ export default {
 
       const pos = this.panelPos;
 
-      if (!pos || !pos.measured || typeof window === 'undefined') {
+      if (!pos || !pos.measured || pos.offscreen || typeof window === 'undefined') {
         // Unmeasured. Hidden rather than painted at 0,0 — the server never knows the
         // control's position, so claiming one would flash the list in the corner.
         return { ...base, visibility: 'hidden' };
@@ -433,17 +435,6 @@ export default {
         return;
       }
       const key = event.key;
-
-      if (key === 'Escape') {
-        if (!this.open) {
-          return;
-        }
-        event.stopPropagation();
-        event.preventDefault();
-        this.close();
-        this.focusControl();
-        return;
-      }
 
       if (key === 'Tab') {
         if (this.open) {
@@ -620,6 +611,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.claimEscape();
       this.overlayLayer = overlayLayerFor(this.$refs.control, PANEL_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
@@ -629,11 +621,34 @@ export default {
         this.reposition();
       });
     },
+    /**
+     * Claims the shared Escape slot for as long as the list is open.
+     *
+     * The list is teleported to `body`, so inside a dialog it is a sibling of that
+     * dialog rather than a child of it. Escape therefore has to be claimed, not
+     * inherited: without a slot on the stack the dialog's trap answers first and the
+     * list is left open underneath it.
+     */
+    claimEscape() {
+      this.releaseEscape();
+      this.escapeHandle = registerEscapeHandler((event) => {
+        event.preventDefault();
+        this.close();
+        this.focusControl();
+      }, this.$refs.control);
+    },
+    releaseEscape() {
+      if (this.escapeHandle && typeof this.escapeHandle.release === 'function') {
+        this.escapeHandle.release();
+      }
+      this.escapeHandle = null;
+    },
     stopTracking() {
       if (this.viewportHandle) {
         releaseViewport(this.viewportHandle);
         this.viewportHandle = null;
       }
+      this.releaseEscape();
       this.panelPos = null;
     }
   }
