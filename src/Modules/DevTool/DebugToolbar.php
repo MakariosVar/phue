@@ -372,8 +372,11 @@ class DebugToolbar
             $exclusive = (float) ($aggregate['exclusive_ms'] ?? 0.0);
             $ratio = $exclusiveTotal > 0.0 ? $exclusive / $exclusiveTotal * 100.0 : 0.0;
 
+            $operationCell = '<span class="font-monospace">' . $this->esc((string) $label) . '</span>'
+                . $this->renderAggregateMeta(is_array($aggregate['meta'] ?? null) ? $aggregate['meta'] : []);
+
             $rows .= '<tr>'
-                . '<td class="font-monospace">' . $this->esc((string) $label) . '</td>'
+                . '<td>' . $operationCell . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc((string) $aggregate['count']) . '</td>'
                 . '<td class="phue-dt-num fw-bold">' . $this->esc(number_format($exclusive, 2)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['total_ms'], 2)) . '</td>'
@@ -410,6 +413,95 @@ class DebugToolbar
                 $rows
             )
             . $footnote;
+    }
+
+    /**
+     * Render a rollup row's rolled-up metadata as a compact line under the operation.
+     *
+     * This line is what makes "Filter by name" true. The row's text content is what the
+     * filter matches against, and without it a label covering 1227 calls across 140
+     * components showed nothing but numbers — typing a component name emptied the table
+     * instead of narrowing it. Reporting the real distribution is also the only honest
+     * option: naming a single component as if it described the whole row is how the
+     * previous last-wins metadata sent the profiling exercise after a phantom.
+     *
+     * Every value passes through the same truncation the span table applies. Raw span
+     * metadata is kept verbatim on purpose so the export panel can be pasted into a bug
+     * report, and a summary line is not an exemption: without this, a single long SQL
+     * statement reached a rendered table at full length and undid the panel caps.
+     *
+     * @param array<string, mixed> $meta Rolled-up metadata from Stopwatch::getAggregates().
+     * @return string HTML, or an empty string when there is nothing worth showing.
+     */
+    private function renderAggregateMeta(array $meta): string
+    {
+        $fragments = [];
+
+        foreach ($meta as $key => $rollup) {
+            if (!is_array($rollup)) {
+                continue;
+            }
+
+            if (($rollup['kind'] ?? null) === 'metric') {
+                $fragments[] = $this->esc(sprintf(
+                    '%s %s…%s',
+                    (string) $key,
+                    (string) $rollup['min'],
+                    (string) $rollup['max']
+                ));
+
+                continue;
+            }
+
+            $top = is_array($rollup['top'] ?? null) ? $rollup['top'] : [];
+            $parts = [];
+
+            foreach ($top as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $parts[] = $this->esc(sprintf(
+                    '%s×%s',
+                    $this->truncate($this->stringifyMetaValue($entry['value'] ?? null), self::MAX_SQL_LENGTH),
+                    (string) ($entry['count'] ?? 0)
+                ));
+            }
+
+            if ($parts === []) {
+                continue;
+            }
+
+            $distinct = (int) ($rollup['distinct'] ?? count($top));
+
+            if ($distinct > count($parts)) {
+                $parts[] = $this->esc(sprintf('+%d more', $distinct - count($parts)));
+            }
+
+            $fragments[] = '<span class="text-body-secondary">' . implode(' · ', $parts) . '</span>';
+        }
+
+        if ($fragments === []) {
+            return '';
+        }
+
+        return '<div class="phue-dt-meta small text-body-secondary">' . implode(' ', $fragments) . '</div>';
+    }
+
+    /**
+     * Render one metadata value as the short, readable token the report displays.
+     *
+     * @param mixed $value Value taken from a span's metadata.
+     * @return string
+     */
+    private function stringifyMetaValue(mixed $value): string
+    {
+        return match (true) {
+            $value === null => 'null',
+            $value === true => 'true',
+            $value === false => 'false',
+            is_scalar($value) => (string) $value,
+            default => json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '?',
+        };
     }
 
     /**
@@ -751,6 +843,7 @@ class DebugToolbar
         .phue-dt-sharecell { width: 20%; white-space: nowrap; }
         .phue-dt-sharecell .phue-dt-bar { display: inline-block; vertical-align: middle; width: auto; }
         .phue-dt-share { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; vertical-align: middle; }
+        .phue-dt-meta { font-size: 11px; line-height: 1.35; word-break: break-word; }
         .phue-dt-filter { max-width: 26rem; }
         .phue-dt-json {
             max-height: 46vh; overflow: auto; font-size: 12px;

@@ -622,14 +622,15 @@ class DebugToolbarTest extends TestCase
 
         $html = $this->toolbar->render($profiler, 5.0);
 
-        // The statement surfaces in the database table and in both slowest-call listings.
-        // Truncating only the first would undo the panel caps through the side door.
+        // The statement surfaces in the rollup row's metadata summary, in the database
+        // table and in both slowest-call listings. Truncating only some of them would
+        // undo the panel caps through the side door.
         $truncated = mb_substr($sql, 0, DebugToolbar::MAX_SQL_LENGTH) . '…';
 
         $this->assertSame(
-            3,
+            4,
             substr_count($html, $truncated),
-            'Expected the truncated statement in the database table and both span listings'
+            'Expected the truncated statement in the rollup summary, the database table and both span listings'
         );
 
         // The raw report deliberately keeps it verbatim: that panel exists to be pasted
@@ -637,7 +638,7 @@ class DebugToolbarTest extends TestCase
         // one verbatim copy, in the export — never in a rendered table.
         $this->assertStringContainsString($sql, $this->extractJson($html));
         $this->assertSame(0, substr_count($this->stripJsonPanel($html), $sql));
-        $this->assertSame(3, substr_count($this->stripJsonPanel($html), $truncated));
+        $this->assertSame(4, substr_count($this->stripJsonPanel($html), $truncated));
     }
 
     public function testRedactedReportSaysSo(): void
