@@ -38,6 +38,15 @@ class Stopwatch
     public const MAX_SPANS = 20000;
 
     /**
+     * Maximum number of distinct values reported per categorical metadata key.
+     *
+     * The histogram itself is counted in full so `distinct` stays exact; only the reported
+     * tail is capped, because a component-heavy request can carry hundreds of names under
+     * one label and the table has no room for them.
+     */
+    public const META_VALUE_LIMIT = 5;
+
+    /**
      * @var float|null Start timestamp in nanoseconds.
      */
     private ?float $startTime = null;
@@ -272,6 +281,14 @@ class Stopwatch
      * the request instead of overlapping. total_ms is still reported — it answers "how
      * much time sits under this label", which is a different and useful question.
      *
+     * Metadata is ROLLED UP, never taken from whichever span happened to close last.
+     * A last-wins meta on a label covering 1200 calls across 140 components reported a
+     * single component name as if it described the whole row, which is worse than
+     * reporting nothing: the toolbar invites you to filter by name, and the name it
+     * showed described 3 calls out of 1227. Numeric keys (request_bytes, status) roll up
+     * to min/max/last; categorical keys (component, path, method) to an exact distinct
+     * count plus the most frequent values.
+     *
      * @return array<string, array{count: int, total_ms: float, exclusive_ms: float, max_ms: float, min_ms: float, avg_ms: float, meta: array<string, mixed>}>
      */
     public function getAggregates(): array
@@ -289,7 +306,8 @@ class Stopwatch
                     'max_ms' => 0.0,
                     'min_ms' => $span['duration_ms'],
                     'avg_ms' => 0.0,
-                    'meta' => $span['meta'],
+                    'meta' => [],
+                    'metaRollup' => [],
                 ];
             }
 
@@ -298,10 +316,14 @@ class Stopwatch
             $aggregates[$label]['exclusive_ms'] += $span['exclusive_ms'];
             $aggregates[$label]['max_ms'] = max($aggregates[$label]['max_ms'], $span['duration_ms']);
             $aggregates[$label]['min_ms'] = min($aggregates[$label]['min_ms'], $span['duration_ms']);
+
+            $this->accumulateMeta($aggregates[$label]['metaRollup'], $span['meta']);
         }
 
         foreach ($aggregates as $label => $aggregate) {
             $aggregates[$label]['avg_ms'] = $aggregate['total_ms'] / $aggregate['count'];
+            $aggregates[$label]['meta'] = $this->finalizeMeta($aggregate['metaRollup']);
+            unset($aggregates[$label]['metaRollup']);
         }
 
         uasort(
@@ -310,6 +332,134 @@ class Stopwatch
         );
 
         return $aggregates;
+    }
+
+    /**
+     * Fold one span's metadata into a per-key accumulator.
+     *
+     * A key is treated as numeric the first time it is seen as one and keeps that
+     * classification for the rest of the request: mixing the two models inside a single
+     * key would make the reported shape depend on which span closed first.
+     *
+     * @param array<string, array<string, mixed>> $rollup Accumulator, keyed by metadata key.
+     * @param array<string, mixed> $meta Metadata of the span being folded in.
+     * @return void
+     */
+    private function accumulateMeta(array &$rollup, array $meta): void
+    {
+        foreach ($meta as $key => $value) {
+            $numeric = is_int($value) || is_float($value);
+
+            if (!isset($rollup[$key])) {
+                $rollup[$key] = $numeric
+                    ? ['numeric' => true, 'min' => $value, 'max' => $value, 'last' => $value, 'conflicts' => 0]
+                    : ['numeric' => false, 'counts' => [], 'conflicts' => 0];
+
+                // A metric is fully described by the value that created it; a histogram
+                // still has to have that value put into it.
+                if ($numeric) {
+                    continue;
+                }
+            } elseif ($rollup[$key]['numeric'] !== $numeric) {
+                // A key that changes type mid-request is counted but never coerced. min()/max()
+                // on a mixed set compare as strings in PHP 8, so folding 'late-string' into a
+                // numeric range silently produced max = 'late-string' — a report that looks
+                // structured and is nonsense. The range stays over the values it can describe
+                // and the report says how many calls it could not account for.
+                $rollup[$key]['conflicts']++;
+
+                continue;
+            }
+
+            if ($numeric) {
+                $rollup[$key]['min'] = min($rollup[$key]['min'], $value);
+                $rollup[$key]['max'] = max($rollup[$key]['max'], $value);
+                $rollup[$key]['last'] = $value;
+
+                continue;
+            }
+
+            // bool, null and array values are not usable as PHP array keys, so the
+            // histogram is keyed by a type-tagged encoding and keeps the original value
+            // alongside it for the report.
+            $bucket = self::metaBucketKey($value);
+
+            if (!isset($rollup[$key]['counts'][$bucket])) {
+                $rollup[$key]['counts'][$bucket] = ['value' => $value, 'count' => 0];
+            }
+
+            $rollup[$key]['counts'][$bucket]['count']++;
+        }
+    }
+
+    /**
+     * Turn the per-key accumulator into the reported metadata shape.
+     *
+     * @param array<string, array<string, mixed>> $rollup Accumulator built by accumulateMeta().
+     * @return array<string, mixed>
+     */
+    private function finalizeMeta(array $rollup): array
+    {
+        $meta = [];
+
+        foreach ($rollup as $key => $bucket) {
+            if ($bucket['numeric']) {
+                $meta[$key] = [
+                    'kind' => 'metric',
+                    'min' => $bucket['min'],
+                    'max' => $bucket['max'],
+                    'last' => $bucket['last'],
+                ];
+
+                if ($bucket['conflicts'] > 0) {
+                    $meta[$key]['conflicts'] = $bucket['conflicts'];
+                }
+
+                continue;
+            }
+
+            $counts = $bucket['counts'];
+            $distinct = count($counts);
+
+            // Insertion order is the tie-break, so a label that is called with the same
+            // components in the same order always reports them in the same order.
+            uasort(
+                $counts,
+                static fn(array $a, array $b): int => $b['count'] <=> $a['count']
+            );
+
+            $top = [];
+            foreach ($counts as $entry) {
+                if (count($top) >= self::META_VALUE_LIMIT) {
+                    break;
+                }
+                $top[] = ['value' => $entry['value'], 'count' => $entry['count']];
+            }
+
+            $meta[$key] = [
+                'kind' => 'values',
+                'distinct' => $distinct,
+                'truncated' => $distinct > count($top),
+                'top' => $top,
+            ];
+
+            if ($bucket['conflicts'] > 0) {
+                $meta[$key]['conflicts'] = $bucket['conflicts'];
+            }
+        }
+
+        return $meta;
+    }
+
+    /**
+     * A stable, collision-free array key for an arbitrary metadata value.
+     *
+     * @param mixed $value Value to encode.
+     * @return string
+     */
+    private static function metaBucketKey(mixed $value): string
+    {
+        return get_debug_type($value) . "\0" . serialize($value);
     }
 
     /**
