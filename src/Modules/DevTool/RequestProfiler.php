@@ -44,6 +44,18 @@ class RequestProfiler
     private array $diagnostics = [];
 
     /**
+     * How many requests this profiler instance has served.
+     *
+     * > 1 means a reused instance under a memory-resident server, so the memos the
+     * framework keeps are warm. The first request pays to populate them and is routinely
+     * several times slower for the same page — a fact a report that does not state it is
+     * actively misleading, because the numbers look like a regression that then vanishes.
+     *
+     * @var int
+     */
+    private int $served = 0;
+
+    /**
      * @param Stopwatch $stopwatch Timing backend and span collector.
      */
     public function __construct(
@@ -64,6 +76,27 @@ class RequestProfiler
         $this->stopwatch->resetSpans();
         $this->startMemory = memory_get_usage();
         $this->stopwatch->start();
+        $this->served++;
+    }
+
+    /**
+     * Whether this is the first request served by this profiler instance.
+     *
+     * @return bool
+     */
+    public function isColdRequest(): bool
+    {
+        return $this->served <= 1;
+    }
+
+    /**
+     * How many requests this profiler instance has served, including the current one.
+     *
+     * @return int
+     */
+    public function getServedRequests(): int
+    {
+        return $this->served;
     }
 
     /**

@@ -251,7 +251,16 @@ class DebugToolbar
         $route = (string) $view['route'];
         $routeChip = ($route !== '' && $route !== $subtitle) ? $route : '';
 
+        $cold = $profiler->isColdRequest();
+
         $chips = '<span class="badge text-bg-light">' . $this->esc($status > 0 ? (string) $status : '-') . '</span>'
+            // Spelled out because a cold request is routinely several times slower for the
+            // same page, and a report that does not say so reads as a regression.
+            . '<span class="badge ' . ($cold ? 'text-bg-warning' : 'text-bg-secondary') . '"'
+            . ' title="' . ($cold
+                ? 'First request on this worker: framework memos are empty, so this includes population cost'
+                : 'Request #' . $this->esc((string) $profiler->getServedRequests()) . ' on this worker: memos are warm') . '">'
+            . ($cold ? 'cold' : 'warm') . '</span>'
             . '<span class="badge text-bg-secondary">' . $this->esc((string) $view['events']) . ' events</span>'
             . '<span class="badge text-bg-secondary">' . $this->esc((string) $view['memory']) . '</span>'
             . '<span class="badge text-bg-secondary">peak ' . $this->esc((string) $view['peak']) . '</span>'
@@ -370,7 +379,8 @@ class DebugToolbar
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['total_ms'], 2)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['avg_ms'], 3)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['max_ms'], 2)) . '</td>'
-                . '<td style="width:18%"><span class="phue-dt-bar bg-info" style="width:'
+                . '<td class="phue-dt-sharecell">'
+                . '<span class="phue-dt-bar bg-info" style="width:'
                 . $this->esc(number_format($ratio, 2)) . '%"></span>'
                 . '<span class="phue-dt-share">' . $this->esc(number_format($ratio, 1)) . '%</span></td>'
                 . '</tr>';
@@ -738,7 +748,9 @@ class DebugToolbar
         .phue-dt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .phue-dt-sql { max-width: 90ch; white-space: pre-wrap; word-break: break-word; }
         .phue-dt-bar { display: block; height: 9px; min-width: 1px; border-radius: 2px; opacity: .8; }
-        .phue-dt-share { font-size: 10px; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+        .phue-dt-sharecell { width: 20%; white-space: nowrap; }
+        .phue-dt-sharecell .phue-dt-bar { display: inline-block; vertical-align: middle; width: auto; }
+        .phue-dt-share { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; vertical-align: middle; }
         .phue-dt-filter { max-width: 26rem; }
         .phue-dt-json {
             max-height: 46vh; overflow: auto; font-size: 12px;
