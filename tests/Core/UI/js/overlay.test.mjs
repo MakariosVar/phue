@@ -315,7 +315,12 @@ h.suite('focusTrap/escape');
     const trapA = focusTrap(modalA, { onEscape: () => { escapedA += 1; } });
     const trapB = focusTrap(modalB, { onEscape: () => { escapedB += 1; } });
 
-    h.eq('two capture listeners registered', win.listenerCount('keydown'), 2);
+    // Two traps still bring two listeners — one each for Tab. Escape is dispatched by
+    // the shared dismissal stack, which installs exactly one listener for the whole
+    // page, so the total is three. Asserting the total keeps the count honest in both
+    // directions: a trap that forgot its Tab listener, and a stack that installed a
+    // second dispatcher, both fail here.
+    h.eq('two trap listeners plus one shared Escape dispatcher', win.listenerCount('keydown'), 3);
 
     const ev = makeEvent('Escape');
     win.dispatchKeydown(ev);
@@ -331,7 +336,8 @@ h.suite('focusTrap/escape');
     h.ok('Tab was handled by trapTab (prevented for an empty trap)', ev2.defaultPrevented);
 
     trapB.release();
-    h.eq('listener removed on release', win.listenerCount('keydown'), 1);
+    // Trap B's own Tab listener goes; trap A's and the shared Escape dispatcher remain.
+    h.eq('releasing a trap removes only its own listener', win.listenerCount('keydown'), 2);
 
     const ev3 = makeEvent('Escape');
     win.dispatchKeydown(ev3);
@@ -490,6 +496,76 @@ h.suite('focusTrap/focus-restore');
 
     trap.release();
     h.ok('focus is NOT restored to a removed node', doc.activeElement !== trigger);
+}
+
+{
+    // Regression: the loader inlines this file into every component that declares it,
+    // so two components run two copies — two module scopes. State held at module level
+    // was therefore per component, and every promise that has to hold *across*
+    // components held only within one: two overlays meant two trap stacks (both
+    // handled Tab and Escape) and two inert WeakMaps (the first to close released the
+    // background while the second was still open).
+    //
+    // Two imports with different query strings are two genuine module instances, which
+    // is exactly the duplication the loader creates.
+    h.installDom();
+    const doc = h.doc;
+
+    const copyA = await import(`${jsDir}/overlay.js`);
+    const copyB = await import(`${jsDir}/overlay.js?inline-copy=2`);
+
+    h.ok('the two imports are distinct module instances', copyA.focusTrap !== copyB.focusTrap);
+
+    const build = (id) => {
+        const el = h.el('div', { attrs: { id } });
+        doc.body.appendChild(el);
+        return el;
+    };
+
+    // --- the inert refcount, which is the promise that is observable ---
+    // Two traps in *different* parents share one background element. Each inerts it,
+    // so it is held twice; releasing one must not hand the page back while the other
+    // is still open. With a per-copy WeakMap the first release would delete the
+    // attribute and the page would come alive under an open dialog.
+    // Direct children of body, which is where two teleported dialogs actually live.
+    // focusTrap inerts the siblings of its root within the root's own parent, so a
+    // root nested alone inside a wrapper would have nothing to inert and the test
+    // would pass without exercising anything.
+    const background = build('bg');
+    const rootA = build('root-a');
+    const rootB = build('root-b');
+
+    const trapA = copyA.focusTrap(rootA);
+    const trapB = copyB.focusTrap(rootB);
+
+    h.ok('the shared background is inert while both traps hold it', background.hasAttribute('inert'));
+
+    trapA.release();
+    h.ok('releasing one trap of two leaves the background inert', background.hasAttribute('inert'),
+        'the second trap still holds it — a per-copy WeakMap would have released it here');
+
+    trapB.release();
+    h.ok('the last release gives the background back', !background.hasAttribute('inert'));
+
+    // --- the dismissal stack, which is the case this fix exists for ---
+    let fromA = 0;
+    let fromB = 0;
+
+    const escapeA = copyA.registerEscapeHandler(() => { fromA += 1; }, build('ea'));
+    const escapeB = copyB.registerEscapeHandler(() => { fromB += 1; }, build('eb'));
+
+    h.eq('the second copy shares one Escape dispatcher', h.win.listenerCount('keydown'), 1);
+
+    h.win.dispatchKeydown(makeEvent('Escape'));
+    h.eq('Escape goes to the newest registration', fromB, 1);
+    h.eq('and not to the one underneath it', fromA, 0);
+
+    escapeB.release();
+    h.win.dispatchKeydown(makeEvent('Escape'));
+    h.eq('releasing hands Escape back to the surface below', fromA, 1);
+
+    escapeA.release();
+    h.eq('the dispatcher is removed once nothing is registered', h.win.listenerCount('keydown'), 0);
 }
 
 h.finish();

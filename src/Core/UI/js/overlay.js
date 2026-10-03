@@ -10,15 +10,175 @@
  */
 
 /**
+ * The state that has to be common to every overlay on the page, and why it cannot
+ * simply be module-level.
+ *
+ * `PhueComponentLoader` does not hand a component an import of this file. It copies
+ * this file's source into the component's own module, so every component that
+ * declares `composables: ['overlay']` gets its **own copy** — its own module scope,
+ * its own bindings. That is the right call for SSR resolution and for cache busting
+ * (see `.opencode/composables.md` §13.1–13.3), and it is invisible as long as a
+ * module holds nothing but functions.
+ *
+ * It stops being invisible the moment a module holds state. A module-level array or
+ * WeakMap is per component, not per page, so anything that has to be true *across*
+ * components is silently true only within one. Three promises in this file were
+ * exactly that:
+ *
+ *   - `trapStack`      "only the top-most overlay handles Escape/Tab"
+ *   - `inertRefcounts` "an element's inert is removed only when ALL traps release it"
+ *   - `escapeStack`    "Escape belongs to the top-most dismissable surface"
+ *
+ * With one overlay each behaves correctly, which is why the defect survived the
+ * tests: two modals meant two stacks, so both handled Tab and both handled Escape,
+ * and the overlay underneath was released while the one above was still open.
+ *
+ * So the shared state is published on `globalThis` under a versioned key, and every
+ * inlined copy adopts the first copy's object. The version is in the key so two kit
+ * versions on one page cannot read each other's stacks — the failure mode there
+ * would be a stack of the wrong shape, not a clean error.
+ *
+ * SSR is unaffected: the server evaluates modules per request, so `globalThis` there
+ * is per request too. This is the same reason the store instances do *not* live on
+ * `window`, and it is why they may still be module-level — a store has one consumer
+ * by construction, while an overlay registry has one per overlay by definition.
+ */
+const REGISTRY_KEY = '__phueOverlayState_v1';
+
+function overlayRegistry() {
+    const scope = typeof globalThis !== 'undefined' ? globalThis : {};
+
+    if (!scope[REGISTRY_KEY]) {
+        scope[REGISTRY_KEY] = {
+            /** Ordered surfaces that want Escape, newest last. */
+            escapeStack: [],
+            /** The single window listener that dispatches Escape to the top entry. */
+            escapeListener: null,
+            /** Active traps, so only the top-most one constrains Tab. */
+            trapStack: [],
+            /** Inert refcounts, so an element is released only by the last trap. */
+            inertRefcounts: typeof WeakMap !== 'undefined' ? new WeakMap() : null
+        };
+    }
+
+    return scope[REGISTRY_KEY];
+}
+
+const shared = overlayRegistry();
+
+/**
  * WeakMap instance used to track refcounts for inert attributes across nested overlay traps.
  * Ensures an element only has its inert attribute removed when ALL active traps targeting it are released.
+ *
+ * An alias into the shared registry: array and WeakMap identity is stable for the
+ * lifetime of the page, so every push/splice/get below reaches the shared object.
  */
-const inertRefcounts = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+const inertRefcounts = shared.inertRefcounts;
 
 /**
  * Active trap stack tracking active focusTrap instances to ensure only the top-most overlay handles Escape/Tab events.
  */
-const trapStack = [];
+const trapStack = shared.trapStack;
+
+/**
+ * Dismissal stack: every surface that should react to Escape, in the order it opened.
+ *
+ * Separate from `trapStack` on purpose. A trap answers "where may focus go?", which
+ * only a modal-shaped surface has an opinion about; a dropdown does not trap focus
+ * and must not inert the page, so it cannot be a trap. But it absolutely has an
+ * opinion about Escape — and while it handled that on its own `document` keydown
+ * listener, the trap's listener was already registered on `window` in the *capture*
+ * phase, so the trap always ran first. The dropdown's `stopPropagation()` was
+ * therefore dead code against it, and Escape inside a dropdown inside a modal closed
+ * the modal and left the dropdown open.
+ *
+ * `stopPropagation()` cannot fix that ordering from the bubble phase, and would not
+ * help on `window` anyway, where it does not stop a sibling listener on the same
+ * node. So the ordering is expressed once, here, as data.
+ *
+ * @type {Array<{handler: Function, owner: Element|null}>}
+ */
+const escapeStack = shared.escapeStack;
+
+/**
+ * Drops entries whose surface has left the DOM.
+ *
+ * A surface removed without releasing — a v-if that tears the branch down between
+ * two ticks — would otherwise sit on top of the stack and swallow every Escape key
+ * in the document while looking perfectly inert.
+ */
+function pruneEscapeStack() {
+    for (let i = escapeStack.length - 1; i >= 0; i--) {
+        const entry = escapeStack[i];
+        if (entry && entry.owner && entry.owner.isConnected === false) {
+            escapeStack.splice(i, 1);
+        }
+    }
+}
+
+function dispatchEscape(event) {
+    if (!event || event.key !== 'Escape') {
+        return;
+    }
+
+    pruneEscapeStack();
+
+    const top = escapeStack[escapeStack.length - 1];
+    if (top && typeof top.handler === 'function') {
+        top.handler(event);
+    }
+}
+
+/**
+ * Makes `handler` the surface that Escape acts on, until released.
+ *
+ * The last registration wins, which is the whole point: a dropdown opened inside a
+ * modal is the surface the user is looking at, so Escape belongs to it, and the
+ * modal underneath waits its turn.
+ *
+ * @param {Function} handler Called with the keydown event
+ * @param {Element|null} [owner] Surface this belongs to, for stale-entry pruning
+ * @returns {{release: Function}} Idempotent release
+ */
+export function registerEscapeHandler(handler, owner = null) {
+    if (typeof handler !== 'function') {
+        return { release: function() {} };
+    }
+
+    const entry = { handler: handler, owner: owner };
+    escapeStack.push(entry);
+
+    // One listener for the whole stack, installed with the first registration and
+    // taken away with the last, so a page with no overlays has no listener at all.
+    if (shared.escapeListener === null && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        shared.escapeListener = dispatchEscape;
+        window.addEventListener('keydown', shared.escapeListener, true);
+    }
+
+    return {
+        release: function() {
+            const idx = escapeStack.indexOf(entry);
+            if (idx !== -1) {
+                escapeStack.splice(idx, 1);
+            }
+
+            // Only the copy that installed the listener may take it away, and only
+            // once nothing is left on the stack for the others to answer.
+            //
+            // Guarded like the registration above it: release() runs from
+            // beforeUnmount, which the server also runs, and a bare `window` there
+            // is a ReferenceError rather than a no-op. A throw from release would
+            // also skip whatever the caller does next — for a float, tearing down
+            // its scroll tracking.
+            if (escapeStack.length === 0 && shared.escapeListener !== null) {
+                if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+                    window.removeEventListener('keydown', shared.escapeListener, true);
+                }
+                shared.escapeListener = null;
+            }
+        }
+    };
+}
 
 function setInertWithRefcount(el) {
     if (!el || typeof el.setAttribute !== 'function') {
@@ -184,7 +344,8 @@ export function focusTrap(root, options = {}) {
         active: true,
         previousActiveElement: null,
         inertElements: [],
-        listener: null
+        listener: null,
+        escape: null
     };
 
     if (typeof document === 'undefined') {
@@ -233,10 +394,17 @@ export function focusTrap(root, options = {}) {
                 return;
             }
 
-            // Elements that are already inert were made inert by the application, not by this
-            // toolkit. They are deliberately never counted and never released: claiming one
-            // would make release() strip an `inert` attribute the application still owns.
-            if (sibling.hasAttribute('inert')) {
+            // An element that is already inert was made inert either by the application or
+            // by another trap, and the two have to be told apart. Claiming one the
+            // application owns would let release() strip an attribute that is not ours to
+            // remove. But *skipping* one that another trap holds is worse than that: the
+            // refcount never reaches two, so whichever trap closes first strips `inert`
+            // and the page comes alive under a dialog that is still open.
+            //
+            // The refcount map is the discriminator: an entry means a trap holds it, no
+            // entry means the application owns it.
+            const heldByTrap = inertRefcounts ? (inertRefcounts.get(sibling) || 0) > 0 : false;
+            if (sibling.hasAttribute('inert') && !heldByTrap) {
                 return;
             }
 
@@ -251,6 +419,15 @@ export function focusTrap(root, options = {}) {
 
     trapStack.push(trapInstance);
 
+    // Escape is dispatched by the shared dismissal stack rather than here, so a
+    // surface opened inside this dialog gets it first. Tab stays here: only a trap
+    // constrains Tab, and only the topmost trap should.
+    state.escape = registerEscapeHandler(function(event) {
+        if (typeof options.onEscape === 'function') {
+            options.onEscape(event);
+        }
+    }, root);
+
     state.listener = function(event) {
         if (!state.active || !event) {
             return;
@@ -259,13 +436,6 @@ export function focusTrap(root, options = {}) {
         // Active Trap Stack Contract — Only the top active trap processes key events
         const topTrap = trapStack[trapStack.length - 1];
         if (topTrap !== trapInstance) {
-            return;
-        }
-
-        if (event.key === 'Escape') {
-            if (typeof options.onEscape === 'function') {
-                options.onEscape(event);
-            }
             return;
         }
 
@@ -313,6 +483,11 @@ export function focusTrap(root, options = {}) {
             const idx = trapStack.indexOf(trapInstance);
             if (idx !== -1) {
                 trapStack.splice(idx, 1);
+            }
+
+            if (state.escape && typeof state.escape.release === 'function') {
+                state.escape.release();
+                state.escape = null;
             }
 
             if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function' && state.listener) {
