@@ -48,12 +48,15 @@ final class BenchmarkRunner
      * Measures full End-to-End Kernel throughput in Requests Per Second (RPS) through $app->handle($request).
      *
      * @param Application $app Instantiated Phue Application instance with routes configured.
+     * @param string $uri Route to exercise. Must exist, otherwise the measurement reports
+     *                     the cost of a 404 instead of the cost of the route.
      * @param int $iterations Benchmark execution iterations (default: 10,000).
      * @return array{iterations: int, rps: float, total_seconds: float}
      */
-    public function benchmarkKernelThroughput(Application $app, int $iterations = 10000): array
+    public function benchmarkKernelThroughput(Application $app, int $iterations = 10000, string $uri = '/health/live'): array
     {
-        $request = new Request('/health/live', 'GET');
+        // Request's constructor is (method, uri) — the reverse order benchmarks a 404.
+        $request = new Request('GET', $uri);
 
         $startTime = microtime(true);
         for ($i = 0; $i < $iterations; $i++) {
