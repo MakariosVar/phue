@@ -276,7 +276,6 @@ class DebugToolbar
             . $this->esc((string) $view['duration_formatted']) . ' ms</span>'
             . $chips
             . '<span class="ms-auto text-secondary text-truncate phue-dt-subtitle">' . $this->esc($subtitle) . '</span>'
-            . ($routeChip !== '' ? '<span class="text-info-emphasis font-monospace">' . $this->esc($routeChip) . '</span>' : '')
             . '</button>'
             . '<button type="button" id="' . $this->esc($reloadId) . '" class="phue-dt-reload btn btn-sm ms-2"'
             . ' title="Re-run this request so the report matches the current page"'
