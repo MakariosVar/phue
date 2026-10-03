@@ -15,22 +15,21 @@
     >
       <div class="d-flex flex-wrap align-items-center gap-1" role="toolbar" aria-label="Formatting" :aria-controls="editorId">
         <template v-for="item in activeToolbar" :key="item.key">
-          <button
-            v-if="item.kind !== 'mode' && item.kind !== 'divider'"
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            :style="toolButtonStyle"
-            :aria-label="item.label"
-            :title="item.title || item.label"
-            :aria-pressed="stateFor(item)"
-            :disabled="disabled"
-            @mousedown.prevent
-            @click="run(item)"
-          >
-            <ph-icon v-if="item.icon" :name="item.icon" size="sm" />
-            <span v-else>{{ item.text }}</span>
-          </button>
-
+          <ph-tooltip  v-if="item.kind !== 'mode' && item.kind !== 'divider'" :content="item.title || item.label">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              :style="toolButtonStyle"
+              :aria-label="item.label"
+              :aria-pressed="stateFor(item)"
+              :disabled="disabled"
+              @mousedown.prevent
+              @click="run(item)"
+            >
+              <ph-icon v-if="item.icon" :name="item.icon" size="sm" />
+              <span v-else>{{ item.text }}</span>
+            </button>
+          </ph-tooltip>
           <span
             v-else-if="item.kind === 'divider'"
             class="d-inline-block"
