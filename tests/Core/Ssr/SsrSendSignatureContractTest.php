@@ -90,13 +90,25 @@ final class SsrSendSignatureContractTest extends TestCase
                 continue;
             }
 
-            if (!preg_match_all('/->' . preg_quote($method, '/') . '\((.*?)\)\s*;/s', $source, $calls, PREG_OFFSET_CAPTURE)) {
-                continue;
-            }
+            // Match the opening parenthesis of each call, then walk to its MATCHING
+            // close. A non-greedy `\((.*?)\)\s*;` stops at the first `);` in the file,
+            // which for a call nested inside another call — `$fn($label, fn() =>
+            // $client->send($a, $b, $c, $d), $meta)` — swallows the outer call's
+            // arguments and reports a compliant four-argument call site as passing eight.
+            $needle = '->' . $method . '(';
+            $offset = 0;
 
-            foreach ($calls[0] as $index => $call) {
-                $arguments = $calls[1][$index][0];
-                $line = substr_count(substr($source, 0, $calls[0][$index][1]), "\n") + 1;
+            while (($position = strpos($source, $needle, $offset)) !== false) {
+                $open = $position + strlen($needle) - 1;
+                $arguments = $this->balancedArguments($source, $open);
+
+                if ($arguments === null) {
+                    $offset = $open + 1;
+                    continue;
+                }
+
+                $line = substr_count(substr($source, 0, $position), "\n") + 1;
+                $offset = $open + strlen($arguments) + 2;
 
                 preg_match_all('/([a-zA-Z_]\w*)\s*:\s*[^,]+/', $arguments, $named);
 
@@ -143,6 +155,54 @@ final class SsrSendSignatureContractTest extends TestCase
         }
 
         return $sites;
+    }
+
+    /**
+     * Extract the text between the parenthesis at $open and its matching close.
+     *
+     * String literals are skipped so a parenthesis inside SQL, a regex or a message
+     * cannot unbalance the walk.
+     *
+     * @return string|null The argument text, or null when the call is never closed.
+     */
+    private function balancedArguments(string $source, int $open): ?string
+    {
+        $depth = 0;
+        $length = strlen($source);
+        $quote = null;
+
+        for ($i = $open; $i < $length; $i++) {
+            $char = $source[$i];
+
+            if ($quote !== null) {
+                if ($char === '\\') {
+                    $i++;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                continue;
+            }
+
+            if ($char === '(') {
+                $depth++;
+                continue;
+            }
+
+            if ($char === ')') {
+                $depth--;
+
+                if ($depth === 0) {
+                    return substr($source, $open + 1, $i - $open - 1);
+                }
+            }
+        }
+
+        return null;
     }
 
     public function testTheSignatureContractIsNotEmpty(): void
