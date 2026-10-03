@@ -90,7 +90,7 @@ final class PhueComponentChildResolutionCostTest extends TestCase
     /**
      * Walks the graph rooted at $rootName and returns the loader's call counters.
      *
-     * @return array{buildFor: int, hasComponent: int, nodes: int}
+     * @return array{buildFor: int, moduleHash: int, hasComponent: int, nodes: int}
      */
     private function walk(string $rootName): array
     {
@@ -102,6 +102,7 @@ final class PhueComponentChildResolutionCostTest extends TestCase
 
         return [
             'buildFor' => $this->loader->buildForCalls,
+            'moduleHash' => $this->loader->moduleHashCalls,
             'hasComponent' => $this->loader->hasComponentCalls,
             'nodes' => count($graph),
         ];
@@ -304,6 +305,188 @@ final class PhueComponentChildResolutionCostTest extends TestCase
             $this->loader->hasComponentCalls,
             'clearMemo() is the process-level flush and must drop the child memo too'
         );
+    }
+
+
+    // ------------------------------------------ child HASH resolution (distinct
+    // ------------------------------------------------ from child discovery)
+
+    /**
+     * The guard this file was missing.
+     *
+     * Child DISCOVERY — the regex scan of a template — is memoised per file and
+     * guarded above. Child HASH RESOLUTION is a different cost and is not guarded
+     * anywhere in the suite: CountingComponentLoader has carried a moduleHashCalls
+     * counter since it was written, and no test ever asserted on it.
+     *
+     * buildFor() resolves each child's hash through the registry BEFORE it reaches
+     * its own memo check, because the memo's fingerprint is built from those child
+     * hashes. So a visit to a node re-walks that node's whole subtree. The cost of
+     * one walk is therefore the SUM of every subtree, which is quadratic in the
+     * depth of the dependency graph — and it is invisible to the chain fixture
+     * above, where nodes equal edges and quadratic is indistinguishable from linear.
+     *
+     * Measured on a branching graph (root -> N sections -> N leaves each), one
+     * request each, counting the second walk:
+     *
+     *     nodes   buildFor   moduleHash   moduleHash per node
+     *         5          15           15                    3.0
+     *         7          28           28                    4.0
+     *         9          45           45                    5.0
+     *        13          91           91                    7.0
+     *        17         153          153                    9.0
+     *        21         231         231                   11.0
+     *
+     * buildFor() and moduleHash() move in lockstep because moduleHash() delegates to
+     * buildFor(). The per-node ratio climbs by roughly one for every node added —
+     * the signature of quadratic total work, since moduleHash settles at about
+     * (n^2 + 2n) / 2. On the real PhUI graph the same shape produced 11,572 hash
+     * resolutions and 3,882 builds for a single /phui request.
+     */
+    public function testChildHashResolutionIsNotRepeatedForEveryParentVisit(): void
+    {
+        $this->writeBranchingGraph(8, 8);
+
+        $this->registry->beginRequest();
+        $result = $this->walk('Root');
+
+        $this->assertSame(17, $result['nodes'], 'fixture should resolve 17 components');
+
+        // A memoised traversal enters each distinct node once: V entries from the
+        // resolver plus at most E from the parents, and a tree has E = V - 1. Three per
+        // node leaves room for both without giving the current behaviour room to pass:
+        // 17 nodes currently issue 153.
+        $budget = $result['nodes'] * 3;
+
+        $this->assertLessThanOrEqual(
+            $budget,
+            $result['moduleHash'],
+            sprintf(
+                'A %d-node graph issued %d child hash resolutions (budget %d). Each distinct component must be '
+                . 'hashed a bounded number of times per request; a count that scales with the depth of the graph '
+                . 'means buildFor() re-walks each subtree on every visit.',
+                $result['nodes'],
+                $result['moduleHash'],
+                $budget
+            )
+        );
+    }
+
+    /**
+     * The shape assertion, which is the one that actually distinguishes a memoised
+     * traversal from a re-walking one: the per-node ratio must not grow with the
+     * graph. A single budget could be satisfied by an implementation that merely got
+     * less bad; this cannot.
+     */
+    public function testHashResolutionPerNodeDoesNotGrowWithTheGraph(): void
+    {
+        $this->writeBranchingGraph(3, 3);
+        $small = $this->walkOnFreshGraph('Small', 3, 3);
+
+        $this->writeBranchingGraph(9, 9);
+        $large = $this->walkOnFreshGraph('Large', 9, 9);
+
+        $smallRatio = $small['moduleHash'] / max(1, $small['nodes']);
+        $largeRatio = $large['moduleHash'] / max(1, $large['nodes']);
+
+        $this->assertLessThanOrEqual(
+            $smallRatio * 2,
+            $largeRatio,
+            sprintf(
+                'Hash resolutions per node grew from %.1f (%d nodes) to %.1f (%d nodes) as the graph grew 3x. '
+                . 'A per-node ratio that climbs with graph size is quadratic work.',
+                $smallRatio,
+                $small['nodes'],
+                $largeRatio,
+                $large['nodes']
+            )
+        );
+    }
+
+    /**
+     * Sanity for the two guards above: a memoised traversal still has to DO the work,
+     * so a fix that simply skips resolution would pass the budget and fail this.
+     */
+    public function testEveryNodeStillGetsItsHashResolved(): void
+    {
+        $this->writeBranchingGraph(4, 4);
+
+        $this->registry->beginRequest();
+        $before = $this->walk('Root');
+        $after = $this->walk('Root');
+
+        $this->assertGreaterThan(0, $before['moduleHash'], 'sanity: the walk must resolve child hashes at all');
+        $this->assertSame(
+            $before['moduleHash'],
+            $after['moduleHash'],
+            'a second walk in the same request must cost the same, not less'
+        );
+    }
+
+    /**
+     * A root referencing N sections, each referencing N leaves.
+     */
+    private function writeBranchingGraph(int $sections, int $leaves): void
+    {
+        for ($l = 0; $l < $leaves; $l++) {
+            $this->write("Leaf{$l}", "<i>leaf {$l}</i>", "Leaf{$l}");
+        }
+
+        for ($s = 0; $s < $sections; $s++) {
+            $kids = '';
+            for ($l = 0; $l < $leaves; $l++) {
+                $kids .= "<Leaf{$l} />";
+            }
+            $this->write("Section{$s}", "<section>{$kids}</section>", "Section{$s}");
+        }
+
+        $rootKids = '';
+        for ($s = 0; $s < $sections; $s++) {
+            $rootKids .= "<Section{$s} />";
+        }
+        $this->write('Root', "<main>{$rootKids}</main>", 'Root');
+    }
+
+    /**
+     * Walk a graph under a distinct root name and return the loader's call counters.
+     *
+     * @return array{buildFor: int, moduleHash: int, hasComponent: int, nodes: int}
+     */
+    private function walkOnFreshGraph(string $root, int $sections, int $leaves): array
+    {
+        // Each root gets its own component names so the two measurements cannot share a
+        // memo entry, which would make the second one look artificially cheap.
+        $suffix = substr(sha1($root), 0, 6);
+
+        for ($l = 0; $l < $leaves; $l++) {
+            $this->write("{$root}Leaf{$suffix}{$l}", "<i>leaf</i>", "Leaf");
+        }
+        for ($s = 0; $s < $sections; $s++) {
+            $kids = '';
+            for ($l = 0; $l < $leaves; $l++) {
+                $kids .= "<{$root}Leaf{$suffix}{$l} />";
+            }
+            $this->write("{$root}Section{$suffix}{$s}", "<section>{$kids}</section>", "Section");
+        }
+        $rootKids = '';
+        for ($s = 0; $s < $sections; $s++) {
+            $rootKids .= "<{$root}Section{$suffix}{$s} />";
+        }
+        $this->write($root, "<main>{$rootKids}</main>", 'Root');
+
+        $this->registry->beginRequest();
+        $discoverer = new ComponentDiscoverer($this->registry);
+        $nodes = count($discoverer->resolveTransitiveDependencies($root));
+
+        $this->loader->resetCounters();
+        $discoverer->resolveTransitiveDependencies($root);
+
+        return [
+            'buildFor' => $this->loader->buildForCalls,
+            'moduleHash' => $this->loader->moduleHashCalls,
+            'hasComponent' => $this->loader->hasComponentCalls,
+            'nodes' => $nodes,
+        ];
     }
 
     // ------------------------------------------------- correctness of the memo
