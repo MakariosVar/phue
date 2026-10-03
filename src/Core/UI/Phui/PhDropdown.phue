@@ -117,6 +117,13 @@ export default {
       panelSize: { width: 0, height: 0 },
       /** Output of positionFor(), or null while the menu is not yet placeable. */
       panelPos: null,
+      /**
+       * Resolved once per open, not per render: the menu has to paint above the
+       * overlay it was teleported out of, and reading that overlay's computed
+       * z-index inside a computed property would force a style recalc on every
+       * render. Null when the trigger is not inside one.
+       */
+      overlayLayer: null,
       viewportHandle: null
     };
   },
@@ -156,7 +163,7 @@ export default {
         position: 'absolute',
         top: `${this.panelPos.top}px`,
         left: `${this.panelPos.left}px`,
-        zIndex: MENU_Z
+        zIndex: this.overlayLayer || MENU_Z
       };
     }
   },
@@ -248,6 +255,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.overlayLayer = overlayLayerFor(this.$refs.root, MENU_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
       // The menu is teleported, so it does not exist until Vue has flushed the
@@ -262,6 +270,7 @@ export default {
         this.viewportHandle = null;
       }
       this.panelPos = null;
+      this.overlayLayer = null;
     },
     toggle() {
       if (this.disabled) return;

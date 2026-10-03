@@ -122,6 +122,20 @@ import { useId } from "vue";
 // Gap between the control and the list, on whichever side it opens.
 const LIST_GAP = 4;
 
+/**
+ * The layer an anchored panel paints at on a plain page.
+ *
+ * Deliberately below the overlay layers (the modal sits at 1055): a dropdown on
+ * the page must not float over a dialog that is already open. That ordering is
+ * what the layer table in `PhUI_Components.md` encodes, and a test enforces it.
+ *
+ * It is only the right answer when the trigger is *not* inside one of those
+ * overlays. A panel that teleports out of a modal lands in this layer as a sibling
+ * of the modal, which means underneath its opaque surface — so open-time
+ * `overlayLayerFor()` raises it past whatever it escaped.
+ */
+const PANEL_Z = 1040;
+
 export default {
   name: 'PhSelect3',
   composables: ['position'],
@@ -261,7 +275,7 @@ export default {
         display: 'block',
         maxHeight: '16rem',
         overflowY: 'auto',
-        zIndex: 1040,
+        zIndex: this.overlayLayer || PANEL_Z,
         // The layer of an anchored float: it opens over page content, and staying
         // under the modal layer is what keeps a select inside a modal in that modal.
         width: '0px'
@@ -606,6 +620,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.overlayLayer = overlayLayerFor(this.$refs.control, PANEL_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
       // The list is teleported, so it does not exist until Vue has flushed the

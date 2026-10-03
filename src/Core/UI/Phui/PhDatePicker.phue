@@ -133,6 +133,20 @@ const PANEL_MIN_WIDTH = 272;
 // Breathing room kept between the calendar and the viewport edge when clamping.
 const VIEWPORT_MARGIN = 8;
 
+/**
+ * The layer an anchored panel paints at on a plain page.
+ *
+ * Deliberately below the overlay layers (the modal sits at 1055): a dropdown on
+ * the page must not float over a dialog that is already open. That ordering is
+ * what the layer table in `PhUI_Components.md` encodes, and a test enforces it.
+ *
+ * It is only the right answer when the trigger is *not* inside one of those
+ * overlays. A panel that teleports out of a modal lands in this layer as a sibling
+ * of the modal, which means underneath its opaque surface — so open-time
+ * `overlayLayerFor()` raises it past whatever it escaped.
+ */
+const PANEL_Z = 1040;
+
 export default {
   name: 'PhDatePicker',
   composables: ['position'],
@@ -211,6 +225,13 @@ export default {
       panelSize: { width: 0, height: 0 },
       /** Output of positionFor(), or null while the panel is not yet placeable. */
       panelPos: null,
+      /**
+       * Resolved once per open, not per render: the panel has to paint above the
+       * overlay it was teleported out of, and reading that overlay's computed
+       * z-index inside a computed property would force a style recalc on every
+       * render. Null when the trigger is not inside one.
+       */
+      overlayLayer: null,
       viewportHandle: null
     };
   },
@@ -282,7 +303,7 @@ export default {
         position: 'absolute',
         display: 'block',
         minWidth: '17rem',
-        zIndex: 1040,
+        zIndex: this.overlayLayer || PANEL_Z,
         width: '0px'
       };
 
@@ -508,6 +529,7 @@ export default {
       if (this.viewportHandle) return;
 
       this.measureAnchor();
+      this.overlayLayer = overlayLayerFor((this.$refs.control || this.$refs.triggerButton || this.$refs.root), PANEL_Z);
       this.viewportHandle = trackViewport(this.reposition);
 
       this.$nextTick(() => {
@@ -520,6 +542,7 @@ export default {
         this.viewportHandle = null;
       }
       this.panelPos = null;
+      this.overlayLayer = null;
     },
     onKeydown(event) {
       if (event.key === 'Escape' && this.open) {
