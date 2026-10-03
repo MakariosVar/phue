@@ -59,6 +59,7 @@
         which is the whole point of not putting a pointer-eater over it.
       -->
       <div
+        v-if="trigger === 'click'"
         data-phui="popover-backdrop"
         style="position: fixed; inset: 0; z-index: 1069;"
         @click="close"
