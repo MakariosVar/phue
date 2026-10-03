@@ -183,21 +183,27 @@ final class PhueComponentChildResolutionCostTest extends TestCase
 
         $this->assertSame(6, $result['nodes'], 'fixture should resolve 6 components (root, 4 sections, shared leaf)');
 
-        // One existence check per child tag, per buildFor entry, per candidate
-        // loader. This fixture's root declares four children, so the observed
-        // ratio sits under 3; the factor leaves headroom without going soft.
-        $budget = $result['buildFor'] * 3;
+        // A per-visit rescan shows up as a rising per-node ratio, which no single
+        // absolute budget can distinguish from "merely expensive". Comparing two graph
+        // sizes is the form that actually fails: quadratic work doubles the ratio when
+        // the graph doubles, linear work leaves it flat.
+        $small = $this->walkOnFreshGraph('Shallow', 3, 3);
+        $large = $this->walkOnFreshGraph('Wider', 7, 7);
+
+        $smallRatio = $small['hasComponent'] / max(1, $small['nodes']);
+        $largeRatio = $large['hasComponent'] / max(1, $large['nodes']);
 
         $this->assertLessThanOrEqual(
-            $budget,
-            $result['hasComponent'],
+            $smallRatio * 2,
+            $largeRatio,
             sprintf(
-                'A full walk issued %d existence checks across %d buildFor entries (budget %d). Existence checks '
-                . 'must stay proportional to buildFor entries — they are one per child tag of the template being '
-                . 'built, and a count that outgrows that ratio means templates are being re-walked per visit.',
-                $result['hasComponent'],
-                $result['buildFor'],
-                $budget
+                'Existence checks per node grew from %.1f (%d nodes) to %.1f (%d nodes) as the graph grew. '
+                . 'A scan must happen once per distinct template; a count that climbs with graph size means '
+                . 'templates are re-scanned on every visit.',
+                $smallRatio,
+                $small['nodes'],
+                $largeRatio,
+                $large['nodes']
             )
         );
 
