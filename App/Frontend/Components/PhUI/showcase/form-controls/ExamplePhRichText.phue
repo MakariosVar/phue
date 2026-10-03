@@ -147,7 +147,7 @@ export default {
 
       propsData: [
         { name: "modelValue", type: "String", default: "''", notes: "The document, <strong>in the current mode</strong>" },
-        { name: "mode", type: "String", default: "'html'", notes: "<code>html</code> \\| <code>markdown</code>. Switching it <strong>converts</strong> the content" },
+        { name: "mode", type: "String", default: "'html'", notes: "<code>html</code> | <code>markdown</code>. Switching it <strong>converts</strong> the content" },
         { name: "label", type: "String", default: "''", notes: "" },
         { name: "name", type: "String", default: "''", notes: "Forwarded to a hidden input, so <code>&lt;ph-form&gt;</code> can validate and submit it. The editing surface is a <code>contenteditable</code> div, which is not labelable" },
         { name: "ariaLabel", type: "String", default: "'Rich text'", notes: "Accessible name, used only when no visible <code>label</code> is rendered" },
