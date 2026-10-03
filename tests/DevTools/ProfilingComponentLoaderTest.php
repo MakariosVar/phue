@@ -136,7 +136,7 @@ class ProfilingComponentLoaderTest extends TestCase
         $this->assertSame($expected->view->getTemplate(), $actual->view->getTemplate());
     }
 
-    public function testEveryResolutionMethodEmitsItsOwnLabel(): void
+    public function testEveryResolutionMethodEmitsALabel(): void
     {
         $this->writePhue('PhButton');
         $loader = $this->decorating();
@@ -154,10 +154,15 @@ class ProfilingComponentLoaderTest extends TestCase
             'loader.moduleHash',
             'loader.rawModuleHash',
             'loader.buildForSsr',
-            'loader.component.load',
         ] as $expected) {
             $this->assertContains($expected, $labels);
         }
+
+        // load() deliberately shares the registry's label. The registry dispatches into
+        // this method, so a label of its own would report one load as two rows and the
+        // rollup could not be trusted to say how many loads a request made.
+        $this->assertContains('loader.load', $labels);
+        $this->assertNotContains('loader.component.load', $labels);
     }
 
     public function testRepeatedResolutionIsCounted(): void

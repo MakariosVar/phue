@@ -67,14 +67,21 @@ class ProfilingComponentLoader extends PhueComponentLoader
     /**
      * Evaluate a component, recording the call.
      *
+     * Shares the 'loader.load' label with ProfilingComponentLoaderRegistry::load() on
+     * purpose: the registry dispatches straight into this method, so two labels would
+     * report one load as two rows in the rollup. Sharing the label lets the fold in
+     * Stopwatch collapse the nested frame, which keeps the count at the number of loads
+     * that were actually requested while still charging the work to the operation. A load
+     * that bypasses the registry — ComponentRenderer calls the loader directly — is a
+     * top-level frame and is counted on its own, which is what it is.
+     *
      * @param string $name Component logical name.
-     * @param array<string, mixed> $params Evaluation parameters.
      * @return PhueComponent
      */
     public function load(string $name, array $params = []): PhueComponent
     {
         return $this->profiler->measure(
-            'loader.component.load',
+            'loader.load',
             fn(): PhueComponent => parent::load($name, $params),
             ['component' => $name]
         );

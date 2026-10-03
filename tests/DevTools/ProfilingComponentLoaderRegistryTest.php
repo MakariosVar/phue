@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Modules\DevTool\ProfilingComponentLoader;
 use Phue\Modules\DevTool\ProfilingComponentLoaderRegistry;
 use Phue\Modules\DevTool\RequestProfiler;
 use Phue\Modules\DevTool\Stopwatch;
@@ -62,6 +63,85 @@ class ProfilingComponentLoaderRegistryTest extends TestCase
         $this->registry->addLoader(fn (): PhueComponentLoader => $this->loader());
 
         return $this;
+    }
+
+    /**
+     * Add the instrumented loader, the way DevToolsModule wires it in a real request.
+     *
+     * @return self
+     */
+    private function withProfilingLoader(): self
+    {
+        $this->registry->addLoader(fn (): PhueComponentLoader => new ProfilingComponentLoader(
+            componentsDir: $this->componentsDir,
+            persistentCache: null,
+            viewsCacheDir: null,
+            compilerBridge: new \Phue\Core\UI\TemplateCompilerBridge(
+                socketPath: '/tmp/phue-does-not-exist.sock',
+                cache: null
+            ),
+            profiler: $this->profiler
+        ));
+
+        return $this;
+    }
+
+    // ------------------------------------------------- one operation, one label
+
+    public function testLoadDispatchedToTheLoaderIsOneRowNotTwo(): void
+    {
+        $this->writePhue('PhButton');
+        $this->withProfilingLoader();
+
+        $this->registry->load('PhButton');
+        $this->registry->load('PhButton');
+
+        $aggregates = $this->profiler->getAggregates();
+
+        // The registry and the loader are both instrumented, so a shared label folds the
+        // nested frame. Two labels instead of one would make the rollup claim two
+        // operations per load and send the profiling exercise after a cost that is not
+        // in the request.
+        $this->assertArrayHasKey('loader.load', $aggregates);
+        $this->assertSame(2, $aggregates['loader.load']['count']);
+        $this->assertArrayNotHasKey('loader.component.load', $aggregates);
+    }
+
+    public function testDispatchedLoadKeepsTheWorkChargedToTheOperation(): void
+    {
+        $this->writePhue('PhButton');
+        $this->withProfilingLoader();
+
+        $this->registry->load('PhButton');
+
+        $aggregates = $this->profiler->getAggregates();
+        $partition = array_sum(array_column($aggregates, 'exclusive_ms'));
+
+        // Folding a frame must move its time to the parent, never delete it.
+        $this->assertEqualsWithDelta($aggregates['loader.load']['total_ms'], $partition, 0.01);
+    }
+
+    public function testLoadThatBypassesTheRegistryIsStillCounted(): void
+    {
+        $this->writePhue('PhButton');
+
+        // ComponentRenderer calls the loader directly on some paths, which is exactly why
+        // the loader is instrumented at all. A top-level frame has nothing to fold into
+        // and must appear on its own.
+        $loader = new ProfilingComponentLoader(
+            componentsDir: $this->componentsDir,
+            persistentCache: null,
+            viewsCacheDir: null,
+            compilerBridge: new \Phue\Core\UI\TemplateCompilerBridge(
+                socketPath: '/tmp/phue-does-not-exist.sock',
+                cache: null
+            ),
+            profiler: $this->profiler
+        );
+
+        $loader->load('PhButton');
+
+        $this->assertSame(1, $this->profiler->getAggregates()['loader.load']['count']);
     }
 
     // ------------------------------------------------------------ pass-through
