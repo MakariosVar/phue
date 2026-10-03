@@ -236,6 +236,90 @@ final class PhueComponentFreshnessTest extends TestCase
         );
     }
 
+    /**
+     * The invalidation contract for a transitive dependency.
+     *
+     * A parent's module embeds its children's hashes in the import URLs it emits, so the
+     * parent's hash is a function of the WHOLE subtree below it, not of its own file. The
+     * existing test above only proves the direct case: editing the child changes the
+     * parent.
+     *
+     * This is the case a child-hash memo can silently break. Memoising resolved child
+     * hashes by the child's own file identity looks correct — the child's own content did
+     * not change — but the hash it hands back also depends on the child's CHILDREN. Edit
+     * the grandchild and the child's hash changes; a memo keyed on the child's file never
+     * learns that, the parent keeps a stale fingerprint, and buildFor() returns stale code
+     * from its memo without ever noticing.
+     *
+     * The failure is invisible in normal operation: no exception, no warning, a page that
+     * renders yesterday's markup. It has to be asserted.
+     */
+    public function testGrandchildEditChangesAncestorModuleHash(): void
+    {
+        $this->write('Grandchild.phue', '<span>grandchild v1</span>', 'Grandchild');
+        $this->write('Child.phue', '<div><Grandchild /></div>', 'Child');
+        $this->write('Parent.phue', '<main><Child /></main>', 'Parent');
+        $this->registry->beginRequest();
+
+        $before = $this->registry->moduleHash('Parent');
+        $this->assertIsString($before);
+
+        // Only the grandchild's content changes. The child's file is untouched, so any
+        // memo keyed on the child's own identity considers it valid.
+        $this->write('Grandchild.phue', '<span>grandchild v2 changed</span>', 'Grandchild');
+        $this->registry->beginRequest();
+
+        $after = $this->registry->moduleHash('Parent');
+
+        $this->assertIsString($after);
+        $this->assertNotSame(
+            $before,
+            $after,
+            'a grandparent module embeds its descendant hashes, so a grandchild edit must change its hash; '
+            . 'a resolved-child-hash memo keyed on the child\'s own file identity cannot see this'
+        );
+    }
+
+    /**
+     * The same contract, asserted on the emitted module rather than on the hash, because
+     * a hash comparison can pass for the wrong reason: a rebuild that happens to produce
+     * an identical hash would satisfy it while still serving stale imports.
+     */
+    public function testGrandchildEditChangesTheImportsTheParentEmits(): void
+    {
+        $this->write('Grandchild.phue', '<span>grandchild v1</span>', 'Grandchild');
+        $this->write('Child.phue', '<div><Grandchild /></div>', 'Child');
+        $this->write('Parent.phue', '<main><Child /></main>', 'Parent');
+        $this->registry->beginRequest();
+
+        $childBefore = $this->registry->moduleHash('Child');
+        $this->assertIsString($childBefore);
+        $parentBefore = $this->lib->buildFor('Parent');
+        $this->assertIsString($parentBefore);
+
+        $this->write('Grandchild.phue', '<span>grandchild v2 changed</span>', 'Grandchild');
+        $this->registry->beginRequest();
+
+        $childAfter = $this->registry->moduleHash('Child');
+        $parentAfter = $this->lib->buildFor('Parent');
+
+        $this->assertIsString($childAfter);
+        $this->assertIsString($parentAfter);
+
+        $this->assertNotSame($childBefore, $childAfter, 'the child hash must follow the grandchild');
+        $this->assertStringContainsString(
+            "Child.{$childAfter}.phue.js",
+            $parentAfter,
+            'the parent module must import the child by its CURRENT hash'
+        );
+        $this->assertStringNotContainsString(
+            "Child.{$childBefore}.phue.js",
+            $parentAfter,
+            'a parent still importing the pre-edit child hash is serving a stale module'
+        );
+        $this->assertNotSame($parentBefore, $parentAfter);
+    }
+
     public function testResolutionAlwaysSeesAFileChangeWithNoManualInvalidation(): void
     {
         // The strongest form of the contract, and the one the loader now honours.
