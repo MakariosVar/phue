@@ -114,7 +114,7 @@ Inspect the current graph any time with:
 | `Phue\Modules\Server\ServerModule` | `server` | *(none)* | Registers the Swoole serve command (`serve`) |
 | `Phue\Modules\Events\EventModule` | `events` | *(none)* | Event bus drivers, SSE response/streamer, `#[Broadcastable]` |
 | `Phue\Modules\Compiler\CompilerModule` | `compiler` | *(none)* | AOT wiring generator, compatibility checker, fallback strategy |
-| `Phue\Modules\DevTool\DevToolsModule` | `devtools` | *(none)* | Debug toolbar middleware (enabled when `app.debug` **and** `app.devTool`) |
+| `Phue\Modules\DevTool\DevToolsModule` | `devtools` | *(none)* | Request profiler + collapsible debug toolbar, instrumenting the SSR transport, component loaders and the database driver (enabled when `app.debug` **and** `app.devTool`) |
 
 Notes worth knowing:
 
@@ -123,9 +123,14 @@ Notes worth knowing:
   appends `'auth'` to its own `requires` and routes CRUD through
   `AuthorizedModelEndpoint`; otherwise it degrades gracefully to the bare
   `ModelEndpoint`.
-- **DevTool gating**: `DevToolsModule::bindings()` checks both `app.debug` and
-  `app.devTool` before attaching the debug toolbar middleware — the toolbar
-  never runs in production.
+- **DevTool gating**: `DevToolsModule::bindings()` returns early unless both
+  `app.debug` and `app.devTool` are set — the toolbar leaks request internals
+  into the page, so a non-debug context must be unreachable however the flags
+  are combined. The module does not merely attach middleware: it binds the
+  collector as a singleton and installs decorators over the SSR transport, the
+  component loaders and the database driver. Panel toggles, theme mode and SQL
+  redaction live in `config/devtool.php`; see
+  [Server Adapters §5](Server-Adapters.md#5-devtools-phuemodulesdevtool).
 - **Rest requires auth**: enforced twice — by `Application::loadModules()`
   (boot-time `RuntimeException`) and by the `phue-create` installer, which
   auto-selects `auth` when you pick `rest`.

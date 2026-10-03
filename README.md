@@ -88,7 +88,7 @@ modules a project needs — everything else stays out.
 | `server` | Swoole persistent server adapter (and friends) | [Server Adapters](docs/Server-Adapters.md) |
 | `events` | Redis Streams event bus + SSE streaming, `#[Broadcastable]` | [Events](docs/Events.md) |
 | `compiler` | AOT compiler & wiring generation | [Server Adapters](docs/Server-Adapters.md) |
-| `devtools` | Debug toolbar + profiler (development) | [Server Adapters](docs/Server-Adapters.md) |
+| `devtools` | Collapsible debug toolbar + request profiler: timeline, SSR round trips, component builds, SQL (development) | [Server Adapters](docs/Server-Adapters.md) |
 
 > Want to know how it all fits together? Read [Core](docs/Core.md) and
 > [Modules](docs/Modules.md). Creating your own module is a first-class use case,
@@ -166,7 +166,7 @@ If you omit the project name, the installer prompts for one:
   ◻ server   —  Swoole persistent server adapter
   ◻ events   —  Events: Redis Streams bus + SSE
   ◻ compiler —  AOT compiler: wiring generation
-  ◻ devtools —  Dev tools: debug toolbar, profiler
+  ◻ devtools —  Dev tools: collapsible debug toolbar + request profiler (spans, SSR, components, SQL)
 ```
 
 > Dependencies are resolved automatically: selecting `rest` (which requires
@@ -332,7 +332,7 @@ DB_PASSWORD=
 |---|---|
 | `APP_NAME` | Brand label (`NavigationConfig::getAppBrand()`) |
 | `APP_ENV`, `APP_DEBUG` | Environment + error verbosity |
-| `APP_DEV_TOOL` | DevTools debug toolbar (needs `APP_DEBUG=true` too) |
+| `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §5](docs/Server-Adapters.md) |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
 

@@ -38,7 +38,7 @@ If you omit the project name, the installer prompts for one:
   ◻ server   —  Swoole persistent server adapter
   ◻ events   —  Events: Redis Streams bus + SSE
   ◻ compiler —  AOT compiler: wiring generation
-  ◻ devtools —  Dev tools: debug toolbar, profiler
+  ◻ devtools —  Dev tools: collapsible debug toolbar + request profiler (spans, SSR, components, SQL)
 ```
 
 > Dependencies are resolved automatically: selecting `rest` (which requires `auth`) adds `auth` for you with a note in the output.
@@ -187,7 +187,7 @@ DB_PASSWORD=
 |---|---|
 | `APP_NAME` | Brand label (`NavigationConfig::getAppBrand()`) |
 | `APP_ENV`, `APP_DEBUG` | Environment + error verbosity |
-| `APP_DEV_TOOL` | DevTools debug toolbar (needs `APP_DEBUG=true` too) |
+| `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §5](Server-Adapters.md) |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
 
