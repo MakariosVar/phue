@@ -2,6 +2,7 @@
   <teleport to="body" v-if="modelValue">
     <div
       v-if="modelValue"
+      ref="dialogRoot"
       class="modal fade show d-block"
       tabindex="-1"
       role="dialog"
@@ -40,6 +41,7 @@
 <script>
 export default {
   name: 'PhModal',
+  composables: ['overlay'],
   props: {
     modelValue: {
       type: Boolean,
@@ -64,6 +66,11 @@ export default {
     }
   },
   emits: ['update:modelValue', 'close'],
+  data() {
+    return {
+      trap: null
+    };
+  },
   computed: {
     sizeClass() {
       const map = {
@@ -76,7 +83,65 @@ export default {
       return map[this.size] || '';
     }
   },
+  watch: {
+    modelValue(value) {
+      if (value) {
+        this.activate();
+      } else {
+        this.deactivate();
+      }
+    }
+  },
+  mounted() {
+    if (this.modelValue) {
+      this.activate();
+    }
+  },
+  beforeUnmount() {
+    this.deactivate();
+  },
   methods: {
+    /**
+     * Holds focus inside the dialog for as long as it is open.
+     *
+     * This modal teleports to `body`, which is exactly what lets it escape a
+     * scrolling ancestor — and also what leaves the page behind it fully
+     * interactive. Without a trap, Tab walks straight out of the dialog into
+     * content the reader cannot see, a screen reader can reach the same content,
+     * and nothing moves focus in or back when the dialog opens or closes.
+     *
+     * PhDrawer and PhConfirmDialog already delegate this; the modal was the one
+     * modal surface that did not, and PhCommandPalette inherits the gap because
+     * it renders a PhModal.
+     */
+    activate() {
+      // The dialog is teleported and only rendered while modelValue is true, so
+      // the ref does not exist until Vue has flushed the open state.
+      this.$nextTick(() => {
+        const root = this.$refs.dialogRoot;
+        if (!root) {
+          return;
+        }
+
+        this.releaseTrap();
+        this.trap = focusTrap(root, {
+          onEscape: () => {
+            if (this.closable) {
+              this.close();
+            }
+          }
+        });
+      });
+    },
+    deactivate() {
+      this.releaseTrap();
+    },
+    releaseTrap() {
+      if (this.trap && typeof this.trap.release === 'function') {
+        this.trap.release();
+      }
+      this.trap = null;
+    },
     close() {
       this.$emit('update:modelValue', false);
       this.$emit('close');
