@@ -28,7 +28,7 @@ final class PhuiComposableBehaviourTest extends TestCase
     {
         return [
             'overlay focus trap' => ['overlay.test.mjs', 'focus trap / inert', 70],
-            'position geometry' => ['position.test.mjs', 'positioning', 86],
+            'position geometry' => ['position.test.mjs', 'positioning', 98],
             'toast + confirm stores' => ['store.test.mjs', 'shared stores', 140],
         ];
     }

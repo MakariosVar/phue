@@ -148,6 +148,16 @@ export function positionFor(anchor, options = {}) {
         top,
         width: targetWidth,
         flipped,
+        // Whether the trigger has left the viewport entirely.
+        //
+        // Clamp and this are two halves of one decision. Clamping exists to stop an
+        // *onscreen* panel from hanging off an edge, but it cannot tell that case
+        // from a panel whose trigger has scrolled away: the clamp then pins it to the
+        // viewport edge, so a menu whose button is two screens away stays glued to the
+        // bottom of the screen, still open, following nothing. Reported rather than
+        // acted on — whether to hide, detach or close is the caller's policy, and this
+        // function stays pure.
+        offscreen: isOffscreen(anchor, opts),
         measured: true
     };
 }
@@ -230,6 +240,35 @@ export function releaseViewport(handle) {
             window.removeEventListener('resize', handle.onResize);
         }
     }
+}
+
+/**
+ * True when the anchor no longer intersects the viewport.
+ *
+ * Only the window viewport, not the nearest scrolling ancestor: on a page whose
+ * scroller is an inner column, a trigger can be clipped by that column while still
+ * being inside the window, and that case stays visible. Narrower than ideal, and
+ * deliberately so — the alternative needs the clipping element, which a geometry
+ * function has no business reaching for.
+ *
+ * Unmeasurable viewports (zero, or an SSR render) answer false, so a panel is never
+ * hidden because nobody could measure the page.
+ *
+ * @param {Object} anchor Viewport-space anchor rect
+ * @param {Object} opts Resolved options, carrying the viewport
+ * @returns {boolean}
+ */
+function isOffscreen(anchor, opts) {
+    if (opts.viewport.width <= 0 || opts.viewport.height <= 0) {
+        return false;
+    }
+
+    const left = anchor.left || 0;
+    const top = anchor.top || 0;
+    const right = anchor.right !== undefined ? anchor.right : left + (anchor.width || 0);
+    const bottom = anchor.bottom !== undefined ? anchor.bottom : top + (anchor.height || 0);
+
+    return right <= 0 || bottom <= 0 || left >= opts.viewport.width || top >= opts.viewport.height;
 }
 
 /**

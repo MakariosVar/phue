@@ -258,7 +258,11 @@ float escapes the clip but detaches from the trigger on scroll; an **in-flow**
    clip and loses the trigger. Use document space.
 3. **An anchored float re-measures on scroll, in the capture phase.** A plain
    `scroll` listener does not fire for nested scrollers, which is where the
-   interesting ones are.
+   interesting ones are. A float whose trigger has left the viewport **hides**
+   rather than following: clamping exists to stop an *onscreen* panel from hanging
+   off an edge, and applied to a panel whose trigger is two screens away it pins the
+   panel to the viewport edge instead — an open menu at the bottom of the screen,
+   attached to nothing.
 4. **No component owns a layer number.** They come from the shared table, so a new
    overlay cannot silently land under sticky chrome or over the toasts.
 

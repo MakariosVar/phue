@@ -483,4 +483,50 @@ h.suite('trackViewport');
     globalThis.window = savedWindow;
 }
 
+{
+    // Clamping and this are two halves of one decision. Clamp stops an *onscreen*
+    // panel from hanging off an edge, but it cannot tell that case from a panel whose
+    // trigger has scrolled away — it pins that one to the viewport edge instead, so a
+    // menu whose button is two screens below stays open at the bottom of the screen,
+    // following nothing.
+    const vp = { width: 1000, height: 800 };
+    const at = (l, t, w, hh) => rect(l, t, w, hh);
+    const off = (a) => positionFor(a, { viewport: vp, clamp: true, margin: 8, size: { width: 200, height: 170 } });
+
+    h.eq('a trigger inside the viewport is not offscreen', off(at(100, 300, 100, 40)).offscreen, false);
+    h.eq('a trigger straddling the top edge is not offscreen', off(at(100, -20, 100, 40)).offscreen, false);
+    h.eq('a trigger straddling the bottom edge is not offscreen', off(at(100, 780, 100, 40)).offscreen, false);
+    h.eq('a trigger below the viewport is offscreen', off(at(100, 900, 100, 40)).offscreen, true);
+    h.eq('a trigger far below the viewport is offscreen', off(at(100, 2000, 100, 40)).offscreen, true);
+    h.eq('a trigger scrolled off the top is offscreen', off(at(100, -300, 100, 40)).offscreen, true);
+    h.eq('a trigger left of the viewport is offscreen', off(at(-400, 300, 100, 40)).offscreen, true);
+    h.eq('a trigger right of the viewport is offscreen', off(at(1200, 300, 100, 40)).offscreen, true);
+
+    // The test is in viewport space, so a scrolled document does not change it.
+    h.eq(
+        'offscreen is viewport-space, not document-space',
+        positionFor(at(100, 900, 100, 40), {
+            viewport: vp,
+            clamp: true,
+            margin: 8,
+            size: { width: 200, height: 170 },
+            scroll: { x: 0, y: 4000 }
+        }).offscreen,
+        true
+    );
+
+    // An unmeasurable viewport must never hide a panel: nobody could have measured
+    // the page, and "hide it" is the wrong answer to that.
+    h.eq(
+        'a zero-sized viewport is not treated as offscreen',
+        positionFor(at(100, 300, 100, 40), { viewport: { width: 0, height: 0 } }).offscreen,
+        false
+    );
+
+    // The pinned-at-the-ceiling behaviour this exists to stop, pinned as a number.
+    const pinned = off(at(100, 2000, 100, 40));
+    h.eq('an offscreen panel is still given coordinates', pinned.top, 800 - 170 - 8);
+    h.eq('which is exactly why it needs the flag', pinned.offscreen, true);
+}
+
 h.finish();
