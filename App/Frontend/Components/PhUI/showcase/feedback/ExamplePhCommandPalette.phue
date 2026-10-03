@@ -59,6 +59,14 @@
       <ph-card class="mt-3" v-if="showProps">
         <h4>Props</h4>
         <props-table :items="propsData" />
+        <h4>Emits</h4>
+        <ul>
+          <li><code>update:modelValue</code></li>
+          <li><code>select(entry)</code></li>
+          <li><code>search(query)</code></li>
+          <li><code>open</code></li>
+          <li><code>close(reason)</code></li>
+        </ul>
         <ph-text>
           Results are <b>ranked, not filtered</b>: a label prefix beats a label
           substring, which beats a keyword hit, which beats a hint. Without that
