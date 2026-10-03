@@ -108,25 +108,53 @@ export default {
       showCode: false,
       showDemo: true,
       showProps: true,
-      snippet: `<ph-dropdown
-  label="Actions"
-  variant="outline"
-  size="sm"
-  align="start"
-  :items="[
-    { label: 'Edit',   icon: 'pencil' },
-    { label: 'Archive', icon: 'archive' },
-    { divider: true },
-    { label: 'Delete', icon: 'trash' },
-    { label: 'Purge',  disabled: true }
-  ]"
->
-  <template #trigger="{ toggle }">
-    <ph-button variant="link" @click="toggle">
-      <ph-icon name="three-dots" />
-    </ph-button>
-  </template>
-</ph-dropdown>`,
+      snippet: `<strong>Align</strong>
+<ph-flex gap="10px">
+  <div class="d-flex flex-column">
+    <p class="mb-0 mt-2">start</p>
+    <ph-dropdown
+      label="Actions"
+      variant="secondary"
+      size="sm"
+      align="start"
+      :items="[
+        { label: 'Edit',   icon: 'pencil' },
+        { label: 'Archive', icon: 'archive' },
+        { divider: true },
+        { label: 'Delete', icon: 'trash' },
+        { label: 'Purge',  disabled: true }
+      ]"
+    >
+      <template #trigger="{ toggle }">
+        <ph-button variant="link" @click="toggle">
+          <ph-icon name="three-dots" />
+        </ph-button>
+      </template>
+    </ph-dropdown>
+  </div>
+  <div class="d-flex flex-column">
+    <p class="mb-0 mt-2">end</p>
+    <ph-dropdown
+      label="Actions"
+      variant="outline"
+      size="sm"
+      align="end"
+      :items="[
+        { label: 'Edit',   icon: 'pencil' },
+        { label: 'Archive', icon: 'archive' },
+        { divider: true },
+        { label: 'Delete', icon: 'trash' },
+        { label: 'Purge',  disabled: true }
+      ]"
+    >
+      <template #trigger="{ toggle }">
+        <ph-button variant="link" @click="toggle">
+          <ph-icon name="three-dots" />
+        </ph-button>
+      </template>
+    </ph-dropdown>
+  </div>
+</ph-flex>`,
       propsData: [
         {
           name: "label",
