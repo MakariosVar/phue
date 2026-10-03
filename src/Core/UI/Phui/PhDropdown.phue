@@ -65,8 +65,15 @@
 
 const MENU_Z = 1040;
 
+// Gap between the trigger and the menu, matching the previous `marginTop: 0.125rem`.
+const MENU_GAP = 2;
+
+// Breathing room kept between the menu and the viewport edge when clamping.
+const VIEWPORT_MARGIN = 8;
+
 export default {
   name: 'PhDropdown',
+  composables: ['position'],
   props: {
     label: {
       type: String,
@@ -104,9 +111,13 @@ export default {
   data() {
     return {
       open: false,
-      // Page-space geometry of the trigger, measured when the menu opens.
+      /** Viewport-space trigger geometry; positionFor adds the scroll offset back. */
       anchorRect: null,
-      tracking: false
+      /** Teleported menu size, needed before flip and clamp can be decided. */
+      panelSize: { width: 0, height: 0 },
+      /** Output of positionFor(), or null while the menu is not yet placeable. */
+      panelPos: null,
+      viewportHandle: null
     };
   },
   computed: {
@@ -118,7 +129,7 @@ export default {
         ghost: 'btn-link',
         danger: 'btn-danger',
         light: 'btn-light'
-      };
+      }
       return map[this.variant] || 'btn-secondary';
     },
     sizeClass() {
@@ -133,30 +144,20 @@ export default {
       };
     },
     menuStyle() {
-      if (!this.anchorRect) {
-        // Opened before the first measurement (can only happen before mount):
-        // hide it rather than flash it at the top-left of the document.
+      // Two things can be missing here: the trigger was never measured, or the
+      // menu is teleported but has not been measured yet. In both cases the
+      // coordinates are unknown, so hide rather than flash at the top-left of
+      // the document.
+      if (!this.panelPos || !this.panelPos.measured) {
         return { visibility: 'hidden' };
       }
 
-      const style = {
+      return {
         position: 'absolute',
-        top: `${this.anchorRect.bottom}px`,
-        marginTop: '0.125rem',
+        top: `${this.panelPos.top}px`,
+        left: `${this.panelPos.left}px`,
         zIndex: MENU_Z
       };
-
-      if (this.align === 'end') {
-        // Right edge of the menu on the right edge of the trigger. Bootstrap's
-        // `.dropdown-menu-end` is not used: it sets `right: 0` against the
-        // original offset parent, which no longer exists once teleported.
-        style.left = `${this.anchorRect.right}px`;
-        style.transform = 'translateX(-100%)';
-      } else {
-        style.left = `${this.anchorRect.left}px`;
-      }
-
-      return style;
     }
   },
   watch: {
@@ -180,46 +181,85 @@ export default {
     this.stopTracking();
   },
   methods: {
-    /** Trigger geometry in document space, so page scroll needs no recompute. */
-    measure() {
+    /**
+     * Viewport-space geometry of the trigger.
+     *
+     * Kept in viewport space on purpose: the scroll offset is passed to
+     * positionFor() instead of being folded in here, so one arithmetic identity
+     * owns the document-space conversion.
+     */
+    measureAnchor() {
       const trigger = this.$refs.root;
-      if (!trigger || typeof trigger.getBoundingClientRect !== 'function') {
-        this.anchorRect = null;
+      this.anchorRect = measureAnchor(trigger);
+    },
+    measurePanel() {
+      const menu = this.$refs.menu;
+      if (!menu || typeof menu.getBoundingClientRect !== 'function') {
+        this.panelSize = { width: 0, height: 0 };
         return;
       }
 
-      const rect = trigger.getBoundingClientRect();
-      this.anchorRect = {
-        left: rect.left + window.scrollX,
-        right: rect.right + window.scrollX,
-        bottom: rect.bottom + window.scrollY
-      };
+      const rect = menu.getBoundingClientRect();
+      this.panelSize = { width: rect.width, height: rect.height };
     },
     /**
-     * Page scrolling is already handled by the document-space coordinates; what
-     * still moves the trigger without moving the menu is a *nested* scroller —
-     * the column the trigger sits inside. A scroll listener on window in the
-     * capture phase sees those too, since scroll events do not bubble.
+     * Recomputes the menu position from freshly measured geometry.
+     *
+     * Both the trigger and the menu are re-measured: a nested scroller moves the
+     * trigger, and the menu's own size decides whether it flips or clamps.
+     */
+    reposition() {
+      this.measureAnchor();
+      this.measurePanel();
+
+      if (!this.anchorRect || typeof window === 'undefined') {
+        this.panelPos = null;
+        return;
+      }
+
+      this.panelPos = positionFor(this.anchorRect, {
+        placement: 'bottom',
+        align: this.align,
+        size: this.panelSize,
+        viewport: {
+          width: window.innerWidth || 0,
+          height: window.innerHeight || 0
+        },
+        scroll: {
+          x: window.scrollX || 0,
+          y: window.scrollY || 0
+        },
+        offset: MENU_GAP,
+        clamp: true,
+        margin: VIEWPORT_MARGIN
+      });
+    },
+    /**
+     * Subscribes to viewport changes through the shared composable.
+     *
+     * trackViewport() listens on scroll in the capture phase, which is what
+     * makes *nested* scrollers (a scrolling column around the trigger) visible
+     * to it — scroll events do not bubble, so a bubbling listener would miss
+     * them. It also coalesces bursts into one rAF callback.
      */
     startTracking() {
-      if (this.tracking) return;
-      this.tracking = true;
-      this.measure();
+      if (this.viewportHandle) return;
 
-      window.addEventListener('scroll', this.onViewportChange, true);
-      window.addEventListener('resize', this.onViewportChange);
+      this.measureAnchor();
+      this.viewportHandle = trackViewport(this.reposition);
+
+      // The menu is teleported, so it does not exist until Vue has flushed the
+      // open state. Measure it on the next tick, then place it.
+      this.$nextTick(() => {
+        this.reposition();
+      });
     },
     stopTracking() {
-      if (!this.tracking) return;
-      this.tracking = false;
-
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
-    },
-    onViewportChange() {
-      if (this.open) {
-        this.measure();
+      if (this.viewportHandle) {
+        releaseViewport(this.viewportHandle);
+        this.viewportHandle = null;
       }
+      this.panelPos = null;
     },
     toggle() {
       if (this.disabled) return;
