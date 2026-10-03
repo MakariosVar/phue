@@ -1,6 +1,7 @@
 <template>
   <teleport to="body" v-if="mounted && visible">
     <div
+      ref="overlayRoot"
       class="modal fade show d-block"
       data-phui="confirm-dialog"
       tabindex="-1"
@@ -11,7 +12,7 @@
       @click="onBackdropClick"
     >
       <div class="modal-dialog modal-dialog-centered">
-        <div ref="panel" class="modal-content" @click.stop>
+        <div class="modal-content" @click.stop>
           <div class="modal-header">
             <h5 id="ph-confirm-title" class="modal-title d-flex align-items-center">
               <ph-icon
@@ -59,26 +60,35 @@
 </template>
 
 <script>
+// One queue instance per evaluated module. PhConfirmDialog is `ssr: false`, so
+// the module is only ever evaluated in the browser and a pending confirmation
+// can never be observed by (or leak into) a concurrent server request.
+const confirmQueue = createConfirmQueue();
+
+// Shape rendered while nothing is queued. Mirrors the queue entry defaults so
+// the template never reads `undefined` during the hand-off between entries.
+const IDLE = {
+    id: 0,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    variant: 'primary',
+    icon: '',
+    closeOnBackdrop: false,
+    loading: false
+};
+
 export default {
   name: 'PhConfirmDialog',
   ssr: false,
+  composables: ['store', 'overlay'],
   emits: ['confirm', 'cancel'],
   data() {
     return {
       mounted: false,
       visible: false,
-      previousActive: null,
-      resolver: null,
-      options: {
-        title: '',
-        message: '',
-        confirmText: 'Confirm',
-        cancelText: 'Cancel',
-        variant: 'primary',
-        icon: '',
-        loading: false,
-        closeOnBackdrop: false
-      }
+      options: { ...IDLE }
     };
   },
   mounted() {
@@ -86,102 +96,117 @@ export default {
     if (typeof window !== 'undefined') {
       // Bound, not the raw instance: `window.confirm({...})` is a method call
       // ON window, so an unbound `this` would be `window` inside confirm() and
-      // every `this.options` / `this.$nextTick` would be undefined.
+      // every `this.options` would be undefined.
       // A bound function is still callable, so the plain call site is unchanged.
       window.confirm = this.confirm.bind(this);
       window.confirm.setLoading = this.setLoading.bind(this);
       window.confirm.__owner = this;
+      window.confirm.__queue = confirmQueue;
     }
-    document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
-    document.removeEventListener('keydown', this.onKeydown);
+    this.releaseTrap();
     if (typeof window !== 'undefined' && window.confirm?.__owner === this) {
       window.confirm = null;
     }
   },
   methods: {
+    /**
+     * Enqueues a confirmation and resolves when the user answers it.
+     *
+     * Callers that fire several requests without awaiting are serialised by the
+     * queue: the second promise only settles once its own entry is reached.
+     *
+     * @param {Object|string} options
+     * @returns {Promise<boolean>}
+     */
     confirm(options) {
-      const opts = options || {};
-      this.options = {
-        title: opts.title || 'Are you sure?',
-        message: opts.message || '',
-        confirmText: opts.confirmText || 'Confirm',
-        cancelText: opts.cancelText || 'Cancel',
-        variant: opts.variant || 'primary',
-        icon: opts.icon || '',
-        loading: !!opts.loading,
-        closeOnBackdrop: opts.closeOnBackdrop === true
-      };
-      this.visible = true;
-      this.$nextTick(this.focusInitial);
-      return new Promise((resolve) => {
-        this.resolver = resolve;
+      const opts = typeof options === 'string' ? { message: options } : (options || {});
+      const pending = confirmQueue.request(opts);
+
+      this.syncFromQueue();
+
+      pending.then((result) => {
+        // The entry's resolve() has already promoted the next one (or emptied
+        // the queue), so this is where ownership of the dialog hands over.
+        if (confirmQueue.state.current) {
+          this.options = { ...confirmQueue.state.current };
+          this.$nextTick(this.activateTrap);
+        } else {
+          this.releaseTrap();
+          this.options = { ...IDLE };
+          this.visible = false;
+        }
+
+        this.$emit(result ? 'confirm' : 'cancel');
       });
+
+      return pending;
+    },
+    syncFromQueue() {
+      const current = confirmQueue.state.current;
+      if (!current) {
+        return;
+      }
+
+      this.options = { ...current };
+      this.visible = true;
+      this.$nextTick(this.activateTrap);
     },
     setLoading(value) {
+      confirmQueue.setLoading(value);
+      // Mirrored locally: the queue mutates its entry in place, and a raw
+      // mutation is invisible to Vue's reactivity.
       this.options = { ...this.options, loading: !!value };
     },
     close(result) {
       if (this.options.loading && result === false) {
         return;
       }
-      const resolver = this.resolver;
-      this.resolver = null;
-      this.visible = false;
-      this.$emit(result ? 'confirm' : 'cancel');
-      if (resolver) {
-        resolver(!!result);
+
+      const current = confirmQueue.state.current;
+      if (!current) {
+        return;
       }
-      this.restoreFocus();
+
+      this.releaseTrap();
+      current.resolve(!!result);
     },
     onBackdropClick() {
       if (this.options.closeOnBackdrop && !this.options.loading) {
         this.close(false);
       }
     },
-    focusInitial() {
-      this.previousActive = document.activeElement;
-      const panel = this.$refs.panel;
-      if (!panel) return;
-      const cancel = panel.querySelector('.modal-footer .btn');
-      if (cancel) {
-        cancel.focus();
-      }
-    },
-    restoreFocus() {
-      if (this.previousActive && typeof this.previousActive.focus === 'function') {
-        this.previousActive.focus();
-      }
-      this.previousActive = null;
-    },
-    focusableElements() {
-      const panel = this.$refs.panel;
-      if (!panel) return [];
-      const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-      return Array.prototype.slice.call(panel.querySelectorAll(selector));
-    },
-    onKeydown(event) {
-      if (!this.visible) return;
-      if (event.key === 'Escape') {
-        if (!this.options.loading) {
-          this.close(false);
-        }
+
+    /**
+     * Hands focus containment to the shared composable.
+     *
+     * The trap root is the outermost teleported element rather than the panel,
+     * so the sibling scan marks the application background inert. Trapping on
+     * the inner panel would find no siblings and silently leave the page
+     * tabbable behind the dialog.
+     */
+    activateTrap() {
+      const root = this.$refs.overlayRoot;
+      if (!root) {
         return;
       }
-      if (event.key === 'Tab') {
-        const focusable = this.focusableElements();
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
+
+      this.releaseTrap();
+      this.trap = focusTrap(root, {
+        initialFocus: '.modal-footer .btn',
+        onEscape: () => {
+          if (!this.options.loading) {
+            this.close(false);
+          }
         }
+      });
+    },
+    releaseTrap() {
+      if (this.trap && typeof this.trap.release === 'function') {
+        this.trap.release();
       }
+      this.trap = null;
     }
   }
 };
