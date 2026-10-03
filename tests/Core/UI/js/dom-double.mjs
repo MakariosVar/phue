@@ -22,7 +22,11 @@
  * Selector compilation
  * ------------------------------------------------------------------ */
 
-const RE_REQ = () => /:not\(([^)]*)\)|\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]/g;
+// Class selectors are matched here too. They were not, and the omission was
+// silent rather than loud: `.modal` compiled to no predicates at all, which
+// matches every element, so an assertion written against a class selector
+// passed without testing anything.
+const RE_REQ = () => /:not\(([^)]*)\)|\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]|\.([A-Za-z_][\w-]*)/g;
 
 /**
  * Compiles one simple selector into a matcher description.
@@ -46,6 +50,9 @@ function compileSimple(selector) {
         if (m[1] !== undefined) {
             const inner = compileSimple(m[1]);
             preds.push({ negate: true, fn: (el) => matchCompiled(el, inner) });
+        } else if (m[4] !== undefined) {
+            const name = m[4];
+            preds.push({ negate: false, fn: (el) => el.classList.contains(name) });
         } else {
             const attr = m[2];
             const value = m[3] === undefined ? null : m[3];
@@ -280,6 +287,20 @@ class FakeWindow {
         this.innerHeight = 768;
         this.scrollX = 0;
         this.scrollY = 0;
+    }
+
+    /**
+     * Minimal computed-style read.
+     *
+     * Only `zIndex` is modelled, and only from the element's inline `style`
+     * attribute — which is enough for the stacking questions the kit asks, and is
+     * honest about its limits: a rule in a real stylesheet is not simulated, so a
+     * test that needs one must set the value inline or install a stylesheet.
+     */
+    getComputedStyle(el) {
+        const raw = (el && el.getAttribute && el.getAttribute('style')) || '';
+        const m = /(?:^|;)\s*z-index\s*:\s*([^;]+)/i.exec(raw);
+        return { zIndex: m ? m[1].trim() : 'auto' };
     }
 
     addEventListener(type, fn, capture) {
