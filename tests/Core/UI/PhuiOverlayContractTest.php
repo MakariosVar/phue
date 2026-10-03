@@ -58,6 +58,21 @@ final class PhuiOverlayContractTest extends TestCase
      *
      * @var array<string, int>
      */
+    /**
+     * The public surface of each composable, by file.
+     *
+     * Read from the modules themselves by a separate test, so a new export cannot be
+     * added to one of them and then used by a component without also being listed
+     * here and checked.
+     *
+     * @var array<string, list<string>>
+     */
+    private const COMPOSABLE_EXPORTS = [
+        'position' => ['positionFor', 'trackViewport', 'releaseViewport', 'measureAnchor', 'overlayLayerFor'],
+        'overlay' => ['focusableWithin', 'trapTab', 'focusTrap', 'registerEscapeHandler'],
+        'store' => ['createToastStore', 'createConfirmQueue'],
+    ];
+
     private const LAYERS = [
         // Keys are the documented row labels, verbatim: the assertion below matches
         // the docs table by name, so a label that drifts apart is caught rather than
@@ -425,7 +440,10 @@ final class PhuiOverlayContractTest extends TestCase
         foreach (self::ANCHORED_FLOATERS as $component) {
             $script = $this->script($component);
 
-            if (str_contains($script, "composables: ['position']") !== true) {
+            // A member test, not an exact-string one: these components declare
+            // 'overlay' as well now, and a literal match would start failing the
+            // moment a component needs a second composable.
+            if (preg_match("/composables:\s*\[[^\]]*'position'/", $script) !== 1) {
                 $offenders[] = "{$component} — does not declare the position composable";
                 continue;
             }
@@ -614,6 +632,108 @@ final class PhuiOverlayContractTest extends TestCase
         return preg_match('/z-?[Ii]ndex\s*:\s*([0-9]+)/', $source, $m) === 1
             ? (int) $m[1]
             : null;
+    }
+
+    /**
+     * Every event a component emits must be declared in its `emits` option.
+     *
+     * Vue does not stop an undeclared emit; it warns on every occurrence and then
+     * drops the handler the parent passed. The component looks like it works — it
+     * emits, the parent just never hears it — which makes the warning easy to
+     * dismiss as noise in a console that also carries asset notices.
+     *
+     * It arrived by copying a sibling's wiring wholesale: `PhModal.activate()`
+     * gained `this.$emit('open')` along with `PhDrawer`'s trap code, and `open` is
+     * not part of `PhModal`'s contract (`v-model` and `close` are).
+     */
+    public function testEveryEmittedEventIsDeclared(): void
+    {
+        $offenders = [];
+
+        foreach ($this->allSources() as $component => $source) {
+            $script = $this->script($component);
+
+            if (preg_match("/emits:\s*\[([^\]]*)\]/s", $script, $m) !== 1) {
+                continue;
+            }
+
+            $declared = [];
+            preg_match_all("/['\"]([^'\"]+)['\"]/", $m[1], $names);
+            foreach ($names[1] as $name) {
+                $declared[] = $name;
+            }
+
+            preg_match_all('/\$emit\(\s*[\x27"]([^\x27"]+)[\x27"]/', $script, $emits);
+            foreach (array_unique($emits[1]) as $event) {
+                if (!in_array($event, $declared, true)) {
+                    $offenders[] = sprintf(
+                        "%s emits '%s' but declares emits: [%s] — Vue warns and the parent's handler never runs",
+                        $component,
+                        $event,
+                        implode(', ', $declared)
+                    );
+                }
+            }
+        }
+
+        self::assertSame([], $offenders, implode("\n  ", $offenders));
+    }
+
+    /**
+     * A composable symbol a component did not declare is a runtime crash.
+     *
+     * `PhueComponentLoader` resolves the names in `composables: [...]` and prepends
+     * that module's exports. It has no idea which identifiers the component body
+     * actually reaches for, so calling one it never declared builds cleanly, ships
+     * cleanly, and then throws `ReferenceError: … is not defined` in the browser —
+     * the first place anyone finds out.
+     *
+     * That is exactly what happened when the floats started calling
+     * `registerEscapeHandler()` while declaring only `position`. The export list
+     * below is the whole public surface of the three composables, so the check is
+     * exhaustive rather than a spot-check of the symbols someone remembered.
+     */
+    public function testEveryComposableSymbolUsedIsDeclared(): void
+    {
+        $exports = [];
+        foreach (self::COMPOSABLE_EXPORTS as $composable => $symbols) {
+            foreach ($symbols as $symbol) {
+                $exports[$symbol] = $composable;
+            }
+        }
+
+        $offenders = [];
+
+        foreach ($this->allSources() as $component => $source) {
+            $script = $this->script($component);
+
+            preg_match("/composables:\s*\[([^\]]*)\]/", $script, $declared);
+            $declaredList = [];
+            foreach (explode(',', $declared[1] ?? '') as $name) {
+                $name = trim($name, " \'\"");
+                if ($name !== '') {
+                    $declaredList[] = $name;
+                }
+            }
+
+            foreach ($exports as $symbol => $composable) {
+                if (!preg_match('/(?<![A-Za-z0-9_$])' . preg_quote($symbol, '/') . '\s*\(/', $script)) {
+                    continue;
+                }
+
+                if (!in_array($composable, $declaredList, true)) {
+                    $offenders[] = sprintf(
+                        '%s calls %s() but declares composables: [%s] — the loader only injects what is '
+                        . 'declared, so this is a ReferenceError in the browser',
+                        $component,
+                        $symbol,
+                        implode(', ', $declaredList)
+                    );
+                }
+            }
+        }
+
+        self::assertSame([], $offenders, implode("\n  ", $offenders));
     }
 
     /**
