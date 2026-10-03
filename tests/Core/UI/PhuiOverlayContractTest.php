@@ -47,6 +47,8 @@ final class PhuiOverlayContractTest extends TestCase
 {
     private const PHUI_DIR = __DIR__ . '/../../../src/Core/UI/Phui';
 
+    private const JS_DIR = __DIR__ . '/../../../src/Core/UI/js';
+
     private const DOCS = __DIR__ . '/../../../docs/PhUI_Components.md';
 
     /**
@@ -319,6 +321,20 @@ final class PhuiOverlayContractTest extends TestCase
         foreach (self::ANCHORED_FLOATERS as $component) {
             $source = $this->source($component);
 
+            // Delegated to the shared positioning composable: `trackViewport()`
+            // owns the capture-phase scroll listener. That delegation is only
+            // accepted when the handle is actually released, otherwise the
+            // listener outlives the component and the panel keeps repositioning
+            // after it is gone.
+            if (str_contains($source, 'trackViewport(')) {
+                if (str_contains($source, 'releaseViewport(') !== true) {
+                    $offenders[] = "{$component} — calls trackViewport() but never releaseViewport(), so the "
+                        . 'scroll/resize listeners leak after unmount';
+                }
+
+                continue;
+            }
+
             if (str_contains($source, "addEventListener('scroll'") !== true) {
                 $offenders[] = "{$component} — no scroll listener, so the panel does not follow its trigger";
                 continue;
@@ -333,6 +349,32 @@ final class PhuiOverlayContractTest extends TestCase
         }
 
         self::assertSame([], $offenders, implode("\n  ", $offenders));
+    }
+
+    /**
+     * The invariant the delegation above depends on.
+     *
+     * `PhDropdown` no longer attaches its own scroll listener, so this is the
+     * only place asserting that the shared composable listens in the capture
+     * phase. Without it, `trackViewport()` could silently drop to a bubbling
+     * listener and every anchored float would stop following nested scrollers
+     * while all component-level tests stayed green.
+     */
+    public function testThePositioningComposableListensInTheCapturePhase(): void
+    {
+        $source = (string) file_get_contents(self::JS_DIR . '/position.js');
+
+        self::assertStringContainsString('trackViewport', $source);
+        self::assertMatchesRegularExpression(
+            "/addEventListener\('scroll',\s*[^,]+,\s*true\s*\)/",
+            $source,
+            'trackViewport() must register scroll with capture=true, otherwise nested scrollers are missed'
+        );
+        self::assertMatchesRegularExpression(
+            "/removeEventListener\('scroll',\s*[^,]+,\s*true\s*\)/",
+            $source,
+            'releaseViewport() must remove the scroll listener with the same capture flag it registered it with'
+        );
     }
 
     /**
