@@ -143,15 +143,6 @@ class Application
 
         // The routes the framework must always expose, derived from the
         // controllers themselves rather than written down as string literals.
-        //
-        // This matters: an earlier version hardcoded '/health', but the framework
-        // actually registers /health/live and /health/ready. The literal matched
-        // nothing, so every valid cache was rejected and route caching was
-        // silently disabled everywhere — invisibly, because a rejected cache
-        // falls back to a scan, which is correct and merely slow.
-        //
-        // Deriving the paths means a renamed route attribute cannot desync the
-        // validator from reality.
         $requiredPaths = [];
 
         foreach ([AssetsController::class, \Phue\Core\Health\HealthController::class] as $coreController) {
