@@ -181,45 +181,87 @@ final class OptimizeCommand implements CommandInterface
         $registry = new ComponentLoaderRegistry();
         $parser = new PhueTemplateParser($viewsDir);
 
-        $warmed = 0;
+        $loaders = [];
 
-        // Warm App/Frontend components
+        // App/Frontend first, then the PhUI library — the same priority order the
+        // application container registers them in (see Application::bindings), so a
+        // component name that exists in both directories resolves the way it will at
+        // request time.
         if (is_dir($componentsDir)) {
-            $loader = new PhueComponentLoader(
+            $loaders[] = new PhueComponentLoader(
                 componentsDir: $componentsDir,
                 parser: $parser,
                 persistentCache: $persistentCache,
                 viewsCacheDir: $viewsDir,
                 compilerBridge: $compilerBridge
             );
-            $loader->setRegistry($registry);
-            $warmed += $this->warmComponentLoader($loader, $componentsDir, $outputStream);
         }
 
-        // Warm PhUI core components
         if (is_dir($phuiDir)) {
-            $loader = new PhueComponentLoader(
+            $loaders[] = new PhueComponentLoader(
                 componentsDir: $phuiDir,
                 parser: $parser,
                 persistentCache: $persistentCache,
                 viewsCacheDir: $viewsDir,
                 compilerBridge: $compilerBridge
             );
+        }
+
+        // Both directions of the link are required, and the order matters.
+        //
+        // setRegistry() first: buildFor() asks the registry for every child hash, and
+        // ComponentDiscoverer::scanTemplate() only accepts a tag the registry can resolve.
+        // A registry with no loaders in it therefore resolves nothing, the discovered
+        // child list comes back empty, and the "warmed" module for any component that
+        // references something is emitted with zero imports under a hash no request will
+        // ever look up again.
+        //
+        // addLoader() second: a loader can only reach a sibling directory's components
+        // once the sibling is actually in the registry, which is what lets an App/Frontend
+        // component resolve the PhUI components it renders.
+        foreach ($loaders as $loader) {
             $loader->setRegistry($registry);
-            $warmed += $this->warmComponentLoader($loader, $phuiDir, $outputStream);
+        }
+
+        foreach ($loaders as $loader) {
+            $registry->addLoader($loader);
+        }
+
+        $warmed = 0;
+        $failed = 0;
+
+        foreach ($loaders as $loader) {
+            [$loaderWarmed, $loaderFailed] = $this->warmComponentLoader(
+                $loader,
+                $loader->getComponentsDir(),
+                $outputStream
+            );
+            $warmed += $loaderWarmed;
+            $failed += $loaderFailed;
         }
 
         fwrite($outputStream, "  ✓ Views cache warmed ({$warmed} components parsed & compiled)\n");
 
-        return true;
+        // A pass that could not build a component has not warmed it. Reporting success
+        // here is how a broken graph reaches production with a green deploy.
+        return $failed === 0;
     }
 
+    /**
+     * Parse and compile every component one loader owns.
+     *
+     * @param PhueComponentLoader $loader Loader whose directory is walked.
+     * @param string $componentsDir Directory scanned for .phue files.
+     * @param resource $outputStream Where progress and failures are reported.
+     * @return array{0: int, 1: int} Components warmed, and components that failed.
+     */
     private function warmComponentLoader(
-        PhueComponentLoader $loader, 
-        string $componentsDir, 
+        PhueComponentLoader $loader,
+        string $componentsDir,
         $outputStream
-    ): int {
+    ): array {
         $warmed = 0;
+        $failed = 0;
         $ssrSkipped = false;
 
         $phueFiles = [];
@@ -237,26 +279,45 @@ final class OptimizeCommand implements CommandInterface
 
         foreach ($phueFiles as $name) {
             try {
-                if ($loader->hasComponent($name)) {
-                    $component = $loader->load($name);
-                    
-                    if ($component !== null) {
-                        $loader->buildFor($name);
+                if (!$loader->hasComponent($name)) {
+                    continue;
+                }
 
-                        // Try compiling SSR module; if sidecar is offline, suppress repeated spam lines
-                        if (!$ssrSkipped) {
-                            try {
-                                $loader->buildForSsr($name);
-                            } catch (\Throwable) {
-                                $ssrSkipped = true;
-                            }
-                        }
+                $component = $loader->load($name);
 
-                        $warmed++;
+                if ($component === null) {
+                    fwrite($outputStream, "  ✗ Failed to warm component '{$name}': the structure could not be evaluated\n");
+                    $failed++;
+
+                    continue;
+                }
+
+                // buildFor() is fail-loud by contract: a child it cannot resolve aborts the
+                // build and returns null rather than emitting a module that is quietly
+                // missing a dependency. Counting that as warmed is how the pass reported a
+                // component as ready while producing nothing for it.
+                $module = $loader->buildFor($name);
+
+                if ($module === null) {
+                    fwrite($outputStream, "  ✗ Failed to warm component '{$name}': the client module could not be built\n");
+                    $failed++;
+
+                    continue;
+                }
+
+                // Try compiling SSR module; if sidecar is offline, suppress repeated spam lines
+                if (!$ssrSkipped) {
+                    try {
+                        $loader->buildForSsr($name);
+                    } catch (\Throwable) {
+                        $ssrSkipped = true;
                     }
                 }
+
+                $warmed++;
             } catch (\Throwable $e) {
                 fwrite($outputStream, "  ✗ Failed to warm component '{$name}': " . $e->getMessage() . "\n");
+                $failed++;
             }
         }
 
@@ -264,7 +325,7 @@ final class OptimizeCommand implements CommandInterface
             fwrite($outputStream, "  ⚠ SSR module compilation skipped (sidecar socket offline)\n");
         }
 
-        return $warmed;
+        return [$warmed, $failed];
     }
 
     private function optimizeSchemas(string $schemasDir, $outputStream): bool
