@@ -126,8 +126,16 @@ export function positionFor(anchor, options = {}) {
 
     // Clamp adjustment (applied strictly when clamp is true)
     if (opts.clamp && opts.viewport.width > 0 && opts.viewport.height > 0) {
+        // Clamp against the width that will actually be rendered. A consumer that
+        // sets minWidth has committed to painting the panel at `width` (targetWidth),
+        // so bounding by the measured size instead would leave the panel hanging
+        // past the edge by exactly the difference — the clamp would look applied
+        // while doing nothing. With no minWidth the panel keeps its measured size,
+        // because a consumer that ignores `width` (a menu that sizes to its content)
+        // is the one that panelWidth describes.
+        const clampWidth = opts.minWidth !== null ? targetWidth : panelWidth;
         const minLeft = opts.margin + opts.scroll.x;
-        const maxLeft = opts.viewport.width - panelWidth - opts.margin + opts.scroll.x;
+        const maxLeft = opts.viewport.width - clampWidth - opts.margin + opts.scroll.x;
         left = Math.max(minLeft, Math.min(left, maxLeft));
 
         const minTop = opts.margin + opts.scroll.y;

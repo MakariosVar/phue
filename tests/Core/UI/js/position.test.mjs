@@ -342,4 +342,60 @@ h.suite('trackViewport');
     h.ok('releaseViewport does not throw without a window', !releaseThrew);
 }
 
+{
+    // Regression: the clamp used to bound `left` by the *measured* panel width even
+    // when `minWidth` forced a wider panel, so the panel was left hanging past the
+    // viewport edge by exactly the difference. The bound has to be the width the
+    // caller will actually paint.
+    const vp = { width: 1024, height: 800 };
+    const anchor = rect(800, 100, 320, 40);   // right edge of the anchor: 1120, past the viewport
+
+    // minWidth wins over the measured size, which is narrower than what will render.
+    const r1 = positionFor(anchor, {
+        placement: 'bottom',
+        align: 'start',
+        size: { width: 272, height: 320 },
+        minWidth: 272,
+        viewport: vp,
+        scroll: { x: 0, y: 0 },
+        clamp: true,
+        margin: 8
+    });
+    h.eq('minWidth above the measured size widens the output', r1.width, 320);
+    h.eq('clamp bounds by the painted width, not the measured one', r1.left, 1024 - 320 - 8);
+    h.eq('the painted panel fits the viewport exactly', r1.left + r1.width, 1024 - 8);
+
+    // minWidth between the anchor width and the measured size: the caller paints
+    // max(anchor, minWidth) = 200, so the bound must be 200. Bounding by the
+    // measured 400 would park the panel 200px further from the edge than it needs
+    // to be; bounding by the anchor 100 would leave it hanging past the viewport.
+    const r2 = positionFor(rect(900, 100, 100, 40), {
+        placement: 'bottom',
+        align: 'start',
+        size: { width: 400, height: 320 },
+        minWidth: 200,
+        viewport: vp,
+        scroll: { x: 0, y: 0 },
+        clamp: true,
+        margin: 8
+    });
+    h.eq('minWidth between anchor and measured sets the painted width', r2.width, 200);
+    h.eq('clamp bounds by the painted width, not the measured one', r2.left, 1024 - 200 - 8);
+    h.eq('the painted panel sits against the margin', r2.left + r2.width, 1024 - 8);
+
+    // No minWidth at all: a consumer that ignores `width` (a content-sized menu) is
+    // the case panelWidth describes, so the bound must not collapse to anchorWidth.
+    const r3 = positionFor(rect(900, 100, 100, 40), {
+        placement: 'bottom',
+        align: 'start',
+        size: { width: 400, height: 320 },
+        viewport: vp,
+        scroll: { x: 0, y: 0 },
+        clamp: true,
+        margin: 8
+    });
+    h.eq('clamp bounds by the measured width when minWidth is unset', r3.left, 1024 - 400 - 8);
+    h.eq('a content-sized menu still fits', r3.left + 400, 1024 - 8);
+}
+
 h.finish();
