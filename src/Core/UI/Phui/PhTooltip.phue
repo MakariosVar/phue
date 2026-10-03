@@ -37,6 +37,7 @@ const VIEWPORT_MARGIN = 8;
 
 export default {
   name: 'PhTooltip',
+  composables: ['position'],
   props: {
     content: {
       type: String,
@@ -80,8 +81,9 @@ export default {
       rendered: false,
       positioned: false,
       timer: null,
-      triggerRect: null,
-      tipSize: { width: 0, height: 0 }
+      anchorRect: null,
+      tipSize: { width: 0, height: 0 },
+      viewportHandle: null
     };
   },
   computed: {
@@ -110,46 +112,36 @@ export default {
        visibility: this.positioned ? 'visible' : 'hidden'
       };
 
-      if (!this.positioned || !this.triggerRect || typeof document === 'undefined') {
+      if (!this.positioned || !this.anchorRect || typeof document === 'undefined') {
         return style;
       }
 
-      const rect = this.triggerRect;
-      const placement = this.placementToUse(rect);
-      const w = this.tipSize.width;
-      const h = this.tipSize.height;
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
+      // A tooltip always sits centred against its trigger on the cross axis,
+      // whichever side it ends up on, so `align` is 'center' for all four
+      // placements rather than following the placement.
+      const pos = positionFor(this.anchorRect, {
+        size: this.tipSize,
+        placement: this.placement,
+        align: 'center',
+        offset: TIP_OFFSET,
+        gap: TIP_OFFSET,
+        allowFlip: true,
+        clamp: true,
+        margin: VIEWPORT_MARGIN,
+        // clientWidth/clientHeight, not innerWidth/innerHeight: those include
+        // the scrollbar, which would let a clamped tip hide under it.
+        viewport: {
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight
+        },
+        scroll: {
+          x: window.scrollX || window.pageXOffset || 0,
+          y: window.scrollY || window.pageYOffset || 0
+        }
+      });
 
-     let top;
-      let left;
-
-      if (placement === 'top') {
-        top = rect.top - h - TIP_OFFSET;
-      } else if (placement === 'bottom') {
-        top = rect.bottom + TIP_OFFSET;
-      } else {
-        top = rect.top + rect.height / 2 - h / 2;
-      }
-
-      if (placement === 'start') {
-        left = rect.left - w - TIP_OFFSET;
-      } else if (placement === 'end') {
-        left = rect.right + TIP_OFFSET;
-      } else {
-        left = rect.left + rect.width / 2 - w / 2;
-      }
-
-      left = this.clamp(left, VIEWPORT_MARGIN, vw - w - VIEWPORT_MARGIN);
-      top = this.clamp(top, VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN);
-
-      // The measurement above is in viewport coordinates; the element is placed in
-      // document space, so the scroll offset has to be added back.
-      const scrollX = window.scrollX || window.pageXOffset || 0;
-      const scrollY = window.scrollY || window.pageYOffset || 0;
-
-      style.left = `${left + scrollX}px`;
-      style.top = `${top + scrollY}px`;
+      style.left = `${pos.left}px`;
+      style.top = `${pos.top}px`;
 
       return style;
     }
@@ -171,60 +163,39 @@ export default {
     this.releaseViewport();
   },
   methods: {
-    clamp(value, min, max) {
-      if (max < min) {
-        return min;
-      }
-      return Math.min(Math.max(value, min), max);
-    },
-    placementToUse(rect) {
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
-      const vertical = this.placement === 'top' || this.placement === 'bottom';
-      const opposite = { top: 'bottom', bottom: 'top', start: 'end', end: 'start' };
-      const room = {
-        top: rect.top,
-        bottom: vh - rect.bottom,
-        start: rect.left,
-        end: vw - rect.right
-      };
-      const needed = (vertical ? this.tipSize.height : this.tipSize.width)
-        + TIP_OFFSET
-        + VIEWPORT_MARGIN;
-      const flipped = opposite[this.placement];
-
-      if (room[this.placement] < needed && room[flipped] >= needed) {
-        return flipped;
-      }
-
-      return this.placement;
-    },
-    measureTrigger() {
-      const root = this.$refs.root;
-      if (root) {
-        this.triggerRect = root.getBoundingClientRect();
-      }
+    measureAnchorRect() {
+      this.anchorRect = measureAnchor(this.$refs.root);
     },
     measureTip() {
       const tip = this.$refs.tip;
       if (tip) {
         this.tipSize = { width: tip.offsetWidth, height: tip.offsetHeight };
       }
+    },
+    reposition() {
+      if (!this.visible) {
+        return;
+      }
+      // Both edges are re-measured: the trigger moves on scroll, and the tip can
+      // change size if its content grew. `positioned` is restored in the same
+      // tick, so the reactivity flush never renders a hidden tip in between.
+      this.positioned = false;
+      this.measureAnchorRect();
+      this.measureTip();
       this.positioned = true;
     },
     trackViewport() {
-      window.addEventListener('scroll', this.onViewportChange, true);
-      window.addEventListener('resize', this.onViewportChange);
+      this.releaseViewport();
+      this.viewportHandle = trackViewport(this.reposition);
       document.addEventListener('keydown', this.onKeydown);
     },
     releaseViewport() {
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
-      document.removeEventListener('keydown', this.onKeydown);
-    },
-    onViewportChange() {
-      if (this.visible) {
-        this.measureTrigger();
+      if (this.viewportHandle) {
+        releaseViewport(this.viewportHandle);
+        this.viewportHandle = null;
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('keydown', this.onKeydown);
       }
     },
     onKeydown(event) {
@@ -241,9 +212,12 @@ export default {
     reveal() {
       if (this.disabled) return;
       this.positioned = false;
-      this.measureTrigger();
+      this.measureAnchorRect();
       this.visible = true;
-      this.$nextTick(() => this.measureTip());
+      this.$nextTick(() => {
+        this.measureTip();
+        this.positioned = true;
+      });
     },
     show() {
       this.reveal();
@@ -252,7 +226,7 @@ export default {
       this.clearTimer();
       this.visible = false;
       this.positioned = false;
-      this.triggerRect = null;
+      this.anchorRect = null;
     },
     scheduleShow() {
       if (this.disabled) return;
