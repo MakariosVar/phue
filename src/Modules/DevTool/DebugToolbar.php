@@ -129,6 +129,7 @@ class DebugToolbar
         $show = static fn(string $key, bool $default = true): bool => (bool) ($options[$key] ?? $default);
 
         $spans = $profiler->getSpans();
+        $context = $profiler->getContext();
         $sections = [];
 
         if ($show('timeline')) {
@@ -168,7 +169,6 @@ class DebugToolbar
         }
 
         if ($show('request')) {
-            $context = $profiler->getContext();
             if ($context !== []) {
                 $sections[] = [
                     'key' => 'request',
@@ -372,7 +372,8 @@ class DebugToolbar
             $ratio = $exclusiveTotal > 0.0 ? $exclusive / $exclusiveTotal * 100.0 : 0.0;
 
             $operationCell = '<span class="font-monospace">' . $this->esc((string) $label) . '</span>'
-                . $this->renderAggregateMeta(is_array($aggregate['meta'] ?? null) ? $aggregate['meta'] : []);
+                . $this->renderAggregateMeta(is_array($aggregate['meta'] ?? null) ? $aggregate['meta'] : [])
+                . $this->renderAggregateCallers(is_array($aggregate['callers'] ?? null) ? $aggregate['callers'] : []);
 
             $rows .= '<tr>'
                 . '<td>' . $operationCell . '</td>'
@@ -487,6 +488,33 @@ class DebugToolbar
     }
 
     /**
+     * Render which callers reached an operation, as a line under the operation name.
+     *
+     * A call count says an operation was entered often. It cannot say by which mechanism,
+     * and on a component page several mechanisms produce the same count — so a hot row
+     * without this line is a question, not a diagnosis.
+     *
+     * @param array<string, int> $callers Immediate caller label => number of entries.
+     * @return string HTML, or an empty string for an operation nothing called.
+     */
+    private function renderAggregateCallers(array $callers): string
+    {
+        if ($callers === []) {
+            return '';
+        }
+
+        $parts = [];
+
+        foreach ($callers as $caller => $count) {
+            $parts[] = $this->esc(sprintf('%s×%d', $this->truncate((string) $caller, self::MAX_SQL_LENGTH), $count));
+        }
+
+        return '<div class="phue-dt-meta small text-body-secondary"><span class="phue-dt-callerlabel">via</span> '
+            . implode(' · ', $parts)
+            . '</div>';
+    }
+
+    /**
      * Render one metadata value as the short, readable token the report displays.
      *
      * @param mixed $value Value taken from a span's metadata.
@@ -517,8 +545,21 @@ class DebugToolbar
 
         $rows = '';
         foreach ($spans as $span) {
+            $parent = $span['parent'] ?? null;
+
+            // The per-call panel is where a specific slow call gets identified. A call
+            // without its caller is a number with nowhere to go.
+            $labelCell = '<span class="font-monospace">' . $this->esc((string) $span['label']) . '</span>';
+
+            if (is_string($parent) && $parent !== '') {
+                $labelCell .= '<div class="phue-dt-meta small text-body-secondary">'
+                    . '<span class="phue-dt-callerlabel">via</span> '
+                    . $this->esc($this->truncate($parent, self::MAX_SQL_LENGTH))
+                    . '</div>';
+            }
+
             $rows .= '<tr>'
-                . '<td class="font-monospace">' . $this->esc((string) $span['label']) . '</td>'
+                . '<td>' . $labelCell . '</td>'
                 . '<td class="text-break">' . $this->esc($this->describeMeta((array) ($span['meta'] ?? []))) . '</td>'
                 . '<td class="phue-dt-num fw-bold">' . $this->esc(number_format((float) $span['duration_ms'], 2)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $span['exclusive_ms'], 2)) . '</td>'
@@ -843,6 +884,7 @@ class DebugToolbar
         .phue-dt-sharecell .phue-dt-bar { display: inline-block; vertical-align: middle; width: auto; }
         .phue-dt-share { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; vertical-align: middle; }
         .phue-dt-meta { font-size: 11px; line-height: 1.35; word-break: break-word; }
+        .phue-dt-callerlabel { text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
         .phue-dt-filter { max-width: 26rem; }
         .phue-dt-json {
             max-height: 46vh; overflow: auto; font-size: 12px;

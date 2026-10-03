@@ -155,6 +155,7 @@ class Stopwatch
 
         $this->stack[] = [
             'label' => $label,
+            'parent' => $parentLabel,
             'meta' => $meta,
             'start' => hrtime(true),
             'child_ms' => 0.0,
@@ -166,7 +167,7 @@ class Stopwatch
     /**
      * Close the innermost open span and return the recorded span.
      *
-     * @return array{label: string, meta: array<string, mixed>, depth: int, duration_ms: float, exclusive_ms: float}|null
+     * @return array{label: string, parent: string|null, meta: array<string, mixed>, depth: int, duration_ms: float, exclusive_ms: float}|null
      *         The completed span, or null when no span was open (unbalanced call).
      */
     public function endSpan(): ?array
@@ -199,6 +200,7 @@ class Stopwatch
 
         $span = [
             'label' => $frame['label'],
+            'parent' => $frame['parent'],
             'meta' => $frame['meta'],
             'depth' => count($this->stack) + 1,
             'duration_ms' => $durationMs,
@@ -289,7 +291,7 @@ class Stopwatch
      * to min/max/last; categorical keys (component, path, method) to an exact distinct
      * count plus the most frequent values.
      *
-     * @return array<string, array{count: int, total_ms: float, exclusive_ms: float, max_ms: float, min_ms: float, avg_ms: float, meta: array<string, mixed>}>
+     * @return array<string, array{count: int, total_ms: float, exclusive_ms: float, max_ms: float, min_ms: float, avg_ms: float, meta: array<string, mixed>, callers?: array<string, int>}>
      */
     public function getAggregates(): array
     {
@@ -308,6 +310,7 @@ class Stopwatch
                     'avg_ms' => 0.0,
                     'meta' => [],
                     'metaRollup' => [],
+                    'callers' => [],
                 ];
             }
 
@@ -318,12 +321,37 @@ class Stopwatch
             $aggregates[$label]['min_ms'] = min($aggregates[$label]['min_ms'], $span['duration_ms']);
 
             $this->accumulateMeta($aggregates[$label]['metaRollup'], $span['meta']);
+
+            // Who asked for this, counted per immediate caller. A call count on its own
+            // says a hot operation was entered often; it cannot say by which mechanism,
+            // and on a component page three different mechanisms produce the same count.
+            // Kept out of `meta` on purpose: a caller is structure, not a property of the
+            // call, and merging the two would make a filter by caller look like a filter
+            // by component.
+            if ($span['parent'] !== null) {
+                $caller = $span['parent'];
+                $aggregates[$label]['callers'][$caller] = ($aggregates[$label]['callers'][$caller] ?? 0) + 1;
+            }
         }
 
         foreach ($aggregates as $label => $aggregate) {
             $aggregates[$label]['avg_ms'] = $aggregate['total_ms'] / $aggregate['count'];
             $aggregates[$label]['meta'] = $this->finalizeMeta($aggregate['metaRollup']);
             unset($aggregates[$label]['metaRollup']);
+
+            if ($aggregate['callers'] === []) {
+                unset($aggregates[$label]['callers']);
+
+                continue;
+            }
+
+            // Frequency first, name second. A stable order is what lets two reports of the
+            // same workload be diffed against each other.
+            uksort(
+                $aggregates[$label]['callers'],
+                static fn(string $a, string $b): int => ($aggregate['callers'][$b] <=> $aggregate['callers'][$a])
+                    ?: strcmp($a, $b)
+            );
         }
 
         uasort(
