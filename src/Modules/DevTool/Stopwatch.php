@@ -232,13 +232,19 @@ class Stopwatch
     }
 
     /**
-     * Per-label rollup, ordered by total time descending.
+     * Per-label rollup, ordered by SELF time descending.
      *
      * Keyed by label only: call-specific metadata would defeat the purpose, since a
      * single hot operation (e.g. a recursive builder) would fragment into one bucket
      * per component name. Use getSpans() to see which individual call was slow.
      *
-     * @return array<string, array{count: int, total_ms: float, max_ms: float, min_ms: float, avg_ms: float, meta: array<string, mixed>}>
+     * Ordered and summed by exclusive time, not by total. Spans nest, so a parent's
+     * total_ms contains every descendant: ranking by it credits a wrapper with all of
+     * its children's work, and the exclusive totals are the only figures that partition
+     * the request instead of overlapping. total_ms is still reported — it answers "how
+     * much time sits under this label", which is a different and useful question.
+     *
+     * @return array<string, array{count: int, total_ms: float, exclusive_ms: float, max_ms: float, min_ms: float, avg_ms: float, meta: array<string, mixed>}>
      */
     public function getAggregates(): array
     {
@@ -251,6 +257,7 @@ class Stopwatch
                 $aggregates[$label] = [
                     'count' => 0,
                     'total_ms' => 0.0,
+                    'exclusive_ms' => 0.0,
                     'max_ms' => 0.0,
                     'min_ms' => $span['duration_ms'],
                     'avg_ms' => 0.0,
@@ -260,6 +267,7 @@ class Stopwatch
 
             $aggregates[$label]['count']++;
             $aggregates[$label]['total_ms'] += $span['duration_ms'];
+            $aggregates[$label]['exclusive_ms'] += $span['exclusive_ms'];
             $aggregates[$label]['max_ms'] = max($aggregates[$label]['max_ms'], $span['duration_ms']);
             $aggregates[$label]['min_ms'] = min($aggregates[$label]['min_ms'], $span['duration_ms']);
         }
@@ -270,7 +278,7 @@ class Stopwatch
 
         uasort(
             $aggregates,
-            static fn(array $a, array $b): int => $b['total_ms'] <=> $a['total_ms']
+            static fn(array $a, array $b): int => $b['exclusive_ms'] <=> $a['exclusive_ms']
         );
 
         return $aggregates;
