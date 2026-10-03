@@ -221,9 +221,11 @@ export default {
         placement: 'bottom',
         align: this.align,
         size: this.panelSize,
+        // clientWidth/clientHeight, not innerWidth/innerHeight: those include
+        // the scrollbar, which would let a clamped menu hide under it.
         viewport: {
-          width: window.innerWidth || 0,
-          height: window.innerHeight || 0
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight
         },
         scroll: {
           x: window.scrollX || 0,
