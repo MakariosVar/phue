@@ -14,7 +14,7 @@
 import { Harness } from './dom-double.mjs';
 
 const jsDir = process.argv[3];
-const { positionFor, measureAnchor, trackViewport, releaseViewport } = await import(`${jsDir}/position.js`);
+const { positionFor, measureAnchor, trackViewport, releaseViewport, overlayLayerFor, OVERLAY_CONTAINERS } = await import(`${jsDir}/position.js`);
 
 const h = new Harness();
 
@@ -396,6 +396,91 @@ h.suite('trackViewport');
     });
     h.eq('clamp bounds by the measured width when minWidth is unset', r3.left, 1024 - 400 - 8);
     h.eq('a content-sized menu still fits', r3.left + 400, 1024 - 8);
+}
+
+{
+    // A panel that teleports out of a modal lands in the base layer as a sibling of
+    // the modal, which paints under its opaque surface: the options are in the DOM
+    // and "visible", just behind the dialog. The layer has to clear the container.
+    h.installDom();
+    const doc = h.doc;
+
+    const build = (containerAttrs, containerStyle) => {
+        const container = h.el('div', { attrs: containerAttrs });
+        if (containerStyle !== undefined) {
+            container.setAttribute('style', containerStyle);
+        }
+        const trigger = h.el('button', { attrs: { id: 't' } });
+        container.appendChild(trigger);
+        doc.body.appendChild(container);
+        return trigger;
+    };
+
+    // The live path: read the container's own z-index.
+    h.eq(
+        'inside a modal at 1055 paints one step above it',
+        overlayLayerFor(build({ class: 'modal' }, 'z-index: 1055'), 1040),
+        1056
+    );
+    h.eq(
+        'a restyled modal is followed, not pinned to the documented layer',
+        overlayLayerFor(build({ class: 'modal' }, 'z-index: 1200'), 1040),
+        1201
+    );
+    h.eq(
+        'inside the drawer panel paints one step above it',
+        overlayLayerFor(build({ 'data-phui': 'drawer' }, 'z-index: 1046'), 1040),
+        1047
+    );
+
+    // The fallback path: no stylesheet, so getComputedStyle reports 'auto'. It must
+    // NOT return the base layer — that is precisely the bug this exists to fix, and
+    // returning it would restore it silently.
+    h.eq(
+        'a modal with no resolvable z-index falls back to the documented layer',
+        overlayLayerFor(build({ class: 'modal' }), 1040),
+        1056
+    );
+    h.deepEq(
+        'the documented layers sit above every container they belong to',
+        OVERLAY_CONTAINERS.map((c) => c.layer),
+        [1056, 1047]
+    );
+
+    // Outside any container: the documented base layer is the contract, because a
+    // float on the page must stay under an overlay that is already open.
+    const plain = h.el('button');
+    doc.body.appendChild(plain);
+    h.eq('a trigger outside any container keeps the base layer', overlayLayerFor(plain, 1040), 1040);
+
+    // A container the base layer already clears must not be raised above it.
+    h.eq(
+        'a container below the base layer does not lower the panel',
+        overlayLayerFor(build({ class: 'modal' }, 'z-index: 5'), 1040),
+        1040
+    );
+    h.eq(
+        'the documented fallback never lowers the panel below the base layer',
+        overlayLayerFor(build({ class: 'modal' }), 5000),
+        5000
+    );
+
+    // Degenerate input.
+    h.eq('a null anchor keeps the base layer', overlayLayerFor(null, 1040), 1040);
+    h.eq('an unmeasurable anchor keeps the base layer', overlayLayerFor({}, 1040), 1040);
+    h.eq(
+        'a selector list that matches nothing keeps the base layer',
+        overlayLayerFor(build({ class: 'modal' }, 'z-index: 1055'), 1040, [{ selector: '.nope', layer: 9999 }]),
+        1040
+    );
+
+    // SSR: no window at all. The container is still detected, so the documented
+    // layer is used rather than the base one.
+    const savedWindow = globalThis.window;
+    const trigger = build({ class: 'modal' }, 'z-index: 1055');
+    delete globalThis.window;
+    h.eq('without a window the documented layer is used', overlayLayerFor(trigger, 1040), 1056);
+    globalThis.window = savedWindow;
 }
 
 h.finish();

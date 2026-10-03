@@ -254,3 +254,84 @@ export function measureAnchor(el) {
         height: rect.height
     };
 }
+/**
+ * The containers a teleported panel can find itself inside, and the layer to use
+ * when the container's own layer cannot be read.
+ *
+ * `.modal` covers all three of the kit's modal surfaces: PhModal, PhConfirmDialog
+ * (which rolls its own `modal fade show d-block` markup rather than reusing
+ * PhModal) and PhCommandPalette (which renders a PhModal). `[data-phui="drawer"]`
+ * is PhDrawer's panel.
+ *
+ * The toast region is deliberately absent. It has no stable hook of its own, and a
+ * form control inside a toast is not a shape this kit supports; adding a selector
+ * for it would be a guess. The list is exported, so extending it is one entry.
+ *
+ * @type {Array<{selector: string, layer: number}>}
+ */
+export const OVERLAY_CONTAINERS = [
+    // One step above the modal's own 1055, and below the popover at 1070 so a
+    // popover opened from inside the same dialog still wins.
+    { selector: '.modal', layer: 1056 },
+    // One step above the drawer panel's 1046.
+    { selector: '[data-phui="drawer"]', layer: 1047 }
+];
+
+/**
+ * The stacking layer a teleported panel needs in order to stay visible.
+ *
+ * A panel that teleports to `body` leaves the stacking context of whatever held
+ * its trigger. That is the point — it is how the panel escapes a scrolling
+ * ancestor's clipping — but it also means the panel and its former host are now
+ * siblings competing on z-index alone. Teleporting out of a modal into a lower
+ * layer does not put the panel "beside" the modal: the modal's own surface is
+ * opaque and paints over it, so a select inside a modal opens its options
+ * *underneath* the dialog, which reads to the user as a control that does nothing.
+ *
+ * So the layer is not a constant, it is a function of the container that was
+ * escaped: paint one step above it.
+ *
+ * The container's live z-index is preferred over the documented one, so a
+ * Bootstrap minor bump cannot leave this quietly wrong. The documented layer is
+ * the fallback, and it is a fallback rather than a preference on purpose: without
+ * a stylesheet `getComputedStyle` reports `auto` for everything, and returning
+ * the base layer there would restore the exact bug this exists to fix — silently,
+ * as "the options do not appear".
+ *
+ * @param {Element|null} anchorEl The element the panel is anchored to (its trigger)
+ * @param {number} baseLayer Layer to use when the trigger is not inside a container
+ * @param {Array<{selector: string, layer: number}>} [containers] Overlay containers
+ * @returns {number} The layer the panel should paint at
+ */
+export function overlayLayerFor(anchorEl, baseLayer, containers = OVERLAY_CONTAINERS) {
+    if (!anchorEl || typeof anchorEl.closest !== 'function') {
+        return baseLayer;
+    }
+
+    let container = null;
+    let documented = null;
+    for (const entry of containers) {
+        const found = anchorEl.closest(entry.selector);
+        if (found) {
+            container = found;
+            documented = entry.layer;
+            break;
+        }
+    }
+
+    if (!container) {
+        return baseLayer;
+    }
+
+    const view = typeof window !== 'undefined' ? window : null;
+    if (view && typeof view.getComputedStyle === 'function') {
+        const z = parseInt(view.getComputedStyle(container).zIndex, 10);
+        // NaN means 'auto', which is the no-stylesheet case and is handled below.
+        if (Number.isFinite(z)) {
+            // A container the base layer already clears needs nothing done to it.
+            return z >= baseLayer ? z + 1 : baseLayer;
+        }
+    }
+
+    return Math.max(documented || 0, baseLayer);
+}
