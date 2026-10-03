@@ -236,7 +236,7 @@ return [
         <!-- Sidebar: a plain column from lg up, an off-canvas drawer below it. -->
         <aside
             id="phue-phui-sidebar"
-            class="phue-sidebar border-end d-flex flex-column overflow-y-auto"
+            class="phue-sidebar pt-3 border-end d-flex flex-column overflow-y-auto"
             :class="isMobile ? 'phue-sidebar--mobile' : 'phue-sidebar--static flex-shrink-0'"
             :style="isMobile
                 ? (sidebarOpen

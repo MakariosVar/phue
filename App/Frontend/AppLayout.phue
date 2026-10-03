@@ -79,7 +79,7 @@ if ($orientation === 'sidebar') {
                 '<button type="button" class="navbar-toggler d-lg-none ms-auto" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>' .
                 '<div id="nav" class="collapse navbar-collapse flex-grow-1">%s</div>' .
             '</header>' .
-            '<main class="app-content p-3">%s</main>' .
+            '<main class="app-content">%s</main>' .
         '</div>',
         $stickyStyle,
         $brandHrefEscaped,
