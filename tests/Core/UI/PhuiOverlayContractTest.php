@@ -62,11 +62,24 @@ final class PhuiOverlayContractTest extends TestCase
         // Keys are the documented row labels, verbatim: the assertion below matches
         // the docs table by name, so a label that drifts apart is caught rather than
         // silently testing nothing.
+        //
+        // `drawer panel` and `drawer backdrop` were the wrong way round here for as
+        // long as this file existed: both the table and the docs agreed with each
+        // other and disagreed with PhDrawer, which writes 1045 on the backdrop and
+        // 1046 on the panel. Nothing caught it because the ordering assertion only
+        // compares numbers, and a swapped pair is still ordered. Anyone reasoning
+        // from this table about which surface to clear would have cleared the
+        // backdrop and left the panel in front.
         'sticky page chrome' => 1020,
         'dropdown menu' => 1040,
-        'drawer panel' => 1045,
-        'drawer backdrop' => 1046,
+        'drawer backdrop' => 1045,
+        'drawer panel' => 1046,
+        // A float teleported out of an overlay has to paint above it. These two are
+        // the fallback layers for that case, owned by position.js, and are only
+        // reached when the container's own z-index cannot be read (no stylesheet).
+        'dropdown menu inside a drawer' => 1047,
         'modal' => 1055,
+        'dropdown menu inside a modal' => 1056,
         'popover backdrop' => 1069,
         'popover' => 1070,
         'tooltip' => 1080,
@@ -236,6 +249,18 @@ final class PhuiOverlayContractTest extends TestCase
             'drawer panel' => 'PhDrawer',
             'drawer backdrop' => 'PhDrawer',
         ];
+
+        // The two resolved layers live in the shared composable rather than in a
+        // component, so they are asserted against the file that writes them.
+        foreach (['dropdown menu inside a drawer', 'dropdown menu inside a modal'] as $layer) {
+            $value = self::LAYERS[$layer];
+
+            $this->assertMatchesRegularExpression(
+                '/(?:z-?[Ii]ndex\s*[:=]\s*[0-9]*|layer\s*:\s*)[0-9]*' . $value . '\b/',
+                (string) file_get_contents(self::JS_DIR . '/position.js'),
+                sprintf('the documented `%s` layer (%d) must be the one position.js falls back to', $layer, $value)
+            );
+        }
 
         foreach ($expected as $layer => $component) {
             $value = self::LAYERS[$layer];
@@ -480,6 +505,115 @@ final class PhuiOverlayContractTest extends TestCase
         }
 
         return implode("\n", $block);
+    }
+
+    /**
+     * A float that teleports out of an overlay has to land above it.
+     *
+     * The failure this exists to catch is silent and looks like a broken control:
+     * teleporting to `body` makes the panel a sibling of the modal, the panel keeps
+     * its page-level layer, and the modal's opaque surface paints over it. The
+     * options are in the DOM, visible, and completely unreachable — which is what
+     * was reported as "a select3 in a modal shows no options".
+     *
+     * So every float whose base layer sits below a container must resolve the layer
+     * through the shared helper, and resolve it on open rather than in a computed
+     * (reading a computed style inside a computed forces a style recalc per render).
+     */
+    public function testAFloatBelowAnOverlayLayerResolvesItOnOpen(): void
+    {
+        $containers = array_values(self::LAYERS);
+        $offenders = [];
+
+        foreach (self::ANCHORED_FLOATERS as $component) {
+            $source = $this->source($component);
+            if (str_contains($source, 'overlayLayerFor(') !== true) {
+                continue;
+            }
+
+            if (str_contains($source, 'this.overlayLayer = overlayLayerFor(') !== true) {
+                $offenders[] = "{$component} — calls overlayLayerFor() but never stores the result on open, "
+                    . 'so the panel cannot use it';
+                continue;
+            }
+
+            // The resolved value has to clear every container it might be inside.
+            $base = $this->baseLayerOf($source);
+            if ($base === null) {
+                $offenders[] = "{$component} — no base layer constant found to compare against";
+                continue;
+            }
+
+            if (str_contains($source, 'this.overlayLayer ||') !== true) {
+                $offenders[] = "{$component} — the style does not fall back to the base layer when there is no overlay";
+            }
+        }
+
+        self::assertSame([], $offenders, implode("\n  ", $offenders));
+    }
+
+    /**
+     * The inverse, and the reason this is cheap rather than universal.
+     *
+     * Only layers that sit below a container can be trapped by one. The popover and
+     * the tooltip already clear every surface in the table, so they need no
+     * resolution — and adding it anyway would be a second, redundant source of
+     * truth for a case that cannot happen. Asserting the arithmetic keeps the
+     * exemption honest if a layer number ever moves.
+     */
+    public function testOnlyFloatsBelowAContainerNeedLayerResolution(): void
+    {
+        $highestContainer = max(
+            self::LAYERS['drawer panel'],
+            self::LAYERS['modal']
+        );
+
+        $needsResolution = [];
+        $exempt = [];
+
+        foreach (self::ANCHORED_FLOATERS as $component) {
+            $source = $this->source($component);
+            $base = $this->baseLayerOf($source);
+            self::assertNotNull($base, "{$component} — no base layer constant found");
+
+            if ($base >= $highestContainer) {
+                $exempt[$component] = $base;
+                continue;
+            }
+            $needsResolution[$component] = $base;
+        }
+
+        // PhPopover at 1070 and PhTooltip at 1080 clear the modal at 1055.
+        self::assertArrayHasKey('PhPopover', $exempt, 'PhPopover should not need layer resolution');
+        self::assertArrayHasKey('PhTooltip', $exempt, 'PhTooltip should not need layer resolution');
+
+        foreach (['PhDropdown', 'PhSelect3', 'PhDatePicker', 'PhColorPicker'] as $component) {
+            self::assertArrayHasKey(
+                $component,
+                $needsResolution,
+                "{$component} paints at {$needsResolution[$component]}, below the modal at "
+                    . self::LAYERS['modal'] . ', so it must resolve its layer'
+            );
+        }
+    }
+
+    /**
+     * The layer a component paints its panel at, or null if it has none.
+     *
+     * Both spellings count: a `_Z` constant (PhDropdown, PhSelect3, PhTooltip) and a
+     * bare literal in the style object (PhPopover). Rejecting the second would mean
+     * the exemption test below could not see the popover at all, which is the one
+     * component whose exemption is most worth asserting.
+     */
+    private function baseLayerOf(string $source): ?int
+    {
+        if (preg_match("/const\s+[A-Za-z_]*_Z\s*=\s*([0-9]+)\s*;/", $source, $m) === 1) {
+            return (int) $m[1];
+        }
+
+        return preg_match('/z-?[Ii]ndex\s*:\s*([0-9]+)/', $source, $m) === 1
+            ? (int) $m[1]
+            : null;
     }
 
     /**

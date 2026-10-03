@@ -195,18 +195,36 @@ two tables are the contract for all of them.
 |---|---|---|
 | sticky page chrome | `1020` | — (the floor a float must beat) |
 | dropdown menu | `1040` | `<ph-dropdown>` |
-| drawer panel | `1045` | `<ph-drawer>` |
-| drawer backdrop | `1046` | `<ph-drawer>` |
+| drawer backdrop | `1045` | `<ph-drawer>` |
+| drawer panel | `1046` | `<ph-drawer>` |
+| dropdown menu inside a drawer | `1047` | fallback only — see below |
 | modal | `1055` | `<ph-modal>`, `<ph-confirm-dialog>` |
+| dropdown menu inside a modal | `1056` | fallback only — see below |
 | popover backdrop | `1069` | `<ph-popover>` — the click-to-close surface |
 | popover | `1070` | `<ph-popover>` |
 | tooltip | `1080` | `<ph-tooltip>` |
 | toast region | `1090` | `<ph-toast>` |
 
 The order is not decorative. A tooltip sits **below** toasts so a tip on a button
-inside a toast stays inside its toast, and everything in a dropdown sits below the
-layers that are genuinely overlays — a dropdown **inside** a modal has to stay in
-the modal's layer.
+inside a toast stays inside its toast, and a dropdown on a page sits below the
+layers that are genuinely overlays — it must not float over a dialog that is
+already open.
+
+**A float inside an overlay needs the layer above it.** Teleporting a panel to
+`body` takes it out of its trigger's stacking context — that is how it escapes a
+scrolling ancestor's clipping — but it also makes it a *sibling* of the overlay it
+came from, competing on `z-index` alone. At `1040` a panel teleported out of a
+modal lands **under** the modal's opaque surface: the options are in the DOM and
+`visibility: visible`, just unreachable. So a float whose trigger is inside an
+overlay paints one step above that overlay (`1047` inside a drawer, `1056` inside a
+modal).
+
+That layer is **resolved at open**, not hardcoded per component: the container's
+own `z-index` is read and incremented, so a Bootstrap bump cannot leave it stale.
+The two `1047`/`1056` rows are the fallback for when no stylesheet is present and
+the container reports `z-index: auto` — deliberately *not* the base layer, which
+would restore the bug silently. `<ph-popover>` and `<ph-tooltip>` need none of
+this: at `1070`/`1080` they already clear every surface in the table.
 
 **A float must beat `1020`.** Bootstrap's own `1000` loses to sticky chrome, which
 is exactly the layer a float exists to cover.
