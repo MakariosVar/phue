@@ -191,14 +191,36 @@ if ($sectionPosition !== false && count($navItems) > 1) {
     }
 }
 
+// ------------------------------------------------------------- palette rows
+// The showcase's headings are already the nav tree, so the palette is that tree
+// flattened: every section and every component, grouped by section. Built here for
+// the same reason as the rest of this block — the SSR renderer reads this state, so
+// a computed would arrive on the server as undefined.
+$paletteItems = [];
+foreach ($navItems as $group) {
+    $paletteItems[] = [
+        'id'    => $group['id'],
+        'label' => $group['label'],
+        'group' => 'Sections',
+    ];
+
+    foreach ($group['components'] as $component) {
+        $paletteItems[] = [
+            'id'    => $component['id'],
+            'label' => $component['label'],
+            'group' => $group['label'],
+        ];
+    }
+}
+
 return [
     'title' => 'Phue PhUI — Built-in Components',
     'state' => [
         'activeSection' => $sectionId,
         'activeAnchor' => $location,
-        'searchQuery' => '',
         'shellHeight' => 'calc(100dvh - 4.75rem)',
         'navItems' => $navItems,
+        'paletteItems' => $paletteItems,
         // The sidebar is rendered from STATE, not from a computed. The SSR engine
         // runs `createSSRApp({ template, data })` (ssr/server.ts) — setup(),
         // computeds and methods never execute on the server, so a `v-for` over a
@@ -223,6 +245,18 @@ return [
 
         <ph-toast position="top-right" />
         <ph-confirm-dialog />
+
+        <!-- Ctrl/Cmd+K. The palette owns the shortcut itself (`shortcut` defaults to
+             true) and removes the listener on unmount, so this page wires no key
+             handler — the one that used to live here also had to open the mobile
+             drawer first, because it was focusing a field behind a v-if. -->
+        <ph-command-palette
+            v-model="paletteOpen"
+            :items="paletteItems"
+            placeholder="Search components…"
+            label="Search components"
+            @select="onPaletteSelect"
+        />
 
         <!-- Mobile scrim: only exists while the off-canvas sidebar is open. -->
         <div
@@ -279,14 +313,17 @@ return [
             </div>
 
             <div v-if="!isMobile || sidebarOpen" class="px-4 mb-3">
-                <ph-search-input
-                    id="phui-search-input"
-                    v-model="searchQuery"
-                    placeholder="Search… (Ctrl+K)"
-                    clearable
-                    size="sm"
-                    :clearable="true"
-                />
+                <!-- Stands where the search field was. A real button rather than a
+                     readonly input: the palette owns filtering, ranking and the
+                     keyboard, so a field that accepted keystrokes and did nothing
+                     with them would be worse than a button. -->
+                <button
+                    type="button"
+                    class="btn btn-sm w-100 d-flex align-items-center justify-content-between text-body-secondary"
+                    @click="paletteOpen = true"
+                >
+                    <span>Search (Ctrl+K)</span>
+                </button>
             </div>
 
             <div v-if="!isMobile || sidebarOpen" class="flex-column px-3 pb-3" style="gap: 0.1rem; min-height: 0;">
@@ -717,7 +754,6 @@ export default function mountApp(injectedContext = null) {
             const state = reactive({
                 activeSection: initState.activeSection ?? DEFAULT_SECTION,
                 activeAnchor: initState.activeAnchor ?? '',
-                searchQuery: initState.searchQuery ?? '',
                 // Seeded from the server's answer rather than left empty. The SSR
                 // renderer reads the PHP state, so it renders the sidebar and the
                 // footer; a client store that started empty would hydrate them
@@ -729,6 +765,7 @@ export default function mountApp(injectedContext = null) {
                     ...nav,
                     components: nav.components ?? [],
                 })),
+                paletteItems: initState.paletteItems ?? [],
                 // Same reason. Note the state serializer drops nulls, so a null
                 // neighbour arrives as undefined — hence the `?? null`.
                 visibleNav: initState.visibleNav ?? [],
@@ -748,6 +785,11 @@ export default function mountApp(injectedContext = null) {
             // query in) — the breakpoint is mirrored in JS and drives an inline style.
             const isMobile = ref(false);
             const sidebarOpen = ref(false);
+
+            // The palette is controlled: its `isOpen` is `modelValue && !disabled`
+            // and the Ctrl+K shortcut only emits `update:modelValue`, so a page that
+            // never binds v-model gets a palette that can never open.
+            const paletteOpen = ref(false);
 
             /** Flat, DOM-ordered list of every spy target (sections + their components). */
             const orderedSpyIds = computed(() => {
@@ -840,6 +882,21 @@ export default function mountApp(injectedContext = null) {
 
             /** Navigates to a section or a component. A section id swaps the DOM, so
              *  its scroll waits for nextTick; a component is already on screen. */
+            /**
+             * Opens on a palette row exactly as the sidebar link would.
+             *
+             * Nothing to add: scrollTo() already resolves an id to its section,
+             * swaps the DOM when that section is not mounted, waits a tick before
+             * scrolling and writes ?section=. The palette inherits the whole
+             * navigation contract instead of reimplementing the part of it that is
+             * easy to get subtly wrong.
+             */
+            function onPaletteSelect(entry) {
+                if (entry && entry.id) {
+                    scrollTo(entry.id);
+                }
+            }
+
             function scrollTo(id) {
                 if (!id) return;
 
@@ -1088,47 +1145,20 @@ export default function mountApp(injectedContext = null) {
                 }
             }
 
-            function syncExpandedSections() {
-                const query = String(state.searchQuery || '').trim().toLowerCase();
-                const activeGroup = parentGroupOf(state.activeSection);
-                for (const nav of state.navItems) {
-                    if (nav.id === activeGroup) {
-                        if (!state.openSections.includes(nav.id)) {
-                            state.openSections = [...state.openSections, nav.id];
-                        }
-                        continue;
-                    }
-                    if (!query) continue;
-                    if (!state.openSections.includes(nav.id)
-                        && (nav.label.toLowerCase().includes(query)
-                            || nav.components.some((comp) => comp.label.toLowerCase().includes(query)))) {
-                        state.openSections = [...state.openSections, nav.id];
-                    }
-                }
-            }
-
             /**
-             * The search filter writes into `visibleNav` state rather than being a
-             * computed the template reads: the server has no query, so its state
-             * already holds the unfiltered list, and a computed would render as
-             * `undefined` there and take the whole sidebar with it.
+             * Opens the group the reader is currently in.
+             *
+             * This did two jobs: open the active group, and open every group whose
+             * label matched the sidebar's search query. The query left with the field —
+             * the palette does that job now — so only the first remains. The name still
+             * fits: it syncs which sections are expanded.
              */
-            function syncVisibleNav() {
-                const query = String(state.searchQuery || '').trim().toLowerCase();
-                if (!query) {
-                    state.visibleNav = state.navItems;
-                    return;
+            function syncExpandedSections() {
+                const activeGroup = parentGroupOf(state.activeSection);
+
+                if (activeGroup && !state.openSections.includes(activeGroup)) {
+                    state.openSections = [...state.openSections, activeGroup];
                 }
-                state.visibleNav = state.navItems
-                    .map((nav) => ({
-                        ...nav,
-                        components: nav.components.filter((comp) =>
-                            comp.label.toLowerCase().includes(query),
-                        ),
-                    }))
-                    .filter((nav) =>
-                        nav.label.toLowerCase().includes(query) || nav.components.length > 0,
-                    );
             }
 
             // Hydration mismatch avoider logic
@@ -1137,7 +1167,6 @@ export default function mountApp(injectedContext = null) {
                     ...nav,
                     components: nav.components ?? [],
                 }));
-                syncVisibleNav();
                 syncFooter();
                 invalidateElementCache();
                 syncExpandedSections();
@@ -1162,12 +1191,6 @@ export default function mountApp(injectedContext = null) {
                     });
                 }
             }
-
-            watch(() => state.searchQuery, () => {
-                invalidateElementCache();
-                syncVisibleNav();
-                syncExpandedSections();
-            });
 
             watch(() => state.navItems.length, () => {
                 invalidateElementCache();
@@ -1209,32 +1232,10 @@ export default function mountApp(injectedContext = null) {
                     sidebarOpen.value = false;
                 }
 
-                // Ctrl/Cmd+K focuses the component search, the same shortcut the docs
-                // page binds. The search only exists above `lg` or in an open drawer,
-                // so a shortcut press has to open the sidebar first or there is
-                // nothing to focus and the browser's own "open search" UI takes over.
-                if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
-                    return;
-                }
-                if (event.key.toLowerCase() !== 'k') {
-                    return;
-                }
-
-                if (isMobile.value && !sidebarOpen.value) {
-                    sidebarOpen.value = true;
-                }
-
-                // The field is behind v-if on the drawer, so it does not exist yet on
-                // the tick the shortcut is pressed; nextTick lands after the render.
-                nextTick(() => {
-                    const search = document.getElementById('phui-search-input');
-                    if (!search) {
-                        return;
-                    }
-                    event.preventDefault();
-                    search.focus();
-                    search.select();
-                });
+                // Ctrl/Cmd+K belongs to <ph-command-palette>, which registers and
+                // removes its own listener. The branch that used to live here had to
+                // open the mobile drawer and wait a tick for a field behind a v-if,
+                // because there was a text input to focus. There is not any more.
             }
 
             onMounted(() => {
@@ -1306,8 +1307,10 @@ export default function mountApp(injectedContext = null) {
                 shellHeight,
                 isMobile,
                 sidebarOpen,
+                paletteOpen,
                 toggleSection,
-                scrollTo
+                scrollTo,
+                onPaletteSelect
             };
         }
     });
