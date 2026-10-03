@@ -1,19 +1,18 @@
 <template>
   <teleport to="body" v-if="mounted && modelValue">
     <div
+      ref="overlayRoot"
       data-phui="drawer"
-      
+      tabindex="-1"
       :style="backdropStyle"
       @click="onBackdropClick"
     >
       <div
-        ref="panel"
         class="d-flex flex-column"
         role="dialog"
         aria-modal="true"
         :aria-label="title || null"
         :style="panelStyle"
-        tabindex="-1"
         @click.stop
       >
         <div class="d-flex align-items-center border-bottom px-3 py-2">
@@ -48,6 +47,7 @@
 export default {
   name: 'PhDrawer',
   ssr: false,
+  composables: ['overlay'],
   props: {
     modelValue: {
       type: Boolean,
@@ -83,7 +83,7 @@ export default {
   data() {
     return {
       mounted: false,
-      previousActive: null
+      trap: null
     };
   },
   computed: {
@@ -142,13 +142,11 @@ export default {
   },
   mounted() {
     this.mounted = true;
-    document.addEventListener('keydown', this.onKeydown);
     if (this.modelValue) {
       this.activate();
     }
   },
   beforeUnmount() {
-    document.removeEventListener('keydown', this.onKeydown);
     this.deactivate();
   },
   methods: {
@@ -161,49 +159,46 @@ export default {
         this.close();
       }
     },
+
+    /**
+     * Hands focus containment to the shared composable.
+     *
+     * The trap root is the outermost teleported element, not the panel: the
+     * sibling scan that makes the background inert walks the root's parent's
+     * children, and only the outer wrapper is a direct child of <body>.
+     * Trapping on the panel would find no siblings and leave the page tabbable
+     * behind the drawer.
+     *
+     * `tabindex="-1"` sits on that wrapper so a drawer with no focusable
+     * children still has a valid programmatic fallback focus target.
+     */
     activate() {
       this.$nextTick(() => {
-        const panel = this.$refs.panel;
-        if (!panel) return;
-        this.previousActive = document.activeElement;
-        const focusable = this.focusableElements();
-        (focusable[0] || panel).focus();
+        const root = this.$refs.overlayRoot;
+        if (!root) {
+          return;
+        }
+
+        this.releaseTrap();
+        this.trap = focusTrap(root, {
+          onEscape: () => {
+            if (this.closable) {
+              this.close();
+            }
+          }
+        });
+
         this.$emit('open');
       });
     },
     deactivate() {
-      if (this.previousActive && typeof this.previousActive.focus === 'function') {
-        this.previousActive.focus();
-      }
-      this.previousActive = null;
+      this.releaseTrap();
     },
-    focusableElements() {
-      const panel = this.$refs.panel;
-      if (!panel) return [];
-      const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-      return Array.prototype.slice.call(panel.querySelectorAll(selector));
-    },
-    onKeydown(event) {
-      if (!this.modelValue) return;
-      if (event.key === 'Escape') {
-        if (this.closable) {
-          this.close();
-        }
-        return;
+    releaseTrap() {
+      if (this.trap && typeof this.trap.release === 'function') {
+        this.trap.release();
       }
-      if (event.key === 'Tab') {
-        const focusable = this.focusableElements();
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
+      this.trap = null;
     }
   }
 };
