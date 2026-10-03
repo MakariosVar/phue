@@ -5,8 +5,10 @@ the same three problems — *"where exactly do I draw this?"*, *"keep the keyboa
 inside me"* and *"something else needs to say something"* — were being solved
 separately, and slightly differently, in every component that needed them.
 
-Each file is a **client-only** module. It may touch `document`/`window` at call time,
-never at import time, so a component can import it inside a `ssr: false` block.
+Each file is a **client-only** module. `document`/`window` are touched inside function
+bodies, never at the top level, so appending one to a component's script is safe even
+when that component is built for the server — and a `ssr: false` component can rely on
+the DOM being there.
 
 ---
 
@@ -14,7 +16,8 @@ never at import time, so a component can import it inside a `ssr: false` block.
 
 Declare it in the `<script>` frontmatter and call the helper normally. There is no
 import to write and no bundler step — `PhueComponentLoader` reads the list, resolves
-the names against this directory and injects the imports ahead of your code.
+the names against this directory and appends the whole module to the end of your
+script, so its exports are already in scope when your code runs.
 
 ```vue
 <script>
@@ -25,14 +28,21 @@ the names against this directory and injects the imports ahead of your code.
 Rules the loader enforces:
 
 - Names must match `/^[A-Za-z_$][A-Za-z0-9_$]*$/`. Anything else fails the build
-  rather than reaching the browser as a string-concatenated import.
+  rather than reaching the browser.
 - Duplicates are removed; order of first appearance is preserved.
 - A name that is not one of the files here fails the build.
 - If your script already declares that identifier, the build **fails on the
   collision** instead of silently letting the local win.
 
-**Do not `import` these from a `.phue` file.** The prelude owns the import; a
-hand-written one will collide with it.
+**There is no import to write.** The loader copies the module's source in, it does not
+add an import statement for it — so a hand-written `import { positionFor } from '…'`
+cannot resolve and is not needed. Note that the loader only inspects `export function`
+names, so a *destructured* binding of the same name in your own script slips past the
+collision check; prefer a distinct name.
+
+The copy lands at the **end** of the module. That is deliberate: function declarations
+are hoisted, so they are in scope from the first line of your code, and appending leaves
+your own `import { … } from 'vue'` at the top where a module requires it.
 
 ---
 
