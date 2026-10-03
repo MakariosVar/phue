@@ -113,6 +113,25 @@ class PhueComponentLoader
     private array $templateChildrenMemo = [];
 
     /**
+     * Memo of resolved child module hashes, keyed by component name.
+     *
+     * Each entry records the identity of the child AND of every node in its subtree, so a
+     * later visit can revalidate the whole branch with stats alone instead of rebuilding
+     * it. Identity is the same (mtime, size, contentHash) triple the client memo's
+     * fingerprint is built from, which is what makes a stale entry detectable: a change
+     * anywhere below the child changes that child's hash, and the recorded identities
+     * stop matching.
+     *
+     * Revalidating the subtree is not optional. Dropping it is what a naive child-hash
+     * memo does, and it silently serves a parent's previous module after a descendant is
+     * edited — including with no request boundary in between, which this loader supports
+     * by design (see PhueComponentFreshnessTest).
+     *
+     * @var array<string, array{identity: string, subtree: array<string, string>, hash: string}>
+     */
+    private array $childHashMemo = [];
+
+    /**
      * Optional PSR-3 logger instance for diagnostic warnings.
      *
      * @var LoggerInterface|null
@@ -188,6 +207,7 @@ class PhueComponentLoader
     {
         $this->componentIndex = null;
         $this->cache = [];
+        $this->childHashMemo = [];
     }
 
     /**
@@ -438,23 +458,12 @@ class PhueComponentLoader
         $resolvedChildHashes = [];
 
         if ($this->registry !== null) {
-            if ($contentHash !== '' && isset($this->templateChildrenMemo[$filePath]) && $this->templateChildrenMemo[$filePath]['hash'] === $contentHash) {
-                $children = $this->templateChildrenMemo[$filePath]['children'];
-            } else {
-                $discoverer = new ComponentDiscoverer($this->registry, $this->logger);
-                $children = $discoverer->scanTemplate($structure['template'], $name);
-                if ($contentHash !== '') {
-                    $this->templateChildrenMemo[$filePath] = [
-                        'hash' => $contentHash,
-                        'children' => $children,
-                    ];
-                }
-            }
+            $children = $this->templateChildrenFor($name, $structure);
 
             $this->buildingStack[$name] = true;
             try {
                 foreach ($children as $child) {
-                    $hash = $this->registry->moduleHash($child);
+                    $hash = $this->resolveChildHash($child);
                     // Fail-loud: if child resolution fails, fail the whole parent build immediately
                     if ($hash === null) {
                         $this->logger?->warning("Could not resolve module hash for child component '{$child}', aborting parent build '{$name}'", [
@@ -1018,6 +1027,188 @@ class PhueComponentLoader
      * @param string $scriptContent Raw inline component script content.
      * @return string|null Empty string if no composables declared, code string if valid, or null on error.
      */
+    /**
+     * The child component tags declared in a component's template, memoised per file.
+     *
+     * Keyed by the file's content hash, so a memoised list cannot outlive the content it
+     * describes: the template only changes when the content does, and the hash is
+     * re-read from the per-request structure entry.
+     *
+     * @param string $name Component logical name.
+     * @param array<string, mixed> $structure Structure as returned by getOrFetchStructure().
+     * @return array<int, string>
+     */
+    private function templateChildrenFor(string $name, array $structure): array
+    {
+        $filePath = (string) ($structure['filePath'] ?? '');
+        $contentHash = '';
+
+        if ($filePath !== '') {
+            $contentHash = (string) ($this->cache[$filePath]['contentHash'] ?? '');
+        }
+
+        if ($contentHash !== ''
+            && isset($this->templateChildrenMemo[$filePath])
+            && $this->templateChildrenMemo[$filePath]['hash'] === $contentHash
+        ) {
+            return $this->templateChildrenMemo[$filePath]['children'];
+        }
+
+        $discoverer = new ComponentDiscoverer($this->registry, $this->logger);
+        $children = $discoverer->scanTemplate((string) ($structure['template'] ?? ''), $name);
+
+        if ($contentHash !== '') {
+            $this->templateChildrenMemo[$filePath] = [
+                'hash' => $contentHash,
+                'children' => $children,
+            ];
+        }
+
+        return $children;
+    }
+
+    /**
+     * Resolve a child component's module hash, reusing a memoised answer when the whole
+     * branch below the child is provably unchanged.
+     *
+     * The memo check is what turns a component-heavy page from rebuilding its dependency
+     * graph once per referring edge into a stat per node per visit. It is only sound
+     * because a memo entry is trusted ONLY after every recorded identity in the child's
+     * subtree still matches: a child's hash is a function of everything below it, so
+     * validating the child alone would miss an edited grandchild.
+     *
+     * @param string $child Child component logical name.
+     * @return string|null 8-character hash prefix, or null when resolution fails.
+     */
+    private function resolveChildHash(string $child): ?string
+    {
+        $memo = $this->childHashMemo[$child] ?? null;
+
+        if ($memo !== null && $this->branchUnchanged($child, $memo['identity'], $memo['subtree'])) {
+            return $memo['hash'];
+        }
+
+        $hash = $this->registry?->moduleHash($child);
+
+        // A failed resolution is never memoised, so it can never read back as a hit.
+        if ($hash === null) {
+            return null;
+        }
+
+        $identity = $this->componentIdentity($child);
+
+        if ($identity !== null) {
+            $this->childHashMemo[$child] = [
+                'identity' => $identity,
+                'subtree' => $this->subtreeIdentities($child),
+                'hash' => $hash,
+            ];
+        }
+
+        return $hash;
+    }
+
+    /**
+     * Whether a component's own identity and every recorded descendant identity still match.
+     *
+     * Short-circuits on the first difference: a stale branch is detected as soon as the
+     * edited file is reached, and an unchanged branch costs one stat per node.
+     *
+     * @param string $name Component logical name.
+     * @param string $identity Identity recorded when the memo entry was written.
+     * @param array<string, string> $subtree Recorded identities of the whole branch.
+     * @return bool
+     */
+    private function branchUnchanged(string $name, string $identity, array $subtree): bool
+    {
+        if ($this->componentIdentity($name) !== $identity) {
+            return false;
+        }
+
+        foreach ($subtree as $descendant => $recorded) {
+            if ($this->componentIdentity($descendant) !== $recorded) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The identity triple a fingerprint is built from: mtime, size and content hash.
+     *
+     * Reading it goes through getOrFetchStructure(), which already caches per request and
+     * only re-hashes the file when mtime or size moved — so this is a stat in the common
+     * case, never a parse.
+     *
+     * @param string $name Component logical name.
+     * @return string|null Identity, or null when the component cannot be read.
+     */
+    private function componentIdentity(string $name): ?string
+    {
+        try {
+            $structure = $this->getOrFetchStructure($name);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $filePath = (string) ($structure['filePath'] ?? '');
+        $entry = $this->cache[$filePath] ?? null;
+
+        if ($filePath === '' || $entry === null) {
+            return null;
+        }
+
+        return $entry['mtime'] . '_' . $entry['size'] . '_' . ($entry['contentHash'] ?? '');
+    }
+
+    /**
+     * Record the identity of every node reachable below a component.
+     *
+     * The child list is already memoised per file, so this is one memo read plus one stat
+     * per descendant. Cycles cannot occur here: the traversal carries its own visited set
+     * and the caller's build stack has already rejected them.
+     *
+     * @param string $name Component logical name.
+     * @param array<string, bool> $seen Internal visited set.
+     * @return array<string, string>
+     */
+    private function subtreeIdentities(string $name, array $seen = []): array
+    {
+        $identities = [];
+
+        if (isset($seen[$name])) {
+            return $identities;
+        }
+
+        $seen[$name] = true;
+
+        $identity = $this->componentIdentity($name);
+        if ($identity === null) {
+            return $identities;
+        }
+
+        $identities[$name] = $identity;
+
+        if ($this->registry === null) {
+            return $identities;
+        }
+
+        try {
+            $children = $this->templateChildrenFor($name, $this->getOrFetchStructure($name));
+        } catch (Throwable) {
+            return $identities;
+        }
+
+        foreach ($children as $child) {
+            foreach ($this->subtreeIdentities($child, $seen) as $descendant => $descendantIdentity) {
+                $identities[$descendant] = $descendantIdentity;
+            }
+        }
+
+        return $identities;
+    }
+
     private function composablePrelude(string $scriptContent): ?string
     {
         if ($this->jsDir === null) {
