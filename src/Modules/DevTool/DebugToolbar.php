@@ -137,7 +137,7 @@ class DebugToolbar
                 'key' => 'timeline',
                 'title' => 'Timeline',
                 'hint' => 'Per-operation rollup by self time, so the shares partition the request. Filter by name or label.',
-                'content' => $this->renderTimeline($profiler->getAggregates()),
+                'content' => $this->renderTimeline($profiler->getAggregates(), $context),
             ];
         }
 
@@ -340,9 +340,10 @@ class DebugToolbar
      * Render the timeline panel: a rollup table plus a client-side filter.
      *
      * @param array<string, array<string, mixed>> $aggregates Per-label rollup.
+     * @param array<string, mixed> $context Request context recorded by the middleware.
      * @return string
      */
-    private function renderTimeline(array $aggregates): string
+    private function renderTimeline(array $aggregates, array $context = []): string
     {
         if ($aggregates === []) {
             return '<p class="phue-dt-note text-secondary mb-0">No spans were recorded for this request.</p>';
@@ -399,7 +400,8 @@ class DebugToolbar
             . ' placeholder="Filter operations…" aria-label="Filter operations"'
             . ' data-phue-dt-filter>';
 
-        return $filter
+        return $this->renderRequestLine($context)
+            . $filter
             . $this->wrapTable(
                 '<thead><tr>'
                 . '<th scope="col">Operation</th>'
@@ -485,6 +487,48 @@ class DebugToolbar
         }
 
         return '<div class="phue-dt-meta small text-body-secondary">' . implode(' ', $fragments) . '</div>';
+    }
+
+    /**
+     * Render the request target the rollup was measured on.
+     *
+     * The collapsed bar prints the method, the path and a route chip, but the bar is the
+     * one part of the report that never travels: panels get pasted into issues and lifted
+     * out of the page. A timeline that does not name its request cannot be compared with
+     * the next one, and on a page that renders a different subtree per query string
+     * (/phui?section=button against /phui?section=otp-input) there is nothing else in the
+     * table that distinguishes the two.
+     *
+     * The target comes from the middleware's `route`, which is the path with the query
+     * string rebuilt from the parsed parameters. That is a normalised target, not the
+     * bytes the client sent: parameter order and encoding follow the parsed array.
+     *
+     * @param array<string, mixed> $context Request context recorded by the middleware.
+     * @return string HTML, or an empty string when no request was recorded.
+     */
+    private function renderRequestLine(array $context): string
+    {
+        $method = strtoupper(trim((string) ($context['method'] ?? '')));
+        $target = trim((string) ($context['route'] ?? ''));
+
+        if ($target === '') {
+            $target = trim((string) ($context['uri'] ?? ''));
+        }
+
+        if ($method === '' && $target === '') {
+            return '';
+        }
+
+        $method = $method !== '' ? $method . ' ' : '';
+        $target = $target !== '' ? $this->esc($this->truncate($target, self::MAX_SQL_LENGTH)) : '';
+
+        if ($target === '') {
+            return '';
+        }
+
+        return '<p class="phue-dt-requestline font-monospace small text-body-secondary mb-2">'
+            . $this->esc($method) . $target
+            . '</p>';
     }
 
     /**
