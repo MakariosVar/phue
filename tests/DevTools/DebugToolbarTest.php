@@ -664,6 +664,46 @@ class DebugToolbarTest extends TestCase
         $this->assertStringNotContainsString('quoted literals redacted', $this->toolbar->render($profiler, 5.0));
     }
 
+    public function testShareIsComputedFromSelfTime(): void
+    {
+        // A parent's total contains every descendant, so totals over the request duration
+        // double-count and saturate. Share must come from exclusive time, which partitions
+        // the request, and the percentages must add up.
+        $profiler = new RequestProfiler(new Stopwatch());
+        $profiler->start();
+        $profiler->beginSpan('wrapper');
+        $profiler->measure('inner', static function (): void {
+            usleep(4000);
+        });
+        $profiler->measure('inner', static function (): void {
+            usleep(4000);
+        });
+        $profiler->measure('solo', static function (): void {
+            usleep(4000);
+        });
+        $profiler->endSpan();
+        $profiler->stop();
+
+        $aggregates = $profiler->getAggregates();
+        $selfTotal = array_sum(array_column($aggregates, 'exclusive_ms'));
+
+        // Ordered by self time, so the heaviest own-work label leads.
+        $this->assertSame(['inner', 'solo', 'wrapper'], array_keys($aggregates));
+
+        $shares = [];
+        foreach ($aggregates as $label => $aggregate) {
+            $shares[$label] = (float) $aggregate['exclusive_ms'] / $selfTotal * 100;
+        }
+
+        $this->assertEqualsWithDelta(100.0, array_sum($shares), 0.01, 'self-time shares must partition the request');
+        $this->assertLessThan(100.0, $shares['wrapper'], 'a wrapper must not be credited with its children');
+        $this->assertEqualsWithDelta(
+            (float) $aggregates['inner']['exclusive_ms'] / $selfTotal * 100,
+            $shares['inner'],
+            0.01
+        );
+    }
+
     public function testStatementRowsAreCapped(): void
     {
         $profiler = new RequestProfiler(new Stopwatch());
@@ -709,7 +749,7 @@ class DebugToolbarTest extends TestCase
      */
     private function countTimelineRows(string $html): int
     {
-        return $this->countRowsAfter($html, 'Share</th>');
+        return $this->countRowsAfter($html, 'Share of self</th>');
     }
 
     /**

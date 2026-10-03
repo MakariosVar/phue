@@ -135,7 +135,7 @@ class DebugToolbar
             $sections[] = [
                 'key' => 'timeline',
                 'title' => 'Timeline',
-                'hint' => 'Per-operation rollup, heaviest first. Filter by name or label.',
+                'hint' => 'Per-operation rollup by self time, so the shares partition the request. Filter by name or label.',
                 'content' => $this->renderTimeline($profiler->getAggregates(), $duration),
             ];
         }
@@ -340,6 +340,17 @@ class DebugToolbar
             return '<p class="phue-dt-note text-secondary mb-0">No spans were recorded for this request.</p>';
         }
 
+        // Share is computed from EXCLUSIVE time, and that is the only figure that can be
+        // turned into a percentage at all. Spans nest, so a parent's total contains every
+        // descendant: dividing totals by the request duration double-counts, saturates the
+        // bar at 100% for anything wrapping other work, and makes the column unreadable.
+        // Exclusive time partitions the request — every nanosecond belongs to exactly one
+        // frame — so these shares sum to 100% across the rows.
+        $exclusiveTotal = 0.0;
+        foreach ($aggregates as $aggregate) {
+            $exclusiveTotal += (float) ($aggregate['exclusive_ms'] ?? 0.0);
+        }
+
         $rows = '';
         $shown = 0;
 
@@ -349,17 +360,19 @@ class DebugToolbar
             }
             $shown++;
 
-            $total = (float) $aggregate['total_ms'];
-            $ratio = $totalDuration > 0.0 ? min(100.0, $total / $totalDuration * 100.0) : 0.0;
+            $exclusive = (float) ($aggregate['exclusive_ms'] ?? 0.0);
+            $ratio = $exclusiveTotal > 0.0 ? $exclusive / $exclusiveTotal * 100.0 : 0.0;
 
             $rows .= '<tr>'
                 . '<td class="font-monospace">' . $this->esc((string) $label) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc((string) $aggregate['count']) . '</td>'
-                . '<td class="phue-dt-num fw-bold">' . $this->esc(number_format($total, 2)) . '</td>'
+                . '<td class="phue-dt-num fw-bold">' . $this->esc(number_format($exclusive, 2)) . '</td>'
+                . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['total_ms'], 2)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['avg_ms'], 3)) . '</td>'
                 . '<td class="phue-dt-num">' . $this->esc(number_format((float) $aggregate['max_ms'], 2)) . '</td>'
-                . '<td style="width:20%"><span class="phue-dt-bar bg-info" style="width:'
-                . $this->esc(number_format($ratio, 2)) . '%"></span></td>'
+                . '<td style="width:18%"><span class="phue-dt-bar bg-info" style="width:'
+                . $this->esc(number_format($ratio, 2)) . '%"></span>'
+                . '<span class="phue-dt-share">' . $this->esc(number_format($ratio, 1)) . '%</span></td>'
                 . '</tr>';
         }
 
@@ -378,10 +391,11 @@ class DebugToolbar
                 '<thead><tr>'
                 . '<th scope="col">Operation</th>'
                 . '<th scope="col" class="phue-dt-num">Calls</th>'
+                . '<th scope="col" class="phue-dt-num">Self ms</th>'
                 . '<th scope="col" class="phue-dt-num">Total ms</th>'
                 . '<th scope="col" class="phue-dt-num">Avg ms</th>'
                 . '<th scope="col" class="phue-dt-num">Max ms</th>'
-                . '<th scope="col">Share</th>'
+                . '<th scope="col">Share of self</th>'
                 . '</tr></thead>',
                 $rows
             )
@@ -724,6 +738,7 @@ class DebugToolbar
         .phue-dt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .phue-dt-sql { max-width: 90ch; white-space: pre-wrap; word-break: break-word; }
         .phue-dt-bar { display: block; height: 9px; min-width: 1px; border-radius: 2px; opacity: .8; }
+        .phue-dt-share { font-size: 10px; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
         .phue-dt-filter { max-width: 26rem; }
         .phue-dt-json {
             max-height: 46vh; overflow: auto; font-size: 12px;
