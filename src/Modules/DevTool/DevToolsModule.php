@@ -21,12 +21,21 @@ use Psr\SimpleCache\CacheInterface;
  * Responsibilities:
  *  - Register the profiling services as explicit singletons so the decorators and the
  *    middleware share one collector.
- *  - Install transport and component-resolution decorators that report into that collector.
- *  - Mount the DevTool middleware last, so its start() brackets the entire request.
+ *  - Install the SSR transport, component-resolution and database-driver decorators that
+ *    report into that collector.
+ *  - Mount the DevTool middleware last, so its start() brackets the part of the request
+ *    that application code is responsible for. SecurityMiddleware and
+ *    ErrorHandlerMiddleware are pushed first and therefore run outside that bracket —
+ *    the report is "where did the application spend its time", not the HTTP wall clock.
  *
  * Instrumentation is applied by decoration rather than by calls inside the framework core.
  * That keeps Phue\Core unaware of the DevTool module and means the same profiler works
  * for third-party services bound into the container.
+ *
+ * Every step is individually guarded. Resolving a service it decorates can legitimately
+ * fail — an application with no component directory, or with no database — and a missing
+ * measurement must never be the reason a page fails. A skipped instrument is recorded as a
+ * diagnostic, surfaced in the report and logged, rather than swallowed.
  *
  * @package Phue\Modules\DevTool
  */
