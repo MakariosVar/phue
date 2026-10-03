@@ -915,16 +915,32 @@ class DebugToolbarTest extends TestCase
 
     // --------------------------------------------------------- readability
 
-    public function testPrimaryReadoutIsLargerThanSecondaryText(): void
+    public function testDurationBadgeDoesNotOutsizeTheBarItSitsIn(): void
     {
         $html = $this->render();
 
-        preg_match('/\.phue-dt-duration \{ font-size: ([0-9.]+)px/', $html, $duration);
+        preg_match('/\.phue-dt-duration \{([^}]*)\}/', $html, $rule);
         preg_match('/\.phue-dt-root \{[^}]*font-size: ([0-9.]+)px/s', $html, $root);
 
-        $this->assertNotEmpty($duration, 'Duration has no dedicated font size');
-        $this->assertGreaterThan((float) $root[1], (float) $duration[1]);
+        $this->assertNotEmpty($rule, 'The duration badge has no styling hook');
         $this->assertGreaterThanOrEqual(13.0, (float) $root[1]);
+
+        // The bar used to print the duration at 16px next to 10px sibling chips. Read next
+        // to them it said "this is the only figure that matters", which is the opposite of
+        // what the panel then spends its whole width arguing. Severity is already carried
+        // by the badge's tone, so the size does not have to carry it too.
+        if (preg_match('/font-size:\s*([0-9.]+)px/', $rule[1], $size) === 1) {
+            $this->assertLessThanOrEqual((float) $root[1], (float) $size[1]);
+        }
+    }
+
+    public function testDurationBadgeStillCarriesTheSeverityTone(): void
+    {
+        // Shrinking the number is only honest while something else still says whether the
+        // request was slow.
+        preg_match('/<span class="badge phue-dt-duration text-bg-[^"]*">/', $this->render(), $badge);
+
+        $this->assertNotEmpty($badge, 'The duration badge lost its tone');
     }
 
     public function testTablesAreNotDensifiedByBootstrapSmallUtility(): void

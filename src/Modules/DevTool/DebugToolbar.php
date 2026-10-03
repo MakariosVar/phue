@@ -893,8 +893,11 @@ class DebugToolbar
             flex: 0 0 auto; flex-wrap: wrap; gap: 8px; padding: 7px 12px; font-size: 13px;
             border-radius: 0 !important; border-top: 1px solid var(--bs-border-color) !important;
         }
-        /* The headline number: the one figure the bar exists to communicate. */
-        .phue-dt-duration { font-size: 16px; font-weight: 700; padding: 2px 10px; letter-spacing: .2px; }
+        /* The duration sits at the same size as its sibling chips. Its background tone
+           already carries how slow the request was, and a 16px number beside 10px badges
+           reads as the only figure that matters — which is the opposite of what the panel
+           then spends its whole width arguing. */
+        .phue-dt-duration { font-weight: 400; }
         .phue-dt-subtitle { font-size: 12.5px; max-width: 40ch; }
         .phue-dt-caret { font-size: 10px; transition: transform .15s ease; }
         .phue-dt-root[data-expanded="true"] .phue-dt-caret { transform: rotate(180deg); }
