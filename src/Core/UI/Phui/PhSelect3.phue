@@ -119,8 +119,12 @@
 <script>
 import { useId } from "vue";
 
+// Gap between the control and the list, on whichever side it opens.
+const LIST_GAP = 4;
+
 export default {
   name: 'PhSelect3',
+  composables: ['position'],
   props: {
     modelValue: {
       type: [String, Number, Array, null],
@@ -181,11 +185,13 @@ export default {
       open: false,
       query: '',
       activeIndex: 0,
-      // The control's viewport rect, and the panel's measured height. Both are
-      // needed on every render now that the panel is positioned by measurement
-      // rather than by being the control's in-flow sibling.
-      triggerRect: null,
-      listHeight: 0
+      /** Viewport-space control geometry; positionFor adds the scroll offset back. */
+      anchorRect: null,
+      /** Teleported list size. Its height decides the flip, so it is measured. */
+      panelSize: { width: 0, height: 0 },
+      /** Output of positionFor(), or null while the list is not yet placeable. */
+      panelPos: null,
+      viewportHandle: null
     };
   },
   computed: {
@@ -261,28 +267,19 @@ export default {
         width: '0px'
       };
 
-      if (!this.triggerRect || typeof window === 'undefined') {
+      const pos = this.panelPos;
+
+      if (!pos || !pos.measured || typeof window === 'undefined') {
         // Unmeasured. Hidden rather than painted at 0,0 — the server never knows the
         // control's position, so claiming one would flash the list in the corner.
         return { ...base, visibility: 'hidden' };
       }
 
-      const r = this.triggerRect;
-      const scrollX = window.scrollX || window.pageXOffset || 0;
-      const scrollY = window.scrollY || window.pageYOffset || 0;
-      const gap = 4;
-      const vh = document.documentElement.clientHeight;
-      const height = this.listHeight || 0;
-
-      const roomBelow = vh - r.bottom;
-      const roomAbove = r.top;
-      const above = height > 0 && roomBelow < height + gap && roomAbove > roomBelow;
-
       return {
         ...base,
-        width: `${r.width}px`,
-        left: `${r.left + scrollX}px`,
-        top: `${(above ? r.top - height - gap : r.bottom + gap) + scrollY}px`,
+        width: `${pos.width}px`,
+        left: `${pos.left}px`,
+        top: `${pos.top}px`,
         visibility: 'visible'
       };
     }
@@ -293,21 +290,19 @@ export default {
 
       if (value) {
         this.activeIndex = this.firstEnabled();
-        this.measure();
-        this.trackViewport();
+        this.startTracking();
 
         // Two ticks: the first renders the teleported panel, the second measures it.
         // Measuring on the first tick reads a node that does not exist yet.
         this.$nextTick(() => {
-          this.measure();
+          this.reposition();
           if (this.searchable && this.$refs.search) {
             this.$refs.search.focus();
           }
         });
       } else {
         this.query = '';
-        this.releaseViewport();
-        this.triggerRect = null;
+        this.stopTracking();
       }
     },
     filteredOptions() {
@@ -329,7 +324,7 @@ export default {
     window.addEventListener('keydown', this.onKeydown, true);
   },
   beforeUnmount() {
-    this.releaseViewport();
+    this.stopTracking();
     document.removeEventListener('click', this.onDocumentClick);
     window.removeEventListener('keydown', this.onKeydown, true);
   },
@@ -541,37 +536,90 @@ export default {
       this.close();
     },
 
-    measure() {
-      const control = this.$refs.control;
-      if (control) {
-        this.triggerRect = control.getBoundingClientRect();
-      }
-
-      const list = this.$refs.list;
-      if (list) {
-        this.listHeight = list.offsetHeight;
-      }
-    },
-
     /**
-     * Re-measure while the panel is open, so it stays attached to its control.
-     * Capture phase, because a plain `scroll` listener never fires for nested
-     * scrollers — which is where a select inside a scrolling form panel lives.
+     * Viewport-space geometry of the control.
+     *
+     * Kept in viewport space on purpose: the scroll offset is passed to
+     * positionFor() instead of being folded in here, so one arithmetic identity
+     * owns the document-space conversion.
      */
-    trackViewport() {
-      if (typeof window === 'undefined') return;
-      this.releaseViewport();
-      window.addEventListener('scroll', this.onViewportChange, true);
-      window.addEventListener('resize', this.onViewportChange);
+    measureAnchor() {
+      this.anchorRect = measureAnchor(this.$refs.control);
     },
-    releaseViewport() {
-      if (typeof window === 'undefined') return;
-      window.removeEventListener('scroll', this.onViewportChange, true);
-      window.removeEventListener('resize', this.onViewportChange);
+    measurePanel() {
+      const list = this.$refs.list;
+      if (!list || typeof list.getBoundingClientRect !== 'function') {
+        this.panelSize = { width: 0, height: 0 };
+        return;
+      }
+
+      const rect = list.getBoundingClientRect();
+      this.panelSize = { width: rect.width, height: rect.height };
     },
-    onViewportChange() {
-      if (!this.open) return;
-      this.measure();
+    /**
+     * Recomputes the list position from freshly measured geometry.
+     *
+     * Both the control and the list are re-measured: a nested scroller moves the
+     * control, and the list's own height decides which side it opens on.
+     */
+    reposition() {
+      this.measureAnchor();
+      this.measurePanel();
+
+      if (!this.anchorRect || typeof window === 'undefined') {
+        this.panelPos = null;
+        return;
+      }
+
+      this.panelPos = positionFor(this.anchorRect, {
+        placement: 'bottom',
+        align: 'start',
+        size: this.panelSize,
+        viewport: {
+          width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight
+        },
+        scroll: {
+          x: window.scrollX || window.pageXOffset || 0,
+          y: window.scrollY || window.pageYOffset || 0
+        },
+        offset: LIST_GAP,
+        allowFlip: true,
+        // Deliberately not clamped. The list is exactly as wide as the control and
+        // left-aligned to it, so it cannot overflow horizontally — and clamping
+        // vertically would drag it up over the very control it belongs to when
+        // neither side has room. Overflowing the bottom is the lesser evil: the
+        // list caps itself at 16rem and scrolls internally.
+        clamp: false,
+        margin: 0
+      });
+    },
+    /**
+     * Subscribes to viewport changes through the shared composable.
+     *
+     * trackViewport() listens on scroll in the capture phase, which is what
+     * makes *nested* scrollers (a scrolling form column around the control)
+     * visible to it — scroll events do not bubble, so a bubbling listener would
+     * miss them. It also coalesces bursts into one rAF callback.
+     */
+    startTracking() {
+      if (this.viewportHandle) return;
+
+      this.measureAnchor();
+      this.viewportHandle = trackViewport(this.reposition);
+
+      // The list is teleported, so it does not exist until Vue has flushed the
+      // open state. Measure it on the next tick, then place it.
+      this.$nextTick(() => {
+        this.reposition();
+      });
+    },
+    stopTracking() {
+      if (this.viewportHandle) {
+        releaseViewport(this.viewportHandle);
+        this.viewportHandle = null;
+      }
+      this.panelPos = null;
     }
   }
 };
