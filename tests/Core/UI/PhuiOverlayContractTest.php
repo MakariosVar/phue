@@ -378,6 +378,111 @@ final class PhuiOverlayContractTest extends TestCase
     }
 
     /**
+     * The invariant the string-grep above cannot see: opening must *call* the
+     * positioning path, and unmounting must *call* the release.
+     *
+     * `PhColorPicker` shipped with a complete measurement apparatus — `measure()`,
+     * `trackViewport()`, `releaseViewport()`, `onViewportChange()` — and none of it
+     * was reachable: the `open` watcher only emitted, so `triggerRect` stayed null
+     * and the panel rendered with `visibility: hidden` on every open. The feature
+     * was 100% dead while the code above reported it as compliant, because a
+     * declared-but-uncalled method contains the identifier the grep looks for.
+     *
+     * So this checks call sites, scoped to the two places that matter. A method
+     * that exists but is never invoked cannot satisfy either.
+     */
+    public function testAnAnchoredFloatPositionsOnOpenAndReleasesOnUnmount(): void
+    {
+        $positioning = ['measureAnchor', 'reposition', 'startTracking', 'trackViewport'];
+        $releasing = ['stopTracking', 'releaseViewport'];
+        $offenders = [];
+
+        foreach (self::ANCHORED_FLOATERS as $component) {
+            $script = $this->script($component);
+
+            if (str_contains($script, "composables: ['position']") !== true) {
+                $offenders[] = "{$component} — does not declare the position composable";
+                continue;
+            }
+
+            $open = $this->blockFrom($script, '/^ {2}watch: \{/m');
+            if ($open === null) {
+                $offenders[] = "{$component} — has no watcher block to inspect";
+                continue;
+            }
+
+            // Deliberately the whole watch block rather than one named key: the state
+            // that opens a float is `open` on some components and `visible` on
+            // others, and the invariant is the same either way. A watcher on some
+            // unrelated key would satisfy this loosely, but a float has one piece of
+            // reactive state that matters, and naming it per component would only
+            // make the test fail on a rename instead of on a real break.
+            $calls = [];
+            foreach ($positioning as $name) {
+                if (str_contains($open, "this->{$name}(") || str_contains($open, ".{$name}(")) {
+                    $calls[] = $name;
+                }
+            }
+            if ($calls === []) {
+                $offenders[] = "{$component} — no watcher triggers positioning "
+                    . '(looked for ' . implode(', ', array_map(static fn ($n) => "this->{$n}()", $positioning)) . ')';
+            }
+
+            $unmount = $this->blockFrom($script, '/^ {2}beforeUnmount\(\) \{/m');
+            if ($unmount === null) {
+                $offenders[] = "{$component} — has no beforeUnmount to inspect";
+                continue;
+            }
+
+            $released = false;
+            foreach ($releasing as $name) {
+                if (str_contains($unmount, "this->{$name}(") || str_contains($unmount, ".{$name}(")) {
+                    $released = true;
+                    break;
+                }
+            }
+            if ($released !== true) {
+                $offenders[] = "{$component} — beforeUnmount never releases the viewport handle, so the "
+                    . 'scroll/resize listeners outlive the component';
+            }
+        }
+
+        self::assertSame([], $offenders, implode("\n  ", $offenders));
+    }
+
+    /**
+     * Extracts a block by its opening line and the matching closing line.
+     *
+     * The scripts are consistently indented (2 spaces per options level), so the
+     * closing line is found by indentation rather than by counting braces — braces
+     * appear inside object literals and comment prose throughout these files, and a
+     * naive counter stops in the wrong place.
+     */
+    private function blockFrom(string $script, string $openPattern): ?string
+    {
+        if (preg_match($openPattern, $script, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        [, $start] = $m[0];
+        $indent = strlen($m[0][0]) - strlen(ltrim($m[0][0]));
+        $lines = explode("\n", substr($script, $start));
+
+        $block = [];
+        foreach ($lines as $i => $line) {
+            $block[] = $line;
+            if ($i === 0) {
+                continue;
+            }
+            if (preg_match('/^ {' . $indent . '}},?$/', $line) === 1) {
+                break;
+            }
+        }
+
+        return implode("\n", $block);
+    }
+
+    /**
      * The SCRIPT only — a backdrop legitimately wants `position: fixed`.
      *
      * `<ph-popover>` grew a real backdrop when its empty unstyled one was replaced,
