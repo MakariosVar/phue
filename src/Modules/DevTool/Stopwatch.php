@@ -118,10 +118,29 @@ class Stopwatch
      */
     public function beginSpan(string $label, array $meta = []): void
     {
-        $recordable = count($this->stack) < self::MAX_SPAN_DEPTH
+        // A frame opened directly inside an identical label is not a second operation.
+        // Resolution is instrumented on BOTH ComponentLoaderRegistry and
+        // PhueComponentLoader on purpose — the renderer reaches the loader directly in
+        // places, so a single-layer profiler has a blind spot on the hot path — and every
+        // registry call therefore opens the same label again underneath itself. Recording
+        // both counts one call twice and reports more time under the label than the
+        // request took, which makes every figure derived from it unusable.
+        //
+        // The frame is still pushed, so endSpan() keeps the stack balanced and still hands
+        // its elapsed time to the parent: the work is charged to the operation rather than
+        // lost, exclusive time keeps partitioning the request, and the fold frees a slot in
+        // the depth budget that the doubling was consuming.
+        $parentLabel = $this->stack === []
+            ? null
+            : $this->stack[count($this->stack) - 1]['label'];
+
+        $folded = $parentLabel !== null && $parentLabel === $label;
+
+        $recordable = !$folded
+            && count($this->stack) < self::MAX_SPAN_DEPTH
             && count($this->spans) < self::MAX_SPANS;
 
-        if (!$recordable && count($this->spans) >= self::MAX_SPANS) {
+        if (!$recordable && !$folded && count($this->spans) >= self::MAX_SPANS) {
             $this->droppedSpans++;
         }
 
@@ -131,6 +150,7 @@ class Stopwatch
             'start' => hrtime(true),
             'child_ms' => 0.0,
             'record' => $recordable,
+            'fold' => $folded,
         ];
     }
 
@@ -152,8 +172,16 @@ class Stopwatch
 
         // The parent's exclusive time is derived from total minus children, so an
         // unrecorded (capped) frame must still contribute its duration to the parent.
+        //
+        // A FOLDED frame is different: it is the same operation observed from another
+        // layer, and its own elapsed time is already inside the parent's duration. Only
+        // what its children consumed may be charged to the parent — charging the full
+        // duration would erase the folded frame's own slice of work from the request
+        // partition, and "Share of self" would stop adding up to 100% without anything in
+        // the report saying so. What the folded frame did itself becomes the parent's own.
         if ($this->stack !== []) {
-            $this->stack[count($this->stack) - 1]['child_ms'] += $durationMs;
+            $parent = count($this->stack) - 1;
+            $this->stack[$parent]['child_ms'] += $frame['fold'] ? $frame['child_ms'] : $durationMs;
         }
 
         if (!$frame['record']) {
