@@ -1,0 +1,189 @@
+# PhUI client composables
+
+Three shared client-side helpers used by the `.phue` components. They exist because
+the same three problems — *"where exactly do I draw this?"*, *"keep the keyboard
+inside me"* and *"something else needs to say something"* — were being solved
+separately, and slightly differently, in every component that needed them.
+
+Each file is a **client-only** module. It may touch `document`/`window` at call time,
+never at import time, so a component can import it inside a `ssr: false` block.
+
+---
+
+## Consuming a composable
+
+Declare it in the `<script>` frontmatter and call the helper normally. There is no
+import to write and no bundler step — `PhueComponentLoader` reads the list, resolves
+the names against this directory and injects the imports ahead of your code.
+
+```vue
+<script>
+  composables: ['position', 'overlay'],
+</script>
+```
+
+Rules the loader enforces:
+
+- Names must match `/^[A-Za-z_$][A-Za-z0-9_$]*$/`. Anything else fails the build
+  rather than reaching the browser as a string-concatenated import.
+- Duplicates are removed; order of first appearance is preserved.
+- A name that is not one of the files here fails the build.
+- If your script already declares that identifier, the build **fails on the
+  collision** instead of silently letting the local win.
+
+**Do not `import` these from a `.phue` file.** The prelude owns the import; a
+hand-written one will collide with it.
+
+---
+
+## `position.js` — where to draw an anchored panel
+
+```js
+const rect = measureAnchor(triggerEl);      // snapshot, or null if detached
+const pos  = positionFor(rect, { … });      // pure geometry, no DOM
+const handle = trackViewport(reposition);    // capture-phase listeners
+releaseViewport(handle);                     // idempotent
+```
+
+`positionFor(anchor, options)` is a **pure function**: same input, same output, no
+DOM access. That is what makes the geometry testable at all — the 82 cases in
+`tests/Core/UI/js/position.test.mjs` run with no browser.
+
+| option | default | meaning |
+| --- | --- | --- |
+| `placement` | `'bottom'` | `top`/`bottom`/`left`/`right` (also `start`/`end` aliases for `left`/`right`) |
+| `align` | `'start'` | cross-axis alignment of the panel against the anchor |
+| `offset` | `gap` | distance between anchor edge and panel |
+| `gap` | `4` | base offset; `offset` wins when both are given |
+| `allowFlip` | `true` | flip to the opposite side when there is no room |
+| `clamp` | `false` | slide the panel back inside the viewport |
+| `margin` | `0` | keep-out distance from the viewport edge |
+| `minWidth` | `null` | panel never narrower than this |
+| `size` | `{0,0}` | measured panel size |
+| `viewport` | `{0,0}` | viewport size |
+| `scroll` | `{0,0}` | document scroll offset |
+| `measured` | `true` | set `false` while the panel is unmeasured |
+
+Returns `{ left, top, width, height, right, bottom, flipped, placement }` in
+**document space** — `scroll` is already added, so you can position a teleported
+panel without doing the addition yourself. `positionFor` never clamps to `width`/
+`height` unless you ask: a component owns its own axis.
+
+### `trackViewport(onChange)` returns
+
+```js
+{ active, onScroll, onResize, … }
+```
+
+`onChange` is called **already coalesced into one `requestAnimationFrame`**, and is
+also exposed as `handle.onScroll` so a caller can fire it directly in a test.
+`releaseViewport()` is idempotent and safe to call twice.
+
+`scroll` is registered with **`capture: true`**. A bubbling scroll listener never
+fires for a nested scroller, which is where the interesting cases live — a dropdown
+inside a scrolling column would otherwise sit still while the column moved under it.
+
+### Measure in two phases
+
+Measure the trigger, draw, then measure the panel and reposition. The panel's own
+height is not known before it exists, and a single-phase implementation either
+guesses or flickers. While unmeasured, pass `measured: false` (or `null` anchor) —
+you then get a zeroed position, which is the signal to keep the panel hidden
+instead of flashing it at the top-left corner.
+
+---
+
+## `overlay.js` — keep focus inside
+
+```js
+const trap = focusTrap(panelEl, { onEscape: close, initialFocus: 'input' });
+trap.release();   // idempotent
+```
+
+`focusTrap`:
+
+- handles **Tab / Shift+Tab wrapping** at the edges (via the `trapTab` handler),
+- marks background siblings `inert`, **refcounted** — two stacked overlays do not
+  fight over the same attribute, and the app's own `inert` state is restored rather
+  than clobbered,
+- keeps a stack so nested overlays release in the right order, pruning entries whose
+  root already left the DOM,
+- restores focus to whatever was active before it opened.
+
+Returns a no-op `release()` when `root` is null or there is no `document` (SSR), so
+callers never need to branch.
+
+Helper exports for bespoke cases: `focusableWithin(root)` and `trapTab(event, root)`.
+
+---
+
+## `store.js` — cross-component state
+
+Two isolated factories. Both keep their state in a closure; the component that owns
+the instance decides where it lives.
+
+### `createToastStore()`
+
+```js
+{ state, push, dismiss, remove, clear, pause, resume,
+  success, error, warning, info,
+  attachHost, detachHost, subscribe }
+```
+
+`push` appends and returns the toast (so you can `dismiss(toast.id)`).
+`dismiss` marks it for the leave transition; `remove` deletes it immediately —
+keep that order or the exit animation is skipped.
+
+`subscribe(listener)` pushes a snapshot to the callback and returns an unsubscribe
+function.
+
+A store with **no host component cannot animate**, because the host owns the DOM.
+The host calls `attachHost(id)` on mount and `detachHost(id)` on unmount; when
+several hosts are mounted only the primary one (`state.hosts[0]`) renders, so
+remounting does not duplicate the toasts.
+
+### `createConfirmQueue()`
+
+```js
+{ state: { queue, current }, request, setLoading, processNext }
+```
+
+Requests queue when one is already showing, so two rapid `window.confirm`-style
+calls do not overwrite each other. Each entry carries `message`, `title`, `variant`,
+`icon`, `closeOnBackdrop` and its own `loading` flag. `setLoading(id, bool)` disables
+the buttons of one entry without disturbing the rest.
+
+### Subscriber isolation
+
+A throwing subscriber cannot take the store down. Each callback is invoked
+independently and failures are reported through `console.error`; a shared store that
+one broken component can crash is worse than no store.
+
+### Where to put the instance
+
+Inside an `ssr: false` component the instance is a module-level `const`:
+
+```js
+const toastStore = createToastStore();
+```
+
+The evaluated module is per browser page, so state is not shared between SSR
+requests — the reason the state does not live on `window`. `window.toast` and
+`window.confirm` may still be installed as facades for the legacy API, but they hold
+no state.
+
+---
+
+## Tests
+
+| suite | what it pins |
+| --- | --- |
+| `tests/Core/UI/js/position.test.mjs` | geometry, flip/clamp, viewport tracking |
+| `tests/Core/UI/js/overlay.test.mjs` | Tab wrapping, inert refcounting, focus restore |
+| `tests/Core/UI/js/store.test.mjs` | queue ordering, loading, subscriber isolation |
+| `tests/Core/UI/PhueComponentComposablePreludeTest.php` | loader injection, collisions, comments, dedupe |
+| `tests/Core/UI/PhuiOverlayContractTest.php` | component-level invariants (teleport, capture scroll, z-index) |
+
+`tests/Core/UI/js/dom-double.mjs` is the shared DOM double. The window double records
+the `capture` flag of every listener — that is the only way to catch a scroll
+listener that silently became bubbling.
