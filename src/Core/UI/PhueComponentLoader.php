@@ -33,6 +33,13 @@ class PhueComponentLoader
     private string $componentsDir;
 
     /**
+     * Optional directory containing shared UI toolkit JS modules (e.g. position.js, overlay.js, store.js).
+     *
+     * @var string|null
+     */
+    private ?string $jsDir = null;
+
+    /**
      * Caches ONLY static raw structure per file path in-memory for the current request pass.
      *
      * @var array<string, array{mtime: int, size: int, contentHash: string, structure: array{template: string, script: ?string, phpCode: ?string, filePath?: string}}>
@@ -143,6 +150,13 @@ class PhueComponentLoader
         }
 
         $this->componentsDir = $realBase;
+
+        // Resolve $jsDir relative to __DIR__ . '/js' without throwing if absent
+        $resolvedJsDir = realpath(__DIR__ . '/js');
+        if ($resolvedJsDir !== false && is_dir($resolvedJsDir)) {
+            $this->jsDir = $resolvedJsDir;
+        }
+
         $this->parser = $parser ?? new PhueTemplateParser($viewsCacheDir);
         $this->persistentCache = $persistentCache;
         $this->compilerBridge = $compilerBridge;
@@ -392,6 +406,19 @@ class PhueComponentLoader
             $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
         }
 
+        // Compute prelude and prelude digest early for client fingerprinting
+        $scriptContent = trim($structure['script'] ?? '');
+        $prelude = $this->composablePrelude($scriptContent);
+
+        if ($prelude === null) {
+            $this->logger?->warning("Failed to build composable prelude for component '{$name}'", [
+                'name' => $name,
+            ]);
+            return null;
+        }
+
+        $preludeDigest = $prelude !== '' ? substr(sha1($prelude), 0, 8) : '';
+
         $children = [];
         $resolvedChildHashes = [];
 
@@ -428,7 +455,8 @@ class PhueComponentLoader
             }
         }
 
-        $fingerprint = "{$mtime}_{$size}_{$contentHash}_" . implode('_', $resolvedChildHashes);
+        // Include $preludeDigest in client fingerprint
+        $fingerprint = "{$mtime}_{$size}_{$contentHash}_{$preludeDigest}_" . implode('_', $resolvedChildHashes);
 
         if (isset($this->clientMemo[$name]) && $this->clientMemo[$name]['key'] === $fingerprint) {
             return $this->clientMemo[$name]['code'];
@@ -467,8 +495,6 @@ class PhueComponentLoader
             ]);
             return null;
         }
-
-        $scriptContent = trim($structure['script'] ?? '');
 
         if ($scriptContent === '') {
             $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
@@ -524,9 +550,10 @@ class PhueComponentLoader
             );
         }
 
+        // Append $prelude at the very end
         $code = "{$importStatements}{$renderFnCode}\n"
              . "export const __phueRender = render;\n"
-             . "{$proxyBlock}{$scriptContent}";
+             . "{$proxyBlock}{$scriptContent}{$prelude}";
 
         $hash = substr(sha1($code), 0, 8);
         $this->clientMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
@@ -571,7 +598,21 @@ class PhueComponentLoader
                 $contentHash = $this->cache[$filePath]['contentHash'] ?? '';
             }
 
-            $fingerprint = "{$mtime}_{$size}_{$contentHash}";
+            // Compute prelude and prelude digest for SSR build
+            $scriptContent = trim($structure['script'] ?? '');
+            $prelude = $this->composablePrelude($scriptContent);
+
+            if ($prelude === null) {
+                $this->logger?->warning("Failed to build composable prelude for SSR component '{$name}'", [
+                    'name' => $name,
+                ]);
+                return null;
+            }
+
+            $preludeDigest = $prelude !== '' ? substr(sha1($prelude), 0, 8) : '';
+
+            // Include $preludeDigest in SSR fingerprint
+            $fingerprint = "{$mtime}_{$size}_{$contentHash}_{$preludeDigest}";
 
             if (isset($this->ssrMemo[$name]) && $this->ssrMemo[$name]['key'] === $fingerprint) {
                 return $this->ssrMemo[$name]['code'];
@@ -586,8 +627,6 @@ class PhueComponentLoader
                 ]);
                 return null;
             }
-
-            $scriptContent = trim($structure['script'] ?? '');
 
             if ($scriptContent === '') {
                 $code = "{$ssrRenderFnCode}\n"
@@ -631,9 +670,10 @@ class PhueComponentLoader
                 $proxyBlock = implode("\n", $proxies) . "\n";
             }
 
+            // B4. Append $prelude at the very end
             $code = "{$ssrRenderFnCode}\n"
                   . "export const __phueSsrRender = ssrRender;\n"
-                  . "{$proxyBlock}{$scriptContent}";
+                  . "{$proxyBlock}{$scriptContent}{$prelude}";
 
             $hash = substr(sha1($code), 0, 8);
             $this->ssrMemo[$name] = ['key' => $fingerprint, 'code' => $code, 'hash' => $hash];
@@ -644,7 +684,7 @@ class PhueComponentLoader
     }
 
     /**
-     * Internal helper to build a module string given a template and script using the injected compiler bridge.
+     * Internal helper to build a standalone module string given a template and script using the injected compiler bridge.
      *
      * @param string      $template
      * @param string|null $script
@@ -662,6 +702,22 @@ class PhueComponentLoader
         }
 
         $scriptContent = trim($script ?? '');
+
+        // Enforce strict fail-loud behavior across all three build entry points.
+        // If composablePrelude() returns null (e.g., missing helper, invalid name, or symbol collision),
+        // abort module generation immediately rather than silently degrading to an un-preluded broken module.
+        $prelude = $this->composablePrelude($scriptContent);
+        if ($prelude === null) {
+            // Log the shape of the declaration, never the script body: a `.phue`
+            // script may embed tokens or other literals, and a build warning
+            // routinely lands in a log aggregator that is not access-controlled
+            // like the repository.
+            $this->logger?->warning("Failed to build composable prelude in buildModuleInstance()", [
+                'declaredComposables' => $this->declaredComposableNames($scriptContent),
+                'scriptBytes' => strlen($scriptContent),
+            ]);
+            return '';
+        }
 
         if ($scriptContent === '') {
             return "{$renderFnCode}\n"
@@ -703,7 +759,7 @@ class PhueComponentLoader
 
         return "{$renderFnCode}\n"
              . "export const __phueRender = render;\n"
-             . "{$proxyBlock}{$scriptContent}";
+             . "{$proxyBlock}{$scriptContent}{$prelude}";
     }
 
     /**
@@ -909,5 +965,129 @@ class PhueComponentLoader
         }
 
         return $structure;
+    }
+
+    /**
+     * Extracts the raw, unvalidated composable names a script declares.
+     *
+     * Used purely for diagnostics: it reports what the author wrote, so a build
+     * warning points at the offending name without echoing the script body.
+     * Unlike composablePrelude() this does not validate or filter the entries.
+     *
+     * @param string $scriptContent Raw inline component script content.
+     * @return list<string>
+     */
+    private function declaredComposableNames(string $scriptContent): array
+    {
+        $cleanScript = preg_replace(['/\/\*[\s\S]*?\*\//', '/\/\/.*/'], '', $scriptContent);
+
+        if (!is_string($cleanScript)) {
+            return [];
+        }
+
+        if (!preg_match('/(?<![A-Za-z0-9_\$])composables\s*:\s*\[([^\]]*)\]/s', $cleanScript, $matches)) {
+            return [];
+        }
+
+        $items = array_map(
+            static fn(string $item): string => trim(trim($item), " \t\n\r\0\x0B'\""),
+            explode(',', $matches[1])
+        );
+
+        return array_values(array_filter($items, static fn(string $item): bool => $item !== ''));
+    }
+
+    /**
+     * Private helper to resolve and concatenate JS composable helper modules into a prelude block.
+     *
+     * @param string $scriptContent Raw inline component script content.
+     * @return string|null Empty string if no composables declared, code string if valid, or null on error.
+     */
+    private function composablePrelude(string $scriptContent): ?string
+    {
+        if ($this->jsDir === null) {
+            return '';
+        }
+
+        if (trim($scriptContent) === '') {
+            return '';
+        }
+
+        // Strip single-line (// ...) and multi-line (/* ... */) JS comments to prevent false matches in comments or strings
+        $cleanScript = preg_replace(['/\/\*[\s\S]*?\*\//', '/\/\/.*/'], '', $scriptContent);
+
+        // Strict boundary check: match 'composables:' only as an exact object key property
+        if (!preg_match('/(?<![A-Za-z0-9_\$])composables\s*:\s*\[([^\]]*)\]/s', $cleanScript, $matches)) {
+            return '';
+        }
+
+        $rawList = $matches[1];
+        $items = array_map('trim', explode(',', $rawList));
+        $names = [];
+
+        foreach ($items as $item) {
+            $item = trim($item, " \t\n\r\0\x0B'\"");
+            if ($item !== '') {
+                // Strict name validation (lowercase, alphanumeric, hyphens)
+                if (!preg_match('/^[a-z][a-z0-9\-]*$/', $item)) {
+                    $this->logger?->warning("Invalid composable helper name format: '{$item}'");
+                    return null;
+                }
+                $names[] = $item;
+            }
+        }
+
+        if ($names === []) {
+            return '';
+        }
+
+        $names = array_values(array_unique($names));
+        $preludeBlocks = [];
+        $exportedSymbols = [];
+
+        foreach ($names as $name) {
+            $targetPath = $this->jsDir . DIRECTORY_SEPARATOR . "{$name}.js";
+            $resolvedPath = realpath($targetPath);
+
+            if ($resolvedPath === false || !is_file($resolvedPath)) {
+                $this->logger?->warning("Composable helper file missing: '{$name}.js'");
+                return null;
+            }
+
+            // Path containment check
+            if (!str_starts_with($resolvedPath, $this->jsDir . DIRECTORY_SEPARATOR)) {
+                $this->logger?->warning("Composable helper file path outside jsDir containment: '{$name}.js'");
+                return null;
+            }
+
+            $content = file_get_contents($resolvedPath);
+            if ($content === false) {
+                $this->logger?->warning("Failed to read composable helper file: '{$name}.js'");
+                return null;
+            }
+
+            // Collect exported function names and check for duplicate exports across composables.
+            if (preg_match_all('/^[ \t]*export\s+function\s+([A-Za-z0-9_$]+)/m', $content, $exportMatches)) {
+                foreach ($exportMatches[1] as $symbol) {
+                    if (isset($exportedSymbols[$symbol])) {
+                        $this->logger?->warning("Duplicate export symbol '{$symbol}' detected across composable helpers ('{$exportedSymbols[$symbol]}' and '{$name}')");
+                        return null;
+                    }
+                    $exportedSymbols[$symbol] = $name;
+                }
+            }
+
+            $preludeBlocks[] = "/* --- Phue JS Helper: {$name}.js --- */\n" . trim($content);
+        }
+
+        // Collision check: verify against cleaned script content without commented code blocks
+        foreach ($exportedSymbols as $symbol => $sourceComposable) {
+            if (preg_match('/(?<![A-Za-z0-9_\$])(?:function|const|let|var|class)\s+' . preg_quote($symbol, '/') . '(?![A-Za-z0-9_\$])/', $cleanScript)) {
+                $this->logger?->warning("Name collision detected between component script and composable export symbol '{$symbol}' from '{$sourceComposable}'");
+                return null;
+            }
+        }
+
+        return "\n\n" . implode("\n\n", $preludeBlocks) . "\n";
     }
 }
