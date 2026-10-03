@@ -164,6 +164,21 @@ class PhueComponentLoader
     }
 
     /**
+     * Returns the base directory this loader reads components from.
+     *
+     * Read-only by contract. A decorating subclass must be constructed with the same
+     * directory as the instance it decorates, and the constructor arguments are private,
+     * so without this seam a profiler cannot wrap a loader without re-deriving the path
+     * by hand and drifting out of sync with the container's own wiring.
+     *
+     * @return string Absolute path to the component directory.
+     */
+    public function getComponentsDir(): string
+    {
+        return $this->componentsDir;
+    }
+
+    /**
      * Per-request lifecycle boundary reset.
      * Clears per-request snapshot index and transient raw structure AST caches.
      *

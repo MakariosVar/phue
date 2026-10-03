@@ -52,6 +52,21 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Returns the registered loader candidates in priority order.
+     *
+     * Read-only by contract: callers may replay these onto another registry (for example
+     * a decorating subclass that must inherit the parent's wiring) but must not mutate
+     * them. Without this seam a subclass cannot preserve the loader list it inherits
+     * conceptually but not structurally, because $loaders is private.
+     *
+     * @return array<int, PhueComponentLoader|callable(): ?PhueComponentLoader>
+     */
+    public function getLoaders(): array
+    {
+        return $this->loaders;
+    }
+
+    /**
      * Flushes per-request state across candidate loaders.
      *
      * @return void
