@@ -2,7 +2,7 @@
   <teleport v-if="mounted" to="body">
     <div
       v-if="toasts.length"
-      
+
       style="position: fixed; z-index: 1090; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none; max-width: min(380px, calc(100vw - 2rem));"
       :style="regionStyle"
       aria-live="polite"
@@ -18,13 +18,13 @@
         @pointerleave="resume(t.id)"
       >
         <div class="toast-header">
-          <strong class="me-auto">{{ t.title || defaultTitle(t.variant) }}</strong>
+          <strong class="me-auto">{{ t.title }}</strong>
           <button
             v-if="dismissible"
             type="button"
             class="btn-close ms-2 mb-1"
             aria-label="Dismiss"
-            @click="remove(t.id)"
+            @click="dismiss(t.id)"
           ></button>
         </div>
         <div v-if="t.message" class="toast-body">{{ t.message }}</div>
@@ -34,11 +34,24 @@
 </template>
 
 <script>
-let toastSeq = 0;
+// One store instance per evaluated module.
+//
+// The store itself is a factory precisely so that this declaration is the only
+// place state is created: this module is evaluated once per browser page and,
+// because PhToast is `ssr: false`, never on the server — so no toast can leak
+// between concurrent requests in a long-running worker.
+//
+// `createToastStore` is reachable here even though the loader appends the
+// prelude after this script: the composable contract mandates `export function`
+// declarations, which are hoisted.
+const toastStore = createToastStore();
+
+let hostSeq = 0;
 
 export default {
     name: 'PhToast',
     ssr: false,
+    composables: ['store'],
     props: {
         position: {
             type: String,
@@ -62,132 +75,136 @@ export default {
     data() {
         return {
             mounted: false,
+            isPrimary: true,
+            // Replaced wholesale on every store notification; see unsubscribe().
             toasts: []
         };
     },
-  mounted() {
-    this.mounted = true;
-    if (typeof window !== 'undefined') {
-      // Bound, not the raw instance: `window.toast.push(...)` is a method call
-      // ON window, so an unbound `this` would be `window` and every
-      // `this.duration` / `this.toasts` / `this.startTimer` would be undefined.
-      window.toast = {
-        push: this.push.bind(this),
-        remove: this.remove.bind(this),
-        clear: this.clear.bind(this),
-        __owner: this
-      };
+    computed: {
+        regionStyle() {
+            const base = {
+              alignItems: 'flex-end'
+            }
+            const p = this.position;
+            if (p === 'top-left' || p === 'bottom-left') base.alignItems = 'flex-start';
+            if (p === 'top-center' || p === 'bottom-center') base.alignItems = 'center';
+            if (p.startsWith('top')) {
+              base.top = '1rem';
+            } else {
+              base.bottom = '1rem';
+            }
+            if (p.endsWith('right')) {
+              base.right = '1rem';
+            } else if (p.endsWith('left')) {
+              base.left = '1rem';
+            } else {
+              base.left = '50%';
+              base.transform = 'translateX(-50%)';
+            }
+            return base;
+        }
+    },
+    watch: {
+        max(value) {
+            toastStore.state.maxToasts = value;
+        }
+    },
+    mounted() {
+        this.mounted = true;
+        toastStore.state.maxToasts = this.max;
+
+        // First-Claim-Wins: a second <ph-toast> registers as a non-primary host
+        // and renders nothing, so two hosts can never fight over the viewport.
+        this.hostId = 'ph-toast-' + (++hostSeq);
+        this.isPrimary = toastStore.attachHost(this.hostId);
+
+        this.toasts = toastStore.state.toasts.slice();
+        this.unsubscribe = toastStore.subscribe((list) => {
+            this.toasts = list.slice();
+        });
+
+        if (typeof window !== 'undefined' && this.isPrimary) {
+            // Bound, not the raw instance: `window.toast.push(...)` is a method
+            // call ON window, so an unbound `this` would be `window`.
+            window.toast = this.buildFacade();
+        }
+    },
+    beforeUnmount() {
+        if (typeof this.unsubscribe === 'function') {
+            this.unsubscribe();
+        }
+        if (typeof window !== 'undefined' && window.toast?.__hostId === this.hostId) {
+            window.toast = null;
+        }
+        toastStore.detachHost(this.hostId);
+    },
+    methods: {
+        /**
+         * The `window.toast` surface.
+         *
+         * Every method delegates to the store, which owns ids, timers, the
+         * leave animation, the overflow cap and pause/resume bookkeeping. The
+         * facade only injects the `duration` prop as the default for callers
+         * that do not pass one, so a mounted <ph-toast duration="9000"> keeps
+         * controlling timing exactly as before.
+         */
+        buildFacade() {
+            const self = this;
+            const withDefaults = (options) => {
+                const opts = typeof options === 'string' ? { message: options } : { ...(options || {}) };
+                if (typeof opts.duration !== 'number') {
+                    opts.duration = self.duration;
+                }
+                return opts;
+            };
+            const shortcut = (variant) => (message, title, duration) => (
+                toastStore.push(withDefaults({ message, title, variant, duration }))
+            );
+
+            return {
+                push: (options) => toastStore.push(withDefaults(options)),
+                // Immediate removal. The animated path is `dismiss()`.
+                remove: (id) => toastStore.remove(id),
+                dismiss: (id) => toastStore.dismiss(id),
+                clear: () => toastStore.clear(),
+                pause: (id) => toastStore.pause(id),
+                resume: (id) => toastStore.resume(id),
+                success: shortcut('success'),
+                error: shortcut('error'),
+                warning: shortcut('warning'),
+                info: shortcut('info'),
+                __hostId: this.hostId,
+                __store: toastStore
+            };
+        },
+        dismiss(id) {
+            const leaving = this.toasts.some((t) => t.id === id);
+            toastStore.dismiss(id);
+            if (leaving) {
+                this.$emit('dismiss', id);
+            }
+        },
+        pause(id) {
+            toastStore.pause(id);
+        },
+        resume(id) {
+            toastStore.resume(id);
+        },
+        toastStyle(t) {
+            const map = {
+                info: 'var(--bs-info)',
+                success: 'var(--bs-success)',
+                warning: 'var(--bs-warning)',
+                error: 'var(--bs-danger)'
+            }
+            return {
+                maxWidth: '100%',
+                pointerEvents: 'auto',
+                borderLeft: `0.25rem solid ${map[t.variant] || map.info}`,
+                marginBottom: 0,
+                transition: 'opacity 0.15s linear'
+            };
+        }
     }
-  },
-  beforeUnmount() {
-    if (typeof window !== 'undefined' && window.toast?.__owner === this) {
-      window.toast = null;
-    }
-  },
-  computed: {
-    regionStyle() {
-      const base = {
-        alignItems: 'flex-end'
-      };
-      const p = this.position;
-      if (p === 'top-left' || p === 'bottom-left') base.alignItems = 'flex-start';
-      if (p === 'top-center' || p === 'bottom-center') base.alignItems = 'center';
-      if (p.startsWith('top')) {
-        base.top = '1rem';
-      } else {
-        base.bottom = '1rem';
-      }
-      if (p.endsWith('right')) {
-        base.right = '1rem';
-      } else if (p.endsWith('left')) {
-        base.left = '1rem';
-      } else {
-        base.left = '50%';
-        base.transform = 'translateX(-50%)';
-      }
-      return base;
-    }
-  },
-  methods: {
-    push(source) {
-      const item = typeof source === 'string' ? { message: source } : (source || {});
-      const duration = typeof item.duration === 'number' && item.duration > 0 ? item.duration : this.duration;
-      const toast = {
-        id: ++toastSeq,
-        variant: item.variant || 'info',
-        title: item.title || '',
-        message: item.message || '',
-        duration,
-        remaining: duration,
-        startedAt: Date.now(),
-        timer: null,
-        leaving: false
-      };
-      this.toasts.push(toast);
-      if (this.toasts.length > this.max) {
-        const overflow = this.toasts.length - this.max;
-        this.toasts.splice(0, overflow);
-      }
-      this.startTimer(toast.id);
-      return toast.id;
-    },
-    remove(id) {
-      const t = this.toasts.find(x => x.id === id);
-      if (!t || t.removing) return;
-      t.removing = true;
-      clearTimeout(t.timer);
-      t.leaving = true;
-      setTimeout(() => {
-        this.toasts = this.toasts.filter(x => x.id !== id);
-        this.$emit('dismiss', id);
-      }, 200);
-    },
-    clear() {
-      this.toasts.forEach(t => clearTimeout(t.timer));
-      this.toasts = [];
-    },
-    pause(id) {
-      const t = this.toasts.find(x => x.id === id);
-      if (!t) return;
-      clearTimeout(t.timer);
-      t.remaining -= Date.now() - t.startedAt;
-    },
-    resume(id) {
-      const t = this.toasts.find(x => x.id === id);
-      if (!t || t.leaving) return;
-      t.startedAt = Date.now();
-      t.timer = setTimeout(() => this.remove(id), Math.max(0, t.remaining));
-    },
-    startTimer(id) {
-      const t = this.toasts.find(x => x.id === id);
-      if (!t) return;
-      t.startedAt = Date.now();
-      t.timer = setTimeout(() => this.remove(id), t.remaining);
-    },
-    defaultTitle(variant) {
-      const map = {
-        info: 'Info',
-        success: 'Success',
-        warning: 'Warning',
-        error: 'Error'
-      };
-      return map[variant] || 'Notice';
-    },
-    toastStyle(t) {
-      const map = {
-        info: 'var(--bs-info)',
-        success: 'var(--bs-success)',
-        warning: 'var(--bs-warning)',
-        error: 'var(--bs-danger)'
-      };
-      return {
-        maxWidth: '100%',
-        pointerEvents: 'auto',
-        borderLeft: `0.25rem solid ${map[t.variant] || map.info}`,
-        marginBottom: 0,
-        transition: 'opacity 0.15s linear'
-      };
-    }
-  }
 };
 </script>
