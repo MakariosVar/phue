@@ -136,7 +136,7 @@ class DebugToolbar
                 'key' => 'timeline',
                 'title' => 'Timeline',
                 'hint' => 'Per-operation rollup by self time, so the shares partition the request. Filter by name or label.',
-                'content' => $this->renderTimeline($profiler->getAggregates(), $duration),
+                'content' => $this->renderTimeline($profiler->getAggregates()),
             ];
         }
 
@@ -340,10 +340,9 @@ class DebugToolbar
      * Render the timeline panel: a rollup table plus a client-side filter.
      *
      * @param array<string, array<string, mixed>> $aggregates Per-label rollup.
-     * @param float $totalDuration Total request duration, used to scale the bars.
      * @return string
      */
-    private function renderTimeline(array $aggregates, float $totalDuration): string
+    private function renderTimeline(array $aggregates): string
     {
         if ($aggregates === []) {
             return '<p class="phue-dt-note text-secondary mb-0">No spans were recorded for this request.</p>';
