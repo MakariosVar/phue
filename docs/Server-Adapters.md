@@ -181,38 +181,153 @@ working when PDO is unavailable. Protected by the test suite
 
 ## 5. DevTools (`Phue\Modules\DevTool`)
 
-Developer instrumentation, gated so it never runs in production:
+Developer instrumentation, gated so it never runs in production.
+
+The module answers one question well: **where did this request's time actually
+go?** It does that by decorating the things that do the work, then rendering
+the result as a collapsed bar that expands into a tabbed report.
 
 | Component | File | Responsibility |
 |---|---|---|
-| `DevToolsModule` | `Modules/DevTool/DevToolsModule.php` | Bootstrapping module — attaches the debug toolbar middleware |
-| `DebugToolbar` | `Modules/DevTool/DebugToolbar.php` | Debug toolbar rendering |
-| `DevToolMiddleware` | `Modules/DevTool/DevToolMiddleware.php` | Global middleware injecting the toolbar |
+| `DevToolsModule` | `Modules/DevTool/DevToolsModule.php` | Binds the collector as a singleton and installs the decorators |
+| `DevToolMiddleware` | `Modules/DevTool/DevToolMiddleware.php` | Global middleware — brackets the request with the `pipeline` span and injects the toolbar |
+| `DebugToolbar` | `Modules/DevTool/DebugToolbar.php` | Renders the collapsed bar and the tabbed report |
+| `RequestProfiler` | `Modules/DevTool/RequestProfiler.php` | Per-request façade: duration, memory, request metadata, diagnostics |
+| `Stopwatch` | `Modules/DevTool/Stopwatch.php` | Nested named-span collector with per-label aggregates |
+| `ProfilingSsrClient` | `Modules/DevTool/ProfilingSsrClient.php` | `SsrClient` decorator — every sidecar round trip |
+| `ProfilingComponentLoader` | `Modules/DevTool/ProfilingComponentLoader.php` | `PhueComponentLoader` subclass — builds, resolutions and structure reads |
+| `ProfilingComponentLoaderRegistry` | `Modules/DevTool/ProfilingComponentLoaderRegistry.php` | `ComponentLoaderRegistry` subclass — the funnel for renderer-driven resolution |
+| `ProfilingDriver` | `Modules/DevTool/ProfilingDriver.php` | `DriverInterface` decorator — statements, fetches and transaction control |
+| `ProfilingConnection` | `Modules/DevTool/ProfilingConnection.php` | `Connection` subclass that installs the profiling driver |
 | `Dumper` | `Modules/DevTool/Dumper.php` | Variable dumping |
-| `RequestProfiler` | `Modules/DevTool/RequestProfiler.php` | Per-request profiling |
-| `Stopwatch` | `Modules/DevTool/Stopwatch.php` | Timing helper |
+
+Two read-only seams were added to the core so these decorators could exist
+without re-deriving framework wiring: `ComponentLoaderRegistry::getLoaders()`
+and `PhueComponentLoader::getComponentsDir()`.
 
 ### Gating
 
-`DevToolsModule::bindings()` checks both `app.debug` **and** `app.devTool`
-before attaching the middleware:
-
-```php
-if ($debug && $devTool) {
-    $this->container->get(\Phue\Core\Application::class)
-        ->use(\Phue\Modules\DevTool\DevToolMiddleware::class);
-}
-```
-
-Enable locally via `.env`:
+The module returns early unless **both** flags are set — the toolbar leaks
+request internals into the page, so a non-debug context must be unreachable
+regardless of how the flags are combined:
 
 ```ini
+# .env
 APP_DEBUG=true
 APP_DEV_TOOL=true
 ```
 
-With both `true`, the toolbar is attached as a global middleware; in production
-(neither flag) the module does nothing.
+Every instrumentation step is individually guarded. Resolving a service it
+decorates can legitimately fail — an application with no component directory,
+or with no database — and **a missing measurement must never be the reason a
+page fails**. A skipped instrument is recorded as a *diagnostic* and shown in
+the report rather than swallowed:
+
+> Diagnostics deliberately survive `RequestProfiler::start()`. They are a fact
+> about the process, not about a request; reporting one in the per-request
+> context would erase it on the next request — exactly when you are still
+> wondering why a measurement is missing.
+
+### Configuration — `config/devtool.php`
+
+```php
+return [
+    'timeline' => true,   // per-operation rollup
+    'spans'    => true,   // slowest calls, by total and by exclusive time
+    'queries'  => true,   // database statements
+    'request'  => true,   // request/response metadata
+    'json'     => true,   // raw report, copy-pasteable
+
+    'sql_literals' => 'redact',  // 'redact' | 'raw'
+    'theme' => 'auto',           // 'auto' | 'light' | 'dark'
+
+    // Rendered before the browser-side theme resolver runs; the server cannot know the
+    // resolved client theme while the application preference is 'system'.
+    'theme_fallback' => 'dark',
+    'theme_storage_key' => 'phue-theme',
+];
+```
+
+A panel with nothing to show is **omitted**, not rendered as a stub: an empty
+section in a debugging tool is indistinguishable from a broken one.
+
+### Reading the report
+
+| Panel | Answers |
+|---|---|
+| **Timeline** | Which *operation* is hot — per-label rollup, heaviest first, filterable |
+| **Slowest calls** | Which exact *call* was slow, with its metadata |
+| **Slowest self time** | The same calls ranked by exclusive time |
+| **Database** | Every statement, its bindings, rows and cost |
+| **Request** | Method, URI, status, response size |
+| **Raw report** | The whole thing as JSON, for an issue or a benchmark |
+
+Three rules make the report trustworthy rather than merely pretty:
+
+- **Aggregates are keyed by label only.** Keying by metadata would shatter one
+  hot operation into one bucket per component name, which defeats the rollup.
+- **A panel never grows with the event count.** A hot page can enter the
+  component loader thousands of times per request; rendering one row per call
+  would inject more HTML than the page being profiled. Lists are capped
+  (`MAX_AGGREGATE_ROWS`, `MAX_SPAN_ROWS`, `MAX_QUERY_ROWS`) and the collector
+  itself is bounded (`MAX_SPAN_DEPTH`, `MAX_SPANS`) so a memory-resident worker
+  cannot grow without limit.
+- **Exclusive time, not total.** A recursive parent's total is dominated by its
+  descendants, so ranking by total blames the wrong operation.
+
+### `pipeline`
+
+The span every other span hangs off, wrapping the rest of the request. Its
+`duration_ms` is the yardstick the Share bars are scaled against, and its
+**`exclusive_ms` is the most useful number in the report**: the work that
+happened *outside* every instrumented operation — routing, the renderer
+assembling HTML, the response object. A large remainder means missing
+instrumentation.
+
+It is not the HTTP total. The middleware is appended **last** to the global
+stack, so security headers, the error handler, socket I/O and the response
+write all fall outside it. The toolbar's own render cost is excluded too, and
+reported as the `X-Phue-Debug-Toolbar-Ms` header instead — a span opened
+around it would make the panel permanently report an unbalanced stack.
+
+### Per-request isolation
+
+`Container::get()` memoizes autowired instances, so under Swoole the profiler
+is effectively application-scoped. `RequestProfiler::start()` therefore resets
+the spans and the memory baseline: without that, request N+1 reports an
+ever-growing pile of request N's work.
+
+### Theming
+
+The toolbar renders in the **opposite** theme from the application, resolved in
+the browser and following the app's own toggle. Bootstrap 5.3 inherits
+`data-bs-theme`, so setting it on the toolbar root re-themes every nested table,
+badge and alert with no extra CSS. Deliberately avoids theme-fixed utilities
+(`btn-dark`, `text-light`, `table-dark`) — they ignore the attribute and would
+defeat the whole mechanism.
+
+Panel internals reuse the Bootstrap the framework already serves as a global
+stylesheet, so they cost zero extra bytes; only the rules Bootstrap has no class
+for (the fixed bar, its z-index ceiling, the collapse) are inlined. The tab and
+filter behaviour is vanilla JS rather than `bootstrap.Tab`/`Collapse`: a debug
+toolbar that silently stops working when an application trims its JS bundle is
+a bad trade for a few saved lines.
+
+### SQL and data safety
+
+The framework prepares and executes separately, so a prepared statement
+carries only placeholders — bound values never reach the report. The remaining
+leak path is a statement assembled by interpolation, so quoted literals and
+comments are redacted by default (`sql_literals => 'redact'`), and the panel
+says so rather than silently showing shorter text:
+
+```
+SELECT * FROM users WHERE tenant = 'acme' AND status = 'active' LIMIT 10
+→  SELECT * FROM users WHERE tenant = ? AND status = ? LIMIT 10
+```
+
+Set `'raw'` only where the page is unreachable by anyone who should not see the
+schema or the data.
 
 ---
 
