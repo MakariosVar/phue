@@ -46,7 +46,27 @@ on top of these primitives.
 | `PhuePartialRenderer` | `UI/PhuePartialRenderer.php` | Renders HTML-first partial components (e.g. nav) |
 | `ComponentDiscoverer` | `UI/ComponentDiscoverer.php` | Auto-discovers components referenced by a template (reserved names: see [PhUI_Components.md §1.1.1](PhUI_Components.md)) |
 | `PhueTemplateParser` | `UI/PhueTemplateParser.php` | Parses `.phue` SFCs (PHP/Template/Script blocks) |
+| `position.js` | `UI/js/position.js` | Placement math for an anchored panel — `positionFor()` (flip, clamp), `trackViewport()`/`releaseViewport()` (capture-phase scroll/resize), `measureAnchor()` |
+| `overlay.js` | `UI/js/overlay.js` | Focus containment for a panel that must hold focus — `focusTrap()`, Tab wrapping, refcounted `inert` on the rest of the page |
+| `store.js` | `UI/js/store.js` | Cross-component state — `createToastStore()` (the shared toast host) and `createConfirmQueue()` (the confirm dialog queue) |
 | `MarkdownParser` | `Utils/MarkdownParser.php` | XSS-safe markdown parser (fenced code blocks without structural newlines) |
+
+**The three composables are injected, not imported.** A `.phue` `<script>` is served
+verbatim as an ESM module, and every one of them imports only from `vue` — there is no
+import path to a sibling file. So `PhueComponentLoader` appends the whole composable
+module to the end of the script, under a `/* --- Phue JS Helper: … */` marker, and the
+component body reaches its exports as ordinary locals. Appending rather than prepending is
+what makes it work: function declarations are hoisted, so they are in scope before their
+position in the text, and the component's own `import { … } from 'vue'` stays at the top
+where a module requires it.
+
+Before appending, the loader scans the module's `export function` names and compares them
+against the component's own declarations. A symbol declared twice **fails the build** — it
+is a hard error, not a silent override in either direction, so a component can never end
+up calling a same-named helper it did not write. Only `export function` is considered; a
+destructured binding that happens to share a name with an export is not detected.
+Their contract — option names, return shapes, the SSR rules, and how a component is
+supposed to call them — is in [`src/Core/UI/js/README.md`](../src/Core/UI/js/README.md).
 
 ---
 
