@@ -10,9 +10,11 @@ use Phue\Core\Application;
 use Phue\Core\Config;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
+use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Ssr\SsrClient;
 use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Modules\DevTool\DevToolMiddleware;
 use Phue\Modules\DevTool\ProfilingComponentLoaderRegistry;
 use Phue\Modules\DevTool\ProfilingSsrClient;
@@ -82,6 +84,59 @@ class DevToolsModuleTest extends TestCase
         $response = $app->handle(new Request('GET', '/page'));
 
         $this->assertStringContainsString('phue-debug-toolbar', (string) $response->getContent());
+    }
+
+    public function testTheLiveReloadRouteIsRegisteredWhenTheModuleIsActive(): void
+    {
+        $app = $this->app(true, true);
+
+        // The kernel calls init() and nothing else, so a routes() hook that init() does not
+        // invoke never runs. That is not a compile error and not a failing page — it is a 404 on
+        // a feature everyone believes is installed.
+        $this->assertNotNull(
+            $app->getRouter()->dispatch('GET', '/_phue/live-reload'),
+            'the live-reload endpoint is only reachable if init() calls routes()'
+        );
+    }
+
+    public function testTheLiveReloadRouteIsAbsentWithoutDebug(): void
+    {
+        // It reports when the application's own source files move, which a deployed site should
+        // not be able to ask about.
+        $this->expectException(RouteNotFoundException::class);
+
+        $this->app(false, true)->getRouter()->dispatch('GET', '/_phue/live-reload');
+    }
+
+    public function testTheLiveReloadRouteIsAbsentWithoutTheDevToolFlag(): void
+    {
+        $this->expectException(RouteNotFoundException::class);
+
+        $this->app(true, false)->getRouter()->dispatch('GET', '/_phue/live-reload');
+    }
+
+    public function testTheHandlerIsASingletonSoItCanRememberTheLastAnswer(): void
+    {
+        $app = $this->app(true, true);
+        $c = $app->getContainer();
+
+        // Built per request it would have no memory of what it said last, and would report every
+        // component as new on every poll.
+        $this->assertSame(
+            $c->get(LiveReloadRoute::class),
+            $c->get(LiveReloadRoute::class)
+        );
+    }
+
+    public function testTheEndpointAnswersAndReturns(): void
+    {
+        $app = $this->app(true, true);
+        $app->getRouter()->get('/page', static fn (): string => '<html><body>hi</body></html>');
+
+        $response = $app->handle(new Request('GET', '/_phue/live-reload'));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('"changed"', (string) $response->getContent());
     }
 
     public function testProfilerServicesAreSingletons(): void

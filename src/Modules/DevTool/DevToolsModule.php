@@ -62,6 +62,43 @@ class DevToolsModule extends Module
     {
         $this->config();
         $this->bindings();
+        $this->routes();
+    }
+
+    /**
+     * Registers the live-reload endpoint.
+     *
+     * Gated on the same two flags as bindings(), for the same reason: it reports when the
+     * application's own source files move, which is not something a deployed site should be
+     * able to ask about.
+     *
+     * @return void
+     */
+    protected function routes(): void
+    {
+        $config = $this->container->has(Config::class)
+            ? $this->container->get(Config::class)
+            : null;
+
+        $debug = (bool) ($config?->get('app.debug', false) ?? false);
+        $devTool = (bool) ($config?->get('app.devTool', false) ?? false);
+
+        if (!$debug || !$devTool) {
+            return;
+        }
+
+        // A singleton, because the handler holds the answer to "changed since the last poll".
+        // Built per request it would report everything as new, every time.
+        $this->container->singleton(
+            LiveReloadRoute::class,
+            fn(): LiveReloadRoute => new LiveReloadRoute(
+                $this->container->get(ComponentLoaderRegistry::class)
+            )
+        );
+
+        // Underscore-prefixed so it cannot collide with an application route of the same name,
+        // and so it reads as framework territory in the routing table.
+        $this->router->addRoute('GET', LiveReloadRoute::ENDPOINT, [LiveReloadRoute::class, '__invoke']);
     }
 
     /**
