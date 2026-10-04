@@ -89,12 +89,18 @@ final class SwooleWebSocketTransport implements WebSocketTransport
 
         // The server must be told WebSocket is on before it starts; that is the Server module's
         // job, not ours, but attaching before start() would silently do nothing.
-        $server->on('open', function ($request, $response): void {
+        // Swoole hands the server as the first argument to every one of these events, and the
+        // connection is the second: open gives the HTTP request that carried the handshake,
+        // message gives the frame. Reading the request where the server actually is leaves
+        // `$server->fd` null, so the connection is never registered and nothing is ever
+        // published to it — while the handshake still returns 101, because Swoole completes
+        // that on its own.
+        $server->on('open', function (object $server, object $request): void {
             $this->handleOpen($request);
         });
 
-        $server->on('message', function ($request, $frame): void {
-            $connection = $this->find((string) ($request->fd ?? ''));
+        $server->on('message', function (object $server, object $frame): void {
+            $connection = $this->find((string) ($frame->fd ?? ''));
 
             if ($connection !== null && $frame !== null) {
                 try {
@@ -107,8 +113,8 @@ final class SwooleWebSocketTransport implements WebSocketTransport
             }
         });
 
-        $server->on('close', function ($request): void {
-            $connection = $this->find((string) ($request->fd ?? ''));
+        $server->on('close', function (object $server, int $fd): void {
+            $connection = $this->find((string) $fd);
 
             if ($connection === null) {
                 return;
