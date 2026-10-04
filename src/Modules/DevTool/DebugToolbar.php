@@ -82,11 +82,11 @@ class DebugToolbar
     /**
      * Default gap between live-reload polls, in milliseconds.
      *
-     * One second is chosen to sit below the point where an edit feels unacknowledged while
-     * staying cheap: the endpoint answers with a short JSON body and returns, so a poll costs a
-     * worker for the length of one directory scan and nothing more.
+     * Zero means polling only covers the wait for a realtime socket to connect, and stops once
+     * one has. A non-zero value makes polling the primary channel, which is the right choice
+     * for a server that cannot hold a WebSocket connection open.
      */
-    public const LIVE_RELOAD_INTERVAL_MS = 1000;
+    public const LIVE_RELOAD_INTERVAL_MS = 0;
 
     /**
      * Monotonic suffix so multiple toolbars on one page never share element ids.
@@ -116,7 +116,10 @@ class DebugToolbar
 
         $sections = $this->buildSections($profiler, $duration, $options);
 
-        $liveReloadMs = (int) ($options['live_reload_interval_ms'] ?? self::LIVE_RELOAD_INTERVAL_MS);
+        // Zero by default: the realtime channel carries this, and polling only stands by until
+        // a socket has had its chance. A server that cannot hold one still reloads, because the
+        // client keeps polling while `pushed` is false.
+        $liveReloadMs = (int) ($options['live_reload_interval_ms'] ?? 0);
 
         return $this->renderShell($rootId, $this->buildView($profiler, $duration, $fallback), $sections, $profiler)
             . $this->renderStyles()
@@ -1024,7 +1027,7 @@ class DebugToolbar
         // dead branch: dead code in an injected <script> is still bytes on every page.
         $themeScript = $themeMode === 'auto' ? $this->renderThemeScript($root) : '';
         $filterScript = $withFilter ? $this->renderFilterScript($root) : '';
-        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs);
+        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, LiveReloadRoute::ENDPOINT_TOPIC);
 
         $js = <<<JS
         (function () {
@@ -1133,13 +1136,13 @@ class DebugToolbar
      * @param int $intervalMs Gap between polls.
      * @return string
      */
-    private function renderLiveReloadScript(string $rootJson, int $intervalMs): string
+    private function renderLiveReloadScript(string $rootJson, int $intervalMs, string $topic): string
     {
         // UNESCAPED_SLASHES on purpose: the path is the one thing a reader of the injected
         // script needs to recognise, and "\/_phue\/live-reload" is not it.
         $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
         $endpoint = json_encode(LiveReloadRoute::ENDPOINT, $flags);
-        $interval = max(250, $intervalMs);
+        $interval = max(0, $intervalMs);
 
         return <<<JS
 
@@ -1153,17 +1156,24 @@ class DebugToolbar
             window.__phueLiveReload = true;
 
             var endpoint = {$endpoint};
+            var pollEndpoint = '/_phue/live-reload';
+            var topic = {$topic};
             var interval = {$interval};
             var failures = 0;
+            var pushed = false;
+
+            // Realtime first, polling as the fallback. The push channel needs a server that
+            // holds a WebSocket connection open, which a single-worker dev server cannot; the
+            // endpoint returns nothing there, so the client has to fall back rather than sit
+            // silent waiting for an event that will never come.
+            var reload = function () { window.location.reload(); };
 
             var poll = function () {
                 // A hidden tab has nothing to reload, and this is the common case: a developer
                 // leaves the page open in another window and comes back to it.
-                if (document.visibilityState === 'hidden') {
-                    return;
-                }
+                if (document.visibilityState === 'hidden') { return; }
 
-                fetch(endpoint, {
+                fetch(pollEndpoint, {
                     headers: { 'Accept': 'application/json' },
                     cache: 'no-store',
                     credentials: 'same-origin'
@@ -1175,14 +1185,54 @@ class DebugToolbar
                 }).then(function (payload) {
                     failures = 0;
                     var changed = (payload && payload.changed) || [];
-                    if (changed.length) { window.location.reload(); }
+                    if (changed.length) { reload(); }
                 }).catch(function () {
                     failures++;
                     if (failures >= 5) { window.__phueLiveReload = false; }
                 });
             };
 
+            var trySockets = function (attempt) {
+                if (attempt > 2) { return; }
+
+                var scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                var socket;
+
+                try {
+                    socket = new WebSocket(scheme + '//' + window.location.host + '/ws');
+                } catch (e) {
+                    return;
+                }
+
+                socket.onopen = function () {
+                    pushed = true;
+                    socket.send(JSON.stringify({ act: 'sub', ch: topic }));
+                };
+
+                socket.onmessage = function (event) {
+                    var message;
+                    try { message = JSON.parse(event.data); } catch (e) { return; }
+                    if (message && message.ev === 'components.changed') { reload(); }
+                };
+
+                // Reconnecting is the client's job, and it is why the client is a small file
+                // with no dependencies: getting this wrong is the difference between live
+                // reload that works after a deploy and one that quietly stops.
+                socket.onclose = function () { window.setTimeout(function () { trySockets(attempt + 1); }, 1000); };
+                socket.onerror = function () { /* onclose always follows */ };
+            };
+
+            trySockets(0);
+
+            // A zero interval means "the push channel is expected to carry this". The poll then
+            // runs only until the socket has had its chance, which keeps a server without
+            // WebSocket support working without a permanent background request.
             var schedule = function () {
+                if (interval <= 0) {
+                    if (!pushed) { poll(); }
+                    window.setTimeout(function () { schedule(); }, 1000);
+                    return;
+                }
                 window.setTimeout(function () { poll(); schedule(); }, interval);
             };
 

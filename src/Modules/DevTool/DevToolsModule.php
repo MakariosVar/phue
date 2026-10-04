@@ -367,7 +367,8 @@ class DevToolsModule extends Module
                     compilerBridge: $bridge,
                     profiler: $profiler,
                     logger: $logger,
-                    source: $real
+                    source: $real,
+                    container: $this->container
                 );
 
                 $this->container->singleton(

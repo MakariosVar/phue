@@ -38,6 +38,14 @@ final class LiveReloadRoute
      */
     public const ENDPOINT = '/_phue/live-reload';
 
+    /**
+     * The topic component changes are announced on.
+     *
+     * Named after the endpoint so there is one obvious place to look when a page is not
+     * reloading, and no second spelling of the name between the publisher and the client.
+     */
+    public const ENDPOINT_TOPIC = '_phue:components';
+
     public function __construct(
         private readonly ChangeTracker $tracker,
     ) {
