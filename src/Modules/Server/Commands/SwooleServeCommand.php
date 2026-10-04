@@ -145,6 +145,15 @@ final class SwooleServeCommand implements CommandInterface
         fwrite($outputStream, "Press Ctrl+C to stop the server.\n\n");
 
         $server->on('request', function (SwooleRequest $swooleRequest, SwooleResponse $swooleResponse) use ($app): void {
+            // A WebSocket handshake arrives here first and then becomes a connection, not a
+            // response. Running it through the HTTP pipeline as well is what produced the
+            // "session_start(): headers already sent" flood: Swoole has answered the upgrade
+            // by the time anything in the pipeline writes, and every auth touchpoint in there
+            // tried to start a session against a finished response.
+            if ($this->isWebSocketUpgrade($swooleRequest)) {
+                return;
+            }
+
             $phueRequest = $this->transformRequest($swooleRequest);
             $phueResponse = $app->handle($phueRequest);
 
@@ -154,6 +163,19 @@ final class SwooleServeCommand implements CommandInterface
         $server->start();
 
         return 0;
+    }
+
+    /**
+     * Whether this request is a WebSocket handshake rather than an HTTP request.
+     *
+     * @param SwooleRequest $request
+     * @return bool
+     */
+    private function isWebSocketUpgrade(SwooleRequest $request): bool
+    {
+        $upgrade = strtolower((string) ($request->header['upgrade'] ?? $request->server['http_upgrade'] ?? ''));
+
+        return $upgrade === 'websocket';
     }
 
     /**

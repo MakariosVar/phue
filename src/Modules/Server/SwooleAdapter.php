@@ -85,6 +85,14 @@ final class SwooleAdapter implements ServerAdapterInterface
             $this->container->setScope($scope);
 
             try {
+                // A WebSocket handshake is answered by the server and then becomes a
+                // connection, not a response. Running it through the HTTP pipeline as well
+                // means every auth touchpoint tries to start a session against headers Swoole
+                // has already sent.
+                if (strtolower((string) ($swRequest->header['upgrade'] ?? $swRequest->server['http_upgrade'] ?? '')) === 'websocket') {
+                    return;
+                }
+
                 // 1. Convert Swoole Request to Phue Request
                 $phueRequest = $this->transformSwooleRequest($swRequest);
 
