@@ -68,22 +68,29 @@ class StopwatchLabelNestingTest extends TestCase
 
     public function testAggregateTotalIsNotDoubleCountedForSameLabelNesting(): void
     {
-        // The outer frame spans 20ms in total, of which 2ms is spent inside the inner
-        // frame. Summing both into one label reports ~22ms for an operation that took
-        // ~20ms; the gap has to be wide enough that instrumentation overhead cannot hide
-        // the difference.
+        // The outer frame spans ~20ms in total. A 40ms inner frame sits inside it, so summing
+        // the inner frame into the same label would report ~60ms for an operation that took
+        // ~20ms.
+        //
+        // The inner frame is deliberately far larger than the outer one rather than the two
+        // being close together. A tight pair of sleeps makes the expected and the wrong value
+        // differ by a couple of milliseconds, and `usleep` overshoots by that much on a loaded
+        // machine, so the test would fail for reasons that have nothing to do with the code.
+        // Here the gap is 40ms wide and no amount of scheduling noise closes it.
         $this->stopwatch->measure('loader.moduleHash', function (): void {
-            usleep(9000);
+            usleep(10000);
             $this->stopwatch->measure('loader.moduleHash', static function (): void {
-                usleep(2000);
+                usleep(40000);
             });
-            usleep(9000);
+            usleep(10000);
         });
 
         $total = $this->stopwatch->getAggregates()['loader.moduleHash']['total_ms'];
 
-        $this->assertLessThan(21.0, $total, 'Summing a frame into its own parent inflates the label total past the real elapsed time.');
-        $this->assertGreaterThan(19.0, $total);
+        // 15ms to 40ms. The correct total is ~20ms and the double-counted one ~60ms, so this
+        // passes with room to spare and still fails loudly on the bug.
+        $this->assertGreaterThan(15.0, $total, 'The outer span was not measured at all.');
+        $this->assertLessThan(40.0, $total, 'Summing a frame into its own parent inflates the label total past the real elapsed time.');
     }
 
     public function testCollapsingSameLabelKeepsTheOuterSpanTotal(): void

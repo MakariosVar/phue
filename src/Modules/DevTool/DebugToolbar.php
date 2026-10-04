@@ -1027,7 +1027,7 @@ class DebugToolbar
         // dead branch: dead code in an injected <script> is still bytes on every page.
         $themeScript = $themeMode === 'auto' ? $this->renderThemeScript($root) : '';
         $filterScript = $withFilter ? $this->renderFilterScript($root) : '';
-        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, LiveReloadRoute::ENDPOINT_TOPIC);
+        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, json_encode(LiveReloadRoute::ENDPOINT_TOPIC, JSON_THROW_ON_ERROR));
 
         $js = <<<JS
         (function () {
