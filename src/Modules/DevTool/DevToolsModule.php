@@ -6,6 +6,7 @@ namespace Phue\Modules\DevTool;
 
 use Phue\Core\Config;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Hiit\ChangeTracker;
 use Phue\Core\Module;
 use Phue\Core\Ssr\SsrClient;
 use Phue\Core\UI\PhueComponentLoader;
@@ -87,17 +88,27 @@ class DevToolsModule extends Module
             return;
         }
 
-        // A singleton, because the handler holds the answer to "changed since the last poll".
-        // Built per request it would report everything as new, every time.
+        // Two singletons, and the split matters. The tracker holds the answer to "changed since
+        // when" and must survive between requests. The handler must not: it is registered as a
+        // class-string so the route stays cacheable, and the router builds those with
+        // Container::make() on every request — which calls the factory each time and skips the
+        // singleton cache. A stateful handler therefore compared the filesystem against itself
+        // and answered "nothing changed", correctly formatted, forever.
         $this->container->singleton(
-            LiveReloadRoute::class,
-            fn(): LiveReloadRoute => new LiveReloadRoute(
-                $this->container->get(ComponentLoaderRegistry::class)
+            ChangeTracker::class,
+            fn(): ChangeTracker => new ChangeTracker(
+                $this->container->get(ComponentLoaderRegistry::class)->resolvedLoaders()
             )
         );
 
+        $this->container->singleton(
+            LiveReloadRoute::class,
+            fn(): LiveReloadRoute => new LiveReloadRoute($this->container->get(ChangeTracker::class))
+        );
+
         // Underscore-prefixed so it cannot collide with an application route of the same name,
-        // and so it reads as framework territory in the routing table.
+        // and so it reads as framework territory in the routing table. A class-string, not a
+        // closure: the route cache refuses to serialise a closure.
         $this->router->addRoute('GET', LiveReloadRoute::ENDPOINT, [LiveReloadRoute::class, '__invoke']);
     }
 

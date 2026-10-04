@@ -6,19 +6,20 @@ namespace Phue\Tests\DevTools;
 
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
-use Phue\Core\Frontend\ComponentLoaderRegistry;
-use Phue\Core\Response;
+use Phue\Core\Hiit\ChangeTracker;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Tests\Support\TestCompilerBridge;
 
 /**
- * The live-reload endpoint answers with JSON and returns.
+ * The handler is deliberately thin: JSON out, and nothing else.
  *
- * Every property that matters is a consequence of that. It cannot pin a worker, because it
- * finishes. It cannot be cached, because the answer is different every time. And it cannot
- * report the same change twice, because the handler — not the browser — remembers what it said
- * last.
+ * It holds no state on purpose. It is registered as a class-string so the route stays
+ * cacheable, and the router builds a class-string handler with Container::make() on every
+ * request — which calls the factory each time and skips the singleton cache. A stateful handler
+ * therefore compared the filesystem against itself and answered "nothing changed", correctly
+ * formatted, on every poll, forever. The state lives in a ChangeTracker singleton this handler
+ * resolves.
  *
  * @package Phue\Tests\DevTools
  */
@@ -26,19 +27,13 @@ use Phue\Tests\Support\TestCompilerBridge;
 final class LiveReloadRouteTest extends TestCase
 {
     private string $root;
-    private string $appDir;
-    private string $libDir;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->root = sys_get_temp_dir() . '/phue_polling_' . bin2hex(random_bytes(6));
-        $this->appDir = $this->root . '/components';
-        $this->libDir = $this->root . '/lib';
-
-        mkdir($this->appDir, 0777, true);
-        mkdir($this->libDir, 0777, true);
+        $this->root = sys_get_temp_dir() . '/phue_livereload_' . bin2hex(random_bytes(6));
+        mkdir($this->root, 0777, true);
     }
 
     protected function tearDown(): void
@@ -61,11 +56,9 @@ final class LiveReloadRouteTest extends TestCase
         @rmdir($this->root);
     }
 
-    // -------------------------------------------------------------- what it answers
-
     public function testItAnswersWithJsonAndFinishes(): void
     {
-        $response = $this->poll($this->route([$this->appDir]));
+        $response = $this->poll($this->routeWithComponents());
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('application/json', (string) $response->getHeader('Content-Type'));
@@ -74,161 +67,64 @@ final class LiveReloadRouteTest extends TestCase
 
     public function testTheAnswerMustNotBeCacheable(): void
     {
-        $response = $this->poll($this->route([$this->appDir]));
-
         // Cached and this endpoint is broken: the browser stops seeing changes that did happen.
-        $this->assertStringContainsString('no-store', (string) $response->getHeader('Cache-Control'));
+        $this->assertStringContainsString(
+            'no-store',
+            (string) $this->poll($this->routeWithComponents())->getHeader('Cache-Control')
+        );
     }
 
-    public function testTheFirstPollReportsNothingEvenWithComponentsOnDisk(): void
+    public function testWhatItReportsIsTheTrackersAnswer(): void
     {
-        $this->write($this->appDir, 'Alpha');
-        $this->write($this->appDir, 'Beta');
+        $tracker = new ChangeTracker([$this->loader()]);
+        $handler = new LiveReloadRoute($tracker);
 
-        // Against an empty baseline every component on disk looks new, so the first poll would
-        // report the whole project and the page would reload for no reason.
-        $this->assertSame(['changed' => []], $this->body($this->poll($this->route([$this->appDir]))));
-    }
+        $this->assertSame(['changed' => []], $this->body($this->poll($handler)));
 
-    // ------------------------------------------------------------- what it detects
+        $this->write('Alpha', 'changed');
 
-    public function testAChangedComponentIsReportedOnce(): void
-    {
-        $this->write($this->appDir, 'Alpha');
-        $route = $this->route([$this->appDir]);
-
-        $this->poll($route);
-        $this->write($this->appDir, 'Alpha', 'changed');
-
-        $this->assertSame(['changed' => ['Alpha']], $this->body($this->poll($route)));
-
-        // The second poll is the one that matters: a handler that keeps re-reporting would make
-        // the browser reload on every tick forever.
-        $this->assertSame(['changed' => []], $this->body($this->poll($route)));
-    }
-
-    public function testAnAddedComponentIsReported(): void
-    {
-        $route = $this->route([$this->appDir]);
-        $this->poll($route);
-
-        $this->write($this->appDir, 'Fresh');
-
-        $this->assertSame(['changed' => ['Fresh']], $this->body($this->poll($route)));
-    }
-
-    public function testARemovedComponentIsReported(): void
-    {
-        $this->write($this->appDir, 'Doomed');
-        $route = $this->route([$this->appDir]);
-        $this->poll($route);
-
-        unlink($this->appDir . '/Doomed.phue');
-
-        $this->assertSame(['changed' => ['Doomed']], $this->body($this->poll($route)));
+        $this->assertSame(
+            ['changed' => ['Alpha']],
+            $this->body($this->poll($handler)),
+            'the handler must report the tracker, not a private copy of the answer'
+        );
     }
 
     /**
-     * The case that rules out an mtime-based check: same byte count, same second, new content.
+     * The property that makes the split work: the answer advances because the tracker advanced,
+     * not because a handler remembered it.
      */
-    public function testASameSecondSameSizeEditIsStillReported(): void
+    public function testTwoHandlersSharingATrackerDoNotEachKeepTheirOwnMemory(): void
     {
-        $original = "<template>\n  <div>alpha</div>\n</template>\n";
-        $edited = "<template>\n  <div>bravo</div>\n</template>\n";
+        $tracker = new ChangeTracker([$this->loader()]);
+        $this->write('Alpha', 'changed');
 
-        $this->assertSame(strlen($original), strlen($edited));
+        $first = new LiveReloadRoute($tracker);
+        $second = new LiveReloadRoute($tracker);
 
-        file_put_contents($this->appDir . '/Alpha.phue', $original . "\n<script>export default {}</script>\n");
+        $this->assertSame(['Alpha'], $this->body($this->poll($first))['changed']);
 
-        $route = $this->route([$this->appDir]);
-        $this->poll($route);
-
-        clearstatcache(true, $this->appDir . '/Alpha.phue');
-        file_put_contents($this->appDir . '/Alpha.phue', $edited . "\n<script>export default {}</script>\n");
-
-        $this->assertSame(['changed' => ['Alpha']], $this->body($this->poll($route)));
-    }
-
-    public function testSeveralDirectoriesAreReportedTogether(): void
-    {
-        $route = $this->route([$this->appDir, $this->libDir]);
-        $this->poll($route);
-
-        $this->write($this->appDir, 'Page');
-        $this->write($this->libDir, 'Widget');
-
-        // One reload for one edit session, not two. Two would be the one a developer notices.
-        $this->assertSame(['changed' => ['Page', 'Widget']], $this->body($this->poll($route)));
-    }
-
-    public function testTwoLoadersOnOneDirectoryReportItOnce(): void
-    {
-        $this->write($this->appDir, 'Alpha');
-
-        $registry = $this->registry([$this->appDir, $this->appDir]);
-        $route = new LiveReloadRoute($registry);
-        $this->poll($route);
-
-        $this->write($this->appDir, 'Alpha', 'changed');
-
-        $this->assertSame(['changed' => ['Alpha']], $this->body($this->poll($route)));
-    }
-
-    // -------------------------------------------------------------- nothing to watch
-
-    public function testWithNoComponentsItStillAnswersCleanly(): void
-    {
-        $response = $this->poll($this->route([]));
-
-        // An application with no .phue components is normal. It must not be an error, because a
-        // 404 here looks to the browser like a broken dev server.
-        $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame(['changed' => []], $this->body($response));
-    }
-
-    public function testABrokenLoaderDoesNotStopTheOthersBeingWatched(): void
-    {
-        $this->write($this->appDir, 'Alpha');
-
-        $registry = new ComponentLoaderRegistry();
-        $registry->addLoader(function (): PhueComponentLoader {
-            throw new \RuntimeException('this module cannot start');
-        });
-        $registry->addLoader($this->loader($this->appDir));
-
-        $route = new LiveReloadRoute($registry);
-        $this->poll($route);
-
-        $this->write($this->appDir, 'Alpha', 'changed');
-
-        $this->assertSame(['changed' => ['Alpha']], $this->body($this->poll($route)));
-    }
-
-    public function testLoadersRegisteredLaterAreStillPickedUp(): void
-    {
-        $registry = $this->registry([]);
-        $route = new LiveReloadRoute($registry);
-
-        // Polled once before anything was registered, so the directories were resolved already.
-        $this->poll($route);
-
-        $this->write($this->libDir, 'Late');
-        $registry->addLoader($this->loader($this->libDir));
-
-        $this->assertSame(['changed' => []], $this->body($this->poll($route)));
+        // A second handler, built from scratch, must not re-report it. If it did, the memory
+        // would live in the handler — which the router rebuilds per request, so the endpoint
+        // would either report everything forever or nothing at all.
+        $this->assertSame(
+            [],
+            $this->body($this->poll($second))['changed'],
+            'the state must live in the tracker, not in the handler'
+        );
     }
 
     // ----------------------------------------------------------------------- helpers
 
-    private function poll(LiveReloadRoute $route): Response
+    private function poll(LiveReloadRoute $handler): \Phue\Core\Response
     {
-        return $route();
+        return $handler();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function body(Response $response): array
+    private function body(\Phue\Core\Response $response): array
     {
         $decoded = json_decode((string) $response->getContent(), true);
 
@@ -237,40 +133,23 @@ final class LiveReloadRouteTest extends TestCase
         return $decoded;
     }
 
-    /**
-     * @param list<string> $directories
-     */
-    private function route(array $directories): LiveReloadRoute
+    private function routeWithComponents(): LiveReloadRoute
     {
-        return new LiveReloadRoute($this->registry($directories));
+        return new LiveReloadRoute(new ChangeTracker([$this->loader()]));
     }
 
-    /**
-     * @param list<string> $directories
-     */
-    private function registry(array $directories): ComponentLoaderRegistry
-    {
-        $registry = new ComponentLoaderRegistry();
-
-        foreach ($directories as $directory) {
-            $registry->addLoader($this->loader($directory));
-        }
-
-        return $registry;
-    }
-
-    private function loader(string $dir): PhueComponentLoader
+    private function loader(): PhueComponentLoader
     {
         return new PhueComponentLoader(
-            componentsDir: $dir,
+            componentsDir: $this->root,
             compilerBridge: new TestCompilerBridge(),
         );
     }
 
-    private function write(string $dir, string $name, string $variant = 'original'): void
+    private function write(string $name, string $variant = 'original'): void
     {
         file_put_contents(
-            $dir . '/' . $name . '.phue',
+            $this->root . '/' . $name . '.phue',
             "<template>\n  <div>{$name} {$variant}</div>\n</template>\n<script>export default {}</script>\n"
         );
     }
