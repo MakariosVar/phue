@@ -116,8 +116,26 @@ final class SwooleServeCommand implements CommandInterface
 
             $server->set([
                 'document_root' => $baseDir . '/public',
-                'enable_static_handler' => true
+                'enable_static_handler' => true,
+                // Has to be on before start(). Without it a WebSocket handshake is answered as
+                // an ordinary request and never upgraded.
+                'enable_websocket' => true
             ]);
+
+            // Realtime-capable modules attach here, and this command does not know which ones
+            // exist: the Websocket module pushes a closure that hooks the server's open, message
+            // and close events. The alternative — a module reaching into the server itself —
+            // would mean the server owning a concept it has no use for.
+            $container = $app->getContainer();
+
+            if ($container->has('phue.server.attachers')) {
+                /** @var array<int, callable> $attachers */
+                $attachers = (array) $container->get('phue.server.attachers');
+
+                foreach ($attachers as $attach) {
+                    $attach($server);
+                }
+            }
         } catch (\Throwable $e) {
             fwrite($errorStream, sprintf("Error: Failed to bind Swoole server to %s:%d - %s\n", $host, $port, $e->getMessage()));
             return 1;

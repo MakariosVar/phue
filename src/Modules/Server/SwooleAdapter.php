@@ -21,6 +21,13 @@ use Swoole\Http\Server as SwooleHttpServer;
 final class SwooleAdapter implements ServerAdapterInterface
 {
     private ?Application $app = null;
+
+    /**
+     * Realtime attachers registered by modules, applied to the server before it starts.
+     *
+     * @var array<int, callable>
+     */
+    private array $attachers = [];
     private ?Container $container = null;
     private ?SwooleHttpServer $server = null;
 
@@ -39,6 +46,17 @@ final class SwooleAdapter implements ServerAdapterInterface
         $this->container = $app->getContainer();
     }
 
+    /**
+     * Register something to hook into the running server.
+     *
+     * @param callable $attacher Receives the Swoole server instance.
+     * @return void
+     */
+    public function attach(callable $attacher): void
+    {
+        $this->attachers[] = $attacher;
+    }
+
     public function handleRequest(Request $request): Response
     {
         if ($this->app === null) {
@@ -55,7 +73,11 @@ final class SwooleAdapter implements ServerAdapterInterface
         }
 
         $this->server = new SwooleHttpServer($this->host, $this->port);
-        $this->server->set($this->settings);
+        $this->server->set(['enable_websocket' => true] + $this->settings);
+
+        foreach ($this->attachers as $attacher) {
+            $attacher($this->server);
+        }
 
         $this->server->on('request', function (SwooleRequest $swRequest, SwooleResponse $swResponse) {
             // Establish request execution scope context for active coroutine

@@ -46,6 +46,9 @@
             ratchet, namespace/PSR-4 hygiene, the independence guard. These read other
             test files, so they must not live inside a module suite.
         -->
+        <testsuite name="websocket">
+            <directory suffix="Test.php">tests/Websocket</directory>
+        </testsuite>
         <testsuite name="suite">
             <directory suffix="Test.php">tests/Suite</directory>
         </testsuite>
