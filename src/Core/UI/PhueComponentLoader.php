@@ -132,6 +132,26 @@ class PhueComponentLoader
     private array $childHashMemo = [];
 
     /**
+     * Whether a request boundary has been declared for this loader.
+     *
+     * Declaring one is the caller saying "this is one unit of work": resolving the same
+     * component twice inside it must not change the answer, because the structures it
+     * reads are already a per-request snapshot. That is true of the HTTP path, where
+     * Application::handle() declares a boundary per request, and of any worker that does
+     * the same.
+     *
+     * Without a declared boundary the loader resolves strictly: every resolution
+     * re-confirms the whole branch below the component it is asked about, so a file edited
+     * between two resolutions in one long-lived process is still seen. That is what
+     * PhueComponentFreshnessTest pins, and it is the only reason the child hash memo is
+     * revalidated at all — revalidating costs one stat per node of the subtree, per visit,
+     * and a component-heavy page makes about 1,700 of those visits.
+     *
+     * @var bool
+     */
+    private bool $boundaryDeclared = false;
+
+    /**
      * Component identity per name, for the length of one top-level resolution.
      *
      * Validating a branch means confirming every node below it, and buildFor() enters a
@@ -244,6 +264,7 @@ class PhueComponentLoader
      */
     public function beginRequest(): void
     {
+        $this->boundaryDeclared = true;
         $this->componentIndex = null;
         $this->cache = [];
         $this->childHashMemo = [];
@@ -1130,7 +1151,14 @@ class PhueComponentLoader
     {
         $memo = $this->childHashMemo[$child] ?? null;
 
-        if ($memo !== null && $this->branchUnchanged($child, $memo['identity'], $memo['subtree'])) {
+        // Inside a declared request the branch cannot have changed underneath us: the
+        // structures it was confirmed against were themselves read once for this request.
+        // Outside one, the branch has to be re-confirmed, because nothing has declared that
+        // the structures still describe the files on disk.
+        $confirmed = $memo !== null
+            && ($this->boundaryDeclared || $this->branchUnchanged($child, $memo['identity'], $memo['subtree']));
+
+        if ($confirmed) {
             return $memo['hash'];
         }
 

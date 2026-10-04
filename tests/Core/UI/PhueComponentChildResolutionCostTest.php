@@ -680,6 +680,79 @@ final class PhueComponentChildResolutionCostTest extends TestCase
     }
 
     /**
+     * Declaring a request boundary is what makes the memo usable.
+     *
+     * Re-confirming a branch costs one stat per node of its subtree, per visit, and a
+     * component-heavy page makes about 1,700 visits — that re-confirmation was 341ms of a
+     * 460ms request. Inside a declared request it is redundant, because the structures the
+     * branch was confirmed against are themselves a per-request snapshot.
+     *
+     * Both halves matter. Dropping the re-confirmation outright would break
+     * PhueComponentFreshnessTest, which pins visibility for a process that never declares a
+     * boundary; keying it to the boundary keeps that guarantee for exactly the processes
+     * that rely on it.
+     */
+    public function testADeclaredRequestBoundaryStopsReconfirmingEveryBranch(): void
+    {
+        $this->writeCrossLoaderGraph(4, 4);
+        $this->registry->beginRequest();
+
+        $first = $this->walkCrossLoader();
+
+        // Same graph, same request. Nothing changed on disk, so the second pass must not
+        // re-enter the child resolver at all.
+        $before = $this->loader->buildForCalls + $this->libLoader->buildForCalls;
+        $this->loader->resetCounters();
+        $this->libLoader->resetCounters();
+
+        $this->loader->buildFor('N00');
+
+        // One entry for the root itself and none for anything below it.
+        $this->assertSame(
+            1,
+            $this->loader->buildForCalls + $this->libLoader->buildForCalls,
+            'Inside a declared request the second build re-entered the builder for a child, so the memo is not being trusted.'
+        );
+
+        $this->assertGreaterThan(0, $before, 'the first pass did no work either');
+    }
+
+    public function testAnEditAfterANewBoundaryIsStillSeen(): void
+    {
+        $graph = $this->writeCrossLoaderGraph(3, 3);
+        $target = $graph['libNames'][0];
+
+        $before = $this->buildRoot();
+        file_put_contents(
+            $this->libDir . '/' . $target . '.phue',
+            "<template>\n<span>edited</span>\n</template>\n<script>export default {}</script>\n"
+        );
+        $this->registry->beginRequest();
+
+        $this->assertNotSame($before, $this->buildRoot(), 'trusting the memo inside a request must not survive the next one');
+    }
+
+    public function testWithoutADeclaredBoundaryAnEditIsStillSeenImmediately(): void
+    {
+        $graph = $this->writeCrossLoaderGraph(3, 3);
+        $target = $graph['libNames'][0];
+
+        // No beginRequest() anywhere: this is the CLI-renderer / queue-worker shape, and it
+        // is the case the strict re-confirmation exists for.
+        $before = $this->loader->buildFor('N00');
+        file_put_contents(
+            $this->libDir . '/' . $target . '.phue',
+            "<template>\n<span>edited</span>\n</template>\n<script>export default {}</script>\n"
+        );
+
+        $this->assertNotSame(
+            $before,
+            $this->loader->buildFor('N00'),
+            'A process that never declares a request boundary must see an edit with no manual invalidation.'
+        );
+    }
+
+    /**
      * A memo that hit is only worth having if it can still miss.
      *
      * Editing a component one level further down must change the root's module hash. This
