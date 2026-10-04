@@ -196,12 +196,101 @@ if ($sectionPosition !== false && count($navItems) > 1) {
 // flattened: every section and every component, grouped by section. Built here for
 // the same reason as the rest of this block — the SSR renderer reads this state, so
 // a computed would arrive on the server as undefined.
+
+// Bootstrap Icon name (without bi- prefix) for every palette entry.
+$paletteIcons = [
+    // Sections
+    'index'             => 'house',
+    'forms'             => 'sliders2',
+    'data'              => 'clipboard-data',
+    'feedback'          => 'megaphone',
+    'navigation'        => 'signpost-split',
+    'content'           => 'layout-text-window-reverse',
+    'ssr'               => 'server',
+    // Form Controls
+    'button'            => 'hand-index-thumb',
+    'input'             => 'input-cursor-text',
+    'number-input'      => '123',
+    'select'            => 'menu-button-wide',
+    'select3'           => 'list-check',
+    'textarea'          => 'textarea-resize',
+    'checkbox'          => 'check-square',
+    'radio'             => 'record-circle',
+    'switch'            => 'toggle-on',
+    'search-input'      => 'search',
+    'range'             => 'sliders',
+    'file-input'        => 'file-earmark-arrow-up',
+    'date-picker'       => 'calendar-date',
+    'calendar'          => 'calendar3',
+    'color-picker'      => 'eyedropper',
+    'segmented-control' => 'segmented-nav',
+    'form'              => 'card-checklist',
+    'form-field'        => 'input-cursor',
+    'inline-edit'       => 'pencil-square',
+    'input-shell'       => 'bounding-box',
+    'otp-input'         => 'shield-lock',
+    'rich-text'         => 'text-paragraph',
+    // Data Display
+    'table'             => 'table',
+    'badge'             => 'patch-check',
+    'chip'              => 'patch-plus',
+    'avatar'            => 'person-circle',
+    'image'             => 'image',
+    'carousel'          => 'images',
+    'card'              => 'card-heading',
+    'empty-state'       => 'inbox',
+    'stat'              => 'speedometer2',
+    'list-group'        => 'list-ul',
+    'sortable'          => 'grip-vertical',
+    'description-list'  => 'card-text',
+    'timeline'          => 'clock-history',
+    'code'              => 'code-slash',
+    'tree-view'         => 'diagram-3',
+    'accordion'         => 'chevron-bar-expand',
+    'collapse'          => 'arrows-collapse',
+    // Feedback
+    'alert'             => 'exclamation-triangle',
+    'modal'             => 'window-stack',
+    'progress-bar'      => 'hourglass-split',
+    'skeleton'          => 'border-style',
+    'spinner'           => 'arrow-clockwise',
+    'toast'             => 'bell',
+    'popover'           => 'balloon',
+    'tooltip'           => 'info-circle',
+    'drawer'            => 'layout-sidebar-reverse',
+    'confirm-dialog'    => 'question-diamond',
+    'command-palette'   => 'lightning-charge',
+    // Navigation
+    'breadcrumb'        => 'signpost',
+    'link'              => 'link-45deg',
+    'pagination'        => 'three-dots',
+    'tabs'              => 'journal-bookmark',
+    'theme'             => 'circle-half',
+    'stepper'           => 'bar-chart-steps',
+    'dropdown'          => 'chevron-expand',
+    // Content & Layout
+    'text'              => 'fonts',
+    'heading'           => 'type-h1',
+    'icon'              => 'gem',
+    'box'               => 'bounding-box',
+    'stack'             => 'layers',
+    'flex'              => 'columns-gap',
+    'row'               => 'layout-three-columns',
+    'col'               => 'layout-split',
+    'spacer'            => 'distribute-vertical',
+    'divider'           => 'dash-lg',
+    // Server-Side
+    'main_navigation'   => 'compass',
+    'markdown'          => 'markdown',
+];
+
 $paletteItems = [];
 foreach ($navItems as $group) {
     $paletteItems[] = [
         'id'    => $group['id'],
         'label' => $group['label'],
         'group' => 'Sections',
+        'icon'  => $paletteIcons[$group['id']] ?? '',
     ];
 
     foreach ($group['components'] as $component) {
@@ -209,6 +298,7 @@ foreach ($navItems as $group) {
             'id'    => $component['id'],
             'label' => $component['label'],
             'group' => $group['label'],
+            'icon'  => $paletteIcons[$component['id']] ?? '',
         ];
     }
 }
