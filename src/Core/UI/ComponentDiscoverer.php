@@ -126,48 +126,64 @@ class ComponentDiscoverer
      */
     public function resolveTransitiveDependencies(string $name, array &$visited = [], array &$graph = []): array
     {
-        // Prevent infinite loops on cyclic dependencies
+        foreach ($this->resolveTransitiveModules($name, $visited) as $component => $module) {
+            $graph[$component] = $module['hash'];
+        }
+
+        return $graph;
+    }
+
+    /**
+     * The full transitive closure, with both the module hash and the URL it was read from.
+     *
+     * Walking the graph already mints every module URL, because a component's children are
+     * discovered by scanning a template that has to be built first. Callers that need both
+     * forms used to ask twice: once here for the hashes, then once per dependency to
+     * recover the URLs — and the second pass re-resolved every component from scratch,
+     * which is a complete extra resolution of the whole graph per render.
+     *
+     * @param string $name Component logical name.
+     * @param array<string, bool> $visited Nodes already walked, shared across the recursion.
+     *
+     * @return array<string, array{hash: string, url: string}> Empty when a URL cannot be minted.
+     */
+    public function resolveTransitiveModules(string $name, array &$visited = []): array
+    {
         if (isset($visited[$name])) {
-            return $graph;
+            return [];
         }
 
         $visited[$name] = true;
 
+        $found = [];
         $moduleUrl = $this->registry->moduleUrl($name);
 
         if ($moduleUrl !== null) {
-            // Extract asset hash when moduleUrl is present
             if (preg_match('/\.([a-f0-9]{8,40})\.phue\.js$/i', $moduleUrl, $matches)) {
-                $graph[$name] = $matches[1];
+                $found[$name] = ['hash' => $matches[1], 'url' => $moduleUrl];
             }
         } else {
-            // Log warning when moduleUrl is null instead of exiting immediately
             $this->logger?->warning("Unable to resolve module URL for component during dependency resolution", [
                 'component' => $name,
             ]);
         }
 
-        // The template is the only thing this walk needs, and the parsed structure already
-        // holds it. load() would also evaluate the component's <php> block — arbitrary
-        // application code, run once per node of the graph on every request.
         $structure = $this->registry->getStructure($name);
         if ($structure === null) {
-            return $graph;
+            return $found;
         }
 
         $template = (string) ($structure['template'] ?? '');
-        if (empty($template)) {
-            return $graph;
+        if ($template === '') {
+            return $found;
         }
 
-        $children = $this->scanTemplate($template, $name);
-
-        foreach ($children as $childName) {
-            // Pass shared $visited and $graph references down the stack
-            $this->resolveTransitiveDependencies($childName, $visited, $graph);
+        foreach ($this->scanTemplate($template, $name) as $childName) {
+            // Pass the shared $visited reference down the stack
+            $found += $this->resolveTransitiveModules($childName, $visited);
         }
 
-        return $graph;
+        return $found;
     }
 
     /**

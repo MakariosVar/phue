@@ -167,9 +167,14 @@ class ComponentRenderer
 
         // Compute transitive dependency graph upfront for both SSR and Client modulepreloads
         $deps = [];
+        $modules = [];
         if ($this->loaderRegistry !== null && $componentName !== null) {
             $discoverer = new ComponentDiscoverer($this->loaderRegistry, $this->logger);
-            $deps = $discoverer->resolveTransitiveDependencies($componentName);
+            $modules = $discoverer->resolveTransitiveModules($componentName);
+
+            foreach ($modules as $depName => $module) {
+                $deps[$depName] = $module['hash'];
+            }
         }
 
         $ssrFailed = false;
@@ -260,15 +265,15 @@ class ComponentRenderer
             'themeConfig' => $this->themeConfig
         ];
 
-        // 1β: Generate modulepreload URLs for the full dependency graph
+        // 1β: Modulepreload URLs for the full dependency graph.
+        //
+        // The walk above already produced these URLs alongside the hashes. Asking the
+        // registry for them again re-resolved every component in the graph from scratch,
+        // once per render — the most expensive loop in the request, to recompute something
+        // the line above it was holding.
         $modulePreloads = [];
-        if ($this->loaderRegistry !== null && !empty($deps)) {
-            foreach (array_keys($deps) as $depName) {
-                $url = $this->loaderRegistry->moduleUrl($depName);
-                if ($url !== null) {
-                    $modulePreloads[] = $url;
-                }
-            }
+        foreach ($modules as $module) {
+            $modulePreloads[] = $module['url'];
         }
 
         if ($isSpaRequest) {
