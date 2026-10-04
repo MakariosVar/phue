@@ -112,7 +112,7 @@ export default {
           name: "id",
           type: "String",
           default: 'null',
-          notes: "Falls back to <strong>ph-select-<_id></strong>",
+          notes: "Falls back to <strong>ph-select-&lt;id&gt;</strong>",
         },
         {
           name: "name",

@@ -70,7 +70,7 @@ export default {
           name: 'id',
           type: 'String',
           default: "null",
-          notes: "Falls back to <code>ph-switch-<_id></code>",
+          notes: "Falls back to <code>ph-switch-&lt;id&gt;</code>",
         },
         {
             name: "label",

@@ -73,7 +73,7 @@ export default {
             name: "id",
             type: "String",
             default: 'null',
-            notes: "Falls back to <strong>ph-textarea-<_id></strong>",
+            notes: "Falls back to <strong>ph-textarea-&lt;id&gt;</strong>",
         },
         {
             name: "name",
