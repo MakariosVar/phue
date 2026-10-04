@@ -148,7 +148,7 @@ export default {
           name: "id",
           type: "String",
           default: 'null',
-          notes: "Falls back to <strong>ph-input-<_id></strong>",
+          notes: "Falls back to <strong>ph-input-&lt;id&gt;</strong>",
         },
         {
           name: "name",
