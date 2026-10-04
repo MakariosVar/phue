@@ -56,7 +56,12 @@ class ProfilingComponentLoader extends PhueComponentLoader
             persistentCache: $persistentCache,
             viewsCacheDir: $viewsCacheDir,
             compilerBridge: $compilerBridge,
-            logger: $logger
+            logger: $logger,
+            // Share the source's detector. This subclass adopts the source's memo tables, so
+            // it must also adopt what those memos were built from — a detector of its own
+            // would see an empty baseline, call every component a change, and wipe the graph
+            // at the first boundary. That is the cost this work removed.
+            hiit: $source?->hiit()
         );
 
         if ($source !== null) {
@@ -78,6 +83,43 @@ class ProfilingComponentLoader extends PhueComponentLoader
      * @param string $name Component logical name.
      * @return PhueComponent
      */
+    /**
+     * Declare a request boundary, and report what the change check found.
+     *
+     * The check is the reason a component-heavy page costs 68ms instead of 160ms, so it is
+     * also the first thing to suspect when a page renders faster or slower than expected. A
+     * silent answer would leave that question unanswerable from the toolbar: "did my edit
+     * register, or is something forcing a rebuild?" is exactly the question a dev tool exists
+     * to answer.
+     *
+     * @return void
+     */
+    public function beginRequest(): void
+    {
+        $this->profiler->measure('hiit.check', function (): void {
+            parent::beginRequest();
+        });
+
+        $hiit = $this->hiit();
+
+        if ($hiit === null) {
+            $this->profiler->addDiagnostic(
+                'Component change detection is off; every component memo is rebuilt on every request.'
+            );
+
+            return;
+        }
+
+        $changed = $hiit->lastChanged();
+
+        $this->profiler->addDiagnostic(
+            $changed === []
+                ? 'Hiit found no changed component; the memo tables were kept.'
+                : sprintf('Hiit found %d changed component(s); the memo tables were dropped.', count($changed)),
+            ['changed' => $changed]
+        );
+    }
+
     public function load(string $name, array $params = []): PhueComponent
     {
         return $this->profiler->measure(

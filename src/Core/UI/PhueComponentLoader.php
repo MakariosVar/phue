@@ -7,6 +7,7 @@ namespace Phue\Core\UI;
 use Exception;
 use LogicException;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\Hiit\Hiit;
 use Phue\Core\UI\Exceptions\CircularComponentReferenceException;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
@@ -152,6 +153,16 @@ class PhueComponentLoader
     private bool $boundaryDeclared = false;
 
     /**
+     * Who answers whether a component's content still matches what was memoised.
+     *
+     * Never null unless setHiit() said so, because the constructor builds one. Null means
+     * change detection is switched off, and the loader falls back to forgetting everything.
+     *
+     * @var Hiit|null
+     */
+    private ?Hiit $hiit = null;
+
+    /**
      * Whether the dependency graph can still be trusted as recorded this request.
      *
      * False as soon as the change check finds a component whose content differs from what
@@ -165,6 +176,30 @@ class PhueComponentLoader
      * @var bool
      */
     private bool $graphTrusted = true;
+
+    /**
+     * Whether this loader's change check found something at the current boundary.
+     *
+     * Distinct from $graphTrusted, which answers a different question: not "did a file
+     * move" but "may I reuse a recorded child hash". Collapsing the two made a boundary that
+     * wiped the graph also disable the memo for the rest of the request, so a component-heavy
+     * page re-walked its whole graph after every boundary — the exact cost this work removed.
+     * The registry reads this one; the memo reads the other.
+     *
+     * @var bool
+     */
+    private bool $graphStale = false;
+
+    /**
+     * The component hashes this loader's memos were built from.
+     *
+     * The loader's own view cannot supply this: it knows hashes for the components it has
+     * built, but a component that exists in the index and has never been built is exactly
+     * the one whose deletion would otherwise go unnoticed.
+     *
+     * @var array<string, string>
+     */
+    private array $knownHashes = [];
 
     /**
      * Component identity per name, for the length of one top-level resolution.
@@ -231,7 +266,8 @@ class PhueComponentLoader
         ?CacheInterface $persistentCache = null,
         ?string $viewsCacheDir = null,
         ?TemplateCompilerBridge $compilerBridge = null,
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
+        ?Hiit $hiit = null
     ) {
         $realBase = realpath($componentsDir);
         if ($realBase === false || !is_dir($realBase)) {
@@ -243,6 +279,12 @@ class PhueComponentLoader
         }
 
         $this->componentsDir = $realBase;
+
+        // Detect freshness here rather than asking the six places that build loaders to
+        // remember to. Every loader knows the only directory it cares about, so the default
+        // detector needs no wiring at all — and a site that forgets one call would lose the
+        // behaviour silently, which is the worst way to lose it.
+        $this->hiit = $hiit ?? new Hiit($realBase);
 
         // Resolve $jsDir relative to __DIR__ . '/js' without throwing if absent
         $resolvedJsDir = realpath(__DIR__ . '/js');
@@ -281,6 +323,7 @@ class PhueComponentLoader
     {
         $this->boundaryDeclared = true;
         $this->graphTrusted = true;
+        $this->graphStale = false;
         $this->invalidateChangedComponents();
     }
 
@@ -292,63 +335,28 @@ class PhueComponentLoader
      * request re-read every file, re-parsed every template and re-walked the graph from
      * nothing — about 90ms of a 112ms request.
      *
-     * Forgetting everything is a blunt way to be sure nothing stale is served. But "nothing
-     * on disk changed" can be established directly, for the cost of a directory scan and one
-     * content hash per component: about 10ms against the 90ms it replaces. The check has to
-     * hash content rather than stat mtime, because an edit landing in the same second that
-     * happens to keep the byte count slips straight through a stat, and
-     * PhueComponentFreshnessTest pins exactly that case.
+     * Forgetting everything is a blunt way to be sure nothing stale is served. Hiit makes the
+     * alternative available: ask what moved, and keep everything else. A request in which
+     * nothing changed then costs a directory scan and one hash per component instead of the
+     * whole rebuild.
      *
-     * When something HAS changed this gives up the fine-grained invalidation and forgets
-     * everything, which is the behaviour that was already correct. A request right after an
-     * edit costs what it always cost; every request in between costs almost nothing. In
-     * production nothing changes and every request is the cheap one.
+     * With detection off the answer stays "forget everything", which is the behaviour that
+     * was already correct and already tested.
      *
      * @return void
      */
     private function invalidateChangedComponents(): void
     {
+        if ($this->hiit !== null) {
+            if ($this->hiit->changed($this->knownHashes) === []) {
+                return;
+            }
+
+            $this->knownHashes = $this->hiit->currentHashes();
+        }
+
+        $this->graphStale = true;
         $this->componentIndex = null;
-        $onDisk = $this->getComponentIndex();
-        $stale = false;
-
-        foreach ($onDisk as $name => $relative) {
-            $path = $this->componentsDir . DIRECTORY_SEPARATOR . $relative;
-
-            if (!is_file($path)) {
-                $stale = true;
-
-                continue;
-            }
-
-            $recorded = $this->cache[$path]['contentHash'] ?? null;
-
-            if ($recorded === null) {
-                continue;
-            }
-
-            $hash = sha1_file($path) ?: '';
-
-            if ($hash === '' || !hash_equals((string) $recorded, $hash)) {
-                $stale = true;
-
-                break;
-            }
-        }
-
-        foreach ([...array_keys($this->resolvedPaths), ...array_keys($this->clientMemo)] as $name) {
-            if (!isset($onDisk[$name])) {
-                $stale = true;
-
-                break;
-            }
-        }
-
-        if (!$stale) {
-            return;
-        }
-
-        $this->graphTrusted = false;
         $this->forgetGraph();
     }
 
@@ -365,7 +373,7 @@ class PhueComponentLoader
      */
     public function graphIsStale(): bool
     {
-        return !$this->graphTrusted;
+        return $this->graphStale;
     }
 
     /**
@@ -397,8 +405,10 @@ class PhueComponentLoader
         // changed on disk.
         $this->boundaryDeclared = true;
         $this->graphTrusted = true;
+        $this->graphStale = true;
         $this->componentIndex = null;
         $this->forgetGraph();
+        $this->knownHashes = $this->hiit?->currentHashes() ?? [];
     }
 
     /**
@@ -408,6 +418,27 @@ class PhueComponentLoader
      *
      * @return void
      */
+    /**
+     * Replace the change detector this loader consults at each request boundary.
+     *
+     * @param Hiit|null $hiit Detector, or null to turn detection off.
+     * @return void
+     */
+    public function setHiit(?Hiit $hiit): void
+    {
+        $this->hiit = $hiit;
+    }
+
+    /**
+     * The detector this loader consults, or null when detection is off.
+     *
+     * @return Hiit|null
+     */
+    public function hiit(): ?Hiit
+    {
+        return $this->hiit;
+    }
+
     public function setRegistry(ComponentLoaderRegistry $registry): void
     {
         $this->registry = $registry;

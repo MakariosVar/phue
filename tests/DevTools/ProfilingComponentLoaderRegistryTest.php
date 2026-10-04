@@ -144,6 +144,70 @@ class ProfilingComponentLoaderRegistryTest extends TestCase
         $this->assertSame(1, $this->profiler->getAggregates()['loader.load']['count']);
     }
 
+    public function testTheRequestBoundaryReportsWhatTheChangeCheckFound(): void
+    {
+        $this->writePhue('PhButton');
+
+        $loader = new ProfilingComponentLoader(
+            componentsDir: $this->componentsDir,
+            persistentCache: null,
+            viewsCacheDir: null,
+            compilerBridge: new \Phue\Core\UI\TemplateCompilerBridge(
+                socketPath: '/tmp/phue-does-not-exist.sock',
+                cache: null
+            ),
+            profiler: $this->profiler
+        );
+
+        $loader->beginRequest();
+
+        // "Why is this page slow" starts with "was anything rebuilt", and the rebuild is now a
+        // decision Hiit makes. A tool that cannot see the decision cannot explain the cost.
+        $this->assertArrayHasKey(
+            'hiit.check',
+            $this->profiler->getAggregates(),
+            'the change check must show up as timed work, it is the gate on the whole memo reuse'
+        );
+
+        $loader->beginRequest();
+        $loader->load('PhButton');
+        $loader->beginRequest();
+        $loader->load('PhButton');
+
+        $messages = array_column($this->profiler->getDiagnostics(), 'message');
+
+        $this->assertNotEmpty(
+            preg_grep('/Hiit found/', $messages),
+            'the toolbar has to be able to say what the change check concluded, in both directions'
+        );
+    }
+
+    public function testTheRequestBoundarySaysWhenDetectionIsOff(): void
+    {
+        $this->writePhue('PhButton');
+
+        $loader = new ProfilingComponentLoader(
+            componentsDir: $this->componentsDir,
+            persistentCache: null,
+            viewsCacheDir: null,
+            compilerBridge: new \Phue\Core\UI\TemplateCompilerBridge(
+                socketPath: '/tmp/phue-does-not-exist.sock',
+                cache: null
+            ),
+            profiler: $this->profiler
+        );
+
+        $loader->setHiit(null);
+        $loader->beginRequest();
+
+        $messages = array_column($this->profiler->getDiagnostics(), 'message');
+
+        $this->assertNotEmpty(
+            preg_grep('/change detection is off/', $messages),
+            'a site that turned detection off needs to be able to see that it did'
+        );
+    }
+
     // ------------------------------------------------------------ pass-through
 
     public function testIsAComponentLoaderRegistry(): void
