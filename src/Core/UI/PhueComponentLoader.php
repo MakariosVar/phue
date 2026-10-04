@@ -132,6 +132,22 @@ class PhueComponentLoader
     private array $childHashMemo = [];
 
     /**
+     * Component identity per name, for the length of one top-level resolution.
+     *
+     * Validating a branch means confirming every node below it, and buildFor() enters a
+     * component once per referring edge, so the same subtree was confirmed hundreds of
+     * times inside a single resolution. Nothing can change in between: a stat taken
+     * microseconds after the last one is the same stat.
+     *
+     * The scope is one top-level resolution, not one request, because an edit has to be
+     * visible to the NEXT resolution (PhueComponentFreshnessTest pins that, and CLI
+     * renderers and queue workers have no request boundary to rely on).
+     *
+     * @var array<string, string|null>
+     */
+    private array $identityMemo = [];
+
+    /**
      * Resolved file path per component name, recorded whenever a full validated read has
      * already happened. Lets an identity confirmation stat the file directly instead of
      * re-deriving the path through realpath() on every check.
@@ -444,6 +460,12 @@ class PhueComponentLoader
             throw new CircularComponentReferenceException("Circular component dependency detected in build path: {$chain}");
         }
 
+        // No component is being built above this one, so this resolution starts here and
+        // every identity it reads is read fresh.
+        if ($this->buildingStack === []) {
+            $this->identityMemo = [];
+        }
+
         try {
             $structure = $this->structureFor($name);
         } catch (Throwable $e) {
@@ -453,6 +475,7 @@ class PhueComponentLoader
             ]);
             return null;
         }
+
 
         $filePath = $structure['filePath'] ?? '';
         $mtime = 0;
@@ -543,6 +566,7 @@ class PhueComponentLoader
             ]);
             return null;
         }
+
 
         if ($scriptContent === '') {
             $componentsProp = !empty($componentsObj) ? ", components: { {$componentsObj} }" : '';
@@ -1064,26 +1088,24 @@ class PhueComponentLoader
      */
     private function templateChildrenFor(string $name, array $structure): array
     {
-        $filePath = (string) ($structure['filePath'] ?? '');
-        $contentHash = '';
+        // Keyed by the component's identity, not by its file path: a component another
+        // loader owns has no entry in this loader's structure cache, so a path-keyed memo
+        // silently never applied to it and every visit re-scanned its template.
+        $identity = $this->identityFor($name);
 
-        if ($filePath !== '') {
-            $contentHash = (string) ($this->cache[$filePath]['contentHash'] ?? '');
-        }
-
-        if ($contentHash !== ''
-            && isset($this->templateChildrenMemo[$filePath])
-            && $this->templateChildrenMemo[$filePath]['hash'] === $contentHash
+        if ($identity !== null
+            && isset($this->templateChildrenMemo[$name])
+            && $this->templateChildrenMemo[$name]['hash'] === $identity
         ) {
-            return $this->templateChildrenMemo[$filePath]['children'];
+            return $this->templateChildrenMemo[$name]['children'];
         }
 
         $discoverer = new ComponentDiscoverer($this->registry, $this->logger);
         $children = $discoverer->scanTemplate((string) ($structure['template'] ?? ''), $name);
 
-        if ($contentHash !== '') {
-            $this->templateChildrenMemo[$filePath] = [
-                'hash' => $contentHash,
+        if ($identity !== null) {
+            $this->templateChildrenMemo[$name] = [
+                'hash' => $identity,
                 'children' => $children,
             ];
         }
@@ -1119,7 +1141,7 @@ class PhueComponentLoader
             return null;
         }
 
-        $identity = $this->componentIdentity($child);
+        $identity = $this->identityFor($child);
 
         if ($identity !== null) {
             $this->childHashMemo[$child] = [
@@ -1145,12 +1167,12 @@ class PhueComponentLoader
      */
     private function branchUnchanged(string $name, string $identity, array $subtree): bool
     {
-        if ($this->componentIdentity($name) !== $identity) {
+        if ($this->identityFor($name) !== $identity) {
             return false;
         }
 
         foreach ($subtree as $descendant => $recorded) {
-            if ($this->componentIdentity($descendant) !== $recorded) {
+            if ($this->identityFor($descendant) !== $recorded) {
                 return false;
             }
         }
@@ -1225,7 +1247,44 @@ class PhueComponentLoader
         return $structure;
     }
 
-    private function componentIdentity(string $name): ?string
+    /**
+     * The identity of a component, whoever owns it, read once per resolution.
+     *
+     * A name this loader holds is answered without a dispatch. Anything else is a
+     * cross-loader child: this loader cannot hash a file it does not own, and reporting
+     * "I cannot confirm" for one made branchUnchanged() call every such edge changed, so
+     * the child hash memo was never written for a single PhUI component on an app page.
+     */
+    private function identityFor(string $name): ?string
+    {
+        if (array_key_exists($name, $this->identityMemo)) {
+            return $this->identityMemo[$name];
+        }
+
+        $identity = isset($this->getComponentIndex()[$name])
+            ? $this->componentIdentity($name)
+            : $this->registry?->componentIdentity($name);
+
+        return $this->identityMemo[$name] = $identity;
+    }
+
+    /**
+     * A component's structure, whoever owns it.
+     */
+    private function structureForName(string $name): ?array
+    {
+        if (isset($this->getComponentIndex()[$name])) {
+            try {
+                return $this->getOrFetchStructure($name);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        return $this->registry?->getStructure($name);
+    }
+
+    public function componentIdentity(string $name): ?string
     {
         // Confirmation path. A path recorded here was produced by a getOrFetchStructure()
         // call that already passed the name-format, realpath and containment checks, so
@@ -1302,7 +1361,7 @@ class PhueComponentLoader
 
         $seen[$name] = true;
 
-        $identity = $this->componentIdentity($name);
+        $identity = $this->identityFor($name);
         if ($identity === null) {
             return $identities;
         }
@@ -1313,11 +1372,13 @@ class PhueComponentLoader
             return $identities;
         }
 
-        try {
-            $children = $this->templateChildrenFor($name, $this->getOrFetchStructure($name));
-        } catch (Throwable) {
+        $structure = $this->structureForName($name);
+
+        if ($structure === null) {
             return $identities;
         }
+
+        $children = $this->templateChildrenFor($name, $structure);
 
         foreach ($children as $child) {
             foreach ($this->subtreeIdentities($child, $seen) as $descendant => $descendantIdentity) {

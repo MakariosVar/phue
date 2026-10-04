@@ -635,4 +635,240 @@ final class PhueComponentChildResolutionCostTest extends TestCase
         );
         $this->assertSame(['Bold'], array_keys($graph));
     }
+
+    // ------------------------------------------------- the same invariant, two loaders
+
+    /**
+     * Every cost assertion in this file uses a single loader, which is why they pass.
+     *
+     * The application wires TWO: App/Frontend and the PhUI library, and components in
+     * one routinely reference components in the other. PhueComponentLoader::componentIdentity()
+     * answers null for a name outside its own index — correctly, because a loader cannot
+     * re-hash a file it does not own — and branchUnchanged() treats that null as "changed".
+     * So the child hash memo is never written for a cross-loader child, and every such edge
+     * is a permanent miss for the whole request.
+     *
+     * Measured on the real /phui page: 1227 buildFor entries for 142 distinct components,
+     * 957 of them reached by re-entering moduleHash from inside buildFor.
+     */
+    public function testChildHashResolutionStaysBoundedWhenChildrenLiveInAnotherLoader(): void
+    {
+        $graph = $this->writeCrossLoaderGraph(4, 4);
+
+        $counters = $this->walkCrossLoader();
+
+        $this->assertSame(17, $counters['nodes'], 'fixture should resolve 17 components');
+
+        // The same budget the single-loader guard uses. It is a statement about the
+        // algorithm, not about the wiring: a hash per distinct node plus one per edge is
+        // the floor, and a graph that grows past three per node is being re-walked.
+        $budget = $counters['nodes'] * 3;
+
+        $this->assertLessThanOrEqual(
+            $budget,
+            $counters['moduleHash'],
+            sprintf(
+                'A %d-node graph spread over two loaders issued %d child hash resolutions (budget %d). A child held '
+                . 'by the other loader must be resolved once per request, not once per referring edge.',
+                $counters['nodes'],
+                $counters['moduleHash'],
+                $budget
+            )
+        );
+
+        $this->assertGreaterThan(0, $graph['crossEdges'], 'fixture should contain cross-loader edges');
+    }
+
+    /**
+     * A memo that hit is only worth having if it can still miss.
+     *
+     * Editing a component one level further down must change the root's module hash. This
+     * is the guard on every fix for the test above: a cache that trusts a cross-loader
+     * child without being able to confirm it would serve a stale subtree forever, and the
+     * profiler would keep reporting the page as warm.
+     */
+    public function testAnEditInTheOtherLoaderStillReachesTheRootHash(): void
+    {
+        $graph = $this->writeCrossLoaderGraph(4, 4);
+        $target = $graph['libNames'][0];
+
+        $before = $this->buildRoot();
+        file_put_contents(
+            $this->libDir . '/' . $target . '.phue',
+            "<template>\n<span>edited</span>\n</template>\n<script>export default {}</script>\n"
+        );
+        $this->registry->beginRequest();
+        $after = $this->buildRoot();
+
+        $this->assertNotSame(
+            $before,
+            $after,
+            'Editing a component in the other loader left the root hash untouched: a cross-loader memo is being trusted '
+            . 'without confirming the file behind it.'
+        );
+    }
+
+    /**
+     * The guard that makes the registry-aware identity sound rather than merely faster.
+     *
+     * A parent's memo is trusted only after every recorded descendant still matches. Once a
+     * cross-loader child can be confirmed, its subtree has to be walkable too — otherwise
+     * the parent records an incomplete subtree, confirms it against itself, and serves a
+     * stale hash for a grandchild that lives in the other loader.
+     *
+     * The chain here is App Root -> Lib Mid -> Lib Deep, so the edited file is two levels
+     * below the root and one level below the child whose hash the root memoises.
+     */
+    public function testAGrandchildEditInTheOtherLoaderReachesTheRootHash(): void
+    {
+        $this->wireTwoLoaders();
+
+        file_put_contents($this->dir . '/Root.phue', "<template>\n<mid />\n</template>\n<script>export default {}</script>\n");
+        file_put_contents($this->libDir . '/Mid.phue', "<template>\n<deep />\n</template>\n<script>export default {}</script>\n");
+        file_put_contents($this->libDir . '/Deep.phue', "<template>\n<span>v1</span>\n</template>\n<script>export default {}</script>\n");
+
+        $before = $this->loader->buildFor('Root');
+
+        file_put_contents($this->libDir . '/Deep.phue', "<template>\n<span>v2 changed</span>\n</template>\n<script>export default {}</script>\n");
+
+        // No request boundary: the loader must see the change on the next resolution, in
+        // the other loader, two levels down.
+        $after = $this->loader->buildFor('Root');
+
+        $this->assertNotSame(
+            $before,
+            $after,
+            'A grandchild edit inside the other loader did not reach the root hash: the parent confirmed an incomplete subtree.'
+        );
+    }
+
+    public function testASecondRequestSeesAnEditMadeBetweenRequests(): void
+    {
+        $graph = $this->writeCrossLoaderGraph(3, 3);
+        $target = $graph['libNames'][0];
+
+        $before = $this->buildRoot();
+        file_put_contents(
+            $this->libDir . '/' . $target . '.phue',
+            "<template>\n<span>edited</span>\n</template>\n<script>export default {}</script>\n"
+        );
+        $this->registry->beginRequest();
+        $after = $this->buildRoot();
+
+        $this->assertNotSame($before, $after, 'An edit between requests was not observed.');
+    }
+
+    // ------------------------------------------------ cross-loader fixtures
+
+    private CountingComponentLoader $libLoader;
+    private string $libDir;
+
+    /**
+     * Two loaders, cross-linked through one registry, exactly as Application::bindings
+     * wires App/Frontend and the PhUI library.
+     */
+    private function wireTwoLoaders(): void
+    {
+        $this->libDir = $this->root . '/lib2';
+        if (!is_dir($this->libDir)) {
+            mkdir($this->libDir, 0777, true);
+        }
+
+        $this->libLoader = new CountingComponentLoader(
+            componentsDir: $this->libDir,
+            compilerBridge: new TestCompilerBridge(),
+        );
+
+        $registry = new ComponentLoaderRegistry();
+        $registry->addLoader($this->loader);
+        $registry->addLoader($this->libLoader);
+        $this->loader->setRegistry($registry);
+        $this->libLoader->setRegistry($registry);
+
+        $this->registry = $registry;
+    }
+
+    /**
+     * Writes a tree whose components alternate between the two loaders, so that no edge
+     * can be resolved without going through the registry.
+     *
+     * Nodes are N{level}{index}; the root is N00 and always lives in the app loader, so a
+     * test can build it through the loader it registered. Ownership alternates on
+     * (level + index), which keeps both directions represented at every level.
+     *
+     * @return array{nodes: int, crossEdges: int, libNames: list<string>}
+     */
+    private function writeCrossLoaderGraph(int $fanout, int $depth): array
+    {
+        $this->wireTwoLoaders();
+
+        $known = ['N00' => true];
+        $queue = [[0, 0]];
+        $edges = 0;
+        $libNames = [];
+
+        while ($queue !== []) {
+            [$level, $index] = array_shift($queue);
+            $name = 'N' . $level . $index;
+            $tags = [];
+
+            for ($i = 0; $i < $fanout; $i++) {
+                $child = 'N' . ($level + 1) . $i;
+
+                if (!isset($known[$child])) {
+                    $known[$child] = true;
+
+                    // Queue every child so its file gets written; nodes at the deepest
+                    // level are simply never expanded.
+                    if ($level + 1 <= $depth) {
+                        $queue[] = [$level + 1, $i];
+                    }
+                }
+
+                $tags[] = '<' . strtolower($child) . ' />';
+            }
+
+            $edges += $fanout;
+
+            $inLib = $name !== 'N00' && ($level + $index) % 2 === 0;
+            $dir = $inLib ? $this->libDir : $this->dir;
+
+            if ($inLib) {
+                $libNames[] = $name;
+            }
+
+            file_put_contents(
+                $dir . '/' . $name . '.phue',
+                "<template>\n" . implode('', $tags) . "\n</template>\n<script>export default {}</script>\n"
+            );
+        }
+
+        return ['nodes' => count($known), 'crossEdges' => $edges, 'libNames' => $libNames];
+    }
+
+    /**
+     * @return array{moduleHash: int, buildFor: int, nodes: int}
+     */
+    private function walkCrossLoader(string $rootName = 'N00'): array
+    {
+        $this->registry->beginRequest();
+
+        $discoverer = new ComponentDiscoverer($this->registry);
+        $graph = $discoverer->resolveTransitiveDependencies($rootName);
+
+        $this->loader->resetCounters();
+        $this->libLoader->resetCounters();
+        $discoverer->resolveTransitiveDependencies($rootName);
+
+        return [
+            'moduleHash' => $this->loader->moduleHashCalls + $this->libLoader->moduleHashCalls,
+            'buildFor' => $this->loader->buildForCalls + $this->libLoader->buildForCalls,
+            'nodes' => count($graph),
+        ];
+    }
+
+    private function buildRoot(string $rootName = 'N00'): ?string
+    {
+        return $this->loader->buildFor($rootName);
+    }
 }

@@ -25,6 +25,16 @@ class ComponentLoaderRegistry
     private array $loaders = [];
 
     /**
+     * Which loader owns a component name, for the length of one request.
+     *
+     * Answering costs a hasComponent() per candidate loader, and it is asked once per node
+     * per branch validation. The answer cannot change inside a request.
+     *
+     * @var array<string, PhueComponentLoader|null>
+     */
+    private array $owners = [];
+
+    /**
      * Optional PSR-3 logger instance for recording loader failures.
      */
     private ?LoggerInterface $logger;
@@ -93,6 +103,8 @@ class ComponentLoaderRegistry
      */
     public function beginRequest(): void
     {
+        $this->owners = [];
+
         foreach ($this->loaders as $candidate) {
             try {
                 /** @var PhueComponentLoader|null $loader */
@@ -119,19 +131,47 @@ class ComponentLoaderRegistry
      */
     public function getStructure(string $name): ?array
     {
+        return $this->ownerOf($name)?->getStructure($name);
+    }
+
+    /**
+     * The identity triple the owning loader currently observes for a component.
+     *
+     * The caller that needs an identity is often not the owner: a component in the app
+     * loader referencing one in the PhUI library cannot hash the library's file.
+     *
+     * @return string|null Null when no registered loader holds the component.
+     */
+    public function componentIdentity(string $name): ?string
+    {
+        return $this->ownerOf($name)?->componentIdentity($name);
+    }
+
+    /**
+     * The registered loader holding a component, decided once per request.
+     */
+    private function ownerOf(string $name): ?PhueComponentLoader
+    {
+        if (array_key_exists($name, $this->owners)) {
+            return $this->owners[$name];
+        }
+
+        $owner = null;
+
         foreach ($this->loaders as $candidate) {
             try {
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
 
                 if ($loader !== null && $loader->hasComponent($name)) {
-                    return $loader->getStructure($name);
+                    $owner = $loader;
+                    break;
                 }
             } catch (Throwable $e) {
                 $this->handleLoaderFailure($e, __FUNCTION__);
             }
         }
 
-        return null;
+        return $this->owners[$name] = $owner;
     }
 
     /**
