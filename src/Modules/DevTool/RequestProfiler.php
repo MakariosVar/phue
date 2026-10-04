@@ -44,6 +44,14 @@ class RequestProfiler
     private array $diagnostics = [];
 
     /**
+     * Diagnostics recorded during boot, which describe the instrumentation itself rather than
+     * a request and so have to outlive the first one.
+     *
+     * @var list<array{message: string, context: array<string, mixed>}>
+     */
+    private array $persistentDiagnostics = [];
+
+    /**
      * How many requests this profiler instance has served.
      *
      * > 1 means a reused instance under a memory-resident server, so the memos the
@@ -73,6 +81,11 @@ class RequestProfiler
     public function start(): void
     {
         $this->context = [];
+        // Per-request notes are dropped, because keeping them made the list grow for the life of
+        // the process and the report render two hundred identical lines. Boot notes are kept:
+        // "this module could not be instrumented" is a fact about the process, not about a
+        // request, and it was the most valuable thing on the report.
+        $this->diagnostics = $this->persistentDiagnostics;
         $this->stopwatch->resetSpans();
         $this->startMemory = memory_get_usage();
         $this->stopwatch->start();
@@ -116,9 +129,15 @@ class RequestProfiler
      * @param array<string, mixed> $context Supporting detail.
      * @return void
      */
-    public function addDiagnostic(string $message, array $context = []): void
+    public function addDiagnostic(string $message, array $context = [], bool $persistent = false): void
     {
-        $this->diagnostics[] = ['message' => $message, 'context' => $context];
+        $note = ['message' => $message, 'context' => $context];
+
+        if ($persistent) {
+            $this->persistentDiagnostics[] = $note;
+        }
+
+        $this->diagnostics[] = $note;
     }
 
     /**
@@ -139,6 +158,7 @@ class RequestProfiler
     public function reset(): void
     {
         $this->context = [];
+        $this->diagnostics = $this->persistentDiagnostics;
         $this->stopwatch->resetSpans();
         $this->startMemory = memory_get_usage();
     }

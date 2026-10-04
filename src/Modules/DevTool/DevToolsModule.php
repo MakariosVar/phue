@@ -132,7 +132,9 @@ class DevToolsModule extends Module
      */
     private function warn(RequestProfiler $profiler, string $message, \Throwable $exception): void
     {
-        $profiler->addDiagnostic($message, ['exception' => $exception->getMessage()]);
+        // Persistent: this describes the instrumentation that could not be installed, which is
+        // a fact about the process rather than about any one request.
+        $profiler->addDiagnostic($message, ['exception' => $exception->getMessage()], true);
 
         $logger = $this->container->has(LoggerInterface::class)
             ? $this->container->get(LoggerInterface::class)

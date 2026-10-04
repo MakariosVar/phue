@@ -240,4 +240,38 @@ class RequestProfilerTest extends TestCase
     {
         $this->assertSame([], $this->profiler->getContext());
     }
+
+    public function testAPersistentNoteOutlivesTheRequestThatRecordedIt(): void
+    {
+        $this->profiler->start();
+        $this->profiler->addDiagnostic('could not instrument X', [], true);
+        $this->profiler->start();
+
+        // "This module is broken" is a fact about the process. Clearing it with the per-request
+        // notes would hide the one thing the report exists to explain.
+        $this->assertCount(1, $this->profiler->getDiagnostics());
+    }
+
+    public function testDiagnosticsDoNotSurviveTheNextRequest(): void
+    {
+        $this->profiler->start();
+        $this->profiler->addDiagnostic('first request', ['a' => 1]);
+        $this->profiler->addDiagnostic('second note');
+
+        $this->assertCount(2, $this->profiler->getDiagnostics());
+
+        $this->profiler->start();
+
+        // A long-lived worker kept every note it had ever been given, so the list grew for the
+        // life of the process and the report rendered all of it on every request.
+        $this->assertSame([], $this->profiler->getDiagnostics(), 'diagnostics are per request, like spans');
+    }
+
+    public function testResetAlsoClearsDiagnostics(): void
+    {
+        $this->profiler->addDiagnostic('stale');
+        $this->profiler->reset();
+
+        $this->assertSame([], $this->profiler->getDiagnostics());
+    }
 }
