@@ -169,17 +169,8 @@ class ProfilingComponentLoaderRegistryTest extends TestCase
             'the change check must show up as timed work, it is the gate on the whole memo reuse'
         );
 
-        $loader->beginRequest();
-        $loader->load('PhButton');
-        $loader->beginRequest();
-        $loader->load('PhButton');
-
-        $messages = array_column($this->profiler->getDiagnostics(), 'message');
-
-        $this->assertNotEmpty(
-            preg_grep('/Hiit found/', $messages),
-            'the toolbar has to be able to say what the change check concluded, in both directions'
-        );
+        // The span is the record that the check ran, whether or not anything changed.
+        $this->assertArrayHasKey('hiit.check', $this->profiler->getAggregates());
     }
 
     public function testTheRequestBoundarySaysWhenDetectionIsOff(): void
@@ -205,6 +196,75 @@ class ProfilingComponentLoaderRegistryTest extends TestCase
         $this->assertNotEmpty(
             preg_grep('/change detection is off/', $messages),
             'a site that turned detection off needs to be able to see that it did'
+        );
+    }
+
+    public function testOnlyTheColdBoundaryIsReported(): void
+    {
+        $this->writePhue('PhButton');
+
+        $loader = $this->profilingLoader();
+
+        // The first boundary on a freshly built loader legitimately finds everything changed:
+        // there are no memo tables yet, so there is nothing to compare against. Reporting it is
+        // correct and happens once.
+        $loader->beginRequest();
+        $this->assertCount(1, $this->profiler->getDiagnostics());
+
+        // From then on the steady state has to be silent. A note per loader per request turned
+        // the report into two hundred identical lines and buried the requests that mattered.
+        $loader->beginRequest();
+        $loader->beginRequest();
+        $loader->beginRequest();
+
+        $this->assertCount(
+            1,
+            $this->profiler->getDiagnostics(),
+            'a long-lived worker must not add a note on every request'
+        );
+    }
+
+    public function testAChangedRequestReportsHowManyAndNamesSomeOfThem(): void
+    {
+        $this->writePhue('PhButton');
+
+        $loader = $this->profilingLoader();
+        $loader->beginRequest();
+
+        $this->writePhue('PhButton');
+        $loader->beginRequest();
+
+        $diagnostics = $this->profiler->getDiagnostics();
+        $this->assertCount(1, $diagnostics);
+        $this->assertStringContainsString('1 component', $diagnostics[0]['message']);
+        $this->assertSame(['PhButton'], $diagnostics[0]['context']['changed']);
+    }
+
+    public function testDetectionBeingOffIsReported(): void
+    {
+        $this->writePhue('PhButton');
+
+        $loader = $this->profilingLoader();
+        $loader->setHiit(null);
+        $loader->beginRequest();
+
+        $diagnostics = $this->profiler->getDiagnostics();
+
+        $this->assertNotSame([], $diagnostics, 'a site that turned detection off needs to see that it did');
+        $this->assertStringContainsString('off', $diagnostics[0]['message']);
+    }
+
+    private function profilingLoader(): ProfilingComponentLoader
+    {
+        return new ProfilingComponentLoader(
+            componentsDir: $this->componentsDir,
+            persistentCache: null,
+            viewsCacheDir: null,
+            compilerBridge: new \Phue\Core\UI\TemplateCompilerBridge(
+                socketPath: '/tmp/phue-does-not-exist.sock',
+                cache: null
+            ),
+            profiler: $this->profiler
         );
     }
 

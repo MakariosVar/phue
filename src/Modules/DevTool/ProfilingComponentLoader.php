@@ -112,11 +112,19 @@ class ProfilingComponentLoader extends PhueComponentLoader
 
         $changed = $hiit->lastChanged();
 
+        // Only the interesting outcome is reported. "Nothing changed" is what happens on almost
+        // every request, one note per loader per request, and a report that says so two hundred
+        // times hides the one request where something actually happened.
+        if ($changed === []) {
+            return;
+        }
+
+        $shown = array_slice($changed, 0, 10);
+        $extra = count($changed) - count($shown);
+
         $this->profiler->addDiagnostic(
-            $changed === []
-                ? 'Hiit found no changed component; the memo tables were kept.'
-                : sprintf('Hiit found %d changed component(s); the memo tables were dropped.', count($changed)),
-            ['changed' => $changed]
+            sprintf('Hiit dropped the memo tables: %d component(s) changed.', count($changed)),
+            ['changed' => $extra > 0 ? [...$shown, sprintf('+%d more', $extra)] : $shown]
         );
     }
 
