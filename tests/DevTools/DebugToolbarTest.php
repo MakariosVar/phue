@@ -1077,15 +1077,34 @@ class DebugToolbarTest extends TestCase
         $this->assertStringContainsString('var interval = 5000', $slow);
     }
 
-    public function testAPollIntervalBelowTheFloorIsRaised(): void
+    public function testZeroMeansPollingOnlyStandsByUntilASocketArrives(): void
+    {
+        $profiler = new RequestProfiler(new Stopwatch());
+        $toolbar = new DebugToolbar();
+
+        // Zero is not "off": it is "poll only while no realtime socket has connected", which is
+        // what keeps a server that cannot hold a WebSocket working.
+        $this->assertStringContainsString('var interval = 0', $toolbar->render($profiler, 1.0));
+    }
+
+    public function testANegativeIntervalIsTreatedAsStandby(): void
     {
         $profiler = new RequestProfiler(new Stopwatch());
 
-        $html = (new DebugToolbar())->render($profiler, 1.0, ['live_reload_interval_ms' => 1]);
+        $html = (new DebugToolbar())->render($profiler, 1.0, [], ['live_reload_interval_ms' => -1]);
 
-        // A zero or negative interval is a hot loop against the dev server. The floor is small
-        // enough to feel immediate and large enough to stay a request per quarter second.
-        $this->assertStringContainsString('var interval = 250', $html);
+        $this->assertStringContainsString('var interval = 0', $html, 'a negative interval is not a faster poll');
+    }
+
+    public function testTheRealtimeChannelIsTriedBeforePolling(): void
+    {
+        $html = $this->render();
+
+        // Realtime first, with reconnect: a client that does not reconnect is deaf after the
+        // next deploy, which is exactly when someone needs live reload most.
+        $this->assertStringContainsString('WebSocket', $html);
+        $this->assertStringContainsString('onclose', $html);
+        $this->assertStringContainsString(LiveReloadRoute::ENDPOINT_TOPIC, $html);
     }
 
     public function testThePollerIsIndependentOfTheBarBeingVisible(): void
