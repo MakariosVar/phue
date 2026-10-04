@@ -1174,7 +1174,11 @@ class PhueComponentLoader
         if ($identity !== null) {
             $this->childHashMemo[$child] = [
                 'identity' => $identity,
-                'subtree' => $this->subtreeIdentities($child),
+                // Only a process that never declared a request boundary has to be able to
+                // re-confirm this branch, and only it reads the subtree back. Recording it
+                // costs one structure read per node below the child, once per child, on
+                // every request — 1,194 of them on a PhUI page.
+                'subtree' => $this->boundaryDeclared ? [] : $this->subtreeIdentities($child),
                 'hash' => $hash,
             ];
         }
