@@ -165,7 +165,17 @@ class PhueTestCliTest extends TestCase
         // Narrower than the truth is the dangerous direction here: it looks like a pass while
         // the change is untested. So an unplaceable path widens to everything, and says so.
         $this->assertStringContainsString('no static mapping', $result['stderr']);
-        $this->assertStringContainsString('219 test files', $result['stdout']);
+
+        // Compare against what a plain run selects, rather than a number that goes stale the
+        // moment anyone adds a test file.
+        $everything = $this->runCli('--list');
+        preg_match('/of (\d+) test files/', $everything['stdout'], $total);
+
+        $this->assertStringContainsString(
+            sprintf('of %s test files', $total[1] ?? '?'),
+            $result['stdout'],
+            'an unplaceable path must widen to the whole suite'
+        );
     }
 
     public function testOnlyFailedIsCalmWhenTheLastRunWasClean(): void

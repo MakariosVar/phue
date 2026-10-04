@@ -444,6 +444,17 @@ if (is_resource($process)) {
 // --only-failed needs and what the status line alone cannot give.
 $failures = failuresFrom($output);
 
+// PHPUnit can fail without naming a test: a parse error in a test file, a bad bootstrap, a
+// selection that matched nothing. Those produce no "N) Class::method" lines, so counting only
+// those reports a green run over a crashed suite — the worst possible failure mode for a tool
+// whose only job is to tell you the truth.
+$aborted = $exitCode !== 0 && $failures === [];
+$emptySelection = $exitCode === 0 && str_contains($output, 'No tests executed');
+
+if ($emptySelection) {
+    fwrite(STDERR, "warning: the selection matched no tests, so nothing was verified\n");
+}
+
 echo $output;
 $elapsed = microtime(true) - $started;
 
@@ -453,10 +464,19 @@ $elapsed = microtime(true) - $started;
     json_encode(['failures' => $failures, 'at' => date('c')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
 );
 
+// A non-zero exit with no named test is PHPUnit's own status code and belongs to the caller:
+// a bad --bootstrap exits 2, and reporting 1 instead would hide a distinction that has meaning.
+$verdict = match (true) {
+    $aborted => 'PHPUnit failed without naming a test — see the output above',
+    $emptySelection => 'Nothing ran',
+    $failures === [] => 'Passed',
+    default => sprintf('%d failing test(s)', count($failures)),
+};
+
 echo sprintf(
     "\n%s in %s — re-run just the failures with ./bin/phue_test --only-failed\n",
-    $failures === [] ? 'Passed' : sprintf('%d failing test(s)', count($failures)),
+    $verdict,
     number_format($elapsed, 1) . 's'
 );
 
-exit($exitCode);
+exit($emptySelection ? 1 : $exitCode);
