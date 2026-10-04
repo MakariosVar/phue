@@ -107,6 +107,34 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Reads a component's parsed structure without evaluating it.
+     *
+     * The composite counterpart of PhueComponentLoader::getStructure(). Dependency
+     * discovery needs a template and nothing else, and getStructure() returns it without
+     * running the component's <php> block — which is arbitrary application code.
+     *
+     * @param string $name Component logical name.
+     *
+     * @return array<string, mixed>|null Null when no registered loader holds the component.
+     */
+    public function getStructure(string $name): ?array
+    {
+        foreach ($this->loaders as $candidate) {
+            try {
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+
+                if ($loader !== null && $loader->hasComponent($name)) {
+                    return $loader->getStructure($name);
+                }
+            } catch (Throwable $e) {
+                $this->handleLoaderFailure($e, __FUNCTION__);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Checks if a component exists within any registered loader without triggering a build.
      *
      * @param string $name Component logical name.

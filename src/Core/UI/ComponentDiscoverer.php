@@ -147,12 +147,15 @@ class ComponentDiscoverer
             ]);
         }
 
-        $component = $this->registry->load($name);
-        if ($component === null) {
+        // The template is the only thing this walk needs, and the parsed structure already
+        // holds it. load() would also evaluate the component's <php> block — arbitrary
+        // application code, run once per node of the graph on every request.
+        $structure = $this->registry->getStructure($name);
+        if ($structure === null) {
             return $graph;
         }
 
-        $template = $component->view->getTemplate();
+        $template = (string) ($structure['template'] ?? '');
         if (empty($template)) {
             return $graph;
         }

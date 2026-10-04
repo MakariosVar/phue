@@ -28,6 +28,7 @@ final class CountingComponentLoader extends PhueComponentLoader
     public int $hasComponentCalls = 0;
     public int $getStructureCalls = 0;
     public int $moduleHashCalls = 0;
+    public int $loadCalls = 0;
 
     public function buildFor(string $name): ?string
     {
@@ -64,8 +65,19 @@ final class CountingComponentLoader extends PhueComponentLoader
         return parent::moduleHash($name);
     }
 
+    /**
+     * load() evaluates the component's <php> block, which is the expensive part.
+     */
+    public function load(string $name, array $params = []): \Phue\Core\UI\PhueComponent
+    {
+        $this->loadCalls++;
+
+        return parent::load($name, $params);
+    }
+
     public function resetCounters(): void
     {
+        $this->loadCalls = 0;
         $this->buildForCalls = 0;
         $this->buildForSsrCalls = 0;
         $this->hasComponentCalls = 0;
