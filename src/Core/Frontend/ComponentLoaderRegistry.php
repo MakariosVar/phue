@@ -105,15 +105,28 @@ class ComponentLoaderRegistry
     {
         $this->owners = [];
 
+        $resolved = [];
+        $stale = false;
+
         foreach ($this->loaders as $candidate) {
             try {
                 /** @var PhueComponentLoader|null $loader */
                 $loader = is_callable($candidate) ? $candidate() : $candidate;
                 if ($loader !== null) {
                     $loader->beginRequest();
+                    $resolved[] = $loader;
+                    $stale = $stale || $loader->graphIsStale();
                 }
             } catch (Throwable $e) {
                 $this->handleLoaderFailure($e, __FUNCTION__);
+            }
+        }
+
+        // A recorded hash is only as good as every node below it, and the node below it may
+        // belong to another loader. One loader finding a change invalidates them all.
+        if ($stale) {
+            foreach ($resolved as $loader) {
+                $loader->forgetGraph();
             }
         }
     }

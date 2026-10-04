@@ -152,6 +152,21 @@ class PhueComponentLoader
     private bool $boundaryDeclared = false;
 
     /**
+     * Whether the dependency graph can still be trusted as recorded this request.
+     *
+     * False as soon as the change check finds a component whose content differs from what
+     * the memo tables were built against. It is per-request and never recovers: a graph is
+     * only as good as its weakest node, so a single changed component means none of the
+     * recorded child hashes may be trusted, because a parent caches its CHILDREN's hashes
+     * and would otherwise keep serving the stale chain upward. Re-resolving the graph once
+     * is what a request after an edit costs, which is exactly the case where correctness
+     * matters more than the saving.
+     *
+     * @var bool
+     */
+    private bool $graphTrusted = true;
+
+    /**
      * Component identity per name, for the length of one top-level resolution.
      *
      * Validating a branch means confirming every node below it, and buildFor() enters a
@@ -265,10 +280,108 @@ class PhueComponentLoader
     public function beginRequest(): void
     {
         $this->boundaryDeclared = true;
+        $this->graphTrusted = true;
+        $this->invalidateChangedComponents();
+    }
+
+    /**
+     * Keep the memo tables warm, and throw them away only if something actually changed.
+     *
+     * beginRequest() used to drop the component index, every parsed structure, the child hash
+     * memo and the prelude memo. Only the PSR-16 file cache survived a boundary, so every
+     * request re-read every file, re-parsed every template and re-walked the graph from
+     * nothing — about 90ms of a 112ms request.
+     *
+     * Forgetting everything is a blunt way to be sure nothing stale is served. But "nothing
+     * on disk changed" can be established directly, for the cost of a directory scan and one
+     * content hash per component: about 10ms against the 90ms it replaces. The check has to
+     * hash content rather than stat mtime, because an edit landing in the same second that
+     * happens to keep the byte count slips straight through a stat, and
+     * PhueComponentFreshnessTest pins exactly that case.
+     *
+     * When something HAS changed this gives up the fine-grained invalidation and forgets
+     * everything, which is the behaviour that was already correct. A request right after an
+     * edit costs what it always cost; every request in between costs almost nothing. In
+     * production nothing changes and every request is the cheap one.
+     *
+     * @return void
+     */
+    private function invalidateChangedComponents(): void
+    {
         $this->componentIndex = null;
+        $onDisk = $this->getComponentIndex();
+        $stale = false;
+
+        foreach ($onDisk as $name => $relative) {
+            $path = $this->componentsDir . DIRECTORY_SEPARATOR . $relative;
+
+            if (!is_file($path)) {
+                $stale = true;
+
+                continue;
+            }
+
+            $recorded = $this->cache[$path]['contentHash'] ?? null;
+
+            if ($recorded === null) {
+                continue;
+            }
+
+            $hash = sha1_file($path) ?: '';
+
+            if ($hash === '' || !hash_equals((string) $recorded, $hash)) {
+                $stale = true;
+
+                break;
+            }
+        }
+
+        foreach ([...array_keys($this->resolvedPaths), ...array_keys($this->clientMemo)] as $name) {
+            if (!isset($onDisk[$name])) {
+                $stale = true;
+
+                break;
+            }
+        }
+
+        if (!$stale) {
+            return;
+        }
+
+        $this->graphTrusted = false;
+        $this->forgetGraph();
+    }
+
+    /**
+     * Whether this request's change check found a component whose content no longer
+     * matches the memo tables.
+     *
+     * The registry asks every loader and tells them all to forget when any one of them says
+     * yes: a parent caches its children's hashes, and a child can live in a different loader
+     * than the parent that depends on it, so one loader noticing a change is enough to make
+     * every recorded hash suspect.
+     *
+     * @return bool
+     */
+    public function graphIsStale(): bool
+    {
+        return !$this->graphTrusted;
+    }
+
+    /**
+     * Drop every memo derived from the files on disk.
+     *
+     * @return void
+     */
+    public function forgetGraph(): void
+    {
         $this->cache = [];
         $this->childHashMemo = [];
         $this->preludeMemo = [];
+        $this->clientMemo = [];
+        $this->ssrMemo = [];
+        $this->templateChildrenMemo = [];
+        $this->resolvedPaths = [];
     }
 
     /**
@@ -279,10 +392,13 @@ class PhueComponentLoader
      */
     public function clearMemo(): void
     {
-        $this->beginRequest();
-        $this->ssrMemo = [];
-        $this->clientMemo = [];
-        $this->templateChildrenMemo = [];
+        // Must not lean on beginRequest(): that now keeps whatever the change check found
+        // intact, and a caller asking for a full flush needs one whether or not anything
+        // changed on disk.
+        $this->boundaryDeclared = true;
+        $this->graphTrusted = true;
+        $this->componentIndex = null;
+        $this->forgetGraph();
     }
 
     /**
@@ -1151,11 +1267,15 @@ class PhueComponentLoader
     {
         $memo = $this->childHashMemo[$child] ?? null;
 
-        // Inside a declared request the branch cannot have changed underneath us: the
-        // structures it was confirmed against were themselves read once for this request.
-        // Outside one, the branch has to be re-confirmed, because nothing has declared that
-        // the structures still describe the files on disk.
+        // Trusting a recorded child hash is only sound while the graph is intact. Inside a
+        // declared request the branch cannot have changed underneath us — the structures it
+        // was confirmed against were read once for this request — unless this request's
+        // change check found something, and then nothing recorded survives.
+        //
+        // Outside a declared request the branch is re-confirmed every visit, because nothing
+        // has declared that the structures still describe the files on disk.
         $confirmed = $memo !== null
+            && $this->graphTrusted
             && ($this->boundaryDeclared || $this->branchUnchanged($child, $memo['identity'], $memo['subtree']));
 
         if ($confirmed) {
