@@ -80,6 +80,15 @@ class DebugToolbar
     public const ROOT_ID = 'phue-debug-toolbar';
 
     /**
+     * Default gap between live-reload polls, in milliseconds.
+     *
+     * One second is chosen to sit below the point where an edit feels unacknowledged while
+     * staying cheap: the endpoint answers with a short JSON body and returns, so a poll costs a
+     * worker for the length of one directory scan and nothing more.
+     */
+    public const LIVE_RELOAD_INTERVAL_MS = 1000;
+
+    /**
      * Monotonic suffix so multiple toolbars on one page never share element ids.
      */
     private static int $instanceCounter = 0;
@@ -107,10 +116,12 @@ class DebugToolbar
 
         $sections = $this->buildSections($profiler, $duration, $options);
 
+        $liveReloadMs = (int) ($options['live_reload_interval_ms'] ?? self::LIVE_RELOAD_INTERVAL_MS);
+
         return $this->renderShell($rootId, $this->buildView($profiler, $duration, $fallback), $sections, $profiler)
             . $this->renderStyles()
             . $this->renderScript($rootId, $themeMode, str_contains($sections[0]['content'] ?? '', self::FILTER_MARKER)
-                || $this->anySectionContains($sections, self::FILTER_MARKER));
+                || $this->anySectionContains($sections, self::FILTER_MARKER), $liveReloadMs);
     }
 
     /**
@@ -996,9 +1007,15 @@ class DebugToolbar
      * @param string $rootId Root element id.
      * @param string $themeMode Either 'auto', 'light' or 'dark'.
      * @param bool $withFilter Whether a filter control was rendered.
+     * @param int $liveReloadIntervalMs Gap between live-reload polls.
      * @return string
      */
-    private function renderScript(string $rootId, string $themeMode = 'auto', bool $withFilter = true): string
+    private function renderScript(
+        string $rootId,
+        string $themeMode = 'auto',
+        bool $withFilter = true,
+        int $liveReloadIntervalMs = self::LIVE_RELOAD_INTERVAL_MS
+    ): string
     {
         $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
         $root = json_encode($rootId, $flags);
@@ -1007,6 +1024,7 @@ class DebugToolbar
         // dead branch: dead code in an injected <script> is still bytes on every page.
         $themeScript = $themeMode === 'auto' ? $this->renderThemeScript($root) : '';
         $filterScript = $withFilter ? $this->renderFilterScript($root) : '';
+        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs);
 
         $js = <<<JS
         (function () {
@@ -1091,7 +1109,86 @@ class DebugToolbar
         })();
         JS;
 
-        return '<script>' . $js . $filterScript . $themeScript . '</script>';
+        return '<script>' . $js . $filterScript . $themeScript . $liveReloadScript . '</script>';
+    }
+
+    /**
+     * Render the live-reload poller.
+     *
+     * Polling, not a stream, and the reason is worth writing down because the obvious
+     * alternative was built and thrown away: a Server-Sent Events stream is a request that never
+     * finishes, so it holds a worker for as long as the tab is open. Four tabs took the dev
+     * server down, and Swoole cannot report a closed tab from inside a running coroutine — not
+     * through write(), isWritable(), exists() or connection_aborted() — so nothing ever told the
+     * stream to let go. A poll costs a worker for one directory scan and returns.
+     *
+     * Three details that keep it from being noisy:
+     *
+     *  - it stops on its own after repeated failures, so a page whose endpoint is missing does
+     *    not retry forever in the background;
+     *  - it pauses while the tab is hidden, because a background tab has nothing to reload;
+     *  - it guards on a window-level flag, so a page with more than one toolbar polls once.
+     *
+     * @param string $rootJson JSON-encoded root element id.
+     * @param int $intervalMs Gap between polls.
+     * @return string
+     */
+    private function renderLiveReloadScript(string $rootJson, int $intervalMs): string
+    {
+        // UNESCAPED_SLASHES on purpose: the path is the one thing a reader of the injected
+        // script needs to recognise, and "\/_phue\/live-reload" is not it.
+        $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
+        $endpoint = json_encode(LiveReloadRoute::ENDPOINT, $flags);
+        $interval = max(250, $intervalMs);
+
+        return <<<JS
+
+        (function () {
+            var root = document.getElementById({$rootJson});
+            if (!root) { return; }
+
+            // Scoped to the window rather than to this toolbar: the toolbar is injected once per
+            // response, and two pollers would double every request for one answer.
+            if (window.__phueLiveReload) { return; }
+            window.__phueLiveReload = true;
+
+            var endpoint = {$endpoint};
+            var interval = {$interval};
+            var failures = 0;
+
+            var poll = function () {
+                // A hidden tab has nothing to reload, and this is the common case: a developer
+                // leaves the page open in another window and comes back to it.
+                if (document.visibilityState === 'hidden') {
+                    return;
+                }
+
+                fetch(endpoint, {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                }).then(function (response) {
+                    // A missing endpoint is a configuration state, not a blip. Retrying it
+                    // forever turns a 404 into a background request every second.
+                    if (!response.ok) { throw new Error('status'); }
+                    return response.json();
+                }).then(function (payload) {
+                    failures = 0;
+                    var changed = (payload && payload.changed) || [];
+                    if (changed.length) { window.location.reload(); }
+                }).catch(function () {
+                    failures++;
+                    if (failures >= 5) { window.__phueLiveReload = false; }
+                });
+            };
+
+            var schedule = function () {
+                window.setTimeout(function () { poll(); schedule(); }, interval);
+            };
+
+            schedule();
+        })();
+        JS;
     }
 
     /**

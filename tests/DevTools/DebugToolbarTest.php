@@ -5,6 +5,7 @@ namespace Phue\Tests\DevTools;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Modules\DevTool\RequestProfiler;
 use Phue\Modules\DevTool\Stopwatch;
 use Phue\Modules\DevTool\Stopwatch as StopwatchAlias;
@@ -1016,5 +1017,85 @@ class DebugToolbarTest extends TestCase
         $this->profiler->stop();
         $warmHtml = $this->toolbar->render($this->profiler, 12.0);
         $this->assertStringContainsString('title="Warm request: in-memory caches are ready"', $warmHtml);
+    }
+
+    // ------------------------------------------------------------------ live reload
+
+    public function testThePollerIsInjectedOnEveryToolbar(): void
+    {
+        $html = $this->render();
+
+        // Without the poller the endpoint is unreachable from the browser and the feature is
+        // a server-side curiosity.
+        $this->assertStringContainsString('/_phue/live-reload', $html);
+        $this->assertStringContainsString('__phueLiveReload', $html);
+        $this->assertStringContainsString('window.location.reload()', $html);
+    }
+
+    public function testTheEndpointPathComesFromTheRouteItself(): void
+    {
+        $this->assertStringContainsString(
+            LiveReloadRoute::ENDPOINT,
+            $this->render(),
+            'the poller and the route must not be able to disagree about the path'
+        );
+    }
+
+    public function testThePollerStopsAfterRepeatedFailures(): void
+    {
+        $html = $this->render();
+
+        // A page whose endpoint is missing must not retry forever in the background. Five
+        // failures then stop, and the guard is released so a later attempt can try again.
+        $this->assertStringContainsString('failures', $html);
+        $this->assertMatchesRegularExpression(
+            '/failures\s*>=\s*\d+/',
+            $html,
+            'there must be a failure ceiling, or a 404 becomes a request every second forever'
+        );
+    }
+
+    public function testThePollerPausesWhileTheTabIsHidden(): void
+    {
+        $this->assertStringContainsString(
+            "visibilityState === 'hidden'",
+            $this->render(),
+            'a background tab has nothing to reload, and this is the common case'
+        );
+    }
+
+    public function testThePollIntervalIsConfigurable(): void
+    {
+        $profiler = new RequestProfiler(new Stopwatch());
+        $toolbar = new DebugToolbar();
+
+        $fast = $toolbar->render($profiler, 1.0, ['live_reload_interval_ms' => 300]);
+        $slow = $toolbar->render($profiler, 1.0, ['live_reload_interval_ms' => 5000]);
+
+        $this->assertMatchesRegularExpression('/var interval = \d+/', $fast);
+        $this->assertStringContainsString('var interval = 300', $fast);
+        $this->assertStringContainsString('var interval = 5000', $slow);
+    }
+
+    public function testAPollIntervalBelowTheFloorIsRaised(): void
+    {
+        $profiler = new RequestProfiler(new Stopwatch());
+
+        $html = (new DebugToolbar())->render($profiler, 1.0, ['live_reload_interval_ms' => 1]);
+
+        // A zero or negative interval is a hot loop against the dev server. The floor is small
+        // enough to feel immediate and large enough to stay a request per quarter second.
+        $this->assertStringContainsString('var interval = 250', $html);
+    }
+
+    public function testThePollerIsIndependentOfTheBarBeingVisible(): void
+    {
+        $html = $this->render();
+
+        // The toolbar starts collapsed behind its FAB and the root carries pointer-events: none.
+        // Gating the poller on visibility would mean live reload silently stops working the
+        // moment the bar is collapsed, which is its default state.
+        $this->assertStringContainsString('data-bar-visible="false"', $html);
+        $this->assertStringContainsString('__phueLiveReload', $html);
     }
 }
