@@ -237,6 +237,8 @@ class DebugToolbar
         $panelId = $rootId . '-panel';
         $toggleId = $rootId . '-toggle';
         $reloadId = $rootId . '-reload';
+        $closeId = $rootId . '-close';
+        $fabId = $rootId . '-fab';
         $status = (int) $view['status'];
         $tone = (string) $view['tone'];
 
@@ -253,22 +255,30 @@ class DebugToolbar
 
         $cold = $profiler->isColdRequest();
 
-        $chips = '<span class="badge text-bg-light">' . $this->esc($status > 0 ? (string) $status : '-') . '</span>'
+        $statusClass = match (true) {
+            $status >= 200 && $status < 300 => 'text-bg-success',
+            $status >= 300 && $status < 400 => 'text-bg-info',
+            $status >= 400 && $status < 500 => 'text-bg-warning',
+            $status >= 500 => 'text-bg-danger',
+            default => 'text-bg-secondary',
+        };
+
+        $chips = '<span class="badge ' . $statusClass . '" title="HTTP response status">' . $this->esc($status > 0 ? (string) $status : '-') . '</span>'
             // Spelled out because a cold request is routinely several times slower for the
             // same page, and a report that does not say so reads as a regression.
             . '<span class="badge ' . ($cold ? 'text-bg-warning' : 'text-bg-secondary') . '"'
             . ' title="' . ($cold
-                ? 'First request on this worker: framework memos are empty, so this includes population cost'
-                : 'Request #' . $this->esc((string) $profiler->getServedRequests()) . ' on this worker: memos are warm') . '">'
+                ? 'Cold request: initial run, caches are warming up'
+                : 'Warm request: in-memory caches are ready') . '">' 
             . ($cold ? 'cold' : 'warm') . '</span>'
-            . '<span class="badge text-bg-secondary">' . $this->esc((string) $view['events']) . ' events</span>'
-            . '<span class="badge text-bg-secondary">' . $this->esc((string) $view['memory']) . '</span>'
-            . '<span class="badge text-bg-secondary">peak ' . $this->esc((string) $view['peak']) . '</span>'
-            . '<span class="badge text-bg-secondary">' . $this->esc($this->formatBytes((int) $view['bytes'])) . '</span>';
+            . '<span class="badge text-bg-secondary" title="Total profiled events">' . $this->esc((string) $view['events']) . ' events</span>'
+            . '<span class="badge text-bg-secondary" title="Memory usage at end of request">' . $this->esc((string) $view['memory']) . '</span>'
+            . '<span class="badge text-bg-secondary" title="Peak memory usage during request">peak ' . $this->esc((string) $view['peak']) . '</span>'
+            . '<span class="badge text-bg-secondary" title="Response body size">' . $this->esc($this->formatBytes((int) $view['bytes'])) . '</span>';
 
         return '<div id="' . $this->esc($rootId) . '" class="phue-dt-root bg-body-secondary text-body"'
             . ' data-bs-theme="' . $this->esc((string) $view['theme_fallback']) . '"'
-            . ' data-tone="' . $this->esc($tone) . '" data-expanded="false">'
+            . ' data-tone="' . $this->esc($tone) . '" data-expanded="false" data-bar-visible="false">'
             . '<div id="' . $this->esc($panelId) . '" class="phue-dt-panel bg-body-tertiary p-3 overflow-auto" hidden>'
             . $this->renderNotices($profiler)
             . $this->renderTabs($rootId, $sections)
@@ -281,15 +291,24 @@ class DebugToolbar
             . ' aria-expanded="false" aria-controls="' . $this->esc($panelId) . '">'
             . '<span class="phue-dt-caret" aria-hidden="true">&#9650;</span>'
             . '<span class="fw-bold text-info-emphasis">Phue DevTool</span>'
-            . '<span class="badge phue-dt-duration text-bg-' . $this->esc($this->toneBootstrap($tone)) . '">'
+            . '<span class="badge phue-dt-duration text-bg-' . $this->esc($this->toneBootstrap($tone)) . '"'
+            . ' title="Total request duration">'
             . $this->esc((string) $view['duration_formatted']) . ' ms</span>'
             . $chips
             . '<span class="ms-auto text-secondary text-truncate phue-dt-subtitle">' . $this->esc($subtitle) . '</span>'
             . '</button>'
+            . '<button type="button" id="' . $this->esc($closeId) . '" class="phue-dt-close btn btn-sm"'
+            . ' title="Collapse toolbar to icon" aria-label="Collapse toolbar to icon">'
+            . '<span aria-hidden="true">&#10005;</span></button>'
             . '<button type="button" id="' . $this->esc($reloadId) . '" class="phue-dt-reload btn btn-sm ms-2"'
             . ' title="Re-run this request so the report matches the current page"'
             . ' aria-label="Reload page and re-profile">'
             . '<span aria-hidden="true">&#8635;</span></button>'
+            . '<button type="button" id="' . $this->esc($fabId) . '" class="phue-dt-fab"'
+            . ' title="Toggle DevTool bar" aria-label="Toggle DevTool bar"'
+            . ' aria-expanded="false">'
+            . '<img src="/Phue.svg" alt="" width="24" height="24">'
+            . '</button>'
             . '</div>';
     }
 
@@ -937,7 +956,33 @@ class DebugToolbar
             max-height: 46vh; overflow: auto; font-size: 12px;
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
-        @media (prefers-reduced-motion: reduce) { .phue-dt-caret { transition: none; } }
+        .phue-dt-fab {
+            position: fixed; bottom: 16px; right: 16px;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 1px solid var(--bs-border-color);
+            background: var(--bs-body-bg); color: var(--bs-body-color);
+            cursor: pointer; padding: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+            display: flex; align-items: center; justify-content: center;
+            transition: box-shadow .15s ease, transform .15s ease;
+            pointer-events: auto;
+        }
+        .phue-dt-fab:hover { box-shadow: 0 4px 16px rgba(0,0,0,.2); transform: scale(1.08); }
+        .phue-dt-fab:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+        .phue-dt-fab img { width: 24px; height: 24px; display: block; }
+        .phue-dt-close {
+            position: absolute; right: 44px; bottom: 100%; margin: 0 0 6px 0;
+            border: 1px solid var(--bs-border-color); background: var(--bs-body-bg);
+            color: var(--bs-body-color); line-height: 1; padding: 4px 9px; font-size: 14px;
+        }
+        .phue-dt-close:hover { background: var(--bs-secondary-bg); }
+        .phue-dt-close:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 1px; }
+        .phue-dt-root:not([data-bar-visible="true"]) { pointer-events: none; }
+        .phue-dt-root:not([data-bar-visible="true"]) .phue-dt-toggle,
+        .phue-dt-root:not([data-bar-visible="true"]) .phue-dt-close,
+        .phue-dt-root:not([data-bar-visible="true"]) .phue-dt-reload { display: none !important; }
+        .phue-dt-root[data-bar-visible="true"] .phue-dt-fab { display: none; }
+        @media (prefers-reduced-motion: reduce) { .phue-dt-caret { transition: none; } .phue-dt-fab { transition: none; } }
         CSS . '</style>';
     }
 
@@ -983,6 +1028,35 @@ class DebugToolbar
 
             if (reload) {
                 reload.addEventListener('click', function () { window.location.reload(); });
+            }
+
+            var fab = root.querySelector('.phue-dt-fab');
+            var closeBtn = root.querySelector('.phue-dt-close');
+
+            var collapseToFab = function () {
+                root.setAttribute('data-bar-visible', 'false');
+                if (fab) { fab.setAttribute('aria-expanded', 'false'); }
+                if (toggle && panel) {
+                    toggle.setAttribute('aria-expanded', 'false');
+                    panel.hidden = true;
+                    root.setAttribute('data-expanded', 'false');
+                }
+            };
+
+            if (fab) {
+                fab.addEventListener('click', function () {
+                    var visible = root.getAttribute('data-bar-visible') === 'true';
+                    if (visible) {
+                        collapseToFab();
+                    } else {
+                        root.setAttribute('data-bar-visible', 'true');
+                        fab.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            }
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function () { collapseToFab(); });
             }
 
             var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-phue-dt-tab]'));

@@ -938,7 +938,7 @@ class DebugToolbarTest extends TestCase
     {
         // Shrinking the number is only honest while something else still says whether the
         // request was slow.
-        preg_match('/<span class="badge phue-dt-duration text-bg-[^"]*">/', $this->render(), $badge);
+        preg_match('/<span class="badge phue-dt-duration text-bg-[^"]*"[^>]*>/', $this->render(), $badge);
 
         $this->assertNotEmpty($badge, 'The duration badge lost its tone');
     }
@@ -951,5 +951,70 @@ class DebugToolbarTest extends TestCase
 
         $this->assertStringNotContainsString('class="font-monospace small"', $html);
         $this->assertStringContainsString('.phue-dt-root .table { font-size: 13px', $html);
+    }
+
+    public function testToolbarDefaultsToFabState(): void
+    {
+        $html = $this->render();
+
+        $this->assertStringContainsString('data-bar-visible="false"', $html);
+        $this->assertStringContainsString('class="phue-dt-fab"', $html);
+        $this->assertStringContainsString('src="/Phue.svg"', $html);
+    }
+
+    public function testCloseButtonRendersBeforeReload(): void
+    {
+        $html = $this->render();
+
+        $this->assertStringContainsString('class="phue-dt-close btn btn-sm"', $html);
+        $this->assertStringContainsString('title="Collapse toolbar to icon"', $html);
+
+        $closePos = strpos($html, 'class="phue-dt-close');
+        $reloadPos = strpos($html, 'class="phue-dt-reload');
+
+        $this->assertNotFalse($closePos);
+        $this->assertNotFalse($reloadPos);
+        $this->assertLessThan($reloadPos, $closePos, 'Close button must precede reload button');
+    }
+
+    public function testBadgesAndButtonsCarryDescriptiveTooltips(): void
+    {
+        $html = $this->render();
+
+        $this->assertStringContainsString('title="Total request duration"', $html);
+        $this->assertStringContainsString('title="HTTP response status"', $html);
+        $this->assertStringContainsString('title="Total profiled events"', $html);
+        $this->assertStringContainsString('title="Memory usage at end of request"', $html);
+        $this->assertStringContainsString('title="Peak memory usage during request"', $html);
+        $this->assertStringContainsString('title="Response body size"', $html);
+        $this->assertStringContainsString('title="Toggle DevTool bar"', $html);
+        $this->assertStringContainsString('title="Collapse toolbar to icon"', $html);
+        $this->assertStringContainsString('title="Re-run this request so the report matches the current page"', $html);
+    }
+
+    public function testStatusCodeBadgesUseContextualColors(): void
+    {
+        $html200 = $this->render(12.0, ['status' => 200]);
+        $this->assertStringContainsString('class="badge text-bg-success" title="HTTP response status">200</span>', $html200);
+
+        $html302 = $this->render(12.0, ['status' => 302]);
+        $this->assertStringContainsString('class="badge text-bg-info" title="HTTP response status">302</span>', $html302);
+
+        $html404 = $this->render(12.0, ['status' => 404]);
+        $this->assertStringContainsString('class="badge text-bg-warning" title="HTTP response status">404</span>', $html404);
+
+        $html500 = $this->render(12.0, ['status' => 500]);
+        $this->assertStringContainsString('class="badge text-bg-danger" title="HTTP response status">500</span>', $html500);
+    }
+
+    public function testColdAndWarmRequestTooltipsAreIntuitive(): void
+    {
+        $coldHtml = $this->render();
+        $this->assertStringContainsString('title="Cold request: initial run, caches are warming up"', $coldHtml);
+
+        $this->profiler->start();
+        $this->profiler->stop();
+        $warmHtml = $this->toolbar->render($this->profiler, 12.0);
+        $this->assertStringContainsString('title="Warm request: in-memory caches are ready"', $warmHtml);
     }
 }
