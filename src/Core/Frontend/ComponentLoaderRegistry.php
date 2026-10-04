@@ -97,6 +97,36 @@ class ComponentLoaderRegistry
     }
 
     /**
+     * Every candidate loader, with its factory closures resolved.
+     *
+     * getLoaders() returns what was registered, and for most modules that is a closure which
+     * builds the loader on demand — so it cannot answer "what exists right now", which is the
+     * only question worth asking when you need to reach whatever the application actually has.
+     * Resolving here, through the same failure handling the rest of this class uses, means a
+     * loader that throws is recorded as a diagnostic instead of taking the caller down with it.
+     *
+     * @return list<PhueComponentLoader>
+     */
+    public function resolvedLoaders(): array
+    {
+        $resolved = [];
+
+        foreach ($this->loaders as $candidate) {
+            try {
+                /** @var PhueComponentLoader|null $loader */
+                $loader = is_callable($candidate) ? $candidate() : $candidate;
+                if ($loader !== null) {
+                    $resolved[] = $loader;
+                }
+            } catch (Throwable $e) {
+                $this->handleLoaderFailure($e, __FUNCTION__);
+            }
+        }
+
+        return $resolved;
+    }
+
+    /**
      * Resets per-request caches across all candidate loaders.
      *
      * @return void

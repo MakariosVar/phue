@@ -38,6 +38,13 @@ final class Hiit
     private array $lastChanged = [];
 
     /**
+     * What the last comparison saw, by component name.
+     *
+     * @var array<string, string>
+     */
+    private array $current = [];
+
+    /**
      * @param string $componentsDir Base directory holding .phue components.
      */
     public function __construct(private readonly string $componentsDir)
@@ -59,6 +66,7 @@ final class Hiit
     public function changed(array $known): array
     {
         $current = $this->currentHashes();
+        $this->current = $current;
         $changed = [];
 
         foreach ($current as $name => $hash) {
@@ -76,6 +84,20 @@ final class Hiit
         sort($changed);
 
         return $this->lastChanged = $changed;
+    }
+
+    /**
+     * The hashes the most recent changed() call compared against.
+     *
+     * A caller comparing on a schedule needs this as the baseline for its next comparison.
+     * Without it the only way to get one is currentHashes(), which rescans — so every poll would
+     * read every component file twice.
+     *
+     * @return array<string, string>
+     */
+    public function snapshot(): array
+    {
+        return $this->current;
     }
 
     /**

@@ -430,6 +430,20 @@ class PhueComponentLoader
     }
 
     /**
+     * The base directory holding this loader's components.
+     *
+     * Exposed so that anything which needs to know where components live can ask the loaders
+     * themselves. Keeping a second list of directories anywhere else is a list that drifts out
+     * of date the first time a module registers a loader of its own.
+     *
+     * @return string
+     */
+    public function componentsDir(): string
+    {
+        return $this->componentsDir;
+    }
+
+    /**
      * The detector this loader consults, or null when detection is off.
      *
      * @return Hiit|null
