@@ -10,7 +10,7 @@ use Phue\Core\Request as PhueRequest;
 use Phue\Core\Response as PhueResponse;
 use Swoole\Http\Request as SwooleRequest;
 use Swoole\Http\Response as SwooleResponse;
-use Swoole\Http\Server as SwooleServer;
+use Swoole\WebSocket\Server as SwooleServer;
 use Phue\Core\Console\PathResolver;
 
 /**
@@ -116,10 +116,7 @@ final class SwooleServeCommand implements CommandInterface
 
             $server->set([
                 'document_root' => $baseDir . '/public',
-                'enable_static_handler' => true,
-                // Has to be on before start(). Without it a WebSocket handshake is answered as
-                // an ordinary request and never upgraded.
-                'enable_websocket' => true
+                'enable_static_handler' => true
             ]);
 
             // Realtime-capable modules attach here, and this command does not know which ones

@@ -11,7 +11,7 @@ use Phue\Core\Response;
 use Phue\Core\ScopeContext;
 use Swoole\Http\Request as SwooleRequest;
 use Swoole\Http\Response as SwooleResponse;
-use Swoole\Http\Server as SwooleHttpServer;
+use Swoole\WebSocket\Server as SwooleHttpServer;
 
 /**
  * Async Coroutine-based Swoole HTTP Server Adapter.
@@ -73,7 +73,11 @@ final class SwooleAdapter implements ServerAdapterInterface
         }
 
         $this->server = new SwooleHttpServer($this->host, $this->port);
-        $this->server->set(['enable_websocket' => true] + $this->settings);
+        // Swoole\WebSocket\Server extends the HTTP server and turns WebSocket on; there is no
+        // `enable_websocket` option, and passing one is not ignored — Swoole prints a warning to
+        // stdout, which sends output before any request and makes every later session_start()
+        // report that headers had already been sent.
+        $this->server->set($this->settings);
 
         foreach ($this->attachers as $attacher) {
             $attacher($this->server);
