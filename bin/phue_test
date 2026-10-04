@@ -3,98 +3,460 @@
 
 declare(strict_types=1);
 
-// Resolve Composer Autoloader
-$autoloadPaths = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-];
+/**
+ * Phue test runner.
+ *
+ * Two jobs: know which tests matter, and hand them to PHPUnit in one go.
+ *
+ * The suite is around 2000 tests and takes minutes end to end, which is long enough that
+ * running it after every change teaches you not to run it. So the point of this script is
+ * selection, not speed of execution: the default is "every test", but the modes you actually
+ * work in — what a change can affect, what failed last time — run in seconds because they
+ * name a handful of files instead of all 219.
+ *
+ * Nothing here runs tests concurrently. Splitting the suite across processes was tried and
+ * the suite does not survive it: the DevTool's PDO wrapper resolves its callback by method
+ * name and loses the race, and the MariaDB-backed tests share a server whose tables they
+ * create and drop. Both are fixable, neither is worth a runner that quietly reports numbers
+ * you cannot trust.
+ */
 
-$autoloaderFound = false;
-foreach ($autoloadPaths as $autoloadPath) {
-    if (file_exists($autoloadPath)) {
-        require_once $autoloadPath;
-        $autoloaderFound = true;
-        break;
+$root = dirname(__DIR__);
+
+require_once $root . '/vendor/autoload.php';
+
+/**
+ * @return array{groups: list<string>, passthrough: list<string>, coverage: bool,
+ *               impact: list<string>, changed: bool, onlyFailed: bool, list: bool}
+ */
+function parseArguments(array $raw): array
+{
+    $options = [
+        'groups' => [],
+        'passthrough' => [],
+        'coverage' => false,
+        'impact' => [],
+        'changed' => false,
+        'onlyFailed' => false,
+        'list' => false,
+    ];
+
+    for ($i = 0; $i < count($raw); $i++) {
+        $arg = $raw[$i];
+
+        if ($arg === '--unit') {
+            $options['groups'][] = 'unit';
+        } elseif ($arg === '--integration') {
+            $options['groups'][] = 'integration';
+        } elseif ($arg === '--coverage') {
+            $options['coverage'] = true;
+        } elseif (str_starts_with($arg, '--group=')) {
+            $options['groups'] = array_merge($options['groups'], explode(',', substr($arg, 8)));
+        } elseif ($arg === '--group' && isset($raw[$i + 1])) {
+            $options['groups'] = array_merge($options['groups'], explode(',', $raw[++$i]));
+        } elseif ($arg === '--impact') {
+            while (isset($raw[$i + 1]) && !str_starts_with($raw[$i + 1], '-')) {
+                $options['impact'][] = $raw[++$i];
+            }
+        } elseif (str_starts_with($arg, '--impact=')) {
+            $options['impact'][] = substr($arg, 9);
+        } elseif ($arg === '--changed') {
+            $options['changed'] = true;
+        } elseif ($arg === '--only-failed') {
+            $options['onlyFailed'] = true;
+        } elseif ($arg === '--list') {
+            $options['list'] = true;
+        } elseif (in_array($arg, ['--help', '-h'], true)) {
+            echo help();
+            exit(0);
+        } else {
+            $options['passthrough'][] = $arg;
+        }
     }
+
+    $options['groups'] = array_values(array_unique(array_filter(array_map('trim', $options['groups']))));
+
+    return $options;
 }
 
-if (!$autoloaderFound) {
-    fwrite(STDERR, "Error: Vendor autoload.php not found. Please run 'composer install'." . PHP_EOL);
+function help(): string
+{
+    return <<<'HELP'
+Phue Test Runner
+
+  ./bin/phue_test [options] [phpunit-args]
+
+Selection — what actually runs:
+  (none)             every test in every configured testsuite
+  --impact <path...> tests that mention those source files
+  --changed          --impact against the working tree, plus untracked files
+  --only-failed      re-run the files that failed last time
+  --unit             group shortcut
+  --integration      group shortcut
+  --list             print what would run, run nothing
+
+Passed through to PHPUnit:
+  --filter <pattern>, --stop-on-failure, --coverage and friends
+
+Notes:
+  Test files come from the testsuites in phpunit.xml, so this runner and
+  PHPUnit never disagree about what exists.
+  Failures from the last run are recorded in .phpunit.cache/phue-test.json.
+HELP;
+}
+
+// -------------------------------------------------------------------- discovery
+
+/**
+ * Every test file the configured testsuites cover.
+ *
+ * Read from phpunit.xml rather than scanned from tests/, so a testsuite added there works
+ * here without anyone remembering this file, and a removed one stops being run.
+ *
+ * @return list<string> Absolute paths, sorted.
+ */
+function discoverTestFiles(string $root): array
+{
+    $config = $root . '/phpunit.xml';
+
+    if (!is_file($config)) {
+        return [];
+    }
+
+    $dom = new DOMDocument();
+    $dom->load($config);
+    $xpath = new DOMXPath($dom);
+
+    $files = [];
+
+    foreach ($xpath->query('//testsuites/testsuite') ?: [] as $suite) {
+        foreach ($xpath->query('.//directory|.//file', $suite) ?: [] as $node) {
+            $path = $root . '/' . ltrim(trim((string) $node->textContent), '/');
+
+            if ($node->nodeName === 'file') {
+                if (is_file($path)) {
+                    $files[$path] = true;
+                }
+
+                continue;
+            }
+
+            $suffix = (string) ($node->getAttribute('suffix') ?: 'Test.php');
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+            );
+
+            /** @var SplFileInfo $file */
+            foreach ($iterator as $file) {
+                if ($file->isFile() && str_ends_with($file->getFilename(), $suffix)) {
+                    $files[$file->getPathname()] = true;
+                }
+            }
+        }
+    }
+
+    $files = array_keys($files);
+    sort($files);
+
+    return $files;
+}
+
+// ------------------------------------------------------------------- selection
+
+/**
+ * Tests that reference any of the given source files.
+ *
+ * Matched on the class basename, because that is what a test file names in a use statement —
+ * "PhueComponentLoader", never "PhueComponentLoader.php".
+ *
+ * A path that cannot be placed falls back to the whole suite rather than to a silently
+ * smaller one. Being wrong here in the narrow direction means a change ships untested, and
+ * the cost of being wrong is one slow run the developer chose.
+ *
+ * @param list<string> $paths
+ * @param list<string> $allFiles
+ * @return list<string>
+ */
+function impactFiles(array $paths, array $allFiles, string $root): array
+{
+    $tokens = [];
+    $direct = [];
+    $unmapped = [];
+
+    foreach ($paths as $path) {
+        $absolute = str_starts_with($path, '/') ? $path : $root . '/' . $path;
+
+        if (!is_file($absolute)) {
+            $unmapped[] = $path;
+
+            continue;
+        }
+
+        if (str_ends_with($absolute, 'Test.php')) {
+            $direct[] = $absolute;
+        }
+
+        $stem = pathinfo(basename($absolute), PATHINFO_FILENAME);
+
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $stem) === 1) {
+            $tokens[$stem] = true;
+        }
+    }
+
+    // Widen before narrowing: an unplaceable path has to reach the fallback below, and an
+    // early return here would quietly answer "nothing to run" for a change nobody placed.
+    if ($unmapped !== []) {
+        fwrite(STDERR, sprintf(
+            "note: no static mapping for %s — running the whole suite\n",
+            implode(', ', $unmapped)
+        ));
+
+        return $allFiles;
+    }
+
+    if ($tokens === [] && $direct === []) {
+        return [];
+    }
+
+    $selected = [];
+
+    foreach ($allFiles as $file) {
+        if (in_array($file, $direct, true)) {
+            $selected[] = $file;
+
+            continue;
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        foreach (array_keys($tokens) as $token) {
+            if (str_contains($contents, $token)) {
+                $selected[] = $file;
+                break;
+            }
+        }
+    }
+
+    return $selected;
+}
+
+/**
+ * Source files the working tree has changed, including new ones nobody committed.
+ *
+ * @return list<string>
+ */
+function changedPaths(string $root): array
+{
+    $read = static function (string $command) use ($root): string {
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = @proc_open($command, $descriptors, $pipes, $root);
+
+        if (!is_resource($process)) {
+            return '';
+        }
+
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return $out;
+    };
+
+    $paths = [];
+
+    foreach ([
+        $read('git diff --name-only HEAD 2>/dev/null'),
+        $read('git ls-files --others --exclude-standard 2>/dev/null'),
+    ] as $output) {
+        foreach (preg_split('/\R/', trim($output)) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line !== '') {
+                $paths[] = $line;
+            }
+        }
+    }
+
+    return array_values(array_unique($paths));
+}
+
+/**
+ * Which files held a failing test in the previous run.
+ *
+ * Taken from this runner's own record rather than from PHPUnit's result cache: that one keys
+ * defects by an ordinal whose meaning shifts between PHPUnit releases, and a mistake here
+ * silently skips a test rather than failing loudly.
+ *
+ * @param list<string> $allFiles
+ * @return list<string>
+ */
+function previouslyFailedFiles(string $root, array $allFiles): array
+{
+    $cacheFile = $root . '/.phpunit.cache/phue-test.json';
+    $record = is_file($cacheFile) ? json_decode((string) file_get_contents($cacheFile), true) : [];
+
+    if (!is_array($record) || ($record['failures'] ?? null) === []) {
+        return [];
+    }
+
+    // The record holds test ids, so map each back to the file that declares the class.
+    $byClass = [];
+
+    foreach ($allFiles as $file) {
+        $byClass[testClassOf($file)] = $file;
+    }
+
+    $files = [];
+
+    foreach ($record['failures'] as $test) {
+        $class = str_contains((string) $test, '::') ? strstr((string) $test, '::', true) : (string) $test;
+
+        if (isset($byClass[$class])) {
+            $files[$byClass[$class]] = true;
+        }
+    }
+
+    return array_keys($files);
+}
+
+/**
+ * The fully qualified class name a test file declares.
+ */
+function testClassOf(string $file): string
+{
+    $contents = (string) file_get_contents($file);
+
+    if (preg_match('/^\s*namespace\s+([^;]+);/m', $contents, $namespace) !== 1) {
+        return '';
+    }
+
+    if (preg_match('/^\s*(?:final\s+|abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/m', $contents, $class) !== 1) {
+        return '';
+    }
+
+    return trim($namespace[1]) . '\\' . $class[1];
+}
+
+// ------------------------------------------------------------------- execution
+
+/**
+ * Class::method of every test PHPUnit reported as failing.
+ *
+ * @return list<string>
+ */
+function failuresFrom(string $output): array
+{
+    preg_match_all('/^\s*\d+\)\s+([A-Za-z_][A-Za-z0-9_\\\\]*::[A-Za-z_][A-Za-z0-9_]*)/m', $output, $matches);
+
+    return array_values(array_unique($matches[1]));
+}
+
+// ------------------------------------------------------------------------ main
+
+$options = parseArguments(array_slice($_SERVER['argv'] ?? [], 1));
+
+$root = dirname(__DIR__);
+$phpunit = $root . '/vendor/bin/phpunit';
+$allFiles = discoverTestFiles($root);
+
+if ($allFiles === [] || !is_file($phpunit)) {
+    fwrite(STDERR, "Could not find the test suites or vendor/bin/phpunit.\n");
     exit(1);
 }
 
-$rawArgs = array_slice($_SERVER['argv'] ?? [], 1);
+// ------------------------------------------------------------------ what runs
 
-// Handle --help or -h
-if (in_array('--help', $rawArgs, true) || in_array('-h', $rawArgs, true)) {
-    echo <<<HELP
-Phue Test Runner (PHPUnit Wrapper)
+$selected = $allFiles;
+$reason = 'every test';
 
-Usage:
-  ./bin/phue_test [options] [phpunit-arguments]
+if ($options['impact'] !== []) {
+    $selected = impactFiles($options['impact'], $allFiles, $root);
+    $reason = 'tests referencing ' . implode(', ', $options['impact']);
+} elseif ($options['changed']) {
+    $paths = changedPaths($root);
 
-Shortcuts:
-  --unit         Runs unit tests suite (--group unit)
-  --integration  Runs integration tests suite (--group integration)
-  --coverage     Enables code coverage report (--coverage-text)
+    if ($paths === []) {
+        echo "Nothing changed against HEAD, so there is nothing to re-run.\n";
+        exit(0);
+    }
 
-Examples:
-  ./bin/phue_test --unit
-  ./bin/phue_test --integration --coverage
-  ./bin/phue_test --unit --filter=UserTest
-HELP;
-    echo PHP_EOL;
+    $selected = impactFiles($paths, $allFiles, $root);
+    $reason = sprintf('tests affected by the working tree (%d changed path(s))', count($paths));
+} elseif ($options['onlyFailed']) {
+    $selected = previouslyFailedFiles($root, $allFiles);
+
+    if ($selected === []) {
+        echo "The last run had no failures.\n";
+        exit(0);
+    }
+
+    $reason = 'the files that failed last time';
+}
+
+echo sprintf("Running %s — %d of %d test files\n", $reason, count($selected), count($allFiles));
+
+if ($options['list']) {
+    foreach ($selected as $file) {
+        echo '  ' . str_replace($root . '/', '', $file) . PHP_EOL;
+    }
+
     exit(0);
 }
 
-$groups = [];
-$transformedArgs = [$_SERVER['argv'][0] ?? 'phue_test']; // Script name as first PHPUnit argument
-$checkCoverageDriver = false;
+$arguments = [];
 
-for ($i = 0; $i < count($rawArgs); $i++) {
-    $arg = $rawArgs[$i];
-
-    if ($arg === '--unit') {
-        $groups[] = 'unit';
-    } elseif ($arg === '--integration') {
-        $groups[] = 'integration';
-    } elseif ($arg === '--coverage') {
-        $checkCoverageDriver = true;
-        $transformedArgs[] = '--coverage-text';
-    } elseif (str_starts_with($arg, '--group=')) {
-        $parsedGroups = explode(',', substr($arg, 8));
-        foreach ($parsedGroups as $g) {
-            $g = trim($g);
-            if ($g !== '') {
-                $groups[] = $g;
-            }
-        }
-    } elseif ($arg === '--group' && isset($rawArgs[$i + 1])) {
-        $parsedGroups = explode(',', $rawArgs[++$i]);
-        foreach ($parsedGroups as $g) {
-            $g = trim($g);
-            if ($g !== '') {
-                $groups[] = $g;
-            }
-        }
-    } else {
-        // Pass-through any other flag/argument as-is
-        $transformedArgs[] = $arg;
-    }
+if ($options['coverage']) {
+    $arguments[] = '--coverage-text';
+} else {
+    $arguments[] = '--no-coverage';
 }
 
-// 1. Check coverage requirements
-if ($checkCoverageDriver && !extension_loaded('pcov') && !extension_loaded('xdebug')) {
-    fwrite(STDERR, "Error: Code coverage requires 'pcov' or 'xdebug' extension to be enabled." . PHP_EOL);
-    exit(1);
+$arguments[] = '--colors=never';
+
+if ($options['groups'] !== []) {
+    $arguments[] = '--group=' . implode(',', $options['groups']);
 }
 
-// 2. Safely merge groups without collisions
-if (!empty($groups)) {
-    $uniqueGroups = array_unique($groups);
-    $transformedArgs[] = '--group';
-    $transformedArgs[] = implode(',', $uniqueGroups);
+foreach (array_merge($options['passthrough'], $selected) as $argument) {
+    $arguments[] = $argument;
 }
 
-// Execute PHPUnit in-process
-exit((new PHPUnit\TextUI\Application())->run($transformedArgs));
+$command = implode(' ', array_map('escapeshellarg', [PHP_BINARY, $phpunit, ...$arguments]));
+
+$started = microtime(true);
+
+$descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+$process = proc_open($command, $descriptors, $pipes, $root);
+$output = '';
+
+if (is_resource($process)) {
+    $output = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exitCode = proc_close($process);
+} else {
+    fwrite(STDERR, "Could not start PHPUnit.\n");
+    $exitCode = 1;
+}
+
+// The exit code says whether anything failed; the output says which tests, which is what
+// --only-failed needs and what the status line alone cannot give.
+$failures = failuresFrom($output);
+
+echo $output;
+$elapsed = microtime(true) - $started;
+
+@mkdir($root . '/.phpunit.cache', 0777, true);
+@file_put_contents(
+    $root . '/.phpunit.cache/phue-test.json',
+    json_encode(['failures' => $failures, 'at' => date('c')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+);
+
+echo sprintf(
+    "\n%s in %s — re-run just the failures with ./bin/phue_test --only-failed\n",
+    $failures === [] ? 'Passed' : sprintf('%d failing test(s)', count($failures)),
+    number_format($elapsed, 1) . 's'
+);
+
+exit($exitCode);
