@@ -31,6 +31,9 @@ class DevToolsModuleTest extends TestCase
     /** @var list<string> */
     private array $tempDirs = [];
 
+    /** @var string Component directory of the throwaway application. */
+    private string $componentDir = '';
+
     protected function tearDown(): void
     {
         parent::tearDown();
@@ -56,6 +59,8 @@ class DevToolsModuleTest extends TestCase
             $dir . '/App/Frontend/PhButton.phue',
             "<template><button /></template>\n<script>export default {}</script>"
         );
+
+        $this->componentDir = $dir . '/App/Frontend';
 
         file_put_contents($dir . '/config/app.php', sprintf(
             '<?php return [
@@ -115,17 +120,44 @@ class DevToolsModuleTest extends TestCase
         $this->app(true, false)->getRouter()->dispatch('GET', '/_phue/live-reload');
     }
 
-    public function testTheHandlerIsASingletonSoItCanRememberTheLastAnswer(): void
+    /**
+     * The bug this pins: the router builds a class-string handler with Container::make(),
+     * which calls the factory every time and skips the singleton cache. The endpoint then
+     * answered 200, said "nothing changed", and was wrong forever.
+     */
+    public function testTheEndpointRemembersTheLastAnswerAcrossRequests(): void
     {
+        // app() is what creates the throwaway tree and records its component directory, so the
+        // order matters: reading the path first writes the fixture to the filesystem root.
         $app = $this->app(true, true);
-        $c = $app->getContainer();
+        $dir = $this->componentDir;
 
-        // Built per request it would have no memory of what it said last, and would report every
-        // component as new on every poll.
-        $this->assertSame(
-            $c->get(LiveReloadRoute::class),
-            $c->get(LiveReloadRoute::class)
+        $poll = static fn(): array => (array) json_decode(
+            (string) $app->handle(new Request('GET', '/_phue/live-reload'))->getContent(),
+            true
         );
+
+        $this->assertSame([], $poll()['changed'], 'the first poll primes and reports nothing');
+
+        $component = $dir . '/PolledComponent.phue';
+        file_put_contents(
+            $component,
+            "<template><b>x</b></template>\n<script>export default {}</script>"
+        );
+
+        try {
+            $this->assertSame(
+                ['PolledComponent'],
+                $poll()['changed'],
+                'a change must survive from one request to the next'
+            );
+
+            // Reported once, not on every poll: a client that reloads on each answer would
+            // reload forever.
+            $this->assertSame([], $poll()['changed']);
+        } finally {
+            @unlink($component);
+        }
     }
 
     public function testTheEndpointAnswersAndReturns(): void
