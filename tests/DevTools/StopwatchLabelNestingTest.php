@@ -68,15 +68,15 @@ class StopwatchLabelNestingTest extends TestCase
 
     public function testAggregateTotalIsNotDoubleCountedForSameLabelNesting(): void
     {
-        // The outer frame spans ~20ms in total. A 40ms inner frame sits inside it, so summing
-        // the inner frame into the same label would report ~60ms for an operation that took
-        // ~20ms.
+        // The outer frame spans ~60ms in total: 10ms, then a 40ms inner frame with the same
+        // label, then 10ms more. A same-label inner frame is folded into its parent, so the label
+        // total is ~60ms. If the fold stopped working the inner frame would also be summed in and
+        // the label would report ~100ms — more elapsed time than the work took.
         //
-        // The inner frame is deliberately far larger than the outer one rather than the two
-        // being close together. A tight pair of sleeps makes the expected and the wrong value
-        // differ by a couple of milliseconds, and `usleep` overshoots by that much on a loaded
-        // machine, so the test would fail for reasons that have nothing to do with the code.
-        // Here the gap is 40ms wide and no amount of scheduling noise closes it.
+        // The inner frame is deliberately far larger than the outer one. Two similar-sized sleeps
+        // put the right answer and the wrong one a couple of milliseconds apart, and usleep
+        // overshoots by that much on a loaded machine, so the test would fail for reasons that
+        // have nothing to do with the code. Here the two answers are 40ms apart.
         $this->stopwatch->measure('loader.moduleHash', function (): void {
             usleep(10000);
             $this->stopwatch->measure('loader.moduleHash', static function (): void {
@@ -87,10 +87,47 @@ class StopwatchLabelNestingTest extends TestCase
 
         $total = $this->stopwatch->getAggregates()['loader.moduleHash']['total_ms'];
 
-        // 15ms to 40ms. The correct total is ~20ms and the double-counted one ~60ms, so this
-        // passes with room to spare and still fails loudly on the bug.
-        $this->assertGreaterThan(15.0, $total, 'The outer span was not measured at all.');
-        $this->assertLessThan(40.0, $total, 'Summing a frame into its own parent inflates the label total past the real elapsed time.');
+        $this->assertGreaterThan(45.0, $total, 'The outer span was not measured at all.');
+        $this->assertLessThan(
+            75.0,
+            $total,
+            'The folded frame was summed on top of its parent, so the label reports more elapsed time than the work took.'
+        );
+    }
+
+    public function testFoldingKeepsTheFoldedTimeInTheExclusiveTotal(): void
+    {
+        // A folded frame's own time becomes the parent's own time, and deliberately so: charging
+        // only the folded frame's children to the parent would erase its slice of work from the
+        // request, and "Share of self" would stop adding up to 100% with nothing in the report
+        // saying so. So exclusive_ms tracks total_ms here rather than shrinking.
+        $this->stopwatch->measure('loader.moduleHash', function (): void {
+            usleep(10000);
+            $this->stopwatch->measure('loader.moduleHash', static function (): void {
+                usleep(40000);
+            });
+            usleep(10000);
+        });
+
+        $aggregate = $this->stopwatch->getAggregates()['loader.moduleHash'];
+
+        $this->assertGreaterThan(45.0, $aggregate['exclusive_ms'], 'The outer span was not measured.');
+        $this->assertLessThan(75.0, $aggregate['exclusive_ms'], 'The folded frame\'s time went missing entirely.');
+    }
+
+    public function testFoldingRecordsOneSpanAndCountsOneCall(): void
+    {
+        $this->stopwatch->measure('op', function (): void {
+            $this->stopwatch->measure('op', static function (): void {
+            });
+        });
+
+        // The fold is the point: a same-label frame is the same operation seen from another
+        // layer, so it is neither recorded as a second span nor counted as a second call. What
+        // keeps the request honest is that its time stays in the parent's figures, which the
+        // test above pins.
+        $this->assertCount(1, $this->stopwatch->getSpans());
+        $this->assertSame(1, $this->stopwatch->getAggregates()['op']['count']);
     }
 
     public function testCollapsingSameLabelKeepsTheOuterSpanTotal(): void
