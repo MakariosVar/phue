@@ -113,6 +113,7 @@ Inspect the current graph any time with:
 | `Phue\Modules\Rest\RestModule` | `rest` | `auth` | Attribute-driven `#[Rest]` CRUD endpoints under `config/rest.php` prefix |
 | `Phue\Modules\Server\ServerModule` | `server` | *(none)* | Registers the Swoole serve command (`serve`) |
 | `Phue\Modules\Events\EventModule` | `events` | *(none)* | Event bus drivers, SSE response/streamer, `#[Broadcastable]` |
+| `Phue\Modules\Websocket\WebsocketModule` | `websocket` | *(none; uses `auth` when present)* | Named WebSocket **endpoints**, each with its own topics, origins and authentication. `Broadcast` for publishing. Needs the Swoole adapter |
 | `Phue\Modules\Compiler\CompilerModule` | `compiler` | *(none)* | AOT wiring generator, compatibility checker, fallback strategy |
 | `Phue\Modules\DevTool\DevToolsModule` | `devtools` | *(none)* | Request profiler + collapsible debug toolbar, instrumenting the SSR transport, component loaders and the database driver (enabled when `app.debug` **and** `app.devTool`) |
 
@@ -126,11 +127,29 @@ Notes worth knowing:
 - **DevTool gating**: `DevToolsModule::bindings()` returns early unless both
   `app.debug` and `app.devTool` are set — the toolbar leaks request internals
   into the page, so a non-debug context must be unreachable however the flags
-  are combined. The module does not merely attach middleware: it binds the
+  are combined. The live-reload watcher is installed *inside* that gate: it
+  depends on the `ChangeTracker` registered under the same two flags, so
+  registering the timer outside it meant a production Swoole server ran the
+  callback once a second and it threw, once a second, for a feature nobody had
+  switched on. The module does not merely attach middleware: it binds the
   collector as a singleton and installs decorators over the SSR transport, the
   component loaders and the database driver. Panel toggles, theme mode and SQL
   redaction live in `config/devtool.php`; see
   [Server Adapters §5](Server-Adapters.md#5-devtools-phuemodulesdevtool).
+- **WebSocket endpoints**: the module takes a `websockets` map rather than one
+  set of settings, because authentication and transport do not change together —
+  an application's realtime traffic is user data and must never be reachable
+  without a login, while the DevTools reload channel carries none and demanding a
+  login for it would only make it stop working for whoever is not signed in.
+  Each endpoint keeps its **own** `TopicRegistry`, which is what makes the
+  per-endpoint `auth` flag a real boundary rather than a label. Enabling the
+  module needs `APP_WEBSOCKET`; `APP_DEBUG` only adds the `dev` endpoint and
+  relaxes origins. A module that wires itself up registers `phue.websocket.active`,
+  so another module can ask whether realtime is really available rather than
+  guessing from the presence of a class name. A handshake needs
+  the Swoole adapter, and Swoole ignores a close issued from inside `on('open')`,
+  so a refusal is delivered on the client's first frame — see
+  [WebSocket](WebSocket.md).
 - **Rest requires auth**: enforced twice — by `Application::loadModules()`
   (boot-time `RuntimeException`) and by the `phue-create` installer, which
   auto-selects `auth` when you pick `rest`.

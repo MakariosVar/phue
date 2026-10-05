@@ -23,12 +23,13 @@ This documentation is organized into focused guides. Pick the one that matches w
 | [Schii](Schii.md) | Server-driven UI, zero-controller REST, JSON schema protocol, auto-migration |
 | [REST](REST.md) | Attribute-driven `#[Rest]` CRUD endpoints with RBAC enforcement |
 | [Events](Events.md) | Event bus drivers, SSE streaming, `#[Broadcastable]` models |
+| [WebSocket](WebSocket.md) | Named endpoints with per-endpoint auth and topics, `Broadcast`, retention, backpressure |
 
 ## Running & shipping
 
 | Guide | What it covers |
 |---|---|
-| [Server Adapters](Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools |
+| [Server Adapters](Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools, **live reload** |
 | [CLI](CLI.md) | `bin/phue` commands, the `phue-create` project installer, `phue-docker` wrapper, testing |
 | [PhUI Components](PhUI_Components.md) | Reference API for every built-in `.phue` component |
 

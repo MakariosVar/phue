@@ -471,7 +471,7 @@ path).
 ### Schema migrations from Schii attributes
 
 For model-driven tables, Schii can auto-migrate missing tables/columns — see
-[Schii](Schii.md#auto-migration).
+[Schii](Schii.md#7-auto-migration).
 
 ```bash
 ./phue schii:migrate "App\Models\Product"

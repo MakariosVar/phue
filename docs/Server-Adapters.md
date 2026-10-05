@@ -199,6 +199,9 @@ the result as a collapsed bar that expands into a tabbed report.
 | `ProfilingComponentLoaderRegistry` | `Modules/DevTool/ProfilingComponentLoaderRegistry.php` | `ComponentLoaderRegistry` subclass — the funnel for renderer-driven resolution |
 | `ProfilingDriver` | `Modules/DevTool/ProfilingDriver.php` | `DriverInterface` decorator — statements, fetches and transaction control |
 | `ProfilingConnection` | `Modules/DevTool/ProfilingConnection.php` | `Connection` subclass that installs the profiling driver |
+| `LiveReloadWatcher` | `Modules/DevTool/LiveReloadWatcher.php` | Detects component changes on a timer and announces them |
+| `LiveReloadState` | `Modules/DevTool/LiveReloadState.php` | Holds what changed until every poller has seen it |
+| `LiveReloadRoute` | `Modules/DevTool/LiveReloadRoute.php` | `GET /_phue/live-reload` — the polling fallback |
 | `Dumper` | `Modules/DevTool/Dumper.php` | Variable dumping |
 
 Two read-only seams were added to the core so these decorators could exist
@@ -237,6 +240,10 @@ return [
     'queries'  => true,   // database statements
     'request'  => true,   // request/response metadata
     'json'     => true,   // raw report, copy-pasteable
+
+    // How often the server looks for component changes. 0 disables live reload.
+    // See §6.
+    'live_reload_interval_ms' => 1000,
 
     'sql_literals' => 'redact',  // 'redact' | 'raw'
     'theme' => 'auto',           // 'auto' | 'light' | 'dark'
@@ -331,7 +338,152 @@ schema or the data.
 
 ---
 
-## 6. Performance & benchmarks
+## 6. Live reload
+
+Save a `.phue` file, and the open tab reloads. No build step, no manual refresh.
+
+Live reload is gated with the rest of DevTools — both `app.debug` **and**
+`app.devTool` — because it reports when the application's own source files move,
+which is not something a deployed site should be able to ask about.
+
+```ini
+# .env
+APP_DEBUG=true
+APP_DEV_TOOL=true
+```
+
+### How live reload behaves without realtime
+
+Live reload does **not** depend on the Websocket module. Realtime makes it
+instant; polling is what it falls back to, and on a server that cannot hold a
+socket open it is the whole mechanism.
+
+| Configuration | What happens |
+|---|---|
+| Both modules, `APP_DEBUG` + `APP_DEV_TOOL` + `APP_WEBSOCKET` | A file save is announced on the `dev` endpoint and the tab reloads in about one watch interval |
+| `websocket` module **absent** | The watcher has no broadcaster and records the change instead; the toolbar polls `/_phue/live-reload` |
+| `websocket` listed but `APP_WEBSOCKET` **off** | Identical to absent — the module returns before wiring anything, and the toolbar cannot tell the difference |
+| `devtools` module **absent**, or `APP_DEV_TOOL` off | No toolbar and no live reload. Your own WebSocket endpoints are unaffected |
+| `APP_DEBUG` **off** | Same as above; the `dev` endpoint is not created either |
+| `serve:php` instead of `serve` | Polling only. No adapter there completes a handshake |
+
+> The optional dependency is a real one, not a courtesy. `LiveReloadWatcher` takes
+> a `?Broadcast`, and it asks the realtime module whether it actually ran
+> (`phue.websocket.active`) rather than asking whether `Broadcast` exists —
+> `Container::has()` answers true for any autowireable class, so that question was
+> satisfied by a project with no realtime module at all, and `get()` then built a
+> broadcaster with a null resolver. Live reload stayed correct only because the
+> null call threw and the exception fell into the polling path.
+
+### The three pieces
+
+| Piece | Responsibility |
+|---|---|
+| `LiveReloadWatcher` | Detects changes and announces them |
+| `LiveReloadState` | Holds what changed until every poller has seen it |
+| `LiveReloadRoute` | `GET /_phue/live-reload` — the polling fallback |
+| `DebugToolbar` | The browser client: WebSocket first, polling as standby |
+
+### Detection is a timer, not a side effect of a request
+
+This is the part that is easy to get wrong, and it was wrong here first.
+
+Change detection originally lived inside a request, which is free — and stops
+working the moment detection is supposed to be request-independent. A developer
+saves a file, the browser sits idle because the realtime channel means it has no
+reason to poll, and nothing in the process ever looks at the filesystem. The
+reload then depends on the developer happening to click something.
+
+So detection moved to a `Swoole\Timer` registered per worker:
+
+```php
+// DevToolsModule::watchForChanges()
+$server->on('WorkerStart', function ($server) use ($intervalMs, $container) {
+    \Swoole\Timer::tick($intervalMs, function () use ($container) {
+        $container->get(LiveReloadWatcher::class)->tick();
+    });
+});
+```
+
+**Every worker watches, deliberately.** Each holds different WebSocket
+connections with different subscriptions, and a change found in one cannot be
+pushed from another. A single shared watcher would leave every tab on every other
+worker waiting for an event nobody sends.
+
+The cost is one directory scan per interval per worker — which is what every
+open tab used to pay on its own. The scan is not the expensive part; rebuilding
+components is, and that still happens lazily on the next request.
+
+### Delivery
+
+The watcher announces on the `dev` endpoint of the [WebSocket](WebSocket.md)
+module, which is the one endpoint that does not authenticate — a reload channel
+carries no user data, and requiring a login would only mean live reload quietly
+stops working for whoever is not signed in.
+
+```php
+$broadcast->for(WebsocketConfig::DEV_ENDPOINT)
+    ->to(LiveReloadRoute::ENDPOINT_TOPIC, 'components.changed', ['changed' => $changed]);
+```
+
+The same change is recorded in `LiveReloadState` for the polling fallback. That
+is not a belt-and-braces gesture: **a server without a timer has nobody else
+looking**, and would otherwise answer "nothing changed" to every poll forever. The
+polling endpoint therefore ticks the watcher itself. Safe to do both, because
+`ChangeTracker` moves its baseline as it answers — whichever gets there first
+reports the change and the other finds nothing. They cannot both claim it, and
+they cannot both miss it.
+
+The pending set is **peeked, not drained**. Draining on read meant the first tab
+to poll took the change and every other tab got nothing, so a developer with the
+page open in two windows watched one of them never reload. Clearing happens on
+the following tick instead: every tab gets a full interval to notice, and a page
+that already reloaded does not see it again and loop.
+
+### In the browser
+
+```js
+socket.onopen  = () => socket.send(JSON.stringify({ act: 'sub', ch: '_phue:components' }));
+socket.onmessage = (e) => { if (JSON.parse(e.data).ev === 'components.changed') reload(); };
+socket.onclose = () => setTimeout(retry, 1000);          // reconnect is the client's job
+```
+
+Polling runs only while no socket has connected. A server that cannot hold one —
+anything but Swoole — keeps working, because the client polls while `pushed` is
+false.
+
+> The script the toolbar emits is handed to a real JavaScript parser by
+> `DebugToolbarScriptSyntaxTest`. A syntax error in it is invisible to the server:
+> the request succeeds, the response is 200, and the browser throws before the
+> first statement runs — every toolbar feature dies at once and nothing in the
+> logs says why.
+
+### Configuration
+
+```php
+// config/devtool.php
+return [
+    // How often the *server* looks for changes, in milliseconds.
+    // 1000 by default. 0 switches the watcher off entirely, which is what an
+    // application that moved change detection into its own build step wants:
+    // nothing polls, nothing ticks, and the toolbar simply never reloads.
+    'live_reload_interval_ms' => 1000,
+];
+```
+
+Two intervals, deliberately distinct. This one is the server's scan. The
+toolbar's own poll interval is separate and defaults to `0` — meaning "only poll
+while waiting for a socket to connect".
+
+### What it watches
+
+Every registered component directory, discovered from the loaders themselves
+rather than from a list kept anywhere else — a second list of directories is a
+list that starts drifting the first time a module registers a loader of its own.
+In practice: your `.phue` component directories. PHP under `App/` is **not**
+watched; a change there is picked up by the next request.
+
+## 7. Performance & benchmarks
 
 The framework's performance posture:
 

@@ -70,6 +70,11 @@ step for your views, Vue 3 powered, no-bundle by design.
 - **A no-build Vue 3 component kit** — the PhUI components: tables, forms,
   navbars, toasts — plain ESM, no Webpack/Vite required.
 - **SSR sidecar** — server-side rendering via a Bun sidecar when you want it.
+- **Realtime, per endpoint** — WebSocket endpoints that each keep their own topics,
+  origins and authentication, so an app channel and a dev-only channel can share
+  one server without sharing one policy.
+- **Live reload** — save a `.phue` file and the open tab reloads. Realtime push
+  with a polling fallback, so it also works on `serve:php`.
 - **Edge-ready** — runs on classic **FPM**, persistent **Swoole**, **RoadRunner**,
   and even **WASM** at the edge. Same application code, different adapter.
 
@@ -87,8 +92,9 @@ modules a project needs — everything else stays out.
 | `rest` | Attribute-driven `#[Rest]` CRUD endpoints with RBAC | [REST](docs/REST.md) |
 | `server` | Swoole persistent server adapter (and friends) | [Server Adapters](docs/Server-Adapters.md) |
 | `events` | Redis Streams event bus + SSE streaming, `#[Broadcastable]` | [Events](docs/Events.md) |
+| `websocket` | Named endpoints, each with its own topics, origins and authentication; `Broadcast` for publishing | [WebSocket](docs/WebSocket.md) |
 | `compiler` | AOT compiler & wiring generation | [Server Adapters](docs/Server-Adapters.md) |
-| `devtools` | Collapsible debug toolbar + request profiler: timeline, SSR round trips, component builds, SQL (development) | [Server Adapters](docs/Server-Adapters.md) |
+| `devtools` | Collapsible debug toolbar + request profiler: timeline, SSR round trips, component builds, SQL — plus live reload (development) | [Server Adapters](docs/Server-Adapters.md) |
 
 > Want to know how it all fits together? Read [Core](docs/Core.md) and
 > [Modules](docs/Modules.md). Creating your own module is a first-class use case,
@@ -332,7 +338,8 @@ DB_PASSWORD=
 |---|---|
 | `APP_NAME` | Brand label (`NavigationConfig::getAppBrand()`) |
 | `APP_ENV`, `APP_DEBUG` | Environment + error verbosity |
-| `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §5](docs/Server-Adapters.md) |
+| `APP_DEV_TOOL` | DevTools debug toolbar + profiler + live reload (needs `APP_DEBUG=true` too) — see [Server Adapters §5](docs/Server-Adapters.md) |
+| `APP_WEBSOCKET` | Turns the WebSocket module on. |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
 
@@ -400,7 +407,8 @@ See [CLI](docs/CLI.md) for the full command list.
 | [Schii](docs/Schii.md) | Server-driven UI, zero-controller REST, JSON schema protocol, auto-migration |
 | [REST](docs/REST.md) | Attribute-driven `#[Rest]` CRUD endpoints with RBAC enforcement |
 | [Events](docs/Events.md) | Event bus drivers, SSE streaming, `#[Broadcastable]` models |
-| [Server Adapters](docs/Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools |
+| [WebSocket](docs/WebSocket.md) | Named endpoints with per-endpoint auth and topics, `Broadcast`, retention, backpressure |
+| [Server Adapters](docs/Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools, live reload |
 | [CLI](docs/CLI.md) | `bin/phue` commands, the `phue-create` project installer, `phue-docker` wrapper, testing |
 | [PhUI Components](docs/PhUI_Components.md) | Reference API for every built-in `.phue` component |
 
