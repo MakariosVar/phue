@@ -62,17 +62,19 @@ final class LiveReloadRoute
         //
         // Without the cache header a browser or an intermediary is free to serve the answer to the
         // next poll from its own cache, and the page stops noticing changes that never happened.
-        // Ticks first, so the endpoint still works where there is no timer to do it. Swoole runs
-        // the watcher on a tick and the change is already recorded by the time a poll arrives,
-        // making this scan a no-op; a server without a timer — anything but Swoole — has nobody
-        // else looking, and would otherwise answer "nothing changed" to every poll forever.
+        // Read before ticking, and that order is load-bearing. The watcher releases what it
+        // reported on its next pass, so a poll that ticked first would clear the answer it was
+        // about to read and report nothing at all.
         //
-        // Safe to do both because ChangeTracker moves its baseline as it answers: whichever gets
-        // there first reports the change and the other finds nothing. The two cannot both claim it
-        // and they cannot both miss it.
+        // The tick is what keeps this endpoint working where nothing else does: a server without a
+        // timer — anything but Swoole — has nobody else looking, and would otherwise answer
+        // "nothing changed" to every poll forever. With Swoole the change is already recorded, so
+        // the scan finds nothing and costs one directory walk.
+        $changed = $this->state->peek();
+
         $this->watcher?->tick();
 
-        return Response::json(['changed' => $this->state->drain()])
+        return Response::json(['changed' => $changed])
             ->setHeader('Cache-Control', 'no-store, must-revalidate');
     }
 }

@@ -46,6 +46,13 @@ final class LiveReloadWatcher
     {
         $changed = $this->tracker->changed();
 
+        // A tick that finds nothing still settles the previous one. Doing this before the
+        // early return is the point: the clear is owed whether or not this pass saw a change, so
+        // a save followed by a quiet second still releases the pending set.
+        if ($this->state->owesClear()) {
+            $this->state->clear();
+        }
+
         if ($changed === []) {
             return [];
         }

@@ -20,6 +20,9 @@ final class LiveReloadState
     /** @var list<string> */
     private array $pending = [];
 
+    /** @var bool Whether a tick is still owed for what is currently pending. */
+    private bool $clearing = false;
+
     /**
      * Record a change the watcher has seen.
      *
@@ -32,23 +35,44 @@ final class LiveReloadState
         }
 
         $this->pending = array_values(array_unique([...$this->pending, ...$names]));
+
+        // The pending set is now owed one clear, on the next tick.
+        $this->clearing = true;
     }
 
     /**
-     * Changes not yet reported to a poller.
+     * Forget what has been reported, called by the watcher on its next pass.
      *
-     * Draining rather than reading is what makes the fallback poller behave like the realtime
-     * channel: a change is announced once, and a tab that reconnects later does not reload in a
-     * loop over a change it already handled.
+     * This is why the endpoint peeks instead of draining. Draining on read means the first tab to
+     * poll takes the change and every other tab gets nothing — so a developer with the page open
+     * in two windows watches one of them never reload. Clearing on the following tick instead
+     * gives every tab a full interval to notice, and is still early enough that a page which
+     * reloaded on the change does not then see it again and reload in a loop.
+     */
+    public function clear(): void
+    {
+        $this->pending = [];
+        $this->clearing = false;
+    }
+
+    /**
+     * Whether a clear is owed.
+     *
+     * @internal Read by the watcher; true means the next tick clears.
+     */
+    public function owesClear(): bool
+    {
+        return $this->clearing;
+    }
+
+    /**
+     * Changes a poller has not seen yet, without consuming them.
      *
      * @return list<string>
      */
-    public function drain(): array
+    public function peek(): array
     {
-        $pending = $this->pending;
-        $this->pending = [];
-
-        return $pending;
+        return $this->pending;
     }
 
     public function hasPending(): bool

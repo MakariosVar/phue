@@ -14,6 +14,7 @@ use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Ssr\SsrClient;
 use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\LiveReloadState;
 use Phue\Modules\DevTool\LiveReloadWatcher;
 use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Modules\DevTool\DevToolMiddleware;

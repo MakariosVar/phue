@@ -114,8 +114,13 @@ final class LiveReloadRouteTest extends TestCase
 
     /**
      * The answer advances because the shared state advanced, not because a handler remembered it.
+     *
+     * Both handlers see the change, and then neither does — which is the pair of properties the
+     * endpoint needs at once. Reporting to only the first poller meant a developer with the page
+     * open in two windows watched one of them never reload; never clearing meant a page that
+     * reloaded on the change would reload again on the next poll, forever.
      */
-    public function testTwoHandlersSharingTheStateDoNotEachKeepTheirOwnMemory(): void
+    public function testTwoPollersBothSeeAChangeAndThenNeitherDoes(): void
     {
         $state = new LiveReloadState();
         // Built before the write: the tracker primes its baseline when it is constructed, so a
@@ -128,15 +133,16 @@ final class LiveReloadRouteTest extends TestCase
         $second = new LiveReloadRoute($state);
 
         $this->assertSame(['Alpha'], $this->body($this->poll($first))['changed']);
-
-        // A second handler, built from scratch, must not re-report it. If it did, the memory
-        // would live in the handler — which the router rebuilds per request, so the endpoint
-        // would either report everything forever or nothing at all.
         $this->assertSame(
-            [],
+            ['Alpha'],
             $this->body($this->poll($second))['changed'],
-            'the change was already reported and must not be reported twice'
+            'the second tab must see the change too, or it never reloads'
         );
+
+        $watcher->tick();
+
+        $this->assertSame([], $this->body($this->poll($first))['changed'], 'reported once, not forever');
+        $this->assertSame([], $this->body($this->poll($second))['changed']);
     }
 
     public function testTheWatcherKeepsThePollingFallbackWorkingWhenNobodyIsListening(): void
@@ -149,7 +155,39 @@ final class LiveReloadRouteTest extends TestCase
 
         // No broadcaster at all: the watcher constructed without one is the shape of an
         // application that has switched the realtime module off, and its pages must still reload.
-        $this->assertSame(['Alpha'], $state->drain());
+        $this->assertSame(['Alpha'], $state->peek());
+        $this->assertTrue($state->owesClear(), 'the pending set is released on the next tick');
+
+        $watcher->tick();
+        $this->assertSame([], $state->peek(), 'a page that reloaded does not reload again');
+    }
+
+    public function testTwoPollersBothSeeTheSameChange(): void
+    {
+        $state = new LiveReloadState();
+        $watcher = $this->watcher($state);
+        $this->write('Alpha', 'changed');
+        $watcher->tick();
+
+        // The regression that made this a real bug: a developer with the page open in two
+        // windows watched one of them never reload, because the first poll emptied the answer.
+        $this->assertSame(['Alpha'], $this->body($this->poll(new LiveReloadRoute($state)))['changed']);
+        $this->assertSame(['Alpha'], $this->body($this->poll(new LiveReloadRoute($state)))['changed']);
+    }
+
+    public function testTheWatcherReleasesAChangeEvenWhenTheNextPassIsQuiet(): void
+    {
+        $state = new LiveReloadState();
+        $watcher = $this->watcher($state);
+        $this->write('Alpha', 'changed');
+        $watcher->tick();
+
+        $this->assertSame(['Alpha'], $state->peek());
+
+        // No new change, and the clear is still owed. Skipping it here would leave every later
+        // poll answering with this same change forever.
+        $watcher->tick();
+        $this->assertSame([], $state->peek());
     }
 
     private function watcher(LiveReloadState $state): LiveReloadWatcher

@@ -157,7 +157,7 @@ class DevToolsModule extends Module
         );
 
         // Resolved inside the tick, not captured. bindings() runs before routes(), so the
-        // ChangeTracker this watcher needs is not registered yet at the point the attacher is
+        // ChangeTracker this watcher needs is not registered yet at the point the ticker is
         // built — and resolving per worker is what we want anyway: Swoole forks after start(), so
         // each worker resolves into its own copy of the container and moves its own baseline.
         // A single shared baseline would let one worker consume a change and leave every tab on
@@ -223,8 +223,6 @@ class DevToolsModule extends Module
      */
     protected function bindings(): void
     {
-        $this->watchForChanges();
-
         $config = $this->container->has(Config::class)
             ? $this->container->get(Config::class)
             : null;
@@ -237,6 +235,12 @@ class DevToolsModule extends Module
         if (!$debug || !$devTool) {
             return;
         }
+
+        // Inside the gate, not above it. The watcher needs the ChangeTracker that routes()
+        // registers under the same two flags, so registering the timer outside meant a
+        // production Swoole server ran this callback every second and it threw — every second —
+        // for a feature nobody had switched on.
+        $this->watchForChanges();
 
         /** @var array<string, mixed> $options */
         $options = (array) ($config?->get('devtool', []) ?? []);
