@@ -229,7 +229,47 @@ class WebsocketModule extends Module
             }
         }
 
+        // Checked before the token because a browser tab carries a session cookie and nothing
+        // else. Trying the token first would mean a logged-in developer is asked for a token
+        // their browser could have answered for.
+        $fromSession = $this->identityFromSession($request);
+
+        if ($fromSession !== null) {
+            return $fromSession;
+        }
+
         return $this->identityFromBearer($request);
+    }
+
+    /**
+     * The session path, which is what a browser actually has.
+     *
+     * Only available when the Auth module is loaded, because a WebSocket handshake has no
+     * business knowing how an application stores its logins. Best effort: a handshake that
+     * cannot read a session is an unauthenticated handshake, which the caller rejects. It
+     * must not be an exception, because that would turn a logged-out visitor into a server
+     * error instead of a refused connection.
+     */
+    private function identityFromSession(Request $request): ?string
+    {
+        if (!$this->container->has(\Phue\Modules\Auth\AuthManager::class)) {
+            return null;
+        }
+
+        try {
+            $identity = $this->container->get(\Phue\Modules\Auth\AuthManager::class)
+                ->authenticate($request);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($identity === null) {
+            return null;
+        }
+
+        $id = (string) $identity->getId();
+
+        return $id === '' ? null : $id;
     }
 
     /**
