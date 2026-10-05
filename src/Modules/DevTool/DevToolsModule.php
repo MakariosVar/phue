@@ -185,27 +185,35 @@ class DevToolsModule extends Module
 
         $container = $this->container;
 
-        // Its own key, not phue.server.attachers. Two modules registering under one key with
-        // singleton() means the second silently replaces the first — and when the DevTool timer
-        // did that to the Websocket module's hook, the server stopped registering onMessage and
-        // refused to start at all. Hooks and periodic tasks are different kinds of thing, so they
-        // get different keys and neither can clobber the other.
+        // Under phue.server.onWorkerStart, not a ticker of its own, and that is not tidiness.
+        //
+        // Swoole keeps exactly one WorkerStart handler: registering a second replaces the first.
+        // So this module used to call $server->on('WorkerStart') from inside a ticker closure, and
+        // the Websocket module's own WorkerStart registration silently took its place — the file
+        // watcher never started, and live reload did nothing under Swoole while answering every
+        // request normally. Which of the two survived depended on the order the modules happened to
+        // initialise in, so it looked fine until it wasn't.
+        //
+        // The server now owns the single handler and calls everything registered here, so adding a
+        // module cannot cost another module its callback. Appending rather than rebinding, because
+        // singleton() replaces and the Websocket module registers under this same key.
+        $existing = $container->has('phue.server.onWorkerStart')
+            ? (array) $container->get('phue.server.onWorkerStart')
+            : [];
+
         $this->container->singleton(
-            'phue.server.tickers',
+            'phue.server.onWorkerStart',
             static fn(): array => [
-                static function ($server) use ($intervalMs, $container): void {
+                ...array_values($existing),
+                // Every worker, deliberately. Each holds different WebSocket connections with
+                // different subscriptions, and a change found in one cannot be pushed from
+                // another — so a single watcher would leave every tab on every other worker
+                // waiting for an event nobody sends.
+                static function (int $workerId) use ($intervalMs, $container): void {
                     // Swoole\Timer rather than the server: there is no tick() on a Swoole server,
                     // and discovering that at boot means a dev server that does not start.
-                    // Every worker, deliberately. Each holds different WebSocket connections with
-                    // different subscriptions, and a change found in one cannot be pushed from
-                    // another — so a single watcher would leave every tab on every other worker
-                    // waiting for an event nobody sends. There is no reliable way to ask a Swoole
-                    // server for its worker count, and guessing at a guard would silently disable
-                    // watching on the workers it excluded.
-                    $server->on('WorkerStart', static function ($server) use ($intervalMs, $container): void {
-                        \Swoole\Timer::tick($intervalMs, static function () use ($container): void {
-                            $container->get(LiveReloadWatcher::class)->tick();
-                        });
+                    \Swoole\Timer::tick($intervalMs, static function () use ($container): void {
+                        $container->get(LiveReloadWatcher::class)->tick();
                     });
                 },
             ]

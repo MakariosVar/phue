@@ -125,11 +125,10 @@ final class SwooleServeCommand implements CommandInterface
             // would mean the server owning a concept it has no use for.
             $container = $app->getContainer();
 
-            // Two keys, because a hook and a periodic task are different things and a module
-            // that registered a ticker under the attacher key would replace every hook already
-            // there. The Websocket module's hooks are what register onMessage, so losing them
-            // does not degrade the realtime channel — it stops the server from starting.
-            foreach (['phue.server.attachers', 'phue.server.tickers'] as $key) {
+            // One key. Worker startup is not among these: Swoole holds a single WorkerStart
+            // handler, so those callbacks are collected under their own key above and dispatched
+            // from the one registration there, rather than being free to overwrite each other.
+            foreach (['phue.server.attachers'] as $key) {
                 if (!$container->has($key)) {
                     continue;
                 }
@@ -148,6 +147,27 @@ final class SwooleServeCommand implements CommandInterface
 
         fwrite($outputStream, sprintf("\033[32mPhue Swoole HTTP Server started:\033[0m http://%s:%d\n", $host, $port));
         fwrite($outputStream, "Press Ctrl+C to stop the server.\n\n");
+
+        // The one WorkerStart handler, owned here on purpose.
+        //
+        // Swoole keeps a single WorkerStart handler: registering another replaces the first, and
+        // nothing says so. Two modules each registering their own meant one of them silently never
+        // ran — which is how live reload stopped working under Swoole while every request answered
+        // normally, and which of the two lost depended on the order the modules initialised in.
+        //
+        // So the server registers once and calls everything collected under the key. A module that
+        // wants startup work appends to the list and cannot take another's away.
+        $onWorkerStart = [];
+
+        if ($container->has('phue.server.onWorkerStart')) {
+            $onWorkerStart = (array) $container->get('phue.server.onWorkerStart');
+        }
+
+        $server->on('WorkerStart', static function ($server, $workerId) use ($onWorkerStart): void {
+            foreach ($onWorkerStart as $callback) {
+                $callback($workerId);
+            }
+        });
 
         $server->on('request', function (SwooleRequest $swooleRequest, SwooleResponse $swooleResponse) use ($app): void {
             // A WebSocket handshake arrives here first and then becomes a connection, not a

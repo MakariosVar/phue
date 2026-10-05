@@ -10,7 +10,9 @@ use Phue\Core\Application;
 use Phue\Core\Config;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Request;
+use Phue\Core\Events\EventDispatcher;
 use Phue\Core\Routing\Exceptions\RouteNotFoundException;
+use Phue\Core\Routing\Router;
 use Phue\Core\Ssr\SsrClient;
 use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Modules\DevTool\DebugToolbar;
@@ -18,6 +20,7 @@ use Phue\Modules\DevTool\LiveReloadState;
 use Phue\Modules\DevTool\LiveReloadWatcher;
 use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Modules\DevTool\DevToolMiddleware;
+use Phue\Modules\DevTool\DevToolsModule;
 use Phue\Modules\DevTool\ProfilingComponentLoaderRegistry;
 use Phue\Modules\DevTool\ProfilingSsrClient;
 use Phue\Modules\DevTool\RequestProfiler;
@@ -473,6 +476,79 @@ class DevToolsModuleTest extends TestCase
             $this->assertArrayHasKey($key, $config, "config/devtool.php is missing '{$key}'");
         }
         $this->assertContains($config['theme'], ['auto', 'light', 'dark']);
+    }
+
+    /**
+     * The file watcher must survive another module needing worker startup too.
+     *
+     * Swoole keeps exactly one WorkerStart handler — registering a second replaces the first, and
+     * nothing says so. This module used to call $server->on('WorkerStart') from inside a ticker
+     * closure while the Websocket module registered one of its own, so one of them silently never
+     * ran: live reload did nothing under Swoole while every request answered 200, and which module
+     * lost depended on the order they happened to initialise in.
+     *
+     * What is pinned here is the list, not the call. A module that rebinds the key instead of
+     * carrying the previous list forward takes the other module's callback away, and that is the
+     * whole bug.
+     */
+    public function testTheWatcherAppendsToWorkerStartupRatherThanReplacingIt(): void
+    {
+        $app = $this->app(true, true);
+        $container = $app->getContainer();
+
+        // What an earlier-initialising module leaves behind — the Websocket module's delivery pump.
+        $foreign = static function (int $workerId): void {
+        };
+
+        $container->singleton(
+            'phue.server.onWorkerStart',
+            static fn(): array => [$foreign]
+        );
+
+        $module = new DevToolsModule();
+        $module->setDependencies($app->getRouter(), $container, $app->getEvents());
+        $module->init();
+
+        $registered = (array) $container->get('phue.server.onWorkerStart');
+
+        $this->assertContains(
+            $foreign,
+            $registered,
+            'Another module\'s worker startup work was dropped. singleton() replaces, so '
+            . 'registering under this key without carrying the previous list forward silently '
+            . 'disables whichever module happened to initialise first.'
+        );
+
+        $this->assertGreaterThan(
+            1,
+            count($registered),
+            'The watcher did not register at all. A module that finds the key already present and '
+            . 'assumes someone else owns it leaves live reload quietly broken.'
+        );
+    }
+
+    public function testTheWatcherRegistersUnderTheSharedWorkerStartupKey(): void
+    {
+        $app = $this->app(true, true);
+        $container = $app->getContainer();
+
+        $this->assertTrue(
+            $container->has('phue.server.onWorkerStart'),
+            'Worker startup has to reach the server somehow, and it is not through a ticker of its '
+            . 'own: a second WorkerStart registration replaces the first, whichever module made it.'
+        );
+    }
+
+    public function testTheWatcherDoesNotClaimATickerKeyOfItsOwn(): void
+    {
+        $app = $this->app(true, true);
+        $container = $app->getContainer();
+
+        $this->assertFalse(
+            $container->has('phue.server.tickers'),
+            'A ticker of its own is how this module used to reach WorkerStart, and it is the '
+            . 'mechanism that made the two modules overwrite each other.'
+        );
     }
 
     private function rmTree(string $dir): void
