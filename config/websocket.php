@@ -23,6 +23,24 @@ return [
     'enabled' => env('APP_WEBSOCKET', false),
 
     /*
+     * The broker that carries published messages between workers.
+     *
+     * Absent or disabled, every worker keeps its messages to itself — correct with one worker, and
+     * free. With more than one it is not: a publish reaches only the subscribers held by the worker
+     * that served the request that caused it, and a browser on any other worker goes quiet with
+     * nothing in the logs to explain it.
+     *
+     * The host defaults to the loopback address rather than a service name because the app
+     * container runs on the host network, where a compose hostname does not resolve.
+     */
+    'redis' => [
+        'enabled' => env('APP_WS_REDIS', false),
+        'host' => env('REDIS_HOST', '127.0.0.1'),
+        'port' => (int) env('REDIS_PORT', 6379),
+        'timeout' => 0.5,
+    ],
+
+    /*
      * The server implementation, named rather than hard-coded so the interface can be resolved
      * from it. Swapping this is how another adapter would be supported without the module
      * knowing it exists.

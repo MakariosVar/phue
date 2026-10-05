@@ -11,8 +11,12 @@ use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Websocket\Connection;
 use Phue\Core\Websocket\Envelope;
+use Phue\Core\Websocket\InProcessPublicationBus;
+use Phue\Core\Websocket\PublicationBus;
+use Phue\Core\Websocket\RedisStreamPublicationBus;
 use Phue\Core\Websocket\TopicRegistry;
 use Phue\Core\Websocket\WebSocketTransport;
+use Psr\Log\LoggerInterface;
 
 /**
  * Real-time channels for the application.
@@ -56,6 +60,14 @@ class WebsocketModule extends Module
      * @var array<string, TopicRegistry>
      */
     private array $registries = [];
+
+    /**
+     * One bus per endpoint, built on first use. Kept beside the registries because the two are
+     * built together: a registry cannot exist without the bus it publishes on.
+     *
+     * @var array<string, PublicationBus>
+     */
+    private array $buses = [];
 
     /**
      * Which endpoint a connection arrived on, so a frame knows where to act.
@@ -174,6 +186,54 @@ class WebsocketModule extends Module
                 $transport->attach($server);
             },
         ]);
+
+        // Handed to the serve command, which owns the worker lifecycle.
+        //
+        // A separate key from the attachers on purpose. Swoole ignores a worker callback that is
+        // registered after the server has started — registered from inside an attacher closure it
+        // simply never fires, and nothing says so. The server that forks the workers is the only
+        // place that can register them in time, so it is also the only place they belong.
+        $container = $this->container;
+
+        // Appended to whatever is already registered, not bound over it. singleton() replaces, and
+        // the DevTool module registers its live-reload watcher under this same key — so binding
+        // here would cost that module its callback, or be lost to it depending on the order the two
+        // modules happened to initialise in.
+        $existing = $container->has('phue.server.onWorkerStart')
+            ? (array) $container->get('phue.server.onWorkerStart')
+            : [];
+
+        $this->container->singleton('phue.server.onWorkerStart', static fn(): array => [
+            ...array_values($existing),
+            static function (int $workerId) use ($container): void {
+                /** @var WebsocketConfig $settings */
+                $settings = $container->get(WebsocketConfig::class);
+
+                foreach (array_keys($settings->endpoints()) as $name) {
+                    $pump = new PublicationPump(
+                        registry: $container->get(Broadcast::class)->for($name)->registry(),
+                        logger: $container->get(LoggerInterface::class)
+                    );
+
+                    if (!$pump->needed()) {
+                        continue;
+                    }
+
+                    // A coroutine of its own, and the handler returns. Not decoration: this loop
+                    // never ends, and it is dispatched by the one handler every module shares — so
+                    // a module registering after this one would never run its own startup work, and
+                    // would fail in a way that looked like that module's bug.
+                    //
+                    // create() rather than Coroutine::run(): this callback already runs inside a
+                    // coroutine, and starting a second scheduler from within one is a fatal
+                    // ("Unable to call Event::wait() in coroutine") that takes the worker down at
+                    // boot.
+                    \Swoole\Coroutine::create(static function () use ($pump): void {
+                        $pump->run();
+                    });
+                }
+            },
+        ]);
     }
 
     /**
@@ -212,8 +272,94 @@ class WebsocketModule extends Module
         return $this->registries[$name] = new TopicRegistry(
             static fn(Connection $c, string $payload): bool => $transport->send($c, $payload),
             $retention,
-            $endpoint->defaultRetention
+            $endpoint->defaultRetention,
+            $this->busFor($name)
         );
+    }
+
+    /**
+     * The broker for one endpoint, built on first use.
+     *
+     * Falls back to the in-process bus when Redis is off or unreachable. That is not a silent
+     * downgrade: with more than one worker the fallback means publishes reach only the worker that
+     * served the request, so it is logged at warning level. With one worker it is not a downgrade
+     * at all, and is what runs.
+     *
+     * @return PublicationBus
+     */
+    private function busFor(string $name): PublicationBus
+    {
+        if (isset($this->buses[$name])) {
+            return $this->buses[$name];
+        }
+
+        $retention = $this->endpointRetention($name);
+        $inProcess = static fn(): PublicationBus => new InProcessPublicationBus(
+            origin: 'worker-' . getmypid(),
+            defaultRetention: $retention
+        );
+
+        /** @var Config $config */
+        $config = $this->container->get(Config::class);
+        $redis = (array) $config->get('websocket.redis', []);
+
+        if (!($redis['enabled'] ?? false) || !class_exists(\Redis::class)) {
+            return $this->buses[$name] = $inProcess();
+        }
+
+        $client = new \Redis();
+
+        try {
+            $connected = $client->connect(
+                (string) ($redis['host'] ?? '127.0.0.1'),
+                (int) ($redis['port'] ?? 6379),
+                (float) ($redis['timeout'] ?? 0.5)
+            );
+
+            if ($connected !== true || $client->ping() !== true) {
+                throw new \RuntimeException('Redis answered neither a connect nor a ping.');
+            }
+        } catch (\Throwable $e) {
+            $this->container->get(LoggerInterface::class)->warning(
+                'WebSocket broker unreachable; falling back to per-worker delivery. With more than '
+                . 'one worker, browsers will only receive messages their own worker published.',
+                ['exception' => $e]
+            );
+
+            return $this->buses[$name] = $inProcess();
+        }
+
+        // Long enough for a blocking read. Left at the default it is shorter than the BLOCK the
+        // pump asks for, and the read fails as a connection error rather than as a timeout.
+        $client->setOption(\Redis::OPT_READ_TIMEOUT, 2.0);
+
+        $logger = $this->container->get(LoggerInterface::class);
+
+        return $this->buses[$name] = new RedisStreamPublicationBus(
+            redis: $client,
+            namespace: 'phue:ws:' . preg_replace('/[^a-z0-9_.-]/i', '-', $name),
+            origin: 'worker-' . getmypid() . '-' . bin2hex(random_bytes(4)),
+            defaultRetention: $retention,
+            onUnreachable: static function (\Throwable $e) use ($logger, $name): void {
+                // Once per worker, and deliberately not silent: this worker has quietly stopped
+                // reaching the others, and an operator reading only the browser would conclude the
+                // feature is broken rather than that the broker behind it is. The fix is a restart
+                // of the server, which only someone who knows that will do will do.
+                $logger->warning(
+                    'WebSocket broker stopped answering; this worker is now delivering on its own '
+                    . 'and other workers will not receive these messages until it is restarted.',
+                    ['endpoint' => $name, 'exception' => $e]
+                );
+            }
+        );
+    }
+
+    private function endpointRetention(string $name): int
+    {
+        /** @var WebsocketConfig $settings */
+        $settings = $this->container->get(WebsocketConfig::class);
+
+        return $settings->endpoint($name)?->defaultRetention ?? 100;
     }
 
     /**

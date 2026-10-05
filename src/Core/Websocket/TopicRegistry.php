@@ -38,29 +38,11 @@ final class TopicRegistry
      */
     private array $subscribers = [];
 
-    /**
-     * channel => [cursor => encoded message], ascending.
-     *
-     * @var array<string, array<int, string>>
-     */
-    private array $history = [];
-
-    /**
-     * How many messages each retaining topic keeps.
-     *
-     * @var array<string, int>
-     */
-    private array $retention = [];
-
     /** Messages kept for a topic that was not listed explicitly. */
     private int $defaultRetention;
 
-    /**
-     * The last cursor handed out.
-     *
-     * @var int
-     */
-    private int $cursor = 0;
+    /** Where published messages are announced, and where cursors come from. */
+    private readonly PublicationBus $bus;
 
     /**
      * Sends one encoded message to one connection.
@@ -78,14 +60,28 @@ final class TopicRegistry
      *        queue state and decide for itself whether the send is worth making.
      * @param array<string, int> $retention Messages to keep per topic, by topic name.
      */
-    public function __construct(callable $sender, array $retention = [], int $defaultRetention = self::DEFAULT_RETENTION)
-    {
+    /**
+     * @param PublicationBus|null $bus Defaults to in-process: correct for one worker, and free.
+     */
+    public function __construct(
+        callable $sender,
+        array $retention = [],
+        int $defaultRetention = self::DEFAULT_RETENTION,
+        ?PublicationBus $bus = null
+    ) {
         $this->sender = $sender;
         $this->defaultRetention = max(0, $defaultRetention);
+        $this->bus = $bus ?? new InProcessPublicationBus(defaultRetention: $this->defaultRetention);
 
         foreach ($retention as $channel => $messages) {
             $this->retain((string) $channel, (int) $messages);
         }
+    }
+
+    /** For the consumer that reads published messages back. */
+    public function bus(): PublicationBus
+    {
+        return $this->bus;
     }
 
     /**
@@ -99,11 +95,14 @@ final class TopicRegistry
      */
     public function publish(string $channel, string $event, mixed $data, array $except = []): int
     {
-        $id = ++$this->cursor;
-        $payload = Envelope::encode(Envelope::make($channel, $event, $data, $id));
+        // The bus takes the envelope's fields rather than a finished envelope, because the cursor
+        // has to end up inside the envelope it names, and only the bus can mint that.
+        $published = $this->bus->publish($channel, $event, $data, $except);
+        $id = $published['id'];
+        $payload = $published['payload'];
 
-        $this->remember($channel, $id, $payload);
-
+        // Delivered here and now, not on the way back around the bus: this process holds these
+        // subscribers, and on a single worker that is every delivery there will ever be.
         foreach ($this->subscribers[$channel] ?? [] as $connectionId => $connection) {
             if (in_array($connectionId, $except, true)) {
                 continue;
@@ -160,6 +159,30 @@ final class TopicRegistry
     }
 
     /**
+     * Deliver a message that arrived here on the bus, to this process's subscribers.
+     *
+     * Skipping the publisher's own copy is the caller's job, because the caller is the one holding
+     * the origin: this method cannot tell "another process said this" from "I said this and it came
+     * back around", and delivering both would double every message on a single-worker deployment.
+     *
+     * @param string $channel Topic to deliver on.
+     * @param string $payload Encoded envelope.
+     * @param int $id Cursor, recorded on the connection so a reconnect resumes from it.
+     * @param list<string> $except Connection ids the publish asked to skip.
+     * @return void
+     */
+    public function deliverFromBus(string $channel, string $payload, int $id, array $except = []): void
+    {
+        foreach ($this->subscribers[$channel] ?? [] as $connectionId => $connection) {
+            if (in_array($connectionId, $except, true)) {
+                continue;
+            }
+
+            $this->deliver($connection, $payload, $id);
+        }
+    }
+
+    /**
      * Stop listening to one topic.
      *
      * @param Connection $connection
@@ -208,11 +231,7 @@ final class TopicRegistry
      */
     public function retain(string $channel, int $messages = self::DEFAULT_RETENTION): void
     {
-        $this->retention[$channel] = max(0, $messages);
-
-        if ($messages === 0) {
-            unset($this->history[$channel]);
-        }
+        $this->bus->retain($channel, max(0, $messages));
     }
 
     /**
@@ -246,15 +265,17 @@ final class TopicRegistry
     }
 
     /**
-     * @return int
+     * The most recently assigned cursor.
+     *
+     * @return int|null Null before anything has been published, so a client is told "nothing yet"
+     *         rather than being handed a cursor that would replay the whole retained window.
      */
-    public function cursor(): int
+    public function cursor(): ?int
     {
-        return $this->cursor;
+        return $this->bus->cursor();
     }
 
     /**
-     * @param string $channel
      * @return list<string>
      */
     public function channels(): array
@@ -270,86 +291,31 @@ final class TopicRegistry
      */
     private function replay(Connection $connection, string $channel, int $since): void
     {
-        // The same default as remember(): an unlisted topic is retained at the endpoint's
-        // default, not at nothing. Reading zero here meant the two disagreed — the history was
-        // recorded and then declared unreplayable — so retention appeared configured and did
-        // nothing.
-        if (($this->retention[$channel] ?? $this->defaultRetention) === 0) {
+        $oldest = $this->bus->oldest($channel);
+
+        if ($oldest === null) {
             return;
         }
 
-        $history = $this->history[$channel] ?? [];
-
-        if ($history === []) {
-            return;
-        }
-
-        // The oldest thing still kept is the boundary, and the comparison is against
-        // since + 1 rather than since: a client that last saw exactly the message before it has
-        // missed nothing that survives, and telling it otherwise makes it resynchronise when it
-        // did not have to. Only a client whose gap starts before the window is incomplete.
-        if ($since + 1 < $this->oldestRetained($channel)) {
+        // Compared against since + 1 rather than since: a client that last saw exactly the message
+        // before it has missed nothing that survives, and telling it otherwise makes it
+        // resynchronise when it did not have to.
+        if ($since + 1 < $oldest) {
             $this->deliver($connection, Envelope::encode(Envelope::make(
                 $channel,
                 'phue.gap',
-                ['since' => $since, 'oldest' => $this->oldestRetained($channel)],
-                $this->cursor
-            )), $this->cursor);
+                ['since' => $since, 'oldest' => $oldest],
+                $this->bus->cursor() ?? 0
+            )), $this->bus->cursor() ?? 0);
 
             return;
         }
 
-        foreach ($history as $id => $payload) {
-            if ($id > $since) {
-                $this->deliver($connection, $payload, $id);
-            }
+        foreach ($this->bus->missed($channel, $since) as $message) {
+            $this->deliver($connection, $message['payload'], $message['id']);
         }
     }
 
-    /**
-     * @param string $channel
-     * @return int
-     */
-    private function oldestRetained(string $channel): int
-    {
-        $history = $this->history[$channel] ?? [];
-
-        return $history === [] ? $this->cursor + 1 : (int) array_key_first($history);
-    }
-
-    /**
-     * @param string $channel
-     * @param int $id
-     * @param string $payload
-     * @return void
-     */
-    private function remember(string $channel, int $id, string $payload): void
-    {
-        // Falls back to the endpoint's default rather than to nothing. Reading zero here made
-        // `default_retention` a documented key with no effect: every unlisted topic was silently
-        // unresumable, which is the one thing a client cannot detect for itself.
-        $limit = $this->retention[$channel] ?? $this->defaultRetention;
-
-        if ($limit === 0) {
-            return;
-        }
-
-        $this->history[$channel][$id] = $payload;
-
-        // Unset by key, never array_shift(): shifting an integer-keyed array renumbers the keys
-        // from zero, which would replace the cursor ids with sequence positions and make every
-        // replay comparison wrong — a client asking for "since 5" would be told it had missed
-        // nothing when in fact the retained window no longer reached back that far.
-        while (count($this->history[$channel]) > $limit) {
-            $oldest = array_key_first($this->history[$channel]);
-
-            if ($oldest === null) {
-                break;
-            }
-
-            unset($this->history[$channel][$oldest]);
-        }
-    }
 
     /**
      * @param Connection $connection
