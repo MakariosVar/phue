@@ -350,6 +350,18 @@ class WebsocketModule extends Module
             case 'sub':
                 if ($message['ch'] !== '') {
                     $registry->subscribe($connection, $message['ch'], $message['since']);
+
+                    // Acknowledged, because "the socket is open" is not evidence that the
+                    // channel works: a server with the module configured but switched off still
+                    // completes the handshake, accepts the connection and then says nothing
+                    // forever. An acknowledgement is the one thing that proves the subscription
+                    // landed, and it costs one small frame per subscription rather than a client
+                    // waiting for a data message that may not arrive for hours.
+                    $registry->sendTo($connection, $message['ch'], 'phue.subscribed', [
+                        'ch' => $message['ch'],
+                        'since' => $message['since'],
+                        'cursor' => $registry->cursor(),
+                    ]);
                 }
                 break;
 

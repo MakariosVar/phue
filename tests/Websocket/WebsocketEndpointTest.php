@@ -248,7 +248,14 @@ final class WebsocketEndpointTest extends TestCase
         $container->get(Broadcast::class)->for('app')->to('orders', 'one');
         $transport->message($connection, '{"act":"sub","ch":"orders","since":0}');
 
-        $this->assertSame([], $transport->sent, 'nothing is retained, so nothing can be resumed');
+        // Only the replay is asserted, so the acknowledgement the subscription is answered with
+        // does not read as a resumed message.
+        $replayed = array_filter(
+            $transport->sent,
+            static fn(array $entry): bool => str_contains($entry[1], '"ev":"one"')
+        );
+
+        $this->assertSame([], $replayed, 'nothing is retained, so nothing can be resumed');
     }
 
     public function testTheConfiguredQueueLimitReachesTheTransport(): void

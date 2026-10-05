@@ -269,12 +269,79 @@ final class WebsocketModuleTest extends TestCase
 
         $this->container->get(Broadcast::class)->for('app')->toUserTopic('42', 'orders', 'order.paid', ['id' => 9]);
 
-        $messages = $this->transport->decoded();
+        $messages = $this->published();
 
         $this->assertCount(1, $messages);
         $this->assertSame('user:42:orders', $messages[0]['ch']);
         $this->assertSame('order.paid', $messages[0]['ev']);
         $this->assertSame(['id' => 9], $messages[0]['d']);
+    }
+
+    /**
+     * A subscription is acknowledged, because an open socket is not evidence that the channel
+     * works.
+     *
+     * A server with this module configured but switched off still completes the handshake and
+     * accepts the connection, then says nothing — indefinitely. A client that treated "connected"
+     * as "working" stopped its fallback at exactly that moment: an open socket, a subscribed topic,
+     * and no live reload, with nothing in the logs. An acknowledgement is the only proof that lands
+     * before any data has moved.
+     */
+    public function testASubscriptionIsAcknowledged(): void
+    {
+        $this->boot();
+        $this->module->authenticateWith(static fn(): ?string => 'user:42');
+
+        $connection = new Connection('fd1');
+        $this->handshake($connection);
+        $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'orders']));
+
+        $messages = $this->transport->decoded();
+
+        $this->assertCount(1, $messages, 'one frame, answering the subscription');
+        $this->assertSame('phue.subscribed', $messages[0]['ev']);
+        $this->assertSame('orders', $messages[0]['ch']);
+        $this->assertSame('orders', $messages[0]['d']['ch']);
+    }
+
+    public function testAnEmptySubscriptionChannelIsNotAcknowledged(): void
+    {
+        $this->boot();
+        $this->module->authenticateWith(static fn(): ?string => 'user:42');
+
+        $connection = new Connection('fd1');
+        $this->handshake($connection);
+        $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => '']));
+
+        // An empty channel is the keepalive frame, not a subscription, and acknowledging it would
+        // tell a client its channel is live when nothing was subscribed.
+        $this->assertSame([], $this->transport->decoded());
+    }
+
+    /**
+     * Only what the application published, without the protocol frames the server adds.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function published(): array
+    {
+        return array_values(array_filter(
+            $this->transport->decoded(),
+            static fn (array $message): bool => !str_starts_with((string) $message['ev'], 'phue.')
+        ));
+    }
+
+    /**
+     * The same filter over the raw transport, for assertions written against `sent`.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function publishedFrames(): array
+    {
+        return array_values(array_filter(
+            $this->transport->sent,
+            static fn(array $frame): bool => !str_contains($frame[1], '"ev":"phue.')
+        ));
     }
 
     public function testAUserTopicIsADifferentTopicFromTheUserStream(): void
@@ -297,7 +364,14 @@ final class WebsocketModuleTest extends TestCase
         $byConnection = [];
 
         foreach ($this->transport->sent as [$connectionId, $payload]) {
-            $byConnection[$connectionId][] = ((array) json_decode($payload, true))['ev'];
+            $event = ((array) json_decode($payload, true))['ev'];
+
+            // The subscription acknowledgements are protocol frames, not what this test is about.
+            if (str_starts_with((string) $event, 'phue.')) {
+                continue;
+            }
+
+            $byConnection[$connectionId][] = $event;
         }
 
         // Conflating the two is how a subscriber ends up waiting on a channel nobody publishes
@@ -318,7 +392,9 @@ final class WebsocketModuleTest extends TestCase
 
         $this->container->get(Broadcast::class)->for('app')->to('orders', 'x');
 
-        $this->assertCount(0, $this->transport->sent);
+        // Filtered: the subscription was acknowledged before the unsubscribe, and only
+        // deliveries say anything about whether the unsubscribe worked.
+        $this->assertCount(0, $this->publishedFrames());
     }
 
     public function testMalformedFramesAreIgnoredRatherThanFatal(): void

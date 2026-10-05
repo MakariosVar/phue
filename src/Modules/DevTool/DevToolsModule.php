@@ -97,7 +97,18 @@ class DevToolsModule extends Module
         $this->container->singleton(
             ChangeTracker::class,
             fn(): ChangeTracker => new ChangeTracker(
-                $this->container->get(ComponentLoaderRegistry::class)->resolvedLoaders()
+                $this->container->get(ComponentLoaderRegistry::class)->resolvedLoaders(),
+                // Persisted because the baseline is the only state here that a fresh process
+                // cannot rebuild. Without it, every request under FPM or PHP's built-in server
+                // compares the tree against itself and reports nothing — while answering 200,
+                // which is the hardest kind of failure to notice.
+                // The PSR interface, which is what Application registers. Asking for the
+                // framework's own CacheInterface answered false on every runtime, so the baseline
+                // stayed in memory and live reload worked on Swoole while doing nothing at all
+                // under FPM or serve:php.
+                $this->container->has(\Psr\SimpleCache\CacheInterface::class)
+                    ? $this->container->get(\Psr\SimpleCache\CacheInterface::class)
+                    : null
             )
         );
 

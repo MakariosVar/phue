@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Hiit\ChangeTracker;
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Support\ArrayCache;
 use Phue\Tests\Support\TestCompilerBridge;
 
 /**
@@ -198,7 +199,7 @@ final class ChangeTrackerTest extends TestCase
     /**
      * @param list<string> $directories
      */
-    private function tracker(array $directories): ChangeTracker
+    private function tracker(array $directories, ?\Psr\SimpleCache\CacheInterface $cache = null): ChangeTracker
     {
         $registry = new ComponentLoaderRegistry();
 
@@ -206,7 +207,62 @@ final class ChangeTrackerTest extends TestCase
             $registry->addLoader($this->loader($directory));
         }
 
-        return new ChangeTracker($registry->resolvedLoaders());
+        return new ChangeTracker($registry->resolvedLoaders(), $cache);
+    }
+
+    /**
+     * The baseline has to outlive the object, or live reload cannot work on any runtime that ends
+     * the process between checks.
+     *
+     * Under FPM and PHP's built-in server every request is a separate execution, so a tracker built
+     * per request compares the tree against the tree and reports nothing — forever. Nothing about
+     * that is visible from outside: the endpoint answers 200 with an empty list.
+     */
+    public function testAPersistedBaselineSpansSeparateTrackers(): void
+    {
+        $cache = new ArrayCache();
+        $this->write($this->appDir, 'Alpha');
+
+        $first = $this->tracker([$this->appDir], $cache);
+        $this->assertSame([], $first->changed(), 'the first pass primes');
+
+        $this->write($this->appDir, 'Beta', 'changed');
+
+        // A brand new tracker, as a fresh request would build. Nothing is shared but the cache.
+        $second = $this->tracker([$this->appDir], $cache);
+        $this->assertSame(['Beta'], $second->changed(), 'the change survives the process boundary');
+
+        // And exactly once, or every poll after the save would report it again.
+        $third = $this->tracker([$this->appDir], $cache);
+        $this->assertSame([], $third->changed(), 'and is reported once');
+    }
+
+    public function testAnInMemoryBaselineIsUnaffectedByAPersistedOne(): void
+    {
+        $cache = new ArrayCache();
+        $this->write($this->appDir, 'Alpha');
+        $this->tracker([$this->appDir], $cache)->changed();
+
+        $this->write($this->appDir, 'Beta');
+
+        // No cache: each tracker primes itself, which is the correct behaviour for a long-lived
+        // process and the reason the persisted baseline is opt-in rather than mandatory.
+        $this->assertSame([], $this->tracker([$this->appDir])->changed());
+    }
+
+    public function testADifferentComponentTreePrimesRatherThanComparingUnrelatedTrees(): void
+    {
+        $cache = new ArrayCache();
+        $this->write($this->appDir, 'Alpha');
+        $this->tracker([$this->appDir], $cache)->changed();
+
+        $other = $this->root . '/other';
+        mkdir($other, 0777, true);
+        $this->write($other, 'Gamma');
+
+        // Keyed by the directories, so a second tree is not compared against the first one's
+        // baseline — which would report every file in both as new.
+        $this->assertSame([], $this->tracker([$other], $cache)->changed());
     }
 
     private function loader(string $dir): PhueComponentLoader

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Hiit;
 
 use Phue\Core\UI\PhueComponentLoader;
+use Psr\SimpleCache\CacheInterface;
 
 /**
  * Reports which components moved since it last looked.
@@ -19,6 +20,12 @@ use Phue\Core\UI\PhueComponentLoader;
  * Deliberately free of any transport concern. It knows about directories and content hashes and
  * nothing about HTTP, so a WebSocket channel, a console watcher and a poll endpoint can all
  * share one implementation.
+ *
+ * The baseline can be persisted, and on a short-lived runtime it has to be. Under Swoole the
+ * process is long-lived, so keeping the baseline in memory works and costs nothing; under FPM or
+ * PHP's built-in server every request is a separate execution, so a tracker built per request
+ * compares the filesystem against itself and reports nothing, forever. Nothing about that failure
+ * is visible from the outside: the endpoint answers 200 with an empty list.
  *
  * The loaders are read once, when the tracker is built. Modules register their loaders during
  * boot and the registry is fixed by the time any request arrives, so re-reading it per call
@@ -53,8 +60,14 @@ final class ChangeTracker
      * @param iterable<PhueComponentLoader> $loaders Whatever already knows where components live.
      *        Asking the loaders is deliberate: a second list of directories anywhere else is a
      *        list that starts drifting the first time a module registers a loader of its own.
+     * @param CacheInterface|null $cache Where the baseline survives a process, or null to keep it
+     *        in memory. Required in practice on any runtime that ends the process between checks.
+     *        Typed as the PSR interface rather than the framework's own, because that is what an
+     *        application binds: `Application` registers `Psr\SimpleCache\CacheInterface`, so a
+     *        parameter asking for `Phue\Core\Cache\CacheInterface` silently received null and the
+     *        persistence looked configured while doing nothing.
      */
-    public function __construct(iterable $loaders)
+    public function __construct(iterable $loaders, private readonly ?CacheInterface $cache = null)
     {
         $seen = [];
 
@@ -87,7 +100,33 @@ final class ChangeTracker
         }
 
         $this->hiits = $hiits;
-        $this->known = $known;
+
+        // A stored baseline is preferred over a fresh prime, because a fresh prime is exactly the
+        // state that cannot see a change on a short-lived runtime. Keyed by the directories as
+        // well as by the name, so pointing a project at a different component tree primes again
+        // instead of comparing two unrelated trees and reporting every file in both.
+        $restored = $cache === null ? null : $cache->get($this->cacheKey());
+
+        $this->known = is_array($restored) && count($restored) === count($known)
+            ? array_map(static fn(array $row): array => (array) $row, $restored)
+            : $known;
+
+        if ($cache !== null && $restored === null) {
+            $this->persist($this->known);
+        }
+    }
+
+    /**
+     * @param list<array<string, string>> $known
+     */
+    private function persist(array $known): void
+    {
+        $this->cache?->set($this->cacheKey(), $known);
+    }
+
+    private function cacheKey(): string
+    {
+        return 'phue.hiit.baseline.' . substr(hash('sha256', implode('|', $this->directories)), 0, 16);
     }
 
     /**
@@ -114,6 +153,11 @@ final class ChangeTracker
 
         $names = array_values(array_unique($names));
         sort($names);
+
+        // Written on every check, not only when something moved: the baseline has to be current
+        // even on a run where nothing changed, or the next process would compare against a stale
+        // snapshot and report a change that already happened.
+        $this->persist($this->known);
 
         return $names;
     }

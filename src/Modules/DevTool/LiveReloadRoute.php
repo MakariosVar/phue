@@ -56,23 +56,33 @@ final class LiveReloadRoute
      */
     public function __invoke(): Response
     {
-        // Reads what the watcher already found rather than looking for changes itself. Two
-        // detectors would compete for one baseline: ChangeTracker moves its baseline as it
-        // answers, so whichever asked first would take the change and the other would see nothing.
+        // The endpoint reports; it does not look. Two detectors would compete for one baseline,
+        // and ChangeTracker moves its baseline as it answers — so whichever asked first would take
+        // the change and the other would see nothing. This handler therefore delegates the looking
+        // to the one watcher, and only reports.
         //
-        // Without the cache header a browser or an intermediary is free to serve the answer to the
-        // next poll from its own cache, and the page stops noticing changes that never happened.
-        // Read before ticking, and that order is load-bearing. The watcher releases what it
-        // reported on its next pass, so a poll that ticked first would clear the answer it was
-        // about to read and report nothing at all.
+        // Without the cache header below, a browser or an intermediary is free to serve the answer
+        // to the next poll from its own cache, and the page stops noticing changes that never
+        // happened.
         //
-        // The tick is what keeps this endpoint working where nothing else does: a server without a
-        // timer — anything but Swoole — has nobody else looking, and would otherwise answer
-        // "nothing changed" to every poll forever. With Swoole the change is already recorded, so
-        // the scan finds nothing and costs one directory walk.
+        // Both halves are needed, and neither alone works. The state carries a change from a
+        // background tick, which is how a Swoole server reports it to every open tab. This
+        // request's own tick is how a server with no timer reports it at all: there, nothing
+        // survives between requests, so a change recorded by this tick is gone before the next
+        // poll could read it — and the tab would sit and poll an empty list forever.
+        //
+        // Reading before ticking, and the tick reporting what it found, is also what makes the
+        // change appear exactly once. The once-only guarantee belongs to ChangeTracker's
+        // advancing baseline, not to the state: whatever request performs the comparison moves it,
+        // so the next one finds nothing to report.
         $changed = $this->state->peek();
+        $found = $this->watcher?->tick() ?? [];
 
-        $this->watcher?->tick();
+        if ($found !== []) {
+            $changed = $changed === []
+                ? $found
+                : array_values(array_unique([...$changed, ...$found]));
+        }
 
         return Response::json(['changed' => $changed])
             ->setHeader('Cache-Control', 'no-store, must-revalidate');

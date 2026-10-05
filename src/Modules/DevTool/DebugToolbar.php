@@ -1240,12 +1240,14 @@ class DebugToolbar
                 socket.onopen = function () {
                     // Deliberately not `pushed = true` here. An open socket only proves the
                     // handshake completed, and a Swoole server completes that on its own — so a
-                    // server with the module configured but switched off, or missing its hooks
-                    // entirely, accepts the connection and then never says anything. Marking the
-                    // channel live on open made the client stop polling at exactly that moment:
-                    // an open socket, a subscribed topic, and no live reload, with nothing in the
-                    // logs. `pushed` therefore means the channel has proved itself, which only a
-                    // delivered message can do.
+                    // server with the module configured but switched off accepts the connection
+                    // and then says nothing, ever.
+                    //
+                    // The flag is set by the first frame the server sends, which is the
+                    // subscription acknowledgement: that arrives immediately on a working channel,
+                    // and never arrives on one that is not working. Waiting for a data message
+                    // instead would work too, but it means polling until the first file save —
+                    // the very cost this feature exists to remove.
                     socket.send(JSON.stringify({ act: 'sub', ch: topic }));
                 };
 
