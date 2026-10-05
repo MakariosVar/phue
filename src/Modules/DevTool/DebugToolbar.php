@@ -1039,8 +1039,12 @@ class DebugToolbar
         // dead branch: dead code in an injected <script> is still bytes on every page.
         $themeScript = $themeMode === 'auto' ? $this->renderThemeScript($root) : '';
         $filterScript = $withFilter ? $this->renderFilterScript($root) : '';
-        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, json_encode(LiveReloadRoute::ENDPOINT_TOPIC, JSON_THROW_ON_ERROR),
-            json_encode(\Phue\Modules\Websocket\WebsocketConfig::DEV_ENDPOINT_PATH, JSON_THROW_ON_ERROR));
+        $liveReloadScript = $this->renderLiveReloadScript(
+            $root,
+            $liveReloadIntervalMs,
+            LiveReloadRoute::ENDPOINT_TOPIC,
+            \Phue\Modules\Websocket\WebsocketConfig::DEV_ENDPOINT_PATH
+        );
 
         $js = <<<JS
         (function () {
@@ -1140,13 +1144,13 @@ class DebugToolbar
      *
      * Three details that keep it from being noisy:
      *
-     *  - it stops on its own after repeated failures, so a page whose endpoint is missing does
-     *    not retry forever in the background;
      *  - it pauses while the tab is hidden, because a background tab has nothing to reload;
      *  - it guards on a window-level flag, so a page with more than one toolbar polls once.
      *
      * @param string $rootJson JSON-encoded root element id.
-     * @param int $intervalMs Gap between polls.
+     * @param int $intervalMs Gap between polls. Zero means standby only.
+     * @param string $topic Realtime topic to subscribe to.
+     * @param string $wsEndpoint Path of the development WebSocket endpoint.
      * @return string
      */
     private function renderLiveReloadScript(
@@ -1155,10 +1159,14 @@ class DebugToolbar
         string $topic,
         string $wsEndpoint
     ): string {
-        // UNESCAPED_SLASHES on purpose: the path is the one thing a reader of the injected
-        // script needs to recognise, and "\/_phue\/live-reload" is not it.
+        // One encoder for every value that reaches the script. Encoding them separately is how the
+        // WebSocket path ended up emitting "\/_phue\/ws" while the comment above this line
+        // explained why that exact form is wrong: escaped slashes are valid JavaScript, so nothing
+        // failed and the inconsistency was invisible until someone read the output.
         $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
         $endpoint = json_encode(LiveReloadRoute::ENDPOINT, $flags);
+        $topic = json_encode($topic, $flags);
+        $wsEndpoint = json_encode($wsEndpoint, $flags);
         $interval = max(0, $intervalMs);
 
         return <<<JS
@@ -1172,20 +1180,22 @@ class DebugToolbar
             if (window.__phueLiveReload) { return; }
             window.__phueLiveReload = true;
 
-            var endpoint = {$endpoint};
-            var pollEndpoint = '/_phue/live-reload';
+            var pollEndpoint = {$endpoint};
             var topic = {$topic};
             var interval = {$interval};
             var failures = 0;
             var pushed = false;
+            var stopped = false;
 
-            // Realtime first, polling as the fallback. The push channel needs a server that
-            // holds a WebSocket connection open, which a single-worker dev server cannot; the
-            // endpoint returns nothing there, so the client has to fall back rather than sit
-            // silent waiting for an event that will never come.
+            // Realtime first, polling as the standby. The push channel needs a server that can
+            // hold a WebSocket connection open, which means Swoole; under anything else the socket
+            // never gets a chance, so the client has to keep polling rather than sit silent
+            // waiting for an event that will never come.
             var reload = function () { window.location.reload(); };
 
             var poll = function () {
+                if (stopped) { return; }
+
                 // A hidden tab has nothing to reload, and this is the common case: a developer
                 // leaves the page open in another window and comes back to it.
                 if (document.visibilityState === 'hidden') { return; }
@@ -1205,7 +1215,10 @@ class DebugToolbar
                     if (changed.length) { reload(); }
                 }).catch(function () {
                     failures++;
-                    if (failures >= 5) { window.__phueLiveReload = false; }
+                    // Gives up for real, unlike clearing a window flag that nothing reads again.
+                    // The endpoint is either absent or broken, and either way a background request
+                    // every second for the rest of the session helps nobody.
+                    if (failures >= 5) { stopped = true; }
                 });
             };
 
@@ -1232,7 +1245,10 @@ class DebugToolbar
                 socket.onmessage = function (event) {
                     var message;
                     try { message = JSON.parse(event.data); } catch (e) { return; }
-                    if (message && message.ev === 'components.changed') { reload(); }
+                    // The version is checked because the field exists to be checked: acting on an
+                    // envelope from a protocol version this client does not know is how a future
+                    // format silently breaks today's page instead of being ignored by it.
+                    if (message && message.v === 1 && message.ev === 'components.changed') { reload(); }
                 };
 
                 // Reconnecting is the client's job, and it is why the client is a small file

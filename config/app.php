@@ -23,10 +23,10 @@ return [
     'modules' => [
         \Phue\Modules\Auth\AuthModule::class,
         \Phue\Modules\Schii\SchiiModule::class, // Comment this on production
-        // Real-time channels. Uncomment, then set APP_WEBSOCKET=1 (or APP_DEBUG=1) and remove
-        // the explicit 'enabled' in config/websocket.php, which otherwise wins over the debug
-        // fallback. Requires the Swoole server: ./phue-docker start -co
-        // \Phue\Modules\Websocket\WebsocketModule::class,
+        // Real-time channels. Set APP_WEBSOCKET=true to switch it on; APP_DEBUG alone does not,
+        // because config/websocket.php always supplies an explicit 'enabled'. Requires the
+        // Swoole server, since a handshake only completes there: ./phue-docker start -co
+        \Phue\Modules\Websocket\WebsocketModule::class,
         \Phue\Modules\Rest\RestModule::class,
         \Phue\Modules\Server\ServerModule::class,
         \Phue\Modules\Events\EventModule::class,

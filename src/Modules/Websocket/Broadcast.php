@@ -25,6 +25,7 @@ final class Broadcast
      */
     public function __construct(
         private readonly mixed $registries,
+        private readonly ?string $endpoint = null,
     ) {
     }
 
@@ -38,7 +39,7 @@ final class Broadcast
      */
     public function for(string $endpoint): self
     {
-        return new self(fn(): TopicRegistry => ($this->registries)($endpoint));
+        return new self($this->registries, $endpoint);
     }
 
     /**
@@ -53,7 +54,31 @@ final class Broadcast
      */
     public function to(string $channel, string $event, mixed $data = null, array $except = []): int
     {
-        return ($this->registries)()->publish($channel, $event, $data, $except);
+        return $this->registry()->publish($channel, $event, $data, $except);
+    }
+
+    /**
+     * The registry this broadcast is scoped to.
+     *
+     * Reached with no argument when a publish forgot its `for()`. That used to be an
+     * ArgumentCountError from a closure three frames down, which is the worst possible error for
+     * the most likely mistake; naming the omission is the difference between a five-second and a
+     * five-minute fix.
+     *
+     * Public because the module's diagnostics reason about one endpoint's topics directly.
+     *
+     * @throws \InvalidArgumentException When used without an endpoint.
+     */
+    public function registry(): TopicRegistry
+    {
+        if ($this->endpoint === null) {
+            throw new \InvalidArgumentException(
+                'Publish to an endpoint: Broadcast::for(\'app\')->to(...). '
+                . 'A publish without an endpoint has no topics to reach, because each endpoint keeps its own.'
+            );
+        }
+
+        return ($this->registries)($this->endpoint);
     }
 
     /**
@@ -75,21 +100,6 @@ final class Broadcast
         return $this->to(self::userChannel($userId), $event, $data, $except);
     }
 
-    /**
-     * The endpoint a connection is watching, for a client that wants to know why it was refused.
-     *
-     * @return list<string>
-     */
-    public function endpoints(): array
-    {
-        $names = [];
-
-        foreach (['app', WebsocketConfig::DEV_ENDPOINT] as $candidate) {
-            $names[] = $candidate;
-        }
-
-        return $names;
-    }
 
     /**
      * Publish to one user on one of their topics.
@@ -137,18 +147,7 @@ final class Broadcast
      */
     public function listeners(string $channel): int
     {
-        return ($this->registries)()->subscriberCount($channel);
+        return $this->registry()->subscriberCount($channel);
     }
 
-    /**
-     * The registry this broadcast is scoped to.
-     *
-     * Exposed for the places that need to reason about one endpoint's topics directly — the
-     * module's diagnostics, mainly. Reading another endpoint's registry is possible but pointless,
-     * because a connection on it will never appear here.
-     */
-    public function registry(): TopicRegistry
-    {
-        return ($this->registries)();
-    }
 }

@@ -52,6 +52,9 @@ final class TopicRegistry
      */
     private array $retention = [];
 
+    /** Messages kept for a topic that was not listed explicitly. */
+    private int $defaultRetention;
+
     /**
      * The last cursor handed out.
      *
@@ -75,9 +78,10 @@ final class TopicRegistry
      *        queue state and decide for itself whether the send is worth making.
      * @param array<string, int> $retention Messages to keep per topic, by topic name.
      */
-    public function __construct(callable $sender, array $retention = [])
+    public function __construct(callable $sender, array $retention = [], int $defaultRetention = self::DEFAULT_RETENTION)
     {
         $this->sender = $sender;
+        $this->defaultRetention = max(0, $defaultRetention);
 
         foreach ($retention as $channel => $messages) {
             $this->retain((string) $channel, (int) $messages);
@@ -221,6 +225,27 @@ final class TopicRegistry
     }
 
     /**
+     * Connections listening to at least one topic.
+     *
+     * Summed per channel it would count a connection once per topic, which is not what anyone
+     * asking "how many clients are connected" means.
+     *
+     * @return int
+     */
+    public function totalSubscribers(): int
+    {
+        $ids = [];
+
+        foreach ($this->subscribers as $connections) {
+            foreach ($connections as $id => $_) {
+                $ids[$id] = true;
+            }
+        }
+
+        return count($ids);
+    }
+
+    /**
      * @return int
      */
     public function cursor(): int
@@ -245,9 +270,11 @@ final class TopicRegistry
      */
     private function replay(Connection $connection, string $channel, int $since): void
     {
-        $retained = $this->retention[$channel] ?? 0;
-
-        if ($retained === 0) {
+        // The same default as remember(): an unlisted topic is retained at the endpoint's
+        // default, not at nothing. Reading zero here meant the two disagreed — the history was
+        // recorded and then declared unreplayable — so retention appeared configured and did
+        // nothing.
+        if (($this->retention[$channel] ?? $this->defaultRetention) === 0) {
             return;
         }
 
@@ -298,7 +325,10 @@ final class TopicRegistry
      */
     private function remember(string $channel, int $id, string $payload): void
     {
-        $limit = $this->retention[$channel] ?? 0;
+        // Falls back to the endpoint's default rather than to nothing. Reading zero here made
+        // `default_retention` a documented key with no effect: every unlisted topic was silently
+        // unresumable, which is the one thing a client cannot detect for itself.
+        $limit = $this->retention[$channel] ?? $this->defaultRetention;
 
         if ($limit === 0) {
             return;

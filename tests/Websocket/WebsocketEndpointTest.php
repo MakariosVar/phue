@@ -211,6 +211,74 @@ final class WebsocketEndpointTest extends TestCase
         $this->assertSame('unknown endpoint', $transport->closed[0][2]);
     }
 
+    public function testTheDefaultRetentionActuallyAppliesToAnUnlistedTopic(): void
+    {
+        [, $transport, $container] = $this->boot();
+
+        // Retention is how a client resumes after a backgrounded socket, and it is configured
+        // per endpoint with a default for everything not listed. A default that was ignored made
+        // every unlisted topic silently unresumable, which is the one failure a client cannot
+        // detect for itself.
+        $connection = new Connection('a1');
+        $transport->connect($connection, query: ['token' => 't']);
+
+        $broadcast = $container->get(Broadcast::class)->for('app');
+        $broadcast->to('orders', 'one');
+        $broadcast->to('orders', 'two');
+
+        // Resuming from cursor 0 asks for both messages.
+        $transport->message($connection, '{"act":"sub","ch":"orders","since":0}');
+
+        $resumed = array_filter(
+            $transport->sent,
+            static fn(array $entry): bool => str_contains($entry[1], '"ev":"one"')
+                || str_contains($entry[1], '"ev":"two"')
+        );
+
+        $this->assertCount(2, $resumed, 'both retained messages should have been replayed');
+    }
+
+    public function testRetentionOfZeroKeepsNothing(): void
+    {
+        [, $transport, $container] = $this->boot(defaultRetention: 0);
+
+        $connection = new Connection('a1');
+        $transport->connect($connection, query: ['token' => 't']);
+
+        $container->get(Broadcast::class)->for('app')->to('orders', 'one');
+        $transport->message($connection, '{"act":"sub","ch":"orders","since":0}');
+
+        $this->assertSame([], $transport->sent, 'nothing is retained, so nothing can be resumed');
+    }
+
+    public function testTheConfiguredQueueLimitReachesTheTransport(): void
+    {
+        [, , $container] = $this->boot(queueLimit: 7);
+
+        // Asserted on the binding rather than through a connection, because the limit is applied
+        // when the transport builds each Connection and the fake never builds one. A queue limit
+        // that never reaches the transport is an out-of-memory kill waiting for a slow client, and
+        // it looks exactly like a working one until the worst possible moment.
+        $transport = $container->get(\Phue\Modules\Websocket\SwooleWebSocketTransport::class);
+
+        $property = new \ReflectionProperty($transport, 'queueLimit');
+
+        $this->assertSame(7, $property->getValue($transport));
+    }
+
+    public function testAPublishWithoutAnEndpointSaysSoRatherThanFailingInAClosure(): void
+    {
+        [, , $container] = $this->boot();
+
+        // The most likely mistake with this API, and the one that used to produce an
+        // ArgumentCountError from a closure three frames down. An error that names the omission is
+        // the difference between a five-second and a five-minute fix.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Broadcast::for/');
+
+        $container->get(Broadcast::class)->to('orders', 'order.paid');
+    }
+
     public function testPublishingToAnEndpointThatDoesNotExistIsAnError(): void
     {
         [$module, $transport, $container] = $this->boot();
@@ -258,7 +326,7 @@ final class WebsocketEndpointTest extends TestCase
     /**
      * @return array{0: WebsocketModule, 1: FakeTransport, 2: Container}
      */
-    private function boot(): array
+    private function boot(int $defaultRetention = 100, int $queueLimit = 256): array
     {
         $dir = sys_get_temp_dir() . '/phue_ws_ep_' . bin2hex(random_bytes(4));
         mkdir($dir, 0777, true);
@@ -268,8 +336,13 @@ final class WebsocketEndpointTest extends TestCase
         file_put_contents($dir . '/websocket.php', '<?php return ' . var_export([
             'enabled' => true,
             'transport' => FakeTransport::class,
+            'queue_limit' => $queueLimit,
             'websockets' => [
-                'app' => ['endpoint' => '/ws', 'auth' => true],
+                'app' => [
+                    'endpoint' => '/ws',
+                    'auth' => true,
+                    'default_retention' => $defaultRetention,
+                ],
                 'dev' => ['endpoint' => WebsocketConfig::DEV_ENDPOINT_PATH, 'auth' => false],
             ],
         ], true) . ';');

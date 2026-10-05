@@ -5,13 +5,29 @@ declare(strict_types=1);
 /**
  * DevTool Configuration
  *
- * Panel toggles for the debug toolbar. Read by Phue\Modules\DevTool\DevToolsModule and
- * only consulted when both app.debug and app.devTool are enabled.
+ * Panel toggles for the debug toolbar, plus the live-reload interval.
+ *
+ * The panel toggles are read by Phue\Modules\DevTool\DevToolsModule and only consulted when
+ * both app.debug and app.devTool are enabled. `live_reload_interval_ms` is read earlier, because
+ * it decides whether the change watcher gets installed.
  *
  * Panels are opt-out rather than opt-in: a new panel should be visible by default, since
  * its whole purpose is surfacing something that was previously invisible.
  */
 return [
+    /**
+     * How often the server looks for changed `.phue` files, in milliseconds.
+     *
+     * Read before the debug gate, unlike the panel toggles below, because the value has to be
+     * readable to decide whether to install the watcher at all. Zero switches live reload off,
+     * which is what an application that moved change detection into its own build step wants:
+     * nothing polls, nothing ticks, and the toolbar simply never reloads.
+     *
+     * This is the *server's* scan. The toolbar's own polling interval is a separate setting and
+     * defaults to zero — meaning "poll only while waiting for a realtime socket to connect".
+     */
+    'live_reload_interval_ms' => 1000,
+
     /**
      * Per-operation rollup table (calls, total, average, max, share of request).
      */

@@ -127,6 +127,19 @@ class WebsocketModule extends Module
             SwooleWebSocketTransport::class
         );
 
+        // Bound before the interface so the built-in transport is built with the configured
+        // limit. Resolving the interface to a class name gave the transport no arguments at all,
+        // so it used its own default and `queue_limit` in config did nothing — a documented key
+        // that silently did nothing is worse than a missing one.
+        $this->container->singleton(
+            SwooleWebSocketTransport::class,
+            static fn(): SwooleWebSocketTransport => new SwooleWebSocketTransport(
+                queueLimit: $settings->queueLimit
+            )
+        );
+
+        // A custom transport still resolves itself, and reads its own configuration if it wants
+        // any; only the framework's own transport is told what the configuration says.
         $this->container->singleton(
             WebSocketTransport::class,
             static fn(Container $c): object => $c->get(
@@ -192,7 +205,8 @@ class WebsocketModule extends Module
 
         return $this->registries[$name] = new TopicRegistry(
             static fn(Connection $c, string $payload): bool => $transport->send($c, $payload),
-            $retention
+            $retention,
+            $endpoint->defaultRetention
         );
     }
 
@@ -447,7 +461,7 @@ class WebsocketModule extends Module
                 'endpoint' => $settings->endpoint($name)?->endpoint,
                 'auth' => $settings->endpoint($name)?->auth,
                 'topics' => $registry?->channels() ?? [],
-                'listeners' => $registry === null ? 0 : count($registry->channels()),
+                'listeners' => $registry === null ? 0 : $registry->totalSubscribers(),
             ];
         }
 

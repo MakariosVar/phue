@@ -6,7 +6,13 @@ use function Phue\Core\env;
 
 return [
     /*
-     * Real-time channels. Off unless APP_DEBUG is on or this is turned on explicitly.
+     * Real-time channels. On when APP_WEBSOCKET is set to a truthy value.
+     *
+     * The explicit `false` below is what makes this key always present, so APP_DEBUG on its own
+     * does NOT switch the module on: the debug fallback in WebsocketConfig only applies to a
+     * config that leaves the key out. That is deliberate — a module that appears because a flag
+     * was set somewhere else is a module nobody audited — but it means "on by default in
+     * development" is not true, and the docs now say so rather than implying otherwise.
      *
      * Origins are an allowlist and the default list is empty, which means "no browser may open a
      * connection". That is not paranoia: a WebSocket handshake carries the session cookie and
