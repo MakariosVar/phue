@@ -131,7 +131,11 @@ class DebugToolbar
         // Zero by default: the realtime channel carries this, and polling only stands by until
         // a socket has had its chance. A server that cannot hold one still reloads, because the
         // client keeps polling while `pushed` is false.
-        $liveReloadMs = (int) ($options['live_reload_interval_ms'] ?? 0);
+        // Its own key, deliberately not `live_reload_interval_ms`. That one is how often the
+        // *server* looks for changes, and reading it here made the client poll every second
+        // because the server's default is 1000 — a setting added for the watcher silently
+        // became the client's behaviour, and the two are the opposite ends of a tradeoff.
+        $liveReloadMs = (int) ($options['live_reload_poll_interval_ms'] ?? self::LIVE_RELOAD_INTERVAL_MS);
 
         return $this->renderShell($rootId, $this->buildView($profiler, $duration, $fallback), $sections, $profiler)
             . $this->renderStyles()

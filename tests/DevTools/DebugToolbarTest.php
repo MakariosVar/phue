@@ -1069,12 +1069,50 @@ class DebugToolbarTest extends TestCase
         $profiler = new RequestProfiler(new Stopwatch());
         $toolbar = new DebugToolbar();
 
-        $fast = $toolbar->render($profiler, 1.0, ['live_reload_interval_ms' => 300]);
-        $slow = $toolbar->render($profiler, 1.0, ['live_reload_interval_ms' => 5000]);
+        $fast = $toolbar->render($profiler, 1.0, ['live_reload_poll_interval_ms' => 300]);
+        $slow = $toolbar->render($profiler, 1.0, ['live_reload_poll_interval_ms' => 5000]);
 
         $this->assertMatchesRegularExpression('/var interval = \d+/', $fast);
         $this->assertStringContainsString('var interval = 300', $fast);
         $this->assertStringContainsString('var interval = 5000', $slow);
+    }
+
+    /**
+     * The regression: one config key for two opposite tradeoffs.
+     *
+     * `live_reload_interval_ms` is how often the server looks for changes. Its 1000ms default
+     * became the browser's poll interval too, so a realtime channel that was working perfectly
+     * still polled once a second, forever — the tab paying the exact cost the feature exists to
+     * remove, on top of the push it was already receiving.
+     */
+    public function testTheWatchersIntervalDoesNotBecomeThePollInterval(): void
+    {
+        $html = (new DebugToolbar())->render(
+            new RequestProfiler(new Stopwatch()),
+            1.0,
+            ['live_reload_interval_ms' => 1000]
+        );
+
+        $this->assertStringContainsString(
+            'var interval = 0',
+            $html,
+            'a server-side scan rate must not drive what the browser polls'
+        );
+    }
+
+    public function testThePollIntervalCanStillBeSetDeliberately(): void
+    {
+        $html = (new DebugToolbar())->render(
+            new RequestProfiler(new Stopwatch()),
+            1.0,
+            ['live_reload_poll_interval_ms' => 2000]
+        );
+
+        $this->assertStringContainsString(
+            'var interval = 2000',
+            $html,
+            'an application that wants polling as the primary channel still can'
+        );
     }
 
     public function testZeroMeansPollingOnlyStandsByUntilASocketArrives(): void

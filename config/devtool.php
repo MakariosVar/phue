@@ -8,8 +8,8 @@ declare(strict_types=1);
  * Panel toggles for the debug toolbar, plus the live-reload interval.
  *
  * The panel toggles are read by Phue\Modules\DevTool\DevToolsModule and only consulted when
- * both app.debug and app.devTool are enabled. `live_reload_interval_ms` is read earlier, because
- * it decides whether the change watcher gets installed.
+ * both app.debug and app.devTool are enabled. The two live-reload intervals are read earlier,
+ * because they decide whether the change watcher gets installed at all.
  *
  * Panels are opt-out rather than opt-in: a new panel should be visible by default, since
  * its whole purpose is surfacing something that was previously invisible.
@@ -27,6 +27,20 @@ return [
      * defaults to zero — meaning "poll only while waiting for a realtime socket to connect".
      */
     'live_reload_interval_ms' => 1000,
+
+    /**
+     * How often the *browser* polls, in milliseconds.
+     *
+     * Zero by default, and zero means "standby": poll only while no realtime frame has arrived.
+     * A non-zero value makes polling the primary channel, which is the right choice for a server
+     * that cannot hold a WebSocket connection open.
+     *
+     * A separate key from the one above on purpose. They look like one setting and are two ends
+     * of a tradeoff: this is what the tab costs, the other is what the process costs. Sharing a
+     * key meant the watcher's 1000ms default became the client's poll interval, so a realtime
+     * channel that was working perfectly still polled once a second forever.
+     */
+    'live_reload_poll_interval_ms' => 0,
 
     /**
      * Per-operation rollup table (calls, total, average, max, share of request).
