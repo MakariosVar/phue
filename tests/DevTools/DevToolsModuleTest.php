@@ -14,6 +14,7 @@ use Phue\Core\Routing\Exceptions\RouteNotFoundException;
 use Phue\Core\Ssr\SsrClient;
 use Phue\Core\Ssr\UnixSsrClient;
 use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\LiveReloadWatcher;
 use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Modules\DevTool\DevToolMiddleware;
 use Phue\Modules\DevTool\ProfilingComponentLoaderRegistry;
@@ -137,6 +138,17 @@ class DevToolsModuleTest extends TestCase
             true
         );
 
+        // The watcher is what finds changes now; the endpoint only reports them. A test that
+        // wrote a file and expected the next poll to notice would be asserting the old contract,
+        // in which detection was a side effect of somebody asking.
+        $watch = static function () use ($app): void {
+            $app->getContainer()->get(LiveReloadWatcher::class)->tick();
+        };
+
+        // Primed before the write, the way the server does it: the tracker records the tree it
+        // first sees, so a tracker built after the change would report nothing at all.
+        $watch();
+
         $this->assertSame([], $poll()['changed'], 'the first poll primes and reports nothing');
 
         $component = $dir . '/PolledComponent.phue';
@@ -146,10 +158,12 @@ class DevToolsModuleTest extends TestCase
         );
 
         try {
+            $watch();
+
             $this->assertSame(
                 ['PolledComponent'],
                 $poll()['changed'],
-                'a change must survive from one request to the next'
+                'a change must survive from the watcher to the next request'
             );
 
             // Reported once, not on every poll: a client that reloads on each answer would

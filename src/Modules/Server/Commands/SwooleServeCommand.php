@@ -125,12 +125,20 @@ final class SwooleServeCommand implements CommandInterface
             // would mean the server owning a concept it has no use for.
             $container = $app->getContainer();
 
-            if ($container->has('phue.server.attachers')) {
-                /** @var array<int, callable> $attachers */
-                $attachers = (array) $container->get('phue.server.attachers');
+            // Two keys, because a hook and a periodic task are different things and a module
+            // that registered a ticker under the attacher key would replace every hook already
+            // there. The Websocket module's hooks are what register onMessage, so losing them
+            // does not degrade the realtime channel — it stops the server from starting.
+            foreach (['phue.server.attachers', 'phue.server.tickers'] as $key) {
+                if (!$container->has($key)) {
+                    continue;
+                }
 
-                foreach ($attachers as $attach) {
-                    $attach($server);
+                /** @var array<int, callable> $callbacks */
+                $callbacks = (array) $container->get($key);
+
+                foreach ($callbacks as $callback) {
+                    $callback($server);
                 }
             }
         } catch (\Throwable $e) {

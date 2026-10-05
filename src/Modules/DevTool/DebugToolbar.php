@@ -85,8 +85,20 @@ class DebugToolbar
      * Zero means polling only covers the wait for a realtime socket to connect, and stops once
      * one has. A non-zero value makes polling the primary channel, which is the right choice
      * for a server that cannot hold a WebSocket connection open.
+     *
+     * This is the *client's* interval. How often the server looks for changes is a separate
+     * setting, on the watcher, and the two were briefly the same number — which read as though
+     * raising one would slow down both halves of a channel that has two halves.
      */
     public const LIVE_RELOAD_INTERVAL_MS = 0;
+
+    /**
+     * Default gap between server-side change checks, in milliseconds.
+     *
+     * One second, because a save followed by a reload that takes noticeably longer than the save
+     * feels broken, and the check itself is a directory scan rather than a component rebuild.
+     */
+    public const WATCH_INTERVAL_MS = 1000;
 
     /**
      * Monotonic suffix so multiple toolbars on one page never share element ids.

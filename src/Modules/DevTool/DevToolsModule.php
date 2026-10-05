@@ -102,8 +102,18 @@ class DevToolsModule extends Module
         );
 
         $this->container->singleton(
+            LiveReloadState::class,
+            static fn(): LiveReloadState => new LiveReloadState()
+        );
+
+        $this->container->singleton(
             LiveReloadRoute::class,
-            fn(): LiveReloadRoute => new LiveReloadRoute($this->container->get(ChangeTracker::class))
+            fn(): LiveReloadRoute => new LiveReloadRoute(
+                $this->container->get(LiveReloadState::class),
+                $this->container->has(LiveReloadWatcher::class)
+                    ? $this->container->get(LiveReloadWatcher::class)
+                    : null
+            )
         );
 
         // Underscore-prefixed so it cannot collide with an application route of the same name,
@@ -113,12 +123,108 @@ class DevToolsModule extends Module
     }
 
     /**
+     * Start looking for changes without waiting for a request to ask.
+     *
+     * Handed to whichever server the application runs, through the same key the Websocket module
+     * uses, because a periodic task is a thing a server can do and neither module should own the
+     * server. The timer is installed per worker on WorkerStart rather than immediately: Swoole
+     * forks workers after start(), and a tick registered in the parent does not reach them.
+     *
+     * Every worker watches, because every worker has its own subscribers. A change detected in one
+     * worker cannot be pushed from another — the connections are not shared — so a single shared
+     * watcher would leave every tab on every other worker waiting for an event nobody sends.
+     *
+     * @return void
+     */
+    private function watchForChanges(): void
+    {
+        // The service is registered whatever the interval is, because it is a service and not a
+        // policy: an application with a zero interval has switched the timer off, and anything
+        // else that wants to ask what changed should still be able to.
+        $this->container->singleton(
+            LiveReloadWatcher::class,
+            fn(): LiveReloadWatcher => new LiveReloadWatcher(
+                $this->container->get(ChangeTracker::class),
+                $this->container->get(LiveReloadState::class),
+                // Optional: a project without the Websocket module still gets live reload through
+                // the polling endpoint. The broadcaster is a dependency of the feature, not of the
+                // capability, and making it required would mean live reload stops working
+                // entirely the moment the realtime module is switched off.
+                $this->container->has(\Phue\Modules\Websocket\Broadcast::class)
+                    ? $this->container->get(\Phue\Modules\Websocket\Broadcast::class)
+                    : null
+            )
+        );
+
+        // Resolved inside the tick, not captured. bindings() runs before routes(), so the
+        // ChangeTracker this watcher needs is not registered yet at the point the attacher is
+        // built — and resolving per worker is what we want anyway: Swoole forks after start(), so
+        // each worker resolves into its own copy of the container and moves its own baseline.
+        // A single shared baseline would let one worker consume a change and leave every tab on
+        // every other worker waiting for an event nobody sends.
+        $intervalMs = $this->liveReloadIntervalMs();
+
+        if ($intervalMs <= 0) {
+            return;
+        }
+
+        $container = $this->container;
+
+        // Its own key, not phue.server.attachers. Two modules registering under one key with
+        // singleton() means the second silently replaces the first — and when the DevTool timer
+        // did that to the Websocket module's hook, the server stopped registering onMessage and
+        // refused to start at all. Hooks and periodic tasks are different kinds of thing, so they
+        // get different keys and neither can clobber the other.
+        $this->container->singleton(
+            'phue.server.tickers',
+            static fn(): array => [
+                static function ($server) use ($intervalMs, $container): void {
+                    // Swoole\Timer rather than the server: there is no tick() on a Swoole server,
+                    // and discovering that at boot means a dev server that does not start.
+                    // Every worker, deliberately. Each holds different WebSocket connections with
+                    // different subscriptions, and a change found in one cannot be pushed from
+                    // another — so a single watcher would leave every tab on every other worker
+                    // waiting for an event nobody sends. There is no reliable way to ask a Swoole
+                    // server for its worker count, and guessing at a guard would silently disable
+                    // watching on the workers it excluded.
+                    $server->on('WorkerStart', static function ($server) use ($intervalMs, $container): void {
+                        \Swoole\Timer::tick($intervalMs, static function () use ($container): void {
+                            $container->get(LiveReloadWatcher::class)->tick();
+                        });
+                    });
+                },
+            ]
+        );
+    }
+
+    /**
+     * How often the watcher looks, in milliseconds.
+     *
+     * The same setting the toolbar used to poll at, now spent on the server. Zero switches the
+     * watcher off, which is what an application that has moved change detection into its own
+     * build step wants: nothing polls, nothing ticks, and the toolbar simply never reloads.
+     */
+    private function liveReloadIntervalMs(): int
+    {
+        /** @var Config $config */
+        $config = $this->container->get(Config::class);
+
+        $devtool = (array) $config->get('devtool', []);
+        $raw = $devtool['live_reload_interval_ms']
+            ?? DebugToolbar::WATCH_INTERVAL_MS;
+
+        return max(0, (int) $raw);
+    }
+
+    /**
      * Registers the profiling services and installs instrumentation.
      *
      * @return void
      */
     protected function bindings(): void
     {
+        $this->watchForChanges();
+
         $config = $this->container->has(Config::class)
             ? $this->container->get(Config::class)
             : null;

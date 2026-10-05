@@ -7,6 +7,8 @@ namespace Phue\Tests\DevTools;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Hiit\ChangeTracker;
+use Phue\Modules\DevTool\LiveReloadState;
+use Phue\Modules\DevTool\LiveReloadWatcher;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Modules\DevTool\LiveReloadRoute;
 use Phue\Tests\Support\TestCompilerBridge;
@@ -74,33 +76,56 @@ final class LiveReloadRouteTest extends TestCase
         );
     }
 
-    public function testWhatItReportsIsTheTrackersAnswer(): void
+    public function testWhatItReportsIsWhatTheWatcherRecorded(): void
     {
-        $tracker = new ChangeTracker([$this->loader()]);
-        $handler = new LiveReloadRoute($tracker);
+        $state = new LiveReloadState();
+        $watcher = $this->watcher($state);
+        $handler = new LiveReloadRoute($state);
 
         $this->assertSame(['changed' => []], $this->body($this->poll($handler)));
 
         $this->write('Alpha', 'changed');
+        $watcher->tick();
 
         $this->assertSame(
             ['changed' => ['Alpha']],
             $this->body($this->poll($handler)),
-            'the handler must report the tracker, not a private copy of the answer'
+            'the endpoint reports what the watcher found; it does not look for changes itself'
         );
     }
 
     /**
-     * The property that makes the split work: the answer advances because the tracker advanced,
-     * not because a handler remembered it.
+     * The split that made live reload possible: the endpoint cannot detect a change, because it
+     * only runs when somebody asks it to, and with a realtime channel nobody is asking.
      */
-    public function testTwoHandlersSharingATrackerDoNotEachKeepTheirOwnMemory(): void
+    public function testTheEndpointCannotNoticeAChangeOnItsOwn(): void
     {
-        $tracker = new ChangeTracker([$this->loader()]);
+        $state = new LiveReloadState();
+        $handler = new LiveReloadRoute($state);
+
         $this->write('Alpha', 'changed');
 
-        $first = new LiveReloadRoute($tracker);
-        $second = new LiveReloadRoute($tracker);
+        $this->assertSame(
+            ['changed' => []],
+            $this->body($this->poll($handler)),
+            'a change nobody announced is not visible to a poller, and that is the point'
+        );
+    }
+
+    /**
+     * The answer advances because the shared state advanced, not because a handler remembered it.
+     */
+    public function testTwoHandlersSharingTheStateDoNotEachKeepTheirOwnMemory(): void
+    {
+        $state = new LiveReloadState();
+        // Built before the write: the tracker primes its baseline when it is constructed, so a
+        // watcher built afterwards has already seen the change and would report nothing.
+        $watcher = $this->watcher($state);
+        $this->write('Alpha', 'changed');
+        $watcher->tick();
+
+        $first = new LiveReloadRoute($state);
+        $second = new LiveReloadRoute($state);
 
         $this->assertSame(['Alpha'], $this->body($this->poll($first))['changed']);
 
@@ -110,9 +135,32 @@ final class LiveReloadRouteTest extends TestCase
         $this->assertSame(
             [],
             $this->body($this->poll($second))['changed'],
-            'the state must live in the tracker, not in the handler'
+            'the change was already reported and must not be reported twice'
         );
     }
+
+    public function testTheWatcherKeepsThePollingFallbackWorkingWhenNobodyIsListening(): void
+    {
+        $state = new LiveReloadState();
+        $watcher = $this->watcher($state);
+
+        $this->write('Alpha', 'changed');
+        $watcher->tick();
+
+        // No broadcaster at all: the watcher constructed without one is the shape of an
+        // application that has switched the realtime module off, and its pages must still reload.
+        $this->assertSame(['Alpha'], $state->drain());
+    }
+
+    private function watcher(LiveReloadState $state): LiveReloadWatcher
+    {
+        return new LiveReloadWatcher(
+            new ChangeTracker([$this->loader()]),
+            $state,
+            null
+        );
+    }
+
 
     // ----------------------------------------------------------------------- helpers
 
@@ -135,7 +183,7 @@ final class LiveReloadRouteTest extends TestCase
 
     private function routeWithComponents(): LiveReloadRoute
     {
-        return new LiveReloadRoute(new ChangeTracker([$this->loader()]));
+        return new LiveReloadRoute(new LiveReloadState());
     }
 
     private function loader(): PhueComponentLoader

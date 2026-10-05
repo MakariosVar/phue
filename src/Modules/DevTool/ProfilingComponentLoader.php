@@ -7,8 +7,6 @@ namespace Phue\Modules\DevTool;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\TemplateCompilerBridge;
-use Phue\Modules\Websocket\Broadcast;
-use Phue\Modules\Websocket\WebsocketConfig;
 use Phue\Core\Container;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
@@ -131,18 +129,6 @@ class ProfilingComponentLoader extends PhueComponentLoader
             ['changed' => $extra > 0 ? [...$shown, sprintf('+%d more', $extra)] : $shown]
         );
 
-        // Announced on the realtime channel so an open page reloads without polling for it.
-        // Best effort by design: the DevTool is a diagnostic, and a missing broadcast must
-        // never be the reason a request fails. The poller in the toolbar is the fallback.
-        try {
-            if ($this->container !== null && $this->container->has(Broadcast::class)) {
-                $this->container->get(Broadcast::class)
-                    ->for(WebsocketConfig::DEV_ENDPOINT)
-                    ->to(LiveReloadRoute::ENDPOINT_TOPIC, 'components.changed', ['changed' => $changed]);
-            }
-        } catch (\Throwable) {
-            // Nothing to do. The browser is polling as well.
-        }
     }
 
     public function load(string $name, array $params = []): PhueComponent

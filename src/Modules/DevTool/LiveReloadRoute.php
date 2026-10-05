@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Phue\Modules\DevTool;
 
-use Phue\Core\Hiit\ChangeTracker;
 use Phue\Core\Response;
 
 /**
@@ -47,7 +46,8 @@ final class LiveReloadRoute
     public const ENDPOINT_TOPIC = '_phue:components';
 
     public function __construct(
-        private readonly ChangeTracker $tracker,
+        private readonly LiveReloadState $state,
+        private readonly ?LiveReloadWatcher $watcher = null,
     ) {
     }
 
@@ -56,9 +56,23 @@ final class LiveReloadRoute
      */
     public function __invoke(): Response
     {
-        // Without this a browser or an intermediary is free to serve the answer to the next poll
-        // from its own cache, and the page stops noticing changes that never happened.
-        return Response::json(['changed' => $this->tracker->changed()])
+        // Reads what the watcher already found rather than looking for changes itself. Two
+        // detectors would compete for one baseline: ChangeTracker moves its baseline as it
+        // answers, so whichever asked first would take the change and the other would see nothing.
+        //
+        // Without the cache header a browser or an intermediary is free to serve the answer to the
+        // next poll from its own cache, and the page stops noticing changes that never happened.
+        // Ticks first, so the endpoint still works where there is no timer to do it. Swoole runs
+        // the watcher on a tick and the change is already recorded by the time a poll arrives,
+        // making this scan a no-op; a server without a timer — anything but Swoole — has nobody
+        // else looking, and would otherwise answer "nothing changed" to every poll forever.
+        //
+        // Safe to do both because ChangeTracker moves its baseline as it answers: whichever gets
+        // there first reports the change and the other finds nothing. The two cannot both claim it
+        // and they cannot both miss it.
+        $this->watcher?->tick();
+
+        return Response::json(['changed' => $this->state->drain()])
             ->setHeader('Cache-Control', 'no-store, must-revalidate');
     }
 }
