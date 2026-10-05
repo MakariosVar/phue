@@ -9,7 +9,7 @@ use Phue\Core\Container;
 use Phue\Core\EventDispatcher;
 use Phue\Core\Request;
 use Phue\Core\Routing\Router;
-use Phue\Core\Websocket\Connection as SocketConnection;
+use Phue\Core\Websocket\Connection;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\Persistence\SessionLoginStore;
@@ -83,7 +83,7 @@ final class WebsocketSessionIdentityTest extends TestCase
             'the auth manager must resolve the fixture user'
         );
 
-        $this->transport->connect(new SocketConnection('7'));
+        $this->handshake(new Connection('7'));
 
         $this->assertSame([], $this->refusals(), 'a logged-in session must not be refused');
     }
@@ -92,7 +92,7 @@ final class WebsocketSessionIdentityTest extends TestCase
     {
         $this->module(withAuth: true);
 
-        $this->transport->connect(new SocketConnection('8'));
+        $this->handshake(new Connection('8'));
 
         $this->assertSame(
             [['8', 1008, 'authentication required']],
@@ -106,8 +106,8 @@ final class WebsocketSessionIdentityTest extends TestCase
         $this->module(withAuth: true);
 
         $_SESSION['__user_id'] = 1;
-        $this->transport->connect(
-            new SocketConnection('9'),
+        $this->handshake(
+            new Connection('9'),
             headers: ['Authorization' => 'Bearer somebody-elses-token']
         );
 
@@ -120,7 +120,7 @@ final class WebsocketSessionIdentityTest extends TestCase
     {
         $this->module(withAuth: false);
 
-        $this->transport->connect(new SocketConnection('10'), query: ['token' => 'abc']);
+        $this->handshake(new Connection('10'), query: ['token' => 'abc']);
 
         $this->assertSame([], $this->refusals());
     }
@@ -129,7 +129,7 @@ final class WebsocketSessionIdentityTest extends TestCase
     {
         $this->module(withAuth: false);
 
-        $this->transport->connect(new SocketConnection('11'));
+        $this->handshake(new Connection('11'));
 
         $this->assertSame([['11', 1008, 'authentication required']], $this->refusals());
     }
@@ -139,7 +139,7 @@ final class WebsocketSessionIdentityTest extends TestCase
         $this->module(withAuth: true, authThrows: true);
 
         // The handshake must not turn a logged-out visitor into a server error.
-        $this->transport->connect(new SocketConnection('12'));
+        $this->handshake(new Connection('12'));
 
         $this->assertSame([['12', 1008, 'authentication required']], $this->refusals());
     }
@@ -155,6 +155,22 @@ final class WebsocketSessionIdentityTest extends TestCase
             static fn (array $entry): array => [(string) $entry[0]->id(), $entry[1], $entry[2]],
             $this->transport->closed
         );
+    }
+
+    /**
+     * Connect, then say something.
+     *
+     * A refusal cannot be delivered during the handshake — the socket is not registered yet — so
+     * it is sent when the client's first frame arrives. Every real client sends one; a test that
+     * only connects would therefore see a refusal that never lands and pass for the wrong reason.
+     * The channel is empty on purpose, so it subscribes to nothing and sends nothing.
+     */
+    private function handshake(Connection $connection, array $headers = [], array $query = [], string $path = '/ws'): Connection
+    {
+        $this->transport->connect($connection, $headers, $query, $path);
+        $this->transport->message($connection, '{"act":"sub","ch":""}');
+
+        return $connection;
     }
 
     private function module(bool $withAuth, bool $authThrows = false): void

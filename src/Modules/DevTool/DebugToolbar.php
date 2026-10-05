@@ -1027,7 +1027,8 @@ class DebugToolbar
         // dead branch: dead code in an injected <script> is still bytes on every page.
         $themeScript = $themeMode === 'auto' ? $this->renderThemeScript($root) : '';
         $filterScript = $withFilter ? $this->renderFilterScript($root) : '';
-        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, json_encode(LiveReloadRoute::ENDPOINT_TOPIC, JSON_THROW_ON_ERROR));
+        $liveReloadScript = $this->renderLiveReloadScript($root, $liveReloadIntervalMs, json_encode(LiveReloadRoute::ENDPOINT_TOPIC, JSON_THROW_ON_ERROR),
+            json_encode(\Phue\Modules\Websocket\WebsocketConfig::DEV_ENDPOINT_PATH, JSON_THROW_ON_ERROR));
 
         $js = <<<JS
         (function () {
@@ -1136,8 +1137,12 @@ class DebugToolbar
      * @param int $intervalMs Gap between polls.
      * @return string
      */
-    private function renderLiveReloadScript(string $rootJson, int $intervalMs, string $topic): string
-    {
+    private function renderLiveReloadScript(
+        string $rootJson,
+        int $intervalMs,
+        string $topic,
+        string $wsEndpoint
+    ): string {
         // UNESCAPED_SLASHES on purpose: the path is the one thing a reader of the injected
         // script needs to recognise, and "\/_phue\/live-reload" is not it.
         $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
@@ -1199,7 +1204,10 @@ class DebugToolbar
                 var socket;
 
                 try {
-                    socket = new WebSocket(scheme + '//' + window.location.host + '/ws');
+                    // The development endpoint, which does not authenticate: a reload channel
+                    // carries no user data, so requiring a login would only mean live reload
+                    // quietly stops working for whoever is not signed in.
+                    socket = new WebSocket(scheme + '//' + window.location.host + {$wsEndpoint});
                 } catch (e) {
                     return;
                 }

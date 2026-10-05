@@ -8,6 +8,7 @@ use Phue\Core\UI\PhueComponentLoader;
 use Phue\Core\UI\PhueComponent;
 use Phue\Core\UI\TemplateCompilerBridge;
 use Phue\Modules\Websocket\Broadcast;
+use Phue\Modules\Websocket\WebsocketConfig;
 use Phue\Core\Container;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
@@ -136,6 +137,7 @@ class ProfilingComponentLoader extends PhueComponentLoader
         try {
             if ($this->container !== null && $this->container->has(Broadcast::class)) {
                 $this->container->get(Broadcast::class)
+                    ->for(WebsocketConfig::DEV_ENDPOINT)
                     ->to(LiveReloadRoute::ENDPOINT_TOPIC, 'components.changed', ['changed' => $changed]);
             }
         } catch (\Throwable) {

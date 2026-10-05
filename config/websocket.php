@@ -23,23 +23,46 @@ return [
      */
     'transport' => \Phue\Modules\Websocket\SwooleWebSocketTransport::class,
 
-    'allowed_origins' => [
-        // 'https://app.example.com',
-    ],
-
     /*
-     * Messages kept per topic so a client that was disconnected can be caught up.
+     * The endpoints clients connect to, keyed by name.
      *
-     * This is the setting that makes reconnecting work: a phone that was backgrounded has an
-     * OS-suspended socket, and on resume it needs to be told what it missed rather than handed
-     * the next event as though nothing happened. Topics listed here retain that many messages;
-     * anything not listed retains `default_retention` unless that is zero.
+     * An endpoint is a path plus the rules that apply to it, and each keeps its own topics. That
+     * separation is what makes `auth` mean anything: a connection opened on an endpoint that does
+     * not authenticate cannot subscribe to a topic belonging to one that does, because the two do
+     * not share a registry. One global setting would have forced a choice between locking the
+     * development reload channel behind a login and leaving application data reachable without
+     * one.
+     *
+     * `auth` defaults to true, and setting it to false is refused outside debug mode: a flag like
+     * that is exactly what travels unnoticed from a development config into a deployment, and the
+     * application should say so at boot rather than after the data has been read.
+     *
+     * Each endpoint takes `endpoint`, `auth`, `allowed_origins`, `retention` and
+     * `default_retention`.
      */
-    'retention' => [
-        // 'user:42:orders' => 100,
-    ],
+    'websockets' => [
+        'app' => [
+            'endpoint' => '/ws',
+            // 'auth' => true,
+            'allowed_origins' => [
+                // 'https://app.example.com',
+            ],
 
-    'default_retention' => 100,
+            /*
+             * Messages kept per topic so a client that was disconnected can be caught up.
+             *
+             * This is the setting that makes reconnecting work: a phone that was backgrounded has
+             * an OS-suspended socket, and on resume it needs to be told what it missed rather than
+             * handed the next event as though nothing happened. Topics listed here retain that
+             * many messages; anything not listed retains `default_retention` unless that is zero.
+             */
+            'retention' => [
+                // 'user:42:orders' => 100,
+            ],
+
+            'default_retention' => 100,
+        ],
+    ],
 
     /*
      * Unread messages a single connection may hold before new ones are dropped rather than

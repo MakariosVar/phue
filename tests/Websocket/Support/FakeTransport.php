@@ -75,11 +75,19 @@ final class FakeTransport implements WebSocketTransport
 
     // ------------------------------------------------------------- test-side triggers
 
-    public function connect(Connection $connection, array $headers = [], array $query = []): void
-    {
+    /**
+     * @param string $path The path being connected to, because an endpoint is chosen by path and
+     *        a fake that always says /ws cannot express a handshake for any other endpoint.
+     */
+    public function connect(
+        Connection $connection,
+        array $headers = [],
+        array $query = [],
+        string $path = '/ws'
+    ): void {
         ($this->onConnect)($connection, new Request(
             method: 'GET',
-            uri: '/ws',
+            uri: $path,
             queryParams: $query,
             headers: $headers,
         ));

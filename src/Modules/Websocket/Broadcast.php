@@ -18,9 +18,27 @@ use Phue\Core\Websocket\TopicRegistry;
  */
 final class Broadcast
 {
+    /**
+     * @param callable(string): TopicRegistry $registries Resolves an endpoint name to its
+     *        registry. A callable rather than a registry because there is one per endpoint, and
+     *        which one a publish belongs to is the caller's decision, not the framework's.
+     */
     public function __construct(
-        private readonly TopicRegistry $registry,
+        private readonly mixed $registries,
     ) {
+    }
+
+    /**
+     * Scope a broadcast to one endpoint.
+     *
+     * An endpoint is part of every publish because endpoints do not merely authenticate, they
+     * separate: each keeps its own topics, so a message published to one can never reach a
+     * subscriber on another. A publish that did not name an endpoint would have to guess, and a
+     * guess here is a message delivered to the wrong audience.
+     */
+    public function for(string $endpoint): self
+    {
+        return new self(fn(): TopicRegistry => ($this->registries)($endpoint));
     }
 
     /**
@@ -35,7 +53,7 @@ final class Broadcast
      */
     public function to(string $channel, string $event, mixed $data = null, array $except = []): int
     {
-        return $this->registry->publish($channel, $event, $data, $except);
+        return ($this->registries)()->publish($channel, $event, $data, $except);
     }
 
     /**
@@ -55,6 +73,22 @@ final class Broadcast
     public function toUser(string $userId, string $event, mixed $data = null, array $except = []): int
     {
         return $this->to(self::userChannel($userId), $event, $data, $except);
+    }
+
+    /**
+     * The endpoint a connection is watching, for a client that wants to know why it was refused.
+     *
+     * @return list<string>
+     */
+    public function endpoints(): array
+    {
+        $names = [];
+
+        foreach (['app', WebsocketConfig::DEV_ENDPOINT] as $candidate) {
+            $names[] = $candidate;
+        }
+
+        return $names;
     }
 
     /**
@@ -103,14 +137,18 @@ final class Broadcast
      */
     public function listeners(string $channel): int
     {
-        return $this->registry->subscriberCount($channel);
+        return ($this->registries)()->subscriberCount($channel);
     }
 
     /**
-     * @return TopicRegistry
+     * The registry this broadcast is scoped to.
+     *
+     * Exposed for the places that need to reason about one endpoint's topics directly — the
+     * module's diagnostics, mainly. Reading another endpoint's registry is possible but pointless,
+     * because a connection on it will never appear here.
      */
     public function registry(): TopicRegistry
     {
-        return $this->registry;
+        return ($this->registries)();
     }
 }

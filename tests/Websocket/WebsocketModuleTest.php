@@ -62,6 +62,15 @@ final class WebsocketModuleTest extends TestCase
         // setting it later leaves the real transport in place and the fake unwired.
         $config['transport'] = FakeTransport::class;
 
+        // Everything in the passed array describes one endpoint, so these tests keep reading as
+        // "the app endpoint" rather than having to name it at every call site. Defaults are
+        // merged rather than replaced so a test can set one key and inherit the rest.
+        $config['websockets'] = ['app' => array_merge([
+            'endpoint' => '/ws',
+            'auth' => true,
+            'default_retention' => 0,
+        ], $config)];
+
         $dir = sys_get_temp_dir() . '/phue_ws_' . bin2hex(random_bytes(6));
         mkdir($dir, 0777, true);
         $this->tempDirs[] = $dir;
@@ -87,9 +96,28 @@ final class WebsocketModuleTest extends TestCase
         $this->module->init();
 
         // Not bound when the module is off, and there is nothing to register in that case.
+        // Reached through Broadcast rather than from the container, because a registry now belongs
+        // to an endpoint and asking the container for "the" registry is the ambiguity the change
+        // removed.
         $this->registry = $this->container->get(WebsocketConfig::class)->enabled
-            ? $this->container->get(TopicRegistry::class)
+            ? $this->container->get(Broadcast::class)->for('app')->registry()
             : null;
+    }
+
+    /**
+     * Connect, then say something.
+     *
+     * A refusal cannot be delivered during the handshake — the socket is not registered yet — so
+     * it is sent when the client's first frame arrives. Every real client sends one; a test that
+     * only connects would therefore see a refusal that never lands and pass for the wrong reason.
+     * The channel is empty on purpose, so it subscribes to nothing and sends nothing.
+     */
+    private function handshake(Connection $connection, array $headers = [], array $query = [], string $path = '/ws'): Connection
+    {
+        $this->transport->connect($connection, $headers, $query, $path);
+        $this->transport->message($connection, '{"act":"sub","ch":""}');
+
+        return $connection;
     }
 
     protected function tearDown(): void
@@ -115,7 +143,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => null);
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
 
         $this->assertCount(1, $this->transport->closed);
         $this->assertSame(1008, $this->transport->closed[0][1]);
@@ -127,7 +155,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
 
         $this->assertSame([], $this->transport->closed);
         $this->assertSame('user:42', $connection->identity());
@@ -138,7 +166,7 @@ final class WebsocketModuleTest extends TestCase
         $this->boot();
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Authorization' => 'Bearer tok_abc']);
+        $this->handshake($connection, headers: ['Authorization' => 'Bearer tok_abc']);
 
         $this->assertSame([], $this->transport->closed);
         $this->assertSame('tok_abc', $connection->identity());
@@ -151,7 +179,7 @@ final class WebsocketModuleTest extends TestCase
         // A native WebSocket cannot be relied on to send custom headers, so the token may have
         // to ride in the query string.
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, query: ['token' => 'tok_xyz']);
+        $this->handshake($connection, query: ['token' => 'tok_xyz']);
 
         $this->assertSame('tok_xyz', $connection->identity());
     }
@@ -161,7 +189,7 @@ final class WebsocketModuleTest extends TestCase
         $this->boot();
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Authorization' => 'Basic dXNlcjpwdw==']);
+        $this->handshake($connection, headers: ['Authorization' => 'Basic dXNlcjpwdw==']);
 
         $this->assertCount(1, $this->transport->closed);
     }
@@ -174,7 +202,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Origin' => 'https://evil.example']);
+        $this->handshake($connection, headers: ['Origin' => 'https://evil.example']);
 
         $this->assertCount(1, $this->transport->closed);
         $this->assertSame(1008, $this->transport->closed[0][1]);
@@ -186,7 +214,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Origin' => 'https://app.example.com']);
+        $this->handshake($connection, headers: ['Origin' => 'https://app.example.com']);
 
         $this->assertSame([], $this->transport->closed);
     }
@@ -197,7 +225,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Origin' => 'https://anywhere.example']);
+        $this->handshake($connection, headers: ['Origin' => 'https://anywhere.example']);
 
         // Default deny. A deployment that configured nothing must not silently accept every
         // origin in the world.
@@ -212,7 +240,7 @@ final class WebsocketModuleTest extends TestCase
         // A phone or a server sends no Origin at all, and rejects it here would reject every
         // client that is not a web page.
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
 
         $this->assertSame([], $this->transport->closed);
     }
@@ -223,7 +251,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection, headers: ['Origin' => 'http://192.168.1.5:8080']);
+        $this->handshake($connection, headers: ['Origin' => 'http://192.168.1.5:8080']);
 
         $this->assertSame([], $this->transport->closed, 'the dev server moves between hosts and ports all the time');
     }
@@ -236,10 +264,10 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
         $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'user:42:orders']));
 
-        $this->container->get(Broadcast::class)->toUserTopic('42', 'orders', 'order.paid', ['id' => 9]);
+        $this->container->get(Broadcast::class)->for('app')->toUserTopic('42', 'orders', 'order.paid', ['id' => 9]);
 
         $messages = $this->transport->decoded();
 
@@ -256,15 +284,15 @@ final class WebsocketModuleTest extends TestCase
 
         $scoped = new Connection('fd1');
         $wholeStream = new Connection('fd2');
-        $this->transport->connect($scoped);
-        $this->transport->connect($wholeStream);
+        $this->handshake($scoped);
+        $this->handshake($wholeStream);
         $this->transport->message($scoped, json_encode(['act' => 'sub', 'ch' => 'user:42:orders']));
         $this->transport->message($wholeStream, json_encode(['act' => 'sub', 'ch' => 'user:42']));
 
         // Conflating these is how a subscriber ends up waiting on a channel nobody publishes
         // to, and it is invisible until a message simply never arrives.
-        $this->container->get(Broadcast::class)->toUserTopic('42', 'orders', 'scoped');
-        $this->container->get(Broadcast::class)->toUser('42', 'whole');
+        $this->container->get(Broadcast::class)->for('app')->toUserTopic('42', 'orders', 'scoped');
+        $this->container->get(Broadcast::class)->for('app')->toUser('42', 'whole');
 
         $byConnection = [];
 
@@ -284,11 +312,11 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
         $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'orders']));
         $this->transport->message($connection, json_encode(['act' => 'unsub', 'ch' => 'orders']));
 
-        $this->container->get(Broadcast::class)->to('orders', 'x');
+        $this->container->get(Broadcast::class)->for('app')->to('orders', 'x');
 
         $this->assertCount(0, $this->transport->sent);
     }
@@ -299,7 +327,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
 
         // A client that sends rubbish should get silence and a chance to correct itself, not a
         // connection it cannot reopen.
@@ -317,7 +345,7 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
         $this->transport->message($connection, json_encode(['act' => 'ping', 'ch' => 'orders']));
 
         $messages = $this->transport->decoded();
@@ -331,14 +359,14 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
         $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'orders']));
         $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'payments']));
 
         $this->transport->disconnect($connection);
 
         $this->transport->sent = [];
-        $this->container->get(Broadcast::class)->to('orders', 'x');
+        $this->container->get(Broadcast::class)->for('app')->to('orders', 'x');
 
         // Leaving the subscriptions behind is how a registry grows without bound.
         $this->assertCount(0, $this->transport->sent);
@@ -351,11 +379,11 @@ final class WebsocketModuleTest extends TestCase
         $this->module->authenticateWith(static fn(): ?string => 'user:42');
 
         $connection = new Connection('fd1');
-        $this->transport->connect($connection);
+        $this->handshake($connection);
         $this->transport->message($connection, json_encode(['act' => 'sub', 'ch' => 'orders']));
 
         $this->transport->failing['fd1'] = true;
-        $this->container->get(Broadcast::class)->to('orders', 'missed');
+        $this->container->get(Broadcast::class)->for('app')->to('orders', 'missed');
 
         $this->assertSame(0, $connection->lastSeen());
     }
