@@ -161,6 +161,12 @@ class WebsocketModule extends Module
             fn(Connection $c) => $this->registryFor($this->endpoints[$c] ?? null)?->detach($c)
         );
 
+        // A key, so another module can ask whether realtime is actually wired without guessing.
+        // Container::has() is not that answer: it answers true for any autowireable class, and
+        // Broadcast is one. Asking it produced a half-built broadcaster with a null resolver, and
+        // the caller only stayed correct because the null call threw.
+        $this->container->singleton('phue.websocket.active', static fn(): bool => true);
+
         // Handed to whichever server the application runs. Keyed rather than injected because
         // the transport is a singleton the server creates, not one the module owns.
         $this->container->singleton('phue.server.attachers', static fn(): array => [

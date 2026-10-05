@@ -150,7 +150,11 @@ class DevToolsModule extends Module
                 // the polling endpoint. The broadcaster is a dependency of the feature, not of the
                 // capability, and making it required would mean live reload stops working
                 // entirely the moment the realtime module is switched off.
-                $this->container->has(\Phue\Modules\Websocket\Broadcast::class)
+                //
+                // Asked of a key the Websocket module registers when it wires itself up, not of
+                // Broadcast::class: has() answers true for any autowireable class, so that check
+                // was satisfied by a module that had never run.
+                $this->container->has('phue.websocket.active')
                     ? $this->container->get(\Phue\Modules\Websocket\Broadcast::class)
                     : null
             )

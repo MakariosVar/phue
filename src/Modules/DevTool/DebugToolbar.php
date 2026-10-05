@@ -1238,7 +1238,14 @@ class DebugToolbar
                 }
 
                 socket.onopen = function () {
-                    pushed = true;
+                    // Deliberately not `pushed = true` here. An open socket only proves the
+                    // handshake completed, and a Swoole server completes that on its own — so a
+                    // server with the module configured but switched off, or missing its hooks
+                    // entirely, accepts the connection and then never says anything. Marking the
+                    // channel live on open made the client stop polling at exactly that moment:
+                    // an open socket, a subscribed topic, and no live reload, with nothing in the
+                    // logs. `pushed` therefore means the channel has proved itself, which only a
+                    // delivered message can do.
                     socket.send(JSON.stringify({ act: 'sub', ch: topic }));
                 };
 
@@ -1248,6 +1255,8 @@ class DebugToolbar
                     // The version is checked because the field exists to be checked: acting on an
                     // envelope from a protocol version this client does not know is how a future
                     // format silently breaks today's page instead of being ignored by it.
+                    pushed = true;
+
                     if (message && message.v === 1 && message.ev === 'components.changed') { reload(); }
                 };
 

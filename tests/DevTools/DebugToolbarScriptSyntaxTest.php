@@ -90,6 +90,69 @@ final class DebugToolbarScriptSyntaxTest extends TestCase
     }
 
     /**
+     * The regression that made live reload silently dead.
+     *
+     * A Swoole server completes a WebSocket handshake on its own, so an open socket proves
+     * nothing about whether the module is wired. Treating "open" as "the channel works" meant a
+     * server with the module configured but switched off — which accepts the connection and then
+     * says nothing — silenced the polling fallback exactly when it was needed.
+     */
+    public function testTheRealtimeChannelOnlyCountsOnceItHasDeliveredSomething(): void
+    {
+        $script = $this->liveReloadScript();
+
+        $onOpen = strpos($script, 'socket.onopen');
+        $onMessage = strpos($script, 'socket.onmessage');
+
+        $this->assertNotFalse($onOpen);
+        $this->assertNotFalse($onMessage);
+
+        // The flag must not be set in the open handler, and must be set when a message lands.
+        $openHandler = $this->withoutComments(substr($script, $onOpen, $onMessage - $onOpen));
+        $this->assertStringNotContainsString(
+            'pushed = true',
+            $openHandler,
+            'an open socket proves only that the handshake completed'
+        );
+
+        $messageHandler = $this->withoutComments(substr($script, $onMessage, 700));
+        $this->assertStringContainsString(
+            'pushed = true',
+            $messageHandler,
+            'a delivered message is the only proof the channel works'
+        );
+    }
+
+    /**
+     * The script with its comments removed.
+     *
+     * The comments in this file explain exactly why the flag must not be set on open, and they
+     * name the flag while doing it — so an assertion over the raw text fails on the explanation
+     * rather than on the code. A test that cannot tell prose from behaviour is a test that gets
+     * "fixed" by deleting the comment.
+     */
+    private function withoutComments(string $script): string
+    {
+        return (string) preg_replace('#^\s*//.*$#m', '', $script);
+    }
+
+    private function liveReloadScript(): string
+    {
+        $html = (new \Phue\Modules\DevTool\DebugToolbar())->render(
+            new \Phue\Modules\DevTool\RequestProfiler(new \Phue\Modules\DevTool\Stopwatch()),
+            1.0
+        );
+
+        foreach ($this->extractInlineScripts($html) as $script) {
+            if (str_contains($script, 'socket.onopen')) {
+                return $script;
+            }
+        }
+
+        $this->fail('the toolbar did not emit a realtime client');
+    }
+
+    /**
      * @return list<string>
      */
     private function extractInlineScripts(string $html): array

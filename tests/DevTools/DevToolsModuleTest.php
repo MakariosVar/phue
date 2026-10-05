@@ -36,6 +36,49 @@ class DevToolsModuleTest extends TestCase
     /** @var string Component directory of the throwaway application. */
     private string $componentDir = '';
 
+    /**
+     * The module the Websocket module would satisfy, and the one it does not.
+     *
+     * has() answers true for any autowireable class, so asking it whether Broadcast existed was
+     * satisfied by a project with no Websocket module at all — and get() then built a broadcaster
+     * with a null resolver. Live reload stayed correct only because the null call threw and the
+     * exception was swallowed into the polling fallback.
+     */
+    public function testNoWebsocketModuleMeansNoBroadcasterRatherThanAHalfBuiltOne(): void
+    {
+        $app = $this->app(true, true);
+
+        $this->assertFalse(
+            $app->getContainer()->has('phue.websocket.active'),
+            'nothing registered the realtime module'
+        );
+
+        $watcher = $app->getContainer()->get(LiveReloadWatcher::class);
+        $property = new \ReflectionProperty($watcher, 'broadcast');
+
+        $this->assertNull($property->getValue($watcher), 'a null broadcaster, not a broken one');
+    }
+
+    public function testTheWatcherStillReportsWithoutAWebsocketModule(): void
+    {
+        $app = $this->app(true, true);
+        $componentDir = $this->componentDir;
+
+        $watcher = $app->getContainer()->get(LiveReloadWatcher::class);
+        $watcher->tick();
+
+        file_put_contents(
+            $componentDir . '/PolledComponent.phue',
+            "<template><b>x</b></template>\n<script>export default {}</script>"
+        );
+
+        $this->assertSame(
+            ['PolledComponent'],
+            $watcher->tick(),
+            'the polling fallback is the whole feature when there is no realtime channel'
+        );
+    }
+
     protected function tearDown(): void
     {
         parent::tearDown();
