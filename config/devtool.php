@@ -102,6 +102,42 @@ return [
     'sql_literals' => 'redact',
 
     /**
+     * AsyncDumper configuration.
+     *
+     * Controls the behavior of the request-scoped async dumper.
+     */
+    'dumper' => [
+        /**
+         * Maximum number of dumps to collect per request.
+         *
+         * Prevents memory exhaustion in case of accidental dump loops.
+         */
+        'max_dumps' => 50,
+
+        /**
+         * Maximum depth for object/array traversal when sanitizing.
+         *
+         * Deeper structures are truncated with '[Max depth reached]'.
+         */
+        'max_depth' => 8,
+
+        /**
+         * Keys (case-insensitive substring match) to redact in dumped values.
+         *
+         * Matching keys will have their values replaced with '***REDACTED***'.
+         */
+        'redact_keys' => ['password', 'token', 'secret', 'api_key', 'ssn'],
+
+        /**
+         * Sampling rate (0.0 - 1.0).
+         *
+         * 1.0 = dump every time (development).
+         * 0.01 = dump 1% of requests (production debugging).
+         */
+        'sampling_rate' => 1.0,
+    ],
+
+    /**
      * Theme rendered before the browser-side resolver runs.
      *
      * The server cannot know the resolved client theme when the application preference is

@@ -299,8 +299,15 @@ class DevToolsModule extends Module
             $this->warn($profiler, 'Database instrumentation skipped', $e);
         }
 
-        $this->container->get(\Phue\Core\Application::class)
-            ->use(DevToolMiddleware::class);
+        $app = $this->container->get(\Phue\Core\Application::class);
+        $app->use(DevToolMiddleware::class);
+        $app->use(\Phue\Core\Http\Middleware\DumperFlushMiddleware::class);
+        $app->use(
+            new \Phue\Core\Http\Middleware\NPlusOneGuardMiddleware(
+                $this->container->get(\Phue\Core\Database\NPlusOneDetector::class),
+                $this->container->get(\Phue\Core\Routing\Router::class)
+            )
+        );
     }
 
     /**
@@ -353,6 +360,31 @@ class DevToolsModule extends Module
                 $this->container->get(DebugToolbar::class),
                 $options
             )
+        );
+
+        // Register AsyncDumper and flush middleware
+        $dumperOptions = $options['dumper'] ?? [];
+        $this->container->scoped(
+            \Phue\Core\Debug\AsyncDumper::class,
+            fn(): \Phue\Core\Debug\AsyncDumper => new \Phue\Core\Debug\AsyncDumper(
+                $dumperOptions['max_dumps'] ?? 50,
+                $dumperOptions['max_depth'] ?? 8,
+                $dumperOptions['redact_keys'] ?? ['password', 'token', 'secret', 'api_key', 'ssn'],
+                $dumperOptions['sampling_rate'] ?? 1.0
+            )
+        );
+
+        $this->container->singleton(
+            \Phue\Core\Http\Middleware\DumperFlushMiddleware::class,
+            fn(): \Phue\Core\Http\Middleware\DumperFlushMiddleware => new \Phue\Core\Http\Middleware\DumperFlushMiddleware(
+                $this->container->get(\Phue\Core\Debug\AsyncDumper::class)
+            )
+        );
+
+        // Register Dumps panel
+        $this->container->singleton(
+            \Phue\Modules\DevTool\Panels\DumpsPanel::class,
+            static fn(): \Phue\Modules\DevTool\Panels\DumpsPanel => new \Phue\Modules\DevTool\Panels\DumpsPanel()
         );
     }
 

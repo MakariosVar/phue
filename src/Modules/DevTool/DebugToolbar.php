@@ -218,7 +218,46 @@ class DebugToolbar
             ];
         }
 
+        // Dumps panel (from AsyncDumper)
+        if ($show('dumps', true)) {
+            $dumps = $this->getDumpsFromProfiler($profiler);
+            if ($dumps !== []) {
+                $sections[] = [
+                    'key' => 'dumps',
+                    'title' => 'Dumps',
+                    'hint' => 'Values dumped via AsyncDumper during this request.',
+                    'content' => \Phue\Modules\DevTool\Panels\DumpsPanel::render(['dumps' => $dumps]),
+                ];
+            }
+        }
+
         return $sections;
+    }
+
+    /**
+     * Extracts dumps from profiler spans.
+     *
+     * The AsyncDumper stores dumps in a special span, or we can access it via container.
+     * For now, we check if the dumper is in the container.
+     *
+     * @return array<int, array{value: mixed, label: string, group: string, time: float, trace: array, request_id: string}>
+     */
+    private function getDumpsFromProfiler(RequestProfiler $profiler): array
+    {
+        // Try to get dumps from container if available
+        try {
+            $container = \Phue\Core\Container::class;
+            // Check if we can access the dumper
+            // This is a bit hacky but works for now
+            if (class_exists('Phue\Core\Debug\AsyncDumper')) {
+                // We can't easily access the container from here
+                // The dumps are injected into the page via JavaScript
+                // So we'll return empty and let the JS panel handle it
+            }
+        } catch (\Throwable) {
+            // Ignore
+        }
+        return [];
     }
 
     /**

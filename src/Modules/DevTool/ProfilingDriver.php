@@ -134,6 +134,15 @@ class ProfilingDriver implements DriverInterface
         return $this->inner->getName();
     }
 
+    public function explain(string $sql, array $params = []): array
+    {
+        return $this->profiler->measure(
+            'db.explain',
+            fn(): array => $this->inner->explain($sql, $params),
+            $this->describe($sql, count($params))
+        );
+    }
+
     /**
      * Wrap a statement so its consumption is measured too.
      *
