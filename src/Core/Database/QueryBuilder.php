@@ -375,6 +375,157 @@ class QueryBuilder
     }
 
     /**
+     * Dumps the query SQL with bindings and executes EXPLAIN ANALYZE,
+     * then terminates execution. For debugging only.
+     *
+     * @return never
+     * @throws \RuntimeException If EXPLAIN is not supported by the driver
+     */
+    public function dd(): never
+    {
+        $sql = $this->toSql();
+        $bindings = $this->getBindings();
+
+        $output = $this->formatQueryDump($sql, $bindings);
+
+        // Try to get EXPLAIN ANALYZE
+        try {
+            $explain = $this->connection->explain($sql, $bindings);
+            $output .= "\n\n--- EXPLAIN ANALYZE ---\n";
+            $output .= $this->formatExplainOutput($explain);
+        } catch (\Throwable $e) {
+            $output .= "\n\n--- EXPLAIN not available ---\n";
+            $output .= $e->getMessage();
+        }
+
+        // Dump and die
+        if (php_sapi_name() === 'cli') {
+            fwrite(STDERR, $output . "\n");
+        } else {
+            // In web context, dump to response and exit
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $output;
+        }
+
+        exit(1);
+    }
+
+    /**
+     * Returns the EXPLAIN ANALYZE output for the current query without executing it.
+     *
+     * @return array<int, mixed> EXPLAIN result rows
+     * @throws \RuntimeException If EXPLAIN is not supported by the driver
+     */
+    public function explain(): array
+    {
+        return $this->connection->explain($this->toSql(), $this->getBindings());
+    }
+
+    /**
+     * Formats query dump with bindings for display.
+     */
+    private function formatQueryDump(string $sql, array $bindings): string
+    {
+        $lines = [];
+        $lines[] = '=== QUERY DUMP ===';
+        $lines[] = 'SQL: ' . $sql;
+        $lines[] = '';
+
+        if ($bindings !== []) {
+            $lines[] = 'Bindings:';
+            foreach ($bindings as $i => $binding) {
+                $type = get_debug_type($binding);
+                $value = is_scalar($binding) ? (string)$binding : get_debug_type($binding);
+                $lines[] = sprintf('  [$i] (%s) %s', $type, $value);
+            }
+        } else {
+            $lines[] = 'Bindings: (none)';
+        }
+
+        $lines[] = '';
+        $lines[] = '=== Compiled SQL (with bindings inline) ===';
+        $lines[] = $this->interpolateBindings($sql, $bindings);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Interpolates bindings into SQL for display purposes only.
+     */
+    private function interpolateBindings(string $sql, array $bindings): string
+    {
+        $result = $sql;
+        foreach ($bindings as $binding) {
+            $placeholder = '?';
+            $pos = strpos($result, $placeholder);
+            if ($pos !== false) {
+                $quoted = $this->quoteValue($binding);
+                $result = substr_replace($result, $quoted, $pos, strlen($placeholder));
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Quotes a value for SQL display.
+     */
+    private function quoteValue(mixed $value): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+        if (is_bool($value)) {
+            return $value ? 'TRUE' : 'FALSE';
+        }
+        if (is_int($value) || is_float($value)) {
+            return (string)$value;
+        }
+        return "'" . addslashes((string)$value) . "'";
+    }
+
+    /**
+     * Formats EXPLAIN output for display.
+     */
+    private function formatExplainOutput(array $rows): string
+    {
+        if ($rows === []) {
+            return '(empty result)';
+        }
+
+        // Get column headers from first row
+        $headers = array_keys($rows[0]);
+        $widths = array_map('strlen', $headers);
+
+        // Calculate column widths
+        foreach ($rows as $row) {
+            foreach ($headers as $header) {
+                $widths[$header] = max($widths[$header], strlen((string)($row[$header] ?? '')));
+            }
+        }
+
+        $lines = [];
+
+        // Header
+        $headerLine = '';
+        foreach ($headers as $header) {
+            $headerLine .= str_pad($header, $widths[$header] + 2);
+        }
+        $lines[] = $headerLine;
+        $lines[] = str_repeat('-', strlen($headerLine));
+
+        // Rows
+        foreach ($rows as $row) {
+            $rowLine = '';
+            foreach ($headers as $header) {
+                $rowLine .= str_pad((string)($row[$header] ?? ''), $widths[$header] + 2);
+            }
+            $lines[] = $rowLine;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * Inserts a record into the database table.
      *
      * @param array<string, mixed> $values Key-value map of column values to insert.

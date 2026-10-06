@@ -51,4 +51,18 @@ class MysqlDriver extends AbstractPdoDriver
     {
         return 'mysql';
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function doExplain(string $sql, array $params): array
+    {
+        $this->connect();
+
+        $explainSql = 'EXPLAIN ANALYZE ' . $sql;
+        $stmt = $this->pdo->prepare($explainSql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
 }

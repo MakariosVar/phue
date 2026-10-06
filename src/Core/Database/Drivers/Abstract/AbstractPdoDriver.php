@@ -136,4 +136,22 @@ abstract class AbstractPdoDriver implements PdoDriverInterface
 
         return $this->pdo->inTransaction();
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function explain(string $sql, array $params = []): array
+    {
+        return $this->doExplain($sql, $params);
+    }
+
+    /**
+     * Driver-specific EXPLAIN implementation.
+     *
+     * @param string $sql Query with placeholders
+     * @param array $params Parameter bindings
+     * @return array<int, mixed> EXPLAIN result rows
+     * @throws \RuntimeException If EXPLAIN is not supported
+     */
+    abstract protected function doExplain(string $sql, array $params): array;
 }

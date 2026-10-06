@@ -73,4 +73,14 @@ interface DriverInterface
      * Returns the lowercased identifier of the driver (e.g. 'sqlite', 'mysql', 'pgsql').
      */
     public function getName(): string;
+
+    /**
+     * Executes EXPLAIN ANALYZE for a query and returns the result rows.
+     *
+     * @param string $sql Query with placeholders
+     * @param array<string|int, mixed> $params Parameter bindings
+     * @return array<int, mixed> EXPLAIN result rows
+     * @throws \RuntimeException If EXPLAIN is not supported
+     */
+    public function explain(string $sql, array $params = []): array;
 }

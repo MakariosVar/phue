@@ -45,4 +45,18 @@ class SqliteDriver extends AbstractPdoDriver
     {
         return 'sqlite';
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function doExplain(string $sql, array $params): array
+    {
+        $this->connect();
+
+        $explainSql = 'EXPLAIN QUERY PLAN ' . $sql;
+        $stmt = $this->pdo->prepare($explainSql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
 }

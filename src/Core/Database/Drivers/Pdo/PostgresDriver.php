@@ -51,4 +51,28 @@ class PostgresDriver extends AbstractPdoDriver
     {
         return 'pgsql';
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function doExplain(string $sql, array $params): array
+    {
+        $this->connect();
+
+        $explainSql = 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' . $sql;
+        $stmt = $this->pdo->prepare($explainSql);
+        $stmt->execute($params);
+
+        $result = $stmt->fetchAll();
+
+        // Postgres returns JSON array with one element containing the plan
+        if ($result !== [] && isset($result[0][0])) {
+            $plan = $result[0][0];
+            if (is_array($plan)) {
+                return $plan;
+            }
+        }
+
+        return $result;
+    }
 }
