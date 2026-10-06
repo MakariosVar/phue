@@ -482,3 +482,127 @@ For model-driven tables, Schii can auto-migrate missing tables/columns — see
 `Phue\Core\Database\SqlIdentifier` sanitizes SQL identifiers with regex
 whitelist validation (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) and provides dialect-aware
 quoting: backticks for MySQL/SQLite, double quotes for PostgreSQL.
+
+---
+
+## 8. Debugging & Profiling Tools
+
+### 8.1 N+1 Query Guard
+
+The `#[NPlusOneGuard]` attribute detects N+1 query patterns in controller actions
+and throws a detailed exception (or logs a warning) when the same query pattern
+executes repeatedly within a single request.
+
+```php
+use Phue\Core\Database\Attributes\NPlusOneGuard;
+
+class UserController
+{
+    #[NPlusOneGuard(threshold: 5, throw: true)]
+    public function index(): Response
+    {
+        $users = User::all(); // 1 query
+        
+        foreach ($users as $user) {
+            // This triggers N+1: 1 query per user!
+            echo $user->posts->count(); // Throws: "N+1 query detected: 12 similar queries executed..."
+        }
+    }
+}
+```
+
+**How it works:**
+- Tracks query fingerprints (normalized SQL structure without literals)
+- Groups similar queries and counts occurrences
+- Triggers when count exceeds `threshold` (default: 5)
+- Reports exact file:line locations from the call stack
+- Request-scoped, zero overhead when not active
+
+**Configuration:**
+- `threshold` — minimum similar queries to trigger (default: 5)
+- `throw` — whether to throw `RuntimeException` or just log warning (default: true)
+
+**Enable globally** (applies to all requests in debug mode):
+```php
+// In a service provider or bootstrapping code
+$app->use(\Phue\Core\Http\Middleware\NPlusOneGuardMiddleware::class);
+```
+
+### 8.2 QueryBuilder::dd() with EXPLAIN ANALYZE
+
+The `dd()` method dumps the compiled SQL, bound parameters, and executes
+`EXPLAIN ANALYZE` (or driver equivalent) — then terminates execution.
+
+```php
+use Phue\Core\Database\QueryBuilder;
+
+$users = $db->table('users')
+    ->where('status', 'active')
+    ->with('posts.comments')
+    ->dd(); // Dumps SQL + bindings + EXPLAIN output, then exits
+```
+
+**Output includes:**
+- Raw SQL with placeholders
+- Bound parameters with types
+- Interpolated SQL for readability
+- Driver-specific `EXPLAIN ANALYZE` formatted as table
+
+**Per-driver EXPLAIN output:**
+| Driver | Command | Format |
+|---|---|---|
+| MySQL | `EXPLAIN ANALYZE` | Tabular |
+| PostgreSQL | `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` | JSON plan |
+| SQLite | `EXPLAIN QUERY PLAN` | Tabular |
+
+Also available: `explain()` — returns EXPLAIN result as array without terminating.
+
+### 8.3 AsyncDumper (Persistent-Safe Dumping)
+
+**⚠️ The legacy `Phue\Modules\DevTool\Dumper` class is deprecated.** It uses
+`var_dump()` directly which breaks in persistent servers (Swoole/RoadRunner)
+by outputting to stdout mid-response.
+
+Use `Phue\Core\Debug\AsyncDumper` instead — it collects dumps during request
+execution and flushes them at the end via middleware.
+
+```php
+use Phue\Core\Debug\AsyncDumper;
+
+// In any controller, service, or .phue component
+dump($user->posts->count());
+
+dumpIf($debug, $expensiveComputation)->label('debug');
+
+dumpWhen(fn() => $request->hasHeader('X-Debug'), $secretData);
+
+dumpSample(0.1, $data); // 10% sampling
+
+// dd() equivalent — dumps and exits
+dd($query->getSql());
+```
+
+**Features for persistent runtimes:**
+- **Request-isolated** — tied to request scope, auto-cleanup via `reset()`
+- **Non-blocking** — doesn't touch stdout during request
+- **Format-agnostic** — JSON for API, HTML/JS for browser, ANSI for CLI
+- **Dev Toolbar integration** — "Dumps" tab with syntax highlighting & stack traces
+- **Conditional helpers** — `dumpIf()`, `dumpWhen()`, `dumpSample()`
+- **Auto-redaction** — masks `password`, `token`, `secret`, `api_key`, `ssn`
+- **Production-safe** — sampling + redaction + disabled by default
+
+**Dev Toolbar panel** (enabled when `app.debug` + `app.devTool`):
+- Collapsible list of all dumps with timestamp, label, group
+- Syntax-highlighted values (arrays, objects, primitives)
+- Toggleable stack trace per dump
+- Request ID for correlation with logs
+
+**Configuration (`config/devtool.php`):**
+```php
+'dumper' => [
+    'max_dumps' => 50,           // per request
+    'max_depth' => 8,            // traversal depth for objects/arrays
+    'redact_keys' => ['password', 'token', 'secret', 'api_key', 'ssn'],
+    'sampling_rate' => 1.0,      // 1.0 = dev, 0.01 = production debugging
+],
+```
