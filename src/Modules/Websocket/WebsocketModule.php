@@ -307,17 +307,35 @@ class WebsocketModule extends Module
             return $this->buses[$name] = $inProcess();
         }
 
-        $client = new \Redis();
+        // One place that knows how to reach the broker, because there are two callers for it: this
+        // method, and a worker that inherited the bus across a fork and has to replace the socket it
+        // was handed. The bus cannot do that for itself — host, port, timeout and read timeout are
+        // this module's configuration, not Core's.
+        $connect = static function () use ($redis): \Redis {
+            $client = new \Redis();
 
-        try {
             $connected = $client->connect(
                 (string) ($redis['host'] ?? '127.0.0.1'),
                 (int) ($redis['port'] ?? 6379),
                 (float) ($redis['timeout'] ?? 0.5)
             );
 
-            if ($connected !== true || $client->ping() !== true) {
-                throw new \RuntimeException('Redis answered neither a connect nor a ping.');
+            if ($connected !== true) {
+                throw new \RuntimeException('Redis did not accept the connection.');
+            }
+
+            // Long enough for a blocking read. Left at the default it is shorter than the BLOCK the
+            // pump asks for, and the read fails as a connection error rather than as a timeout.
+            $client->setOption(\Redis::OPT_READ_TIMEOUT, 2.0);
+
+            return $client;
+        };
+
+        try {
+            $client = $connect();
+
+            if ($client->ping() !== true) {
+                throw new \RuntimeException('Redis answered a connect but not a ping.');
             }
         } catch (\Throwable $e) {
             $this->container->get(LoggerInterface::class)->warning(
@@ -329,14 +347,11 @@ class WebsocketModule extends Module
             return $this->buses[$name] = $inProcess();
         }
 
-        // Long enough for a blocking read. Left at the default it is shorter than the BLOCK the
-        // pump asks for, and the read fails as a connection error rather than as a timeout.
-        $client->setOption(\Redis::OPT_READ_TIMEOUT, 2.0);
-
         $logger = $this->container->get(LoggerInterface::class);
 
         return $this->buses[$name] = new RedisStreamPublicationBus(
             redis: $client,
+            connectionFactory: $connect,
             namespace: 'phue:ws:' . preg_replace('/[^a-z0-9_.-]/i', '-', $name),
             origin: 'worker-' . getmypid() . '-' . bin2hex(random_bytes(4)),
             defaultRetention: $retention,

@@ -343,13 +343,39 @@ function testClassOf(string $file): string
 /**
  * Class::method of every test PHPUnit reported as failing.
  *
+ * Bounded to the sections that actually report failures, because the numbered list looks the same
+ * wherever PHPUnit lists tests: `--display-skipped` prints the skipped ones under "There was 1
+ * skipped test:", with the very same `1) Class::method` shape, and counting those made a clean run
+ * report a failing test — and write it to the record, where the next `--only-failed` would go
+ * looking for a defect that does not exist.
+ *
  * @return list<string>
  */
 function failuresFrom(string $output): array
 {
-    preg_match_all('/^\s*\d+\)\s+([A-Za-z_][A-Za-z0-9_\\\\]*::[A-Za-z_][A-Za-z0-9_]*)/m', $output, $matches);
+    // Split at the section headers, keep the ones that report a failure or an error, and parse each
+    // on its own: a section boundary is also what stops the last failure's trace from being read as
+    // part of the next section.
+    $sections = preg_split(
+        '/^(?=There (?:was|were) \d+ (?:failure|error)s?:)/m',
+        $output
+    ) ?: [];
 
-    return array_values(array_unique($matches[1]));
+    $found = [];
+
+    foreach (array_slice($sections, 1) as $section) {
+        preg_match_all(
+            '/^\s*\d+\)\s+([A-Za-z_][A-Za-z0-9_\\\\]*::[A-Za-z_][A-Za-z0-9_]*)/m',
+            $section,
+            $matches
+        );
+
+        foreach ($matches[1] as $test) {
+            $found[] = $test;
+        }
+    }
+
+    return array_values(array_unique($found));
 }
 
 // ------------------------------------------------------------------------ main

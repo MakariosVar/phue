@@ -36,8 +36,7 @@ final class RedisTestConnection
      */
     public static function available(): ?self
     {
-        $host = (string) (getenv('PHUE_TEST_REDIS_HOST') ?: '127.0.0.1');
-        $port = (int) (getenv('PHUE_TEST_REDIS_PORT') ?: 6379);
+        [$host, $port] = self::endpoint();
 
         $redis = new \Redis();
 
@@ -64,6 +63,49 @@ final class RedisTestConnection
     }
 
     /**
+     * A second connection to the same server, for a process that may not touch the first one.
+     *
+     * What a test needs when it makes another process use the bus: a socket belongs to the process
+     * that opened it, and a child that inherited one cannot both keep it and be trusted with it.
+     *
+     * @return \Redis
+     */
+    public function client(): \Redis
+    {
+        [$host, $port] = self::endpoint();
+
+        $redis = new \Redis();
+
+        if ($redis->connect($host, $port, 0.35) !== true) {
+            throw new \RuntimeException(sprintf('Could not connect to Redis at %s:%d.', $host, $port));
+        }
+
+        $redis->setOption(\Redis::OPT_READ_TIMEOUT, 2.0);
+
+        return $redis;
+    }
+
+    /**
+     * Where to look for Redis, the same way for every connection this harness makes.
+     *
+     * The host defaults to the loopback address rather than the `redis` service name, because the
+     * app container runs on the host network and a compose hostname does not resolve there.
+     *
+     * Public because a test that boots the framework in a child process has to write that same
+     * address into the child's configuration, and two places that read the environment differently
+     * is how a suite ends up passing against a Redis the application never sees.
+     *
+     * @return array{0: string, 1: int}
+     */
+    public static function endpoint(): array
+    {
+        return [
+            (string) (getenv('PHUE_TEST_REDIS_HOST') ?: '127.0.0.1'),
+            (int) (getenv('PHUE_TEST_REDIS_PORT') ?: 6379),
+        ];
+    }
+
+    /**
      * Every key this harness may have created, and may therefore delete.
      *
      * Enumerated rather than discovered. A prefix scan would need `KEYS`, which is both a blocking
@@ -84,7 +126,29 @@ final class RedisTestConnection
      */
     public function cleanup(): void
     {
-        foreach ($this->keys() as $key) {
+        $this->remove($this->keys());
+    }
+
+    /**
+     * Remove a bus's own keys, given the namespace that bus was built with.
+     *
+     * For a test that boots the framework in another process: that process builds its bus from the
+     * application's configuration, so its namespace is the application's — `phue:ws:<endpoint>` — and
+     * not this harness's. Enumerated rather than discovered, for the same reason as {@see keys()}.
+     *
+     * @return void
+     */
+    public function cleanupFor(string $namespace): void
+    {
+        $this->remove([$namespace . ':stream', $namespace . ':cursor']);
+    }
+
+    /**
+     * @param list<string> $keys
+     */
+    private function remove(array $keys): void
+    {
+        foreach ($keys as $key) {
             try {
                 $this->redis->del($key);
             } catch (\Throwable) {

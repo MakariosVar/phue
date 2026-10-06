@@ -17,6 +17,7 @@ reload uses.
 - [Enabling it](#enabling-it)
 - [Endpoints](#endpoints) — the part to read before writing any
 - [Publishing](#publishing)
+- [More than one worker](#more-than-one-worker)
 - [The wire protocol](#the-wire-protocol)
 - [Authentication](#authentication)
 - [Origins](#origins)
@@ -248,6 +249,54 @@ feature ends up "sometimes not working".
 
 ---
 
+## More than one worker
+
+A WebSocket connection belongs to one worker process, and the process that
+serves a request is whichever worker was free. So with more than one worker, a
+publish reaches the subscribers held by *that* worker and nobody else's — the
+other tabs are not gone, they are on another process, and nothing anywhere says
+so.
+
+The broker is what carries a published message to the other processes. It is a
+Redis stream rather than pub/sub, because fan-out needs every reader to see
+every message (a consumer group would hand each one to a single member) and
+because a resumable protocol needs a replay window.
+
+```ini
+# .env
+APP_WEBSOCKET=true
+APP_WS_REDIS=true
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+```
+
+```php
+// config/websocket.php — the keys, with their defaults
+'redis' => [
+    'enabled' => env('APP_WS_REDIS', false),
+    'host'    => env('REDIS_HOST', '127.0.0.1'),
+    'port'    => (int) env('REDIS_PORT', 6379),
+    'timeout' => 0.5,
+],
+```
+
+Each worker opens its own connection, and each one reads the whole stream rather
+than a share of it. Two things follow, and both are deliberate:
+
+- **The cursor is shared.** It is an `INCR` counter, not the stream id, so every
+  worker mints cursors from one sequence. Two processes counting independently
+  is how a reconnecting client gets told it missed messages it received.
+- **The delivery path stays free on one worker.** The publishing worker delivers
+  to its own subscribers synchronously and skips its own copy when it comes back
+  around the stream, so a single-worker deployment never pays a network hop.
+
+Without the broker, everything still works with one worker and costs nothing.
+With more than one, browsers on the other workers go quiet — and if Redis is
+configured but unreachable, that is what happens, logged once per worker at
+warning level.
+
+---
+
 ## The wire protocol
 
 Every frame is JSON. Server → client:
@@ -391,7 +440,9 @@ and the connection is told.
 
 Stated plainly, because each of these is a real limit rather than a roadmap item.
 
-- **One process.** `TopicRegistry` is per worker. With `worker_num > 1`, a publish reaches only the subscribers held by the worker that handled the request. Cross-process fan-out needs a shared broker (Redis pub/sub, or a Swoole table plus a router) and is not implemented. **Test with more than one worker before you rely on this.**
+- **One worker unless a broker is configured.** `TopicRegistry` is per worker, so with `worker_num > 1` a publish reaches only the subscribers held by the worker that handled the request — unless `websocket.redis.enabled` is on, in which case every worker reads the same Redis stream and delivers to its own subscribers. Without it, browsers on other workers go quiet with nothing in the log to say why, because from the publishing worker's point of view there is simply nobody listening. **Test with more than one worker before you rely on either path.**
+- **A worker that loses the broker delivers alone.** The fall-over is permanent for that process: it keeps serving its own subscribers, other workers stop hearing it, and it says so once in the log. Restarting the server is the fix.
+- **Nothing can observe a connection.** Swoole keeps one handler per event, and the transport owns `open`, `message` and `close`. An application or a second module that registers its own would silently take the transport's away, so there is no supported way to hook a connection lifecycle — including to ask a client which worker it is sitting on. `CrossWorkerDeliveryTest` has to prove cross-process delivery with two servers for the same reason.
 - **No path-level routing.** Every endpoint shares the one upgrade handler; the endpoint is chosen by the handshake path. There is no per-endpoint middleware chain beyond the Origin and authentication checks.
 - **Refusals are delivered late.** Swoole ignores a close issued from inside `on('open')`, so a refused handshake closes on the client's first frame instead. The client sees `101` and then a close code; it cannot see a rejected handshake as a rejected handshake.
 - **The bundled client is not served.** `phue-ws.js` has no asset route; copy it into your own build if you want it, or write the twenty lines of subscribe loop yourself — it is deliberately small.

@@ -66,7 +66,6 @@ final class PublicationPump
     public function run(): void
     {
         $bus = $this->registry->bus();
-        $origin = $bus->origin();
 
         // Place the offset past whatever was published before this worker existed. A worker
         // starting now holds no connections, so it has nobody to reach with the backlog — and an
@@ -108,7 +107,12 @@ final class PublicationPump
             // The copy that comes back around from a publish this process made. It was delivered
             // to these subscribers synchronously, and delivering it again would double every
             // message on a single-worker deployment — the one nobody tests.
-            if ($message['origin'] === $origin) {
+            //
+            // Read per message rather than once before the loop, because an identity belongs to the
+            // process using it: a bus that changes hands — inherited across a fork, say — has a
+            // different answer afterwards, and a value captured here would keep discarding this
+            // process's own messages as somebody else's for as long as the worker lives.
+            if ($message['origin'] === $bus->origin()) {
                 continue;
             }
 

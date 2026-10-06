@@ -221,6 +221,44 @@ class PhueTestCliTest extends TestCase
         }
     }
 
+    /**
+     * A skipped test is not a failing one, however PHPUnit chooses to print it.
+     *
+     * `--display-skipped` lists skipped tests in the same numbered shape as failures, under their own
+     * section header. Counting those made a clean run report a failure — and record it, so the next
+     * `--only-failed` would go looking for a defect that was never there. The recorded list is
+     * asserted rather than the wording, because that is the part that misleads.
+     */
+    public function testASkippedTestIsNotRecordedAsAFailure(): void
+    {
+        $cacheFile = '/app/.phpunit.cache/phue-test.json';
+        $backup = is_file($cacheFile) ? (string) file_get_contents($cacheFile) : null;
+
+        @mkdir(dirname($cacheFile), 0777, true);
+        file_put_contents($cacheFile, json_encode(['failures' => [], 'at' => date('c')]));
+
+        try {
+            // A skipped test that skips for the same reason this environment would: no OPcache JIT.
+            // Whatever the wording, the run is clean and must be recorded as clean.
+            $result = $this->runCli('--filter=testFallbackStrategyResolvesJitWhenEnabled', '--display-skipped');
+
+            $this->assertSame(0, $result['exit']);
+
+            $recorded = json_decode((string) file_get_contents($cacheFile), true);
+
+            $this->assertSame(
+                [],
+                $recorded['failures'] ?? null,
+                'A skipped test was recorded as a failure, so --only-failed will chase a defect that '
+                . 'does not exist.'
+            );
+
+            $this->assertStringContainsString('Passed', $result['stdout'], $result['stderr']);
+        } finally {
+            $backup === null ? @unlink($cacheFile) : file_put_contents($cacheFile, $backup);
+        }
+    }
+
     public function testChangedReportsNothingToDoOnACleanTree(): void
     {
         $result = $this->runCli('--changed', '--list');

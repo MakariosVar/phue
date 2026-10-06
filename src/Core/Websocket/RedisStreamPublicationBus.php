@@ -29,6 +29,16 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
     private string $offset = '$';
 
     /**
+     * The process that built this bus, and so the only one whose connection and identity it may use.
+     *
+     * Both are properties of a process rather than of the object. A socket is one file descriptor and
+     * one stream of replies: two processes reading from it do not each get the answer to their own
+     * question. And the origin is how a reader tells "mine" from "somebody else's", which is worth
+     * nothing if every process answers "mine".
+     */
+    private int $ownerPid;
+
+    /**
      * Takes over once Redis stops answering, for the rest of this process's life.
      *
      * @var InProcessPublicationBus|null
@@ -39,6 +49,11 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
     private bool $reported = false;
 
     /**
+     * @param null|callable(): \Redis $connectionFactory Hands over a connected client for whichever
+     *        process ends up using this bus. Needed because a bus this process did not build cannot
+     *        keep the connection it inherited; see {@see claim()}. A callable rather than a host and
+     *        a port, because this class does not know how an application reaches its broker — a
+     *        password, TLS, a read timeout — and guessing at that is worse than being handed it.
      * @param string $initialOffset Where this process starts reading. The default, `$`, means only
      *        messages published from now on — right for a worker that has just started and holds no
      *        connections yet, because replaying history to nobody is work for no reason. `0-0` is
@@ -48,14 +63,16 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      *        of a logging dependency and a test can count the calls.
      */
     public function __construct(
-        private readonly \Redis $redis,
+        private \Redis $redis,
+        private $connectionFactory = null,
         private readonly string $namespace = 'phue:ws',
-        private readonly string $origin = '',
+        private string $origin = '',
         private readonly int $defaultRetention = 100,
         private readonly string $initialOffset = '$',
         private $onUnreachable = null
     ) {
         $this->offset = $initialOffset;
+        $this->ownerPid = getmypid();
     }
 
     /**
@@ -77,7 +94,74 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function origin(): string
     {
+        $this->claim();
+
+        return $this->identity();
+    }
+
+    /**
+     * The value stamped on a message this process publishes.
+     *
+     * Split out of {@see origin()} because claiming the bus can report an outage, and reporting an
+     * outage needs this value — which would otherwise call back into the method already claiming.
+     */
+    private function identity(): string
+    {
         return $this->origin !== '' ? $this->origin : (string) getmypid();
+    }
+
+    /**
+     * Take the bus over if this process is not the one that built it.
+     *
+     * `Swoole\Server::start()` forks its workers from the memory image the master built, so anything
+     * resolved before that moment — a bus among it — reaches every worker as an object belonging to a
+     * process that no longer exists here. Using it as it stands is the worst of the available
+     * outcomes rather than a visible failure: the child reads from the parent's socket, and every
+     * message on the stream carries an origin this process also claims, so each pump discards all of
+     * them. Cross-worker delivery stops, and a browser on any other worker simply goes quiet.
+     *
+     * None of this is expensive, and all of it happens once per process, on the first thing the bus
+     * is asked to do.
+     */
+    private function claim(): void
+    {
+        if (getmypid() === $this->ownerPid) {
+            return;
+        }
+
+        $this->ownerPid = getmypid();
+
+        // A new identity, because the old one names the process that built the bus. Appended rather
+        // than replaced, so the value the application chose stays recognisable in a log and the pid
+        // is what tells this process apart from every other worker reading the same stream.
+        $this->origin = $this->identity() . '@' . $this->ownerPid;
+
+        // Back to "only new". This process has just arrived and holds no connections, so what was
+        // published before it existed has nobody to reach — and an offset inherited from the parent
+        // would leave it reading from wherever that process happened to have got to.
+        $this->offset = '$';
+
+        // The parent's verdict is not this one's to inherit. A broker that failed once in the master
+        // is worth another attempt here, and a process that arrived already "reported" would swallow
+        // its own outage without a word.
+        $this->fallback = null;
+        $this->reported = false;
+
+        if ($this->connectionFactory === null) {
+            $this->fallBack(new \RuntimeException(sprintf(
+                'The publication bus was inherited from another process and no way to reach the broker '
+                . 'again was given, so pid %d is now delivering on its own.',
+                $this->ownerPid
+            )));
+
+            return;
+        }
+
+        try {
+            $this->redis = ($this->connectionFactory)();
+        } catch (\Throwable $e) {
+            $this->fallBack($e);
+        }
     }
 
     /**
@@ -92,6 +176,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function publish(string $channel, string $event, mixed $data, array $except = []): array
     {
+        $this->claim();
+
         if ($this->fallback !== null) {
             return $this->fallback->publish($channel, $event, $data, $except);
         }
@@ -136,7 +222,7 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
                 'p' => $payload,
                 'ch' => $channel,
                 'x' => json_encode(array_values($except)) ?: '[]',
-                'o' => $this->origin(),
+                'o' => $this->identity(),
             ],
             // One stream holds every channel, so MAXLEN bounds the stream rather than any one
             // channel. That is deliberate: it is the only bound Redis can enforce, and a busy
@@ -160,6 +246,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function next(int $blockMs = 0): ?array
     {
+        $this->claim();
+
         if ($this->fallback !== null) {
             return $this->fallback->next();
         }
@@ -230,6 +318,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function settle(): int
     {
+        $this->claim();
+
         if ($this->fallback !== null || $this->offset !== '$') {
             return 0;
         }
@@ -268,6 +358,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
 
     public function missed(string $channel, int $since): iterable
     {
+        $this->claim();
+
         if ($this->fallback !== null) {
             return $this->fallback->missed($channel, $since);
         }
@@ -298,6 +390,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function oldest(string $channel): ?int
     {
+        $this->claim();
+
         if ($this->fallback !== null) {
             return $this->fallback->oldest($channel);
         }
@@ -324,6 +418,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function cursor(): ?int
     {
+        $this->claim();
+
         if ($this->fallback !== null) {
             return $this->fallback->cursor();
         }
@@ -349,6 +445,8 @@ final class RedisStreamPublicationBus implements SettablePublicationBus
      */
     public function retain(string $channel, int $messages): void
     {
+        $this->claim();
+
         $this->retention[$channel] = max(0, $messages);
 
         if ($this->fallback !== null) {

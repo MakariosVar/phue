@@ -30,6 +30,10 @@ return [
      * that served the request that caused it, and a browser on any other worker goes quiet with
      * nothing in the logs to explain it.
      *
+     * Each worker opens its own connection. That is not a preference: Swoole forks its workers from
+     * the memory the master built, so a connection resolved before the fork would be one socket
+     * shared by every worker, and a shared socket answers whichever process asked last.
+     *
      * The host defaults to the loopback address rather than a service name because the app
      * container runs on the host network, where a compose hostname does not resolve.
      */
