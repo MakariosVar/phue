@@ -106,6 +106,13 @@ final class FakeDriver implements DriverInterface
         return 'fake';
     }
 
+    public function explain(string $sql, array $params = []): array
+    {
+        $this->calls[] = 'explain:' . $sql;
+
+        return [['plan' => 'fake plan']];
+    }
+
     private function guard(): void
     {
         if ($this->throw !== null) {

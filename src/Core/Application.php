@@ -237,6 +237,11 @@ class Application
         // Enable ErrorHandlerMiddleware at global middleware stack
         $this->use(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class);
 
+        // Register N+1 Query Detector (request-scoped, fresh per request)
+        $this->container->scoped(\Phue\Core\Database\NPlusOneDetector::class, function (): \Phue\Core\Database\NPlusOneDetector {
+            return new \Phue\Core\Database\NPlusOneDetector();
+        });
+
         // Register TemplateCompilerBridge Singleton for SSR/Client Template Compilations
         $this->container->singleton(TemplateCompilerBridge::class, function ($c): TemplateCompilerBridge {
             return new TemplateCompilerBridge(
