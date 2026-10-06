@@ -522,11 +522,9 @@ class UserController
 - `threshold` — minimum similar queries to trigger (default: 5)
 - `throw` — whether to throw `RuntimeException` or just log warning (default: true)
 
-**Enable globally** (applies to all requests in debug mode):
-```php
-// In a service provider or bootstrapping code
-$app->use(\Phue\Core\Http\Middleware\NPlusOneGuardMiddleware::class);
-```
+**Auto-enabled in debug mode:** The middleware is automatically registered by
+`DevToolsModule` when both `app.debug` and `app.devTool` are `true` (see
+`config/devtool.php`). No manual registration needed.
 
 ### 8.2 QueryBuilder::dd() with EXPLAIN ANALYZE
 
@@ -559,11 +557,7 @@ Also available: `explain()` — returns EXPLAIN result as array without terminat
 
 ### 8.3 AsyncDumper (Persistent-Safe Dumping)
 
-**⚠️ The legacy `Phue\Modules\DevTool\Dumper` class is deprecated.** It uses
-`var_dump()` directly which breaks in persistent servers (Swoole/RoadRunner)
-by outputting to stdout mid-response.
-
-Use `Phue\Core\Debug\AsyncDumper` instead — it collects dumps during request
+Use `Phue\Core\Debug\AsyncDumper` — it collects dumps during request
 execution and flushes them at the end via middleware.
 
 ```php
