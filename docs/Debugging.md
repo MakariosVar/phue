@@ -43,36 +43,48 @@ class UserController
 
 ## 2. QueryBuilder::dd() and explain()
 
-The `dd()` method dumps the compiled SQL, bound parameters, and executes `EXPLAIN ANALYZE` (or driver equivalent) — then terminates execution.
+The `dd()` method records the compiled SQL, the bound parameters and the driver-specific plan into the request-scoped `AsyncDumper`, then **lets execution continue**. It never terminates the process: under a persistent runtime (Swoole, RoadRunner) `exit()` raises `Swoole\ExitException` and unwinds the whole pipeline into a 500. Because the report goes through the dumper, it lands in the DevTool **Dumps** tab.
 
 ```php
 use Phue\Core\Database\QueryBuilder;
 
-$users = $db->table('users')
+$report = $db->table('users')
     ->where('status', 'active')
-    ->with('posts.comments')
-    ->dd(); // Dumps SQL + bindings + EXPLAIN output, then exits
+    ->dd(); // Dumps SQL + bindings + plan, then keeps going
+
+$report['compiled']; // Interpolated SQL for readability
 ```
 
-**Global helper (via `src/Core/functions.php`):**
+**Global helper (via `src/Core/Debug/helpers.php`):**
 ```php
 dd($db->table('users')->where('active', 1)); // Same as ->dd()
 ```
 
-**Output includes:**
-- Raw SQL with placeholders
-- Bound parameters with types
-- Interpolated SQL for readability
-- Driver-specific `EXPLAIN ANALYZE` formatted as table
+**Report shape:**
+| Key | Value |
+|---|---|
+| `sql` | Raw SQL with `?` placeholders |
+| `bindings` | Bound parameter values (redacted by the dumper when sensitive) |
+| `compiled` | SQL with the bindings interpolated in, for reading only |
+| `explain` | Plan rows, or `null` when the server refused |
+| `explain_error` | Why the plan is missing |
+| `driver` | Driver name (`mysql`, `postgres`, `sqlite`) |
+| `time` | `microtime(true)` at dump time |
+| `text` | The same report as a printable block |
 
-**Per-driver EXPLAIN output:**
+**Per-driver EXPLAIN:**
 | Driver | Command | Format |
 |---|---|---|
-| MySQL | `EXPLAIN ANALYZE` | Tabular |
+| MySQL 8.0.18+ | `EXPLAIN ANALYZE` | Tabular |
+| MariaDB | `ANALYZE` | Tabular |
 | PostgreSQL | `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` | JSON plan |
 | SQLite | `EXPLAIN QUERY PLAN` | Tabular |
 
-**Also available:** `explain()` — returns EXPLAIN result as array without terminating.
+The MySQL driver probes `SELECT VERSION()` once per connection and picks the spelling its server understands, keeping the driver — not the query builder — responsible for dialect differences.
+
+`ANALYZE` executes the statement it plans, so `dd()` skips the plan for anything that is not a read (`INSERT`/`UPDATE`/`DELETE`/DDL) and reports `explain_error` instead of touching your data.
+
+**Also available:** `explain()` — returns the plan rows as an array without dumping anything.
 
 ```php
 $plan = $db->table('users')->where('active', 1)->explain();
