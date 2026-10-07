@@ -10,6 +10,7 @@ use Phue\Core\Container;
 use Phue\Core\Database\QueryBuilder;
 use Phue\Core\Debug\AsyncDumper;
 use Phue\Modules\DevTool\DebugToolbar;
+use Phue\Modules\DevTool\Panels\DumpsPanel;
 use Phue\Modules\DevTool\RequestProfiler;
 use Phue\Modules\DevTool\Stopwatch;
 use Phue\Tests\Support\SqliteFactory;
@@ -141,6 +142,103 @@ final class DebugToolbarDumpsPanelTest extends TestCase
         $this->assertStringContainsString('sqlite', $value);
     }
 
+    public function testNestedValuesAccumulateIndentation(): void
+    {
+        $this->dumper->dump(['plan' => [['id' => 1]]]);
+
+        $value = $this->plainDumpValueBlock($this->render());
+
+        $this->assertSame(
+            [
+                '[',
+                '  plan => [',
+                '    [',
+                '      id => 1',
+                '    ]',
+                '  ]',
+                ']',
+            ],
+            explode("\n", $value),
+            'A child has to sit further right than its parent, or the nesting is invisible.'
+        );
+    }
+
+    public function testListValuesDropTheirNumericKeys(): void
+    {
+        $this->dumper->dump(['bindings' => [1, 2]]);
+
+        $this->assertSame(
+            ['[', '  bindings => [', '    1,', '    2', '  ]', ']'],
+            explode("\n", $this->plainDumpValueBlock($this->render()))
+        );
+    }
+
+    public function testSparseArraysKeepTheirKeys(): void
+    {
+        $this->dumper->dump(['rows' => [3 => 'third']]);
+
+        $this->assertSame(
+            ['[', '  rows => [', '    3 => "third"', '  ]', ']'],
+            explode("\n", $this->plainDumpValueBlock($this->render()))
+        );
+    }
+
+    public function testEmptyContainersRenderInline(): void
+    {
+        $this->dumper->dump(['list' => [], 'map' => ['a' => 1]]);
+
+        $this->assertSame(
+            ['[', '  list => [],', '  map => [', '    a => 1', '  ]', ']'],
+            explode("\n", $this->plainDumpValueBlock($this->render()))
+        );
+    }
+
+    public function testObjectsRenderWithTheirClassNameAndIndent(): void
+    {
+        // The dumper normally flattens objects before they get here, so the panel's
+        // object branch is exercised directly to keep it honest.
+        $html = DumpsPanel::render([
+            'dumps' => [[
+                'value'      => ['row' => $this->anonymousRow()],
+                'label'      => '',
+                'group'      => 'default',
+                'time'       => microtime(true),
+                'trace'      => [],
+                'request_id' => 'test',
+            ]],
+        ]);
+
+        $this->assertSame(
+            ['[', '  row => Phue\\Tests\\DevTools\\DumpPanelRow {', '    id => 7', '  }', ']'],
+            explode("\n", $this->plainDumpValueBlock($html))
+        );
+    }
+
+    public function testSanitizedObjectsArriveLabelledWithTheirClass(): void
+    {
+        $this->dumper->dump(['row' => $this->anonymousRow()]);
+
+        $value = $this->plainDumpValueBlock($this->render());
+
+        $this->assertStringContainsString('__class => "Phue\\Tests\\DevTools\\DumpPanelRow"', $value);
+        $this->assertStringContainsString('id => 7', $value);
+    }
+
+    public function testDeepNestingIsTruncatedRatherThanRenderedForever(): void
+    {
+        $value = 'leaf';
+        for ($i = 0; $i < 20; $i++) {
+            $value = ['level' => $value];
+        }
+
+        $this->dumper->dump($value);
+
+        $this->assertStringContainsString(
+            '[Max depth reached]',
+            $this->plainDumpValueBlock($this->render())
+        );
+    }
+
     public function testValuesAreHtmlEscaped(): void
     {
         $this->dumper->dump(['markup' => '<script>alert(1)</script>']);
@@ -220,6 +318,20 @@ final class DebugToolbarDumpsPanelTest extends TestCase
     // ------------------------------------------------------------- helpers
 
     /**
+     * An object the dumper and the panel both have to cope with.
+     *
+     * A named class on purpose: an anonymous one carries its file and line in the
+     * class name, which would make the rendering assertion depend on the test's
+     * own location.
+     *
+     * @return DumpPanelRow Object with one public property
+     */
+    private function anonymousRow(): DumpPanelRow
+    {
+        return new DumpPanelRow();
+    }
+
+    /**
      * Records a query report through the builder under test.
      *
      * @return void
@@ -268,6 +380,20 @@ final class DebugToolbarDumpsPanelTest extends TestCase
         }
 
         return $matches[1];
+    }
+
+    /**
+     * Extracts the rendered value block of the first dump, without any markup.
+     *
+     * Layout is the point of these assertions, so the comparison happens on the
+     * text a developer reads, not on the spans wrapped around it.
+     *
+     * @param string $html Toolbar HTML
+     * @return string Plain-text value block
+     */
+    private function plainDumpValueBlock(string $html): string
+    {
+        return html_entity_decode(strip_tags($this->dumpValueBlock($html)), ENT_QUOTES);
     }
 
     /**
@@ -366,4 +492,15 @@ final class DebugToolbarDumpsPanelTest extends TestCase
 
         return null;
     }
+}
+
+/**
+ * A named object for the panel's object branch.
+ */
+final class DumpPanelRow
+{
+    /**
+     * Public property, so reflection finds it.
+     */
+    public int $id = 7;
 }
