@@ -7,15 +7,15 @@ use Phue\Core\Container;
 use Phue\Core\Debug\AsyncDumper;
 
 /**
- * Dump and die - wraps QueryBuilder::dd() for any QueryBuilder instance.
+ * Records a full debugging report for a query and lets execution continue.
  *
  * @param QueryBuilder $query QueryBuilder instance
- * @return never
+ * @return array<string, mixed> The query report
  */
 if (!function_exists('dd')) {
-    function dd(QueryBuilder $query): never
+    function dd(QueryBuilder $query): array
     {
-        $query->dd();
+        return $query->dd();
     }
 }
 

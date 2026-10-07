@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Phue\Core\Database;
 
 use InvalidArgumentException;
+use Phue\Core\Container;
+use Phue\Core\Debug\AsyncDumper;
 
 /**
  * Fluent Query Builder for constructing safe PDO SQL statements.
@@ -375,43 +377,89 @@ class QueryBuilder
     }
 
     /**
-     * Dumps the query SQL with bindings and executes EXPLAIN ANALYZE,
-     * then terminates execution. For debugging only.
+     * Builds the full debugging report for the current query, records it in the
+     * request-scoped dumper and lets execution continue. For debugging only.
      *
-     * @return never
-     * @throws \RuntimeException If EXPLAIN is not supported by the driver
+     * The report is handed to the AsyncDumper instead of the process output:
+     * under a persistent runtime (Swoole, RoadRunner) `exit()` raises
+     * Swoole\ExitException and unwinds the whole pipeline into a 500, while
+     * `echo`/`header()` never reach the Swoole response at all. Routing the
+     * report through the dumper is what puts it in the DevTool "Dumps" panel.
+     *
+     * @return array{sql: string, bindings: array<int, mixed>, compiled: string, explain: array<int, mixed>|null, explain_error: string|null, driver: string, time: float, text: string} Full query report
      */
-    public function dd(): never
+    public function dd(): array
     {
-        $sql = $this->toSql();
+        $sql      = $this->toSql();
         $bindings = $this->getBindings();
 
-        $output = $this->formatQueryDump($sql, $bindings);
+        $explain      = null;
+        $explainError = null;
 
-        // Try to get EXPLAIN ANALYZE
-        try {
-            $explain = $this->connection->explain($sql, $bindings);
-            $output .= "\n\n--- EXPLAIN ANALYZE ---\n";
-            $output .= $this->formatExplainOutput($explain);
-        } catch (\Throwable $e) {
-            $output .= "\n\n--- EXPLAIN not available ---\n";
-            $output .= $e->getMessage();
-        }
-
-        // Dump and die
-        if (php_sapi_name() === 'cli') {
-            fwrite(STDERR, $output . "\n");
+        if ($this->isReadOnlyStatement($sql)) {
+            try {
+                $explain = $this->connection->explain($sql, $bindings);
+            } catch (\Throwable $e) {
+                $explainError = $e->getMessage();
+            }
         } else {
-            // In web context, dump to response and exit
-            header('Content-Type: text/plain; charset=utf-8');
-            echo $output;
+            // ANALYZE executes the statement, so explaining a write would apply it.
+            $explainError = 'EXPLAIN skipped: statement is not read-only.';
         }
 
-        exit(1);
+        $report = [
+            'sql'           => $sql,
+            'bindings'      => $bindings,
+            'compiled'      => $this->interpolateBindings($sql, $bindings),
+            'explain'       => $explain,
+            'explain_error' => $explainError,
+            'driver'        => $this->connection->getDriver()->getName(),
+            'time'          => microtime(true),
+        ];
+
+        $report['text'] = $this->formatQueryDump($sql, $bindings, $explain, $explainError);
+
+        $this->recordReport($report);
+
+        return $report;
     }
 
     /**
-     * Returns the EXPLAIN ANALYZE output for the current query without executing it.
+     * Hands the report to the request-scoped dumper when one is available.
+     *
+     * @param array<string, mixed> $report Report produced by dd()
+     * @return void
+     */
+    private function recordReport(array $report): void
+    {
+        try {
+            $container = Container::getInstance();
+
+            if ($container === null) {
+                return;
+            }
+
+            $container->get(AsyncDumper::class)->dump($report, 'query', 'query');
+        } catch (\Throwable) {
+            // A debug helper must never take the request down with it.
+        }
+    }
+
+    /**
+     * Whether the statement is safe to hand to the server's EXPLAIN/ANALYZE.
+     *
+     * @param string $sql Compiled SQL
+     * @return bool True for read-only statements
+     */
+    private function isReadOnlyStatement(string $sql): bool
+    {
+        $keyword = strtoupper(strtok(ltrim($sql), " \t\r\n(") ?: '');
+
+        return in_array($keyword, ['SELECT', 'WITH'], true);
+    }
+
+    /**
+     * Returns the EXPLAIN output for the current query without executing it.
      *
      * @return array<int, mixed> EXPLAIN result rows
      * @throws \RuntimeException If EXPLAIN is not supported by the driver
@@ -423,8 +471,14 @@ class QueryBuilder
 
     /**
      * Formats query dump with bindings for display.
+     *
+     * @param string $sql Query with placeholders
+     * @param array<int, mixed> $bindings Parameter bindings
+     * @param array<int, mixed>|null $explain EXPLAIN rows when the server provided them
+     * @param string|null $explainError EXPLAIN failure message when it did not
+     * @return string Human readable report
      */
-    private function formatQueryDump(string $sql, array $bindings): string
+    private function formatQueryDump(string $sql, array $bindings, ?array $explain = null, ?string $explainError = null): string
     {
         $lines = [];
         $lines[] = '=== QUERY DUMP ===';
@@ -433,10 +487,10 @@ class QueryBuilder
 
         if ($bindings !== []) {
             $lines[] = 'Bindings:';
-            foreach ($bindings as $i => $binding) {
+            foreach ($bindings as $index => $binding) {
                 $type = get_debug_type($binding);
-                $value = is_scalar($binding) ? (string)$binding : get_debug_type($binding);
-                $lines[] = sprintf('  [$i] (%s) %s', $type, $value);
+                $value = is_scalar($binding) ? var_export($binding, true) : get_debug_type($binding);
+                $lines[] = sprintf('  [%d] (%s) %s', $index, $type, $value);
             }
         } else {
             $lines[] = 'Bindings: (none)';
@@ -445,6 +499,18 @@ class QueryBuilder
         $lines[] = '';
         $lines[] = '=== Compiled SQL (with bindings inline) ===';
         $lines[] = $this->interpolateBindings($sql, $bindings);
+
+        if ($explain !== null) {
+            $lines[] = '';
+            $lines[] = '=== EXPLAIN ===';
+            $lines[] = $this->formatExplainOutput($explain);
+        }
+
+        if ($explainError !== null) {
+            $lines[] = '';
+            $lines[] = '=== EXPLAIN not available ===';
+            $lines[] = $explainError;
+        }
 
         return implode("\n", $lines);
     }
@@ -485,6 +551,9 @@ class QueryBuilder
 
     /**
      * Formats EXPLAIN output for display.
+     *
+     * @param array<int, mixed> $rows EXPLAIN result rows
+     * @return string Table rendering of the plan
      */
     private function formatExplainOutput(array $rows): string
     {
@@ -492,11 +561,15 @@ class QueryBuilder
             return '(empty result)';
         }
 
-        // Get column headers from first row
-        $headers = array_keys($rows[0]);
-        $widths = array_map('strlen', $headers);
+        // Column headers, and their widths keyed by header name so the padding
+        // lookups below cannot miss. (A list here reads every width as undefined.)
+        $headers = array_map('strval', array_keys($rows[0]));
 
-        // Calculate column widths
+        $widths = [];
+        foreach ($headers as $header) {
+            $widths[$header] = strlen($header);
+        }
+
         foreach ($rows as $row) {
             foreach ($headers as $header) {
                 $widths[$header] = max($widths[$header], strlen((string)($row[$header] ?? '')));
