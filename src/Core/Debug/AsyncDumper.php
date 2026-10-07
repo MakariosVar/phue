@@ -170,7 +170,8 @@ final class AsyncDumper implements ResettableInterface
 
             $result = ['__class' => $reflection->getName()];
             foreach ($properties as $prop) {
-                $prop->setAccessible(true);
+                // No setAccessible(): it has been a no-op since PHP 8.1 and the
+                // project requires 8.5, where calling it is deprecated.
                 $key = $prop->getName();
                 $val = $prop->getValue($value);
                 if ($this->isSensitiveKey($key)) {

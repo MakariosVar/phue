@@ -128,7 +128,8 @@ final class DumpsPanel
 
             $items = [];
             foreach ($properties as $prop) {
-                $prop->setAccessible(true);
+                // No setAccessible(): it has been a no-op since PHP 8.1 and the
+                // project requires 8.5, where calling it is deprecated.
                 $key = '<span class="text-primary">' . htmlspecialchars($prop->getName()) . '</span>';
                 $val = $prop->getValue($value);
                 $items[] = '  ' . $key . ' => ' . self::highlightValue($val, $depth + 1);
