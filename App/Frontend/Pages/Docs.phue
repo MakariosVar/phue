@@ -21,6 +21,8 @@ $guides = [
     'auth'            => ['label' => 'Auth & RBAC',     'file' => 'Auth-RBAC.md',       'badge' => 'core'],
     'schii'           => ['label' => 'Schii',           'file' => 'Schii.md',           'badge' => 'module'],
     'rest'            => ['label' => 'REST',            'file' => 'REST.md',            'badge' => 'module'],
+    'websocket'       => ['label' => 'WebSocket',       'file' => 'WebSocket.md',       'badge' => 'module'],
+    'queue'           => ['label' => 'Queue',           'file' => 'Queue.md',           'badge' => 'module'],
     'events'          => ['label' => 'Events',          'file' => 'Events.md',          'badge' => 'module'],
     'server'          => ['label' => 'Server Adapters', 'file' => 'Server-Adapters.md', 'badge' => 'runtime'],
     'cli'             => ['label' => 'CLI',             'file' => 'CLI.md',             'badge' => 'tooling'],
