@@ -9,7 +9,7 @@ SERVICE_NAME="app"
 usage() {
     echo "Phue - Docker Compose Wrapper"
     echo ""
-    echo "Usage: phue {up|start|down|build|restart|shell|logs|status|clean} [options]"
+    echo "Usage: phue {up|start|down|build|restart|shell|logs|watcher|status|clean} [options]"
     echo ""
     echo "Commands:"
     echo "  up      : Safely start containers in detached mode"
@@ -18,14 +18,16 @@ usage() {
     echo "  build   : Rebuild images without cache and recreate containers"
     echo "  restart : Safely stop containers (down) and start them back up"
     echo "  shell   : Attach to interactive bash shell inside '$SERVICE_NAME' container"
-    echo "  logs    : Stream live logs (tail 100)"
+    echo "  logs    : Stream container logs (tail 100)"
+    echo "  watcher : Stream Phue HTTP & Bun SSR server logs (tail 100)"
     echo "  status  : View current container states"
     echo "  clean   : Stop containers AND purge associated volumes (destructive)"
     echo ""
     echo "Options (for start/restart):"
+    echo "  -d, --detach         Run servers in detached mode (background)"
     echo "  -c, --clear-cache    Clear all caches once Bun is up"
     echo "  -o, --optimize       Warm all caches once Bun is up (skipped with a warning if it never starts)"
-    echo "  -co, -oc             Both clear cache and optimize"
+    echo "  Short options can be combined, e.g. -cod, -co, -d"
     exit 0
 }
 
@@ -48,25 +50,40 @@ fi
 ACTION="$1"
 shift || true
 
-# Parse cache/optimize flags into CLEAR_CACHE / OPTIMIZE.
-# Shared by start and restart — the two copies drifted apart once already.
-parse_cache_flags() {
+# Parse flags (detach, cache, optimize) into CLEAR_CACHE / OPTIMIZE / DETACH.
+# Shared by start and restart — supports combinations like -cod, -do, etc.
+parse_flags() {
     CLEAR_CACHE=false
     OPTIMIZE=false
+    DETACH=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -c|--clear-cache)
+            --clear-cache)
                 CLEAR_CACHE=true
                 shift
                 ;;
-            -o|--optimize)
+            --optimize)
                 OPTIMIZE=true
                 shift
                 ;;
-            -co|-oc)
-                CLEAR_CACHE=true
-                OPTIMIZE=true
+            -d|--detach|--detached)
+                DETACH=true
+                shift
+                ;;
+            -[a-zA-Z]*)
+                local flags="${1#-}"
+                for (( i=0; i<${#flags}; i++ )); do
+                    case "${flags:i:1}" in
+                        c) CLEAR_CACHE=true ;;
+                        o) OPTIMIZE=true ;;
+                        d) DETACH=true ;;
+                        *)
+                            echo "❌ Unknown option: -${flags:i:1}"
+                            exit 1
+                            ;;
+                    esac
+                done
                 shift
                 ;;
             *)
@@ -77,11 +94,11 @@ parse_cache_flags() {
 }
 
 run_start() {
-    # Defaulted here as well as in parse_cache_flags: `up` calls run_start
-    # straight, and without these the -e flags below would expand to empty and
-    # the subshell would compare "" against "true" and silently skip both steps.
+    # Defaulted here as well as in parse_flags: `up` calls run_start
+    # straight, and without these the -e flags below would expand to empty.
     : "${CLEAR_CACHE:=false}"
     : "${OPTIMIZE:=false}"
+    : "${DETACH:=false}"
 
     echo "🚀 Starting containers..."
     docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
@@ -89,63 +106,104 @@ run_start() {
     # Pre-clean stale socket inside container before starting servers
     docker compose -f "$COMPOSE_FILE" exec "$SERVICE_NAME" rm -f /tmp/phue-ssr.sock
 
-    # Optimization runs INSIDE the server subshell, after Bun is up.
-    #
-    # It used to run here, before the servers launched. Two problems: `optimize`
-    # warms caches for a system whose SSR sidecar is not listening yet, so the
-    # very first thing it measured was a cold path; and this function blocks on
-    # the foreground `phue serve` below, so nothing scheduled after this point
-    # could ever run within the same invocation.
-    #
-    # Passing the flags through the environment keeps the ordering explicit: the
-    # subshell knows to warm the cache only once the socket is live.
-    echo "⚡ Launching Phue HTTP & Bun SSR dev servers..."
+    # Ensure log directory and log file exist on host
+    mkdir -p storage/logs
+    touch storage/logs/servers.log
 
-    # CWD fix: run bun inside /app/ssr subshell
-    # Export root environment variables to prevent relying on hardcoded fallbacks like SOCKET_PATH
-    # Added grep -v to filter out Vue warnings from Bun SSR logs
+    local EXEC_DETACH_FLAG=""
+    if [[ "$DETACH" == "true" ]]; then
+        EXEC_DETACH_FLAG="-d"
+        echo "⚡ Launching Phue HTTP & Bun SSR dev servers (detached)..."
+    else
+        echo "⚡ Launching Phue HTTP & Bun SSR dev servers..."
+    fi
+
+    # Optimization runs INSIDE the server subshell, after Bun is up.
+    # Passing the flags through the environment keeps the ordering explicit.
+    #
+    # When DETACH is true, output redirects to /app/storage/logs/servers.log.
+    # When false, output is displayed live in the terminal and tee'd to servers.log.
     docker compose -f "$COMPOSE_FILE" exec \
+        $EXEC_DETACH_FLAG \
         -e "PHUE_CLEAR_CACHE=$CLEAR_CACHE" \
         -e "PHUE_OPTIMIZE=$OPTIMIZE" \
+        -e "PHUE_DETACH=$DETACH" \
         "$SERVICE_NAME" bash -c '
         trap "kill 0" EXIT SIGINT SIGTERM
+        LOG_FILE="/app/storage/logs/servers.log"
 
-        # Bring up Bun first: it is the sidecar the HTTP server depends on, and
-        # the cache warm-up below is only meaningful once it answers.
-        (
-            cd /app/ssr && \
-            [ -f /app/.env ] && set -o allexport && source /app/.env && set +o allexport
-            NODE_ENV=production bun server.ts
-        ) 2>&1 | grep --line-buffered -v "\[Vue warn\]" | sed "s/^/[BUN SSR]    /" &
-        BUN_PID=$!
+        run_bun() {
+            (
+                cd /app/ssr && \
+                [ -f /app/.env ] && set -o allexport && source /app/.env && set +o allexport
+                NODE_ENV=production bun server.ts
+            ) 2>&1 | grep --line-buffered -v "\[Vue warn\]" | sed "s/^/[BUN SSR]    /"
+        }
 
-        if [[ "$PHUE_CLEAR_CACHE" == "true" ]]; then
-            echo "🧹 Clearing cache..."
-            php /app/phue cache:clear --type=all
-        fi
+        run_serve() {
+            ./phue serve 2>&1 | sed "s/^/[PHUE SERVE] /"
+        }
 
-        # Wait for the sidecar socket rather than sleeping a fixed interval: a
-        # fixed sleep is either too short (optimize runs mid-boot, warming
-        # nothing) or needlessly long on a fast host.
-        SOCKET_PATH="${SSR_SOCKET:-/tmp/phue-ssr.sock}"
-        for _ in $(seq 1 100); do
-            [ -S "$SOCKET_PATH" ] && break
-            sleep 0.1
-        done
+        if [[ "$PHUE_DETACH" == "true" ]]; then
+            run_bun >> "$LOG_FILE" 2>&1 &
+            BUN_PID=$!
 
-        if [[ "$PHUE_OPTIMIZE" == "true" ]]; then
-            if [ -S "$SOCKET_PATH" ]; then
-                echo "⚡ Optimizing caches..."
-                php /app/phue optimize --type=all
-            else
-                echo "⚠️  Bun sidecar socket $SOCKET_PATH never appeared; skipping optimize."
-                echo "   The servers keep running — start them and re-run with -o once Bun is up."
+            if [[ "$PHUE_CLEAR_CACHE" == "true" ]]; then
+                echo "🧹 Clearing cache..." >> "$LOG_FILE"
+                php /app/phue cache:clear --type=all >> "$LOG_FILE" 2>&1
             fi
-        fi
 
-        ./phue serve 2>&1 | sed "s/^/[PHUE SERVE] /" &
-        wait -n
+            SOCKET_PATH="${SSR_SOCKET:-/tmp/phue-ssr.sock}"
+            for _ in $(seq 1 100); do
+                [ -S "$SOCKET_PATH" ] && break
+                sleep 0.1
+            done
+
+            if [[ "$PHUE_OPTIMIZE" == "true" ]]; then
+                if [ -S "$SOCKET_PATH" ]; then
+                    echo "⚡ Optimizing caches..." >> "$LOG_FILE"
+                    php /app/phue optimize --type=all >> "$LOG_FILE" 2>&1
+                else
+                    echo "⚠️  Bun sidecar socket $SOCKET_PATH never appeared; skipping optimize." >> "$LOG_FILE"
+                fi
+            fi
+
+            run_serve >> "$LOG_FILE" 2>&1 &
+            wait -n
+        else
+            run_bun | tee -a "$LOG_FILE" &
+            BUN_PID=$!
+
+            if [[ "$PHUE_CLEAR_CACHE" == "true" ]]; then
+                echo "🧹 Clearing cache..." | tee -a "$LOG_FILE"
+                php /app/phue cache:clear --type=all 2>&1 | tee -a "$LOG_FILE"
+            fi
+
+            SOCKET_PATH="${SSR_SOCKET:-/tmp/phue-ssr.sock}"
+            for _ in $(seq 1 100); do
+                [ -S "$SOCKET_PATH" ] && break
+                sleep 0.1
+            done
+
+            if [[ "$PHUE_OPTIMIZE" == "true" ]]; then
+                if [ -S "$SOCKET_PATH" ]; then
+                    echo "⚡ Optimizing caches..." | tee -a "$LOG_FILE"
+                    php /app/phue optimize --type=all 2>&1 | tee -a "$LOG_FILE"
+                else
+                    echo "⚠️  Bun sidecar socket $SOCKET_PATH never appeared; skipping optimize." | tee -a "$LOG_FILE"
+                    echo "   The servers keep running — start them and re-run with -o once Bun is up." | tee -a "$LOG_FILE"
+                fi
+            fi
+
+            run_serve | tee -a "$LOG_FILE" &
+            wait -n
+        fi
     '
+
+    if [[ "$DETACH" == "true" ]]; then
+        echo "✅ Servers running in detached mode."
+        echo "💡 Run './phue-docker watcher' to inspect logs."
+    fi
 }
 
 case "$ACTION" in
@@ -156,7 +214,7 @@ case "$ACTION" in
         ;;
 
     start)
-        parse_cache_flags "$@"
+        parse_flags "$@"
         run_start "$@"
         ;;
 
@@ -174,7 +232,7 @@ case "$ACTION" in
         ;;
 
     restart)
-        parse_cache_flags "$@"
+        parse_flags "$@"
         echo "🔄 Stopping containers..."
         docker compose -f "$COMPOSE_FILE" down --remove-orphans
         echo "✅ Containers stopped."
@@ -189,6 +247,13 @@ case "$ACTION" in
     logs)
         echo "📜 Streaming logs (Press Ctrl+C to exit)..."
         docker compose -f "$COMPOSE_FILE" logs -f --tail=100
+        ;;
+
+    watcher)
+        echo "📜 Streaming servers logs (Press Ctrl+C to exit)..."
+        mkdir -p storage/logs
+        touch storage/logs/servers.log
+        tail -f -n 100 storage/logs/servers.log
         ;;
 
     status)
