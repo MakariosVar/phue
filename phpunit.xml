@@ -34,6 +34,9 @@
         <testsuite name="devtools">
             <directory suffix="Test.php">tests/DevTools</directory>
         </testsuite>
+        <testsuite name="queue">
+            <directory suffix="Test.php">tests/Queue</directory>
+        </testsuite>
         <testsuite name="kit">
             <directory suffix="Test.php">tests/App</directory>
             <directory suffix="Test.php">tests/Benchmark</directory>

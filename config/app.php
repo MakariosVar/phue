@@ -32,5 +32,9 @@ return [
         \Phue\Modules\Events\EventModule::class,
         \Phue\Modules\Compiler\CompilerModule::class,
         \Phue\Modules\DevTool\DevToolsModule::class,
+        // Background jobs. No module is required, so mounting this cannot fail; with no driver
+        // configured it runs jobs inline, which is what development wants and what makes a
+        // dropped job impossible to mistake for a working one.
+        \Phue\Modules\Queue\QueueModule::class,
     ],
 ];
