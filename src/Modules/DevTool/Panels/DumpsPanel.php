@@ -40,6 +40,9 @@ final class DumpsPanel
             // Pre-render the value with syntax highlighting (server-side)
             $valueHtml = self::highlightValue($dump['value']);
 
+            // Pre-render the trace too, so it is present without JavaScript.
+            $traceHtml = self::renderTrace($dump['trace'] ?? []);
+
             $html .= <<<HTML
             <div class="dump-item card mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -66,7 +69,7 @@ final class DumpsPanel
                             Toggle Stack Trace
                         </button>
                     </div>
-                    <pre class="dump-trace mt-2 d-none"><code></code></pre>
+                    <pre class="dump-trace mt-2 d-none"><code>{$traceHtml}</code></pre>
                 </div>
             </div>
             HTML;
@@ -75,7 +78,7 @@ final class DumpsPanel
         $html .= '</div>';
 
         // Add JavaScript for interactive dump display
-        $html .= self::renderScript($dumps);
+        $html .= self::renderScript();
 
         return $html;
     }
@@ -115,7 +118,7 @@ final class DumpsPanel
                 $key = '<span class="text-primary">' . htmlspecialchars((string)$k) . '</span>';
                 $items[] = '  ' . $key . ' => ' . self::highlightValue($v, $depth + 1);
             }
-            return '[\n' . implode(",\n", $items) . "\n" . str_repeat('  ', $depth) . ']';
+            return "[\n" . implode(",\n", $items) . "\n" . str_repeat('  ', $depth) . ']';
         }
 
         if (is_object($value)) {
@@ -139,37 +142,60 @@ final class DumpsPanel
             if ($items === []) {
                 return "{$className} {}";
             }
-            return $className . ' {\n' . implode(",\n", $items) . "\n" . str_repeat('  ', $depth) . '}';
+            return $className . " {\n" . implode(",\n", $items) . "\n" . str_repeat('  ', $depth) . '}';
         }
 
         return htmlspecialchars((string)$value);
     }
 
     /**
-     * Renders the JavaScript for interactive dump display.
+     * Renders a stack trace as plain text lines.
+     *
+     * The trace is built here rather than in the browser so it stays readable
+     * with JavaScript disabled, and so each frame keeps the `::` between class
+     * and function — the browser-side version ran the two together and rendered
+     * `AsyncDumperdump`.
+     *
+     * @param array<int, array{file: string, line: int, function: string, class: string}> $trace Recorded frames
+     * @return string Escaped trace block
      */
-    private static function renderScript(array $dumps): string
+    private static function renderTrace(array $trace): string
     {
-        $dumpsJson = json_encode($dumps, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($trace === []) {
+            return '<span class="text-muted">(no stack trace recorded)</span>';
+        }
 
+        $lines = [];
+
+        foreach ($trace as $frame) {
+            $qualifier = ($frame['class'] ?? '') !== '' ? $frame['class'] . '::' : '';
+
+            $lines[] = sprintf(
+                '%s:%d %s%s()',
+                (string) ($frame['file'] ?? ''),
+                (int) ($frame['line'] ?? 0),
+                $qualifier,
+                (string) ($frame['function'] ?? '')
+            );
+        }
+
+        return htmlspecialchars(implode("\n", $lines));
+    }
+
+    /**
+     * Renders the JavaScript for interactive dump display.
+     *
+     * The trace itself is already in the markup; this only toggles it.
+     *
+     * @return string Script block
+     */
+    private static function renderScript(): string
+    {
         return <<<JS
 <script>
 (function() {
-    const dumps = {$dumpsJson};
-
     // Initialize when panel is shown (tab activated)
     function initDumpsPanel(panel) {
-        // Render stack trace for each dump
-        const traceContainers = panel.querySelectorAll('.dump-trace code');
-        traceContainers.forEach((traceContainer, i) => {
-            const dump = dumps[i];
-            if (traceContainer && dump && dump.trace) {
-                traceContainer.textContent = dump.trace.map(f =>
-                    f.file + ':' + f.line + ' ' + (f.class || '') + (f.function || '')
-                ).join('\\n');
-            }
-        });
-
         // Toggle trace buttons
         panel.querySelectorAll('.toggle-trace').forEach(btn => {
             if (btn.dataset._initialized) return;
