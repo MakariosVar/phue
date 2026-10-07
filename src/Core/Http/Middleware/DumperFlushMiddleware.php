@@ -136,7 +136,7 @@ final class DumperFlushMiddleware
                 'trace' => $dump['trace'],
                 'request_id' => $dump['request_id'],
             ];
-        }, $dumps), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }, $dumps), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG);
 
         $script = "<script>window.__PHUE_DUMPS = {$dumpsJson};</script>";
 
