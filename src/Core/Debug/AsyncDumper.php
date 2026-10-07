@@ -49,7 +49,7 @@ final class AsyncDumper implements ResettableInterface
      */
     public function dump(mixed $value, string $label = '', string $group = 'default'): self
     {
-        if ($this->dumps >= $this->maxDumps) {
+        if (count($this->dumps) >= $this->maxDumps) {
             return $this;
         }
 

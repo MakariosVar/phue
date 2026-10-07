@@ -100,6 +100,7 @@ class Application
         Env::load($this->basePath);
 
         $this->container = new Container();
+        Container::setInstance($this->container);
         $this->config = new Config($this->basePath . '/config');
         $this->router = new Router();
         $this->events = new EventDispatcher();

@@ -20,7 +20,7 @@ use Phue\Core\Container;
 final class DumperFlushMiddleware
 {
     public function __construct(
-        private AsyncDumper $dumper
+        private Container $container
     ) {}
 
     /**
@@ -34,14 +34,17 @@ final class DumperFlushMiddleware
     {
         $response = $next($request);
 
-        $dumps = $this->dumper->getDumps();
+        // Get the CURRENT request's AsyncDumper (scoped, not the one from middleware creation)
+        $dumper = $this->container->get(\Phue\Core\Debug\AsyncDumper::class);
+        $dumps = $dumper->getDumps();
 
         if ($dumps === []) {
             return $response;
         }
 
         // CLI: output to stderr
-        if (php_sapi_name() === 'cli') {
+        // CLI: output to stderr (but not for Swoole/web requests)
+        if (php_sapi_name() === 'cli' && !($request instanceof \Phue\Core\Request)) {
             $this->outputCli($dumps);
             return $response;
         }
@@ -65,15 +68,16 @@ final class DumperFlushMiddleware
      */
     private function outputCli(array $dumps): void
     {
-        fwrite(STDERR, "\n=== PHUE DUMPS (Request: " . $this->dumper->getRequestId() . ") ===\n\n");
+        $dumper = $this->container->get(\Phue\Core\Debug\AsyncDumper::class);
+        fwrite(STDERR, "\n=== PHUE DUMPS (Request: " . $dumper->getRequestId() . ") ===\n\n");
 
         foreach ($dumps as $i => $dump) {
-            $time = date('H:i:s.u', $dump['time']);
+            $time = date('H:i:s.u', (int) $dump['time']);
             $label = $dump['label'] ? " [{$dump['label']}]" : '';
             $group = $dump['group'] !== 'default' ? " ({$dump['group']})" : '';
 
             fwrite(STDERR, "--- Dump #{$i}{$label}{$group} @ {$time} ---\n");
-            fwrite(STDERR, $this->formatValue($dump['value']) . "\n");
+            fwrite(STDERR, $this->formatValueForHtml($dump['value']) . "\n");
 
             if ($dump['trace'] !== []) {
                 fwrite(STDERR, "  Stack trace:\n");
@@ -122,7 +126,7 @@ final class DumperFlushMiddleware
     {
         $body = (string)$response->getContent();
 
-        // Prepare dumps data for JavaScript
+        // Prepare dumps data for JavaScript (for Dev Toolbar)
         $dumpsJson = json_encode(array_map(function ($dump) {
             return [
                 'label' => $dump['label'],
@@ -187,9 +191,9 @@ final class DumperFlushMiddleware
     }
 
     /**
-     * Formats a value for CLI output.
+     * Formats a value for HTML display.
      */
-    private function formatValue(mixed $value, int $indent = 0): string
+    private function formatValueForHtml(mixed $value, int $indent = 0): string
     {
         $pad = str_repeat('  ', $indent);
 
@@ -200,14 +204,14 @@ final class DumperFlushMiddleware
 
             $lines = ['['];
             foreach ($value as $k => $v) {
-                $lines[] = $pad . '  ' . var_export($k, true) . ' => ' . $this->formatValue($v, $indent + 1) . ',';
+                $lines[] = $pad . '  ' . var_export($k, true) . ' => ' . $this->formatValueForHtml($v, $indent + 1) . ',';
             }
             $lines[] = $pad . ']';
             return implode("\n", $lines);
         }
 
         if (is_object($value)) {
-            return get_class($value) . ' ' . $this->formatValue((array)$value, $indent);
+            return get_class($value) . ' ' . $this->formatValueForHtml((array)$value, $indent);
         }
 
         if (is_bool($value)) {

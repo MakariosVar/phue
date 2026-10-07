@@ -17,6 +17,11 @@ use Phue\Core\Exceptions\CircularDependencyException;
 class Container
 {
     /**
+     * The current container instance for static access.
+     */
+    private static ?self $instance = null;
+
+    /**
      * Reserved fallback scope key when no active ScopeContext is set.
      */
     private const FALLBACK_SCOPE = '__none__';
@@ -169,6 +174,27 @@ class Container
     public function getScope(): ?ScopeContext
     {
         return $this->currentScope;
+    }
+
+    /**
+     * Get the current container instance.
+     *
+     * @return self|null
+     */
+    public static function getInstance(): ?self
+    {
+        return self::$instance;
+    }
+
+    /**
+     * Set the current container instance for static access.
+     *
+     * @param self|null $instance
+     * @return void
+     */
+    public static function setInstance(?self $instance): void
+    {
+        self::$instance = $instance;
     }
 
     /**

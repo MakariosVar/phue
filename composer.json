@@ -31,7 +31,8 @@
             "App\\": "App/"
         },
         "files": [
-            "src/Core/functions.php"
+            "src/Core/functions.php",
+            "src/Core/Debug/helpers.php"
         ]
     },
     "autoload-dev": {

@@ -235,24 +235,17 @@ class DebugToolbar
     }
 
     /**
-     * Extracts dumps from profiler spans.
-     *
-     * The AsyncDumper stores dumps in a special span, or we can access it via container.
-     * For now, we check if the dumper is in the container.
+     * Extracts dumps from AsyncDumper via container.
      *
      * @return array<int, array{value: mixed, label: string, group: string, time: float, trace: array, request_id: string}>
      */
     private function getDumpsFromProfiler(RequestProfiler $profiler): array
     {
-        // Try to get dumps from container if available
         try {
-            $container = \Phue\Core\Container::class;
-            // Check if we can access the dumper
-            // This is a bit hacky but works for now
-            if (class_exists('Phue\Core\Debug\AsyncDumper')) {
-                // We can't easily access the container from here
-                // The dumps are injected into the page via JavaScript
-                // So we'll return empty and let the JS panel handle it
+            $container = \Phue\Core\Container::getInstance();
+            if ($container && $container->has(\Phue\Core\Debug\AsyncDumper::class)) {
+                $dumper = $container->get(\Phue\Core\Debug\AsyncDumper::class);
+                return $dumper->getDumps();
             }
         } catch (\Throwable) {
             // Ignore

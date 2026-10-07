@@ -17,6 +17,7 @@ $guides = [
     'core'            => ['label' => 'Core',            'file' => 'Core.md',            'badge' => 'core'],
     'modules'         => ['label' => 'Modules',         'file' => 'Modules.md',         'badge' => 'core'],
     'database'        => ['label' => 'Database',        'file' => 'Database.md',        'badge' => 'core'],
+    'debugging'       => ['label' => 'Debugging',       'file' => 'Debugging.md',       'badge' => 'core'],
     'auth'            => ['label' => 'Auth & RBAC',     'file' => 'Auth-RBAC.md',       'badge' => 'core'],
     'schii'           => ['label' => 'Schii',           'file' => 'Schii.md',           'badge' => 'module'],
     'rest'            => ['label' => 'REST',            'file' => 'REST.md',            'badge' => 'module'],

@@ -377,7 +377,7 @@ class DevToolsModule extends Module
         $this->container->singleton(
             \Phue\Core\Http\Middleware\DumperFlushMiddleware::class,
             fn(): \Phue\Core\Http\Middleware\DumperFlushMiddleware => new \Phue\Core\Http\Middleware\DumperFlushMiddleware(
-                $this->container->get(\Phue\Core\Debug\AsyncDumper::class)
+                $this->container
             )
         );
 
