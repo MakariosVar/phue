@@ -7,6 +7,7 @@
       shapeClass,
       sizeClasses[size] || sizeClasses.md
     ]"
+    :style="sizeStyle"
   >
     <img 
       v-if="src && !hasError" 
@@ -63,12 +64,16 @@ export default {
     sizeClasses() {
       // Inline sizing using Bootstrap width/height (w-*, h-*) and font size (fs-*) utilities
       return {
-        xs: 'fs-6 p-1',
-        sm: 'fs-6 p-2',
-        md: 'fs-5 p-2',
-        lg: 'fs-4 p-3',
-        xl: 'fs-2 p-4'
+        xs: 'fs-6',
+        sm: 'fs-6',
+        md: 'fs-5',
+        lg: 'fs-4',
+        xl: 'fs-2'
       };
+    },
+    sizeStyle() {
+      const px = { xs: 24, sm: 32, md: 40, lg: 56, xl: 80 }[this.size] || 40;
+      return { width: px + 'px', height: px + 'px' };
     },
     computedInitials() {
       if (!this.name) return '?';
