@@ -48,7 +48,7 @@ final class ServeCommand implements CommandInterface
      */
     public function getDescription(): string
     {
-        return 'Starts the PHP development server (default: http://localhost:8000).';
+        return 'Starts the PHP development server (default: http://localhost:8000). Mostly used for debugging.';
     }
 
     /**
