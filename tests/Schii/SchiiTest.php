@@ -10,6 +10,7 @@ use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Stub ActiveRecord model used for testing Schii attributes and endpoints.
@@ -43,6 +44,8 @@ class StubProduct extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class SchiiTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

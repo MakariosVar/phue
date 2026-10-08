@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract tests for HTTP error responses produced by the application kernel.
@@ -19,11 +20,14 @@ use PHPUnit\Framework\TestCase;
  */
 class ErrorResponseContractTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void
     {
         $this->app = new Application('/app');
+        $this->isolateApplicationDatabase($this->app);
     }
 
     public function test404CarriesSecurityHeaders(): void

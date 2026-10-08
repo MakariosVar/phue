@@ -30,6 +30,7 @@ class ApplicationTest extends TestCase
     {
         parent::setUp();
         $this->app = new Application(dirname(__DIR__, 2));
+        $this->isolateApplicationDatabase($this->app);
         
         // Reset static tracker before each test run
         ExecutionTracker::$log = [];

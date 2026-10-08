@@ -5,6 +5,7 @@ namespace Phue\Tests\Core\Database;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Bare stub model for Active Record persistence tests — no relations.
@@ -26,6 +27,8 @@ class UserStub extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class BaseActiveRecordTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();

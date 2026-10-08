@@ -7,6 +7,7 @@ namespace Phue\Tests\Schii\Endpoint;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * S13 — Explorer endpoints MUST be behind the auth gate when requireAuth=true.
@@ -25,6 +26,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class ExplorerAuthGateTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $tmpBase;
 
     protected function setUp(): void

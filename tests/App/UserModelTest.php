@@ -10,6 +10,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use App\Models\User;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Regression-guard + AR identity tests for the BaseUser-backed App\Models\User.
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class UserModelTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

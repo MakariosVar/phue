@@ -29,6 +29,7 @@ class DemoAppIntegrationTest extends TestCase
         parent::setUp();
 
         $this->app = new Application(dirname(__DIR__, 2));
+        $this->isolateApplicationDatabase($this->app);
 
         // Register Demo controllers from App/Controllers directory
         $controllersDir = dirname(__DIR__, 2) . '/App/Controllers';

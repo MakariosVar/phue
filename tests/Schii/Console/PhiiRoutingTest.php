@@ -16,6 +16,7 @@ use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Endpoint\SchemaInspectorEndpoint;
 use Phue\Modules\Schii\Endpoint\SchemaSyncEndpoint;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Phii panel wiring contracts:
@@ -29,6 +30,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class PhiiRoutingTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $tmpBase;
 
     protected function setUp(): void

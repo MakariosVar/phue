@@ -10,6 +10,7 @@ use Phue\Core\ErrorPages\ErrorHandlerMiddleware;
 use Phue\Core\ErrorPages\ErrorPageRenderer;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 use Psr\Log\LoggerInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -27,6 +28,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class RestErrorProductionTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

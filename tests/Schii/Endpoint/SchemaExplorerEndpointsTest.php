@@ -13,6 +13,7 @@ use Phue\Modules\Schii\Schema\SchemaInspector;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Modules\Schii\Schema\SchemaSyncEngine;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 use RuntimeException;
 
 /**
@@ -25,6 +26,8 @@ use RuntimeException;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchemaExplorerEndpointsTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

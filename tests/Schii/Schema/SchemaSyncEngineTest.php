@@ -13,6 +13,7 @@ use Phue\Modules\Schii\Schema\SchemaInspector;
 use Phue\Modules\Schii\Schema\SchemaOperation;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Modules\Schii\Schema\SchemaSyncEngine;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Syncing models on a real in-memory SQLite database: diff detection, dry-run
@@ -107,6 +108,8 @@ class SyncTyped extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchemaSyncEngineTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private SchemaSyncEngine $engine;
 

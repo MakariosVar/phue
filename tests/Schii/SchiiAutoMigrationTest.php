@@ -18,6 +18,7 @@ use Phue\Modules\Schii\Migration\SchemaToSqlConverter;
 use Phue\Modules\Schii\Schema\FieldSchema;
 use Phue\Modules\Schii\Schema\ModelSchema;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 #[UI(label: 'Dynamic Products')]
 class MigratableProduct extends BaseActiveRecord
@@ -63,6 +64,8 @@ class InvalidTableProduct extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class SchiiAutoMigrationTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

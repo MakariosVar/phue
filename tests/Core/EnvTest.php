@@ -6,6 +6,7 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
 use Phue\Core\Env;
 use Phue\Core\functions;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Unit and integration tests for the Env .env loader and env() helper.
@@ -14,6 +15,8 @@ use Phue\Core\functions;
  */
 class EnvTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     /**
      * Temporary base paths created for the current test.
      *

@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Routing\Loader\AttributeRouteLoader;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * The route cache may only ever ADD a speed-up. It may never change what routes
@@ -39,6 +40,8 @@ use Phue\Core\Routing\Loader\AttributeRouteLoader;
 #[Group('unit')]
 final class RouteCacheSafetyTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $baseDir;
 
     protected function setUp(): void
@@ -93,7 +96,11 @@ final class RouteCacheSafetyTest extends TestCase
 
     private function app(?string $baseDir = null): Application
     {
-        return new Application($baseDir ?? $this->baseDir, debug: false);
+        $app = new Application($baseDir ?? $this->baseDir, debug: false);
+
+        $this->isolateApplicationDatabase($app);
+
+        return $app;
     }
 
     /**

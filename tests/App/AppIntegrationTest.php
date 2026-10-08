@@ -19,6 +19,7 @@ class AppIntegrationTest extends TestCase
     protected function setUp(): void
     {
         $this->app = new Application('/app');
+        $this->isolateApplicationDatabase($this->app);
         $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
     }
 

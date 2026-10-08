@@ -39,6 +39,7 @@ class RouteParameterBindingTest extends TestCase
     protected function setUp(): void
     {
         $this->app = new Application('/app', debug: false);
+        $this->isolateApplicationDatabase($this->app);
     }
 
     private function handle(string $method, string $uri): Response
@@ -190,6 +191,7 @@ class RouteParameterBindingTest extends TestCase
         // for — before it, $debug was read once from config and Env::load() was
         // guarded per-process, so the verbose branch was unreachable in tests.
         $app = new Application('/app', debug: true);
+        $this->isolateApplicationDatabase($app);
 
         $this->assertTrue($app->isDebug(), 'The explicit debug argument must win over config.');
 
@@ -216,7 +218,9 @@ class RouteParameterBindingTest extends TestCase
     public function testDebugStateIsPerInstanceNotPerProcess(): void
     {
         $production = new Application('/app', debug: false);
+        $this->isolateApplicationDatabase($production);
         $debug = new Application('/app', debug: true);
+        $this->isolateApplicationDatabase($debug);
 
         $this->assertFalse($production->isDebug());
         $this->assertTrue($debug->isDebug());

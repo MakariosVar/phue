@@ -30,6 +30,7 @@ final class RouterHandlerBindingTest extends TestCase
     protected function setUp(): void
     {
         $this->app = new Application(dirname(__DIR__, 2));
+        $this->isolateApplicationDatabase($this->app);
         FlushSpy::$counter = 0;
     }
 

@@ -7,6 +7,7 @@ namespace Phue\Tests\Schii\Console;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Console page auth-gate contract (UX requirement):
@@ -27,6 +28,8 @@ use PHPUnit\Framework\TestCase;
 #[PHPUnit\Framework\Attributes\Group('auth')]
 final class ConsolePagesAuthGateTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $tmpBase;
 
     protected function setUp(): void

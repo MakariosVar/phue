@@ -7,6 +7,7 @@ namespace Phue\Tests\Production;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract tests for the framework health-check endpoints.
@@ -18,9 +19,12 @@ use PHPUnit\Framework\TestCase;
  */
 class HealthEndpointContractTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     public function testLiveEndpointReportsUp(): void
     {
         $app = new Application('/app');
+        $this->isolateApplicationDatabase($app);
 
         $response = $app->handle(new Request('GET', '/health/live'));
         $body = json_decode($response->getContent(), true);

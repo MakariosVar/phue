@@ -81,6 +81,7 @@ final class KernelScopeLifecycleTest extends TestCase
         RequestScopeSpy::$constructions = 0;
 
         $this->app = new Application(dirname(__DIR__, 2));
+        $this->isolateApplicationDatabase($this->app);
         $this->container = $this->app->getContainer();
     }
 

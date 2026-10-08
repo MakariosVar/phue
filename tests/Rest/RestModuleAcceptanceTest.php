@@ -9,6 +9,7 @@ use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Prod-level acceptance tests for the RestModule (attribute-driven public REST API).
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class RestModuleAcceptanceTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

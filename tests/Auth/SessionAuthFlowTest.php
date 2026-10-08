@@ -19,10 +19,13 @@ use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 #[Group('integration')]
 final class SessionAuthFlowTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

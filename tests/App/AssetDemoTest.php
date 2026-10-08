@@ -30,6 +30,7 @@ final class AssetDemoTest extends TestCase
         parent::setUp();
 
         $this->app = new Application('/app');
+        $this->isolateApplicationDatabase($this->app);
         $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
         $registry->registerSource('/assets', '/app/App/Frontend');
@@ -208,6 +209,7 @@ final class AssetDemoTest extends TestCase
         // from "the test env happens to match"; driving both flags can.
         foreach ([false, true] as $debug) {
             $app = new Application('/app', $debug);
+            $this->isolateApplicationDatabase($app);
             $app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
             $registry = $app->getContainer()->get(AssetRegistry::class);
             $registry->registerSource('/assets', '/app/App/Frontend');

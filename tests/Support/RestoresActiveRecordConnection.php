@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Support;
 
-use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Application;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\Attributes\Before;
 
@@ -45,39 +45,60 @@ use PHPUnit\Framework\Attributes\Before;
  * attributes are additive, so there is nothing to override and no parent call
  * to forget.
  *
+ * What it does on the way in, not only on the way out
+ * --------------------------------------------------
+ * Restoring in teardown is half the contract. The other half is the #[Before]
+ * hook: it collapses whatever state the previous file left behind, so a test
+ * that boots an application cannot inherit an earlier application's resolver
+ * and destroy a database it never intended to touch. The trait also does NOT
+ * restore the snapshotted values verbatim — a snapshot taken from a leaked
+ * state points at user-space, and re-installing it would propagate the leak to
+ * the next file. The suite has one correct resting state; see
+ * TestDatabase::releaseGlobal().
+ *
  * What this does NOT do
  * ---------------------
  * It does not stop a test from choosing its own connection. Several tests
  * deliberately swap in a private in-memory SQLite; that still works, because
  * the restore puts back whatever was in place before this test started.
  *
+ * For tests that issue DDL, prefer UsesIsolatedDatabase. This trait protects
+ * the files that BOOT an application; that one protects the files that WRITE,
+ * and it protects them even when someone forgets this trait.
+ *
  * @package Phue\Tests\Support
  */
 trait RestoresActiveRecordConnection
 {
-    private mixed $arSavedResolver = null;
-
-    private mixed $arSavedConnection = null;
-
     #[Before]
-    public function snapshotActiveRecordConnectionState(): void
+    public function restoreDatabaseBeforeTest(): void
     {
-        $reflection = new \ReflectionClass(BaseActiveRecord::class);
-
-        $this->arSavedResolver = $reflection->getStaticPropertyValue('connectionResolver');
-        $this->arSavedConnection = $reflection->getStaticPropertyValue('dbConnection');
+        TestDatabase::releaseGlobal();
     }
 
     #[After]
-    public function restoreActiveRecordConnectionState(): void
+    public function restoreDatabaseAfterTest(): void
     {
-        $reflection = new \ReflectionClass(BaseActiveRecord::class);
+        TestDatabase::releaseGlobal();
+    }
 
-        // Unconditional. An earlier version of this logic restored only when a
-        // guessed bootstrap file path existed; when it did not, dbConnection
-        // stayed null and the next getConnection() silently fell through to the
-        // .env database — the same class of bug this trait exists to remove.
-        $reflection->setStaticPropertyValue('connectionResolver', $this->arSavedResolver);
-        $reflection->setStaticPropertyValue('dbConnection', $this->arSavedConnection);
+    /**
+     * Point a freshly constructed Application at the test database.
+     *
+     * Call this immediately after `new Application($basePath)` in every test
+     * that boots the real application. Restoring in teardown cannot help while
+     * the test is running: between the constructor returning and the test
+     * ending, Active Record and the container both hand out the application's
+     * own database, and any code under test that touches the database does so
+     * against the developer's data.
+     *
+     * The container's Connection singleton is what makes this work.
+     * bootstrapDatabase() installs a lazy resolver — `fn() => $container->get(...)`
+     * — so re-binding the singleton before the first get() rewrites what Active
+     * Record will return for the rest of the test.
+     */
+    protected function isolateApplicationDatabase(Application $application): void
+    {
+        TestDatabase::isolateApplication($application);
     }
 }

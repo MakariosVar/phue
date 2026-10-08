@@ -85,7 +85,11 @@ final class AccessControlMiddlewareWiringTest extends TestCase
 
     private function app(string $basePath = '/app'): Application
     {
-        return new Application($basePath, debug: false);
+        $app = new Application($basePath, debug: false);
+
+        $this->isolateApplicationDatabase($app);
+
+        return $app;
     }
 
     private function request(string $uri = '/protected'): Request

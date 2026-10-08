@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Asset\AssetServer;
 use Phue\Core\Asset\HtmlShellRenderer;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract tests for the phue-explorer navigation interceptor pipeline:
@@ -24,6 +25,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PhueExplorerAssetTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private const EXPLORER_JS = __DIR__ . '/../../../storage/assets/js/phue-explorer.js';
 
     private string $baseDir;

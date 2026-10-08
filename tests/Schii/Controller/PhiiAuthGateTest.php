@@ -19,6 +19,7 @@ use Phue\Tests\Auth\Stubs\ExplorerAuthUser;
 use Phue\Tests\Schii\Stubs\Profile;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * P12/P1 — the Phii code generator writes arbitrary files; when auth is wired
@@ -30,6 +31,8 @@ use PHPUnit\Framework\TestCase;
 #[Group('unit')]
 final class PhiiAuthGateTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private string $dump;
     private Connection $db;
 

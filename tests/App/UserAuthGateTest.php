@@ -15,6 +15,7 @@ use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use App\Models\User;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Integration test: Bearer token resolves to an AR-backed App\Models\User,
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class UserAuthGateTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private SchemaRegistry $registry;
     private string $emptyRbacSeed;

@@ -8,6 +8,7 @@ use Phue\Core\Application;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\AssetServer;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contracts for the default Bootstrap stylesheet pipeline:
@@ -19,6 +20,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PhueDefaultStylesheetTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     /**
      * The Bootstrap stylesheet shipped under storage/assets/vendor/bootstrap.
      */

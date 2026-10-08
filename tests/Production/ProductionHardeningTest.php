@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Security\SecurityMiddleware;
 use Phue\Tests\Benchmark\BenchmarkRunner;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Unit tests covering Health Checking, Security Hardening, and Benchmark execution.
@@ -20,6 +21,8 @@ use Phue\Tests\Benchmark\BenchmarkRunner;
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class ProductionHardeningTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     /**
      * Verifies that HealthChecker baseline checks pass with valid environment options.
      *
@@ -65,6 +68,7 @@ final class ProductionHardeningTest extends TestCase
     public function testKernelBenchmark(): void
     {
         $app = new Application(dirname(__DIR__, 2));
+        $this->isolateApplicationDatabase($app);
         $app->getRouter()->get('/health/live', static fn(): Response => new Response('OK', 200));
 
         $runner = new BenchmarkRunner();

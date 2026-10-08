@@ -13,6 +13,7 @@ use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Hardening / edge-case suite for the Schii REST ModelEndpoint.
@@ -66,6 +67,8 @@ class EdgeProduct extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchiiEndpointEdgeCasesTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private ModelEndpoint $endpoint;
 

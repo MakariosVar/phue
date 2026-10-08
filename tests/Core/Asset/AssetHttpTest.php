@@ -9,6 +9,7 @@ use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * HTTP contract tests for the auto-registered AssetsController: end-to-end
@@ -21,6 +22,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class AssetHttpTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $baseDir;
     private string $sourceDir;
     private string $siblingDir;

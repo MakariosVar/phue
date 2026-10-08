@@ -47,6 +47,7 @@ final class SpaModulePreloadContractTest extends TestCase
         parent::setUp();
 
         $this->app = new Application('/app');
+        $this->isolateApplicationDatabase($this->app);
         $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
         $registry = $this->app->getContainer()->get(AssetRegistry::class);
         $registry->registerSource('/assets', '/app/App/Frontend');

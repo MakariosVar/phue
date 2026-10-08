@@ -12,6 +12,7 @@ use Phue\Modules\Schii\Schema\SchemaInspector;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Modules\Schii\Schema\SchemaSyncEngine;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * SchemaSyncEndpoint::diff contract consumed by the Schii Diff panel:
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchemaDiffEndpointTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private SchemaSyncEndpoint $endpoint;
 

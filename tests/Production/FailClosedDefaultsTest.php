@@ -10,6 +10,7 @@ use Phue\Core\Application;
 use Phue\Core\Env;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * The framework must fail closed when it has been told nothing.
@@ -29,6 +30,8 @@ use Phue\Core\Response;
 #[Group('unit')]
 final class FailClosedDefaultsTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $baseDir;
 
     protected function setUp(): void
@@ -164,7 +167,15 @@ final class FailClosedDefaultsTest extends TestCase
 
     private function app(): Application
     {
-        return new Application($this->baseDir);
+        $app = new Application($this->baseDir);
+
+        // The temp base path carries a COPY of the repository's config/, so
+        // config/database.php runs here too. Without this, env('DB_CONNECTION')
+        // answers from the .env an earlier test loaded and the boot hands the
+        // global Active Record connection to the real MariaDB.
+        $this->isolateApplicationDatabase($app);
+
+        return $app;
     }
 
     public function testDebugDefaultsToFalseWithoutAnEnvFile(): void
@@ -230,6 +241,7 @@ final class FailClosedDefaultsTest extends TestCase
     public function testDebugOptInStillExposesTheMessage(): void
     {
         $app = new Application($this->baseDir, debug: true);
+        $this->isolateApplicationDatabase($app);
 
         $this->assertTrue($app->isDebug());
 
@@ -254,6 +266,7 @@ final class FailClosedDefaultsTest extends TestCase
     public function testRouteCacheIsOffByDefaultAndIndependentOfDebug(): void
     {
         $app = new Application($this->baseDir, debug: false);
+        $this->isolateApplicationDatabase($app);
 
         $this->assertFalse(
             $app->getConfig()->get('app.routeCache', false),
@@ -272,7 +285,7 @@ final class FailClosedDefaultsTest extends TestCase
      */
     public function testRouteCacheStaysOffWhenDebugIsEnabled(): void
     {
-        new Application($this->baseDir, debug: true);
+        $this->isolateApplicationDatabase(new Application($this->baseDir, debug: true));
 
         $this->assertFileDoesNotExist(
             $this->baseDir . '/storage/cache/routes.php',

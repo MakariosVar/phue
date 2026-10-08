@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\UI\PhueComponentLoader;
 use Phue\Modules\Schii\SchiiModule;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 use Phue\Tests\Support\TestComponentLoader;
 
 /**
@@ -24,6 +25,8 @@ use Phue\Tests\Support\TestComponentLoader;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchiiUiIndependenceTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $tmpBase;
 
     protected function setUp(): void

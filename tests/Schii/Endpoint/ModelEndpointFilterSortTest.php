@@ -12,10 +12,13 @@ use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 #[Group('integration')]
 final class ModelEndpointFilterSortTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private ModelEndpoint $endpoint;
 

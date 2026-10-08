@@ -21,6 +21,7 @@ use Phue\Modules\Schii\Schema\SchemaSyncEngine;
 use Phue\Tests\Auth\Stubs\ExplorerAuthUser;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * S13 — the authorized schema-explorer wrappers must not only 401 anonymous
@@ -37,6 +38,8 @@ use PHPUnit\Framework\TestCase;
 #[Group('integration')]
 final class AuthorizedSchemaExplorerEndpointTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
 
     protected function setUp(): void

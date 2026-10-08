@@ -8,6 +8,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\ActiveRecord\Relations\HasMany;
 use Phue\Core\Database\ActiveRecord\Relations\HasOne;
 use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Stub User model with relations.
@@ -62,6 +63,8 @@ class Profile extends BaseActiveRecord
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class RelationsTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();

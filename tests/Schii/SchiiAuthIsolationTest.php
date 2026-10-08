@@ -7,6 +7,7 @@ namespace Phue\Tests\Schii;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * B4 — Auth module isolation contract:
@@ -19,6 +20,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class SchiiAuthIsolationTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private string $tmpBase;
 
     protected function setUp(): void

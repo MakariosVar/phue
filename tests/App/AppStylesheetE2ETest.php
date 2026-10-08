@@ -30,6 +30,7 @@ final class AppStylesheetE2ETest extends TestCase
         parent::setUp();
 
         $this->app = new Application('/app');
+        $this->isolateApplicationDatabase($this->app);
         $this->app->getRouter()->scanControllers('/app/App/Controllers', 'App\\Controllers');
 
         // Mirror public/index.php source registration order.

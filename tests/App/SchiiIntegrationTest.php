@@ -7,9 +7,12 @@ namespace Phue\Tests\App;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 class SchiiIntegrationTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     private Application $app;
 
     protected function setUp(): void

@@ -11,6 +11,7 @@ use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 use Phue\Tests\Schii\Stubs\User;
 use PHPUnit\Framework\TestCase;
+use Phue\Tests\Support\UsesIsolatedDatabase;
 
 /**
  * Advanced ModelEndpoint operations invoked by the Schii UI panels:
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 final class ModelAdvancedOperationsTest extends TestCase
 {
+    use UsesIsolatedDatabase;
+
     private Connection $db;
     private ModelEndpoint $endpoint;
 

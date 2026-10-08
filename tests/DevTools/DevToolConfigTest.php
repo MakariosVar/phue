@@ -6,10 +6,13 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 #[\PHPUnit\Framework\Attributes\Group('integration')]
 class DevToolConfigTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     public function testDevToolEnabledShowsToolbar(): void
     {
         $configDir = $this->createConfigDir(debug: true, devTool: true);

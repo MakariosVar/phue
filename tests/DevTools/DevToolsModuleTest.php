@@ -25,6 +25,7 @@ use Phue\Modules\DevTool\ProfilingComponentLoaderRegistry;
 use Phue\Modules\DevTool\ProfilingSsrClient;
 use Phue\Modules\DevTool\RequestProfiler;
 use Phue\Modules\DevTool\Stopwatch;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Contract of the DevTools module as the kernel sees it: what gets installed, what stays
@@ -33,6 +34,8 @@ use Phue\Modules\DevTool\Stopwatch;
 #[Group('integration')]
 class DevToolsModuleTest extends TestCase
 {
+    use RestoresActiveRecordConnection;
+
     /** @var list<string> */
     private array $tempDirs = [];
 
