@@ -102,6 +102,10 @@ Notes:
   Test files come from the testsuites in phpunit.xml, so this runner and
   PHPUnit never disagree about what exists.
   Failures from the last run are recorded in .phpunit.cache/phue-test.json.
+
+Environment:
+  PHUE_TEST_MEMORY_LIMIT   memory ceiling for the whole run (default 512M).
+                           Raised only when your php.ini asks for less, never lowered.
 HELP;
 }
 
@@ -378,6 +382,34 @@ function failuresFrom(string $output): array
     return array_values(array_unique($found));
 }
 
+/**
+ * Bytes for a php.ini shorthand (128M, 512M, 1G, -1) or a raw byte count.
+ *
+ * Returns null for -1 and for anything unrecognised: "unlimited" and "cannot tell" both
+ * mean this runner has no business raising the limit.
+ */
+function parseMemoryLimit(string $value): ?int
+{
+    $value = trim($value);
+
+    if ($value === '' || $value === '-1') {
+        return null;
+    }
+
+    if (!preg_match('/^(\d+)([kmg]?)$/i', $value, $matches)) {
+        return null;
+    }
+
+    $bytes = (int) $matches[1];
+
+    return match (strtolower($matches[2])) {
+        'g' => $bytes * 1024 * 1024 * 1024,
+        'm' => $bytes * 1024 * 1024,
+        'k' => $bytes * 1024,
+        default => $bytes,
+    };
+}
+
 // ------------------------------------------------------------------------ main
 
 $options = parseArguments(array_slice($_SERVER['argv'] ?? [], 1));
@@ -446,6 +478,25 @@ if ($options['groups'] !== []) {
 
 foreach (array_merge($options['passthrough'], $selected) as $argument) {
     $arguments[] = $argument;
+}
+
+// PHPUnit runs in ONE process for the whole selection, so the suite's memory ceiling is
+// the single global limit rather than a per-test budget. At 128M the full run exhausts it
+// in tests that legitimately allocate: an SSR payload compression test gzdecodes a
+// multi-megabyte string, and SsrBaselineTest drives a full page render. That is a limit
+// that is too tight for the suite, not a leak in whatever test happened to run last.
+//
+// Raised here because ini settings on the parent do NOT reach the child: -d on the wrapper
+// is silently dropped when proc_open starts a fresh interpreter, which makes this look
+// like the flag "did not work" rather than like a runner that dropped it.
+//
+// Only raised, never lowered: if the developer already configured more than the target,
+// their php.ini wins.
+$memoryTarget = getenv('PHUE_TEST_MEMORY_LIMIT') ?: '512M';
+$memoryCurrent = parseMemoryLimit(ini_get('memory_limit'));
+
+if ($memoryTarget !== '' && ($memoryCurrent === null || $memoryCurrent < parseMemoryLimit($memoryTarget))) {
+    array_unshift($arguments, '-d', 'memory_limit=' . $memoryTarget);
 }
 
 $command = implode(' ', array_map('escapeshellarg', [PHP_BINARY, $phpunit, ...$arguments]));

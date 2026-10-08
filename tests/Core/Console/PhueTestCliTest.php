@@ -41,6 +41,31 @@ class PhueTestCliTest extends TestCase
     }
 
     /**
+     * @param array<string, string> $env
+     * @return array{stdout: string, stderr: string, exit: int}
+     */
+    private function runEnv(array $env, string ...$args): array
+    {
+        $cmd = array_merge([self::SCRIPT], $args);
+        $process = proc_open(
+            $cmd,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            array_merge(getenv(), $env)
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return ['stdout' => $stdout, 'stderr' => $stderr, 'exit' => proc_close($process)];
+    }
+
+    /**
      * PHP diagnostics (Notice/Warning/Deprecated) leak to STDOUT when
      * display_errors is enabled in the CLI SAPI - assert both streams stay clean.
      */
@@ -49,6 +74,35 @@ class PhueTestCliTest extends TestCase
         $combined = $stdout . "\n" . $stderr;
         foreach (['Warning:', 'Notice:', 'Deprecated:', 'Fatal error:'] as $needle) {
             $this->assertStringNotContainsString($needle, $combined);
+        }
+    }
+
+    /**
+     * PHPUnit runs as a child interpreter and ini settings on the parent never reach it,
+     * so the runner has to put the ceiling on the command line. A regression here does not
+     * surface as a failing test: the run dies with "Allowed memory size exhausted" partway
+     * through, and the last tests executed look like the guilty ones.
+     */
+    public function testHelpDocumentsTheMemoryCeilingItApplies(): void
+    {
+        $result = $this->runCli('--help');
+
+        $this->assertSame(0, $result['exit']);
+        $this->assertStringContainsString('PHUE_TEST_MEMORY_LIMIT', $result['stdout']);
+    }
+
+    /**
+     * The selection modes must stay side-effect free, including the memory plumbing: a list
+     * run executes nothing and therefore has to stay cheap and quiet whatever the ceiling is.
+     */
+    public function testListModeRunsWithoutMemoryDiagnosticsAtAnyCeiling(): void
+    {
+        foreach (['8M', '512M'] as $limit) {
+            $result = $this->runEnv(['PHUE_TEST_MEMORY_LIMIT' => $limit], '--list');
+
+            $this->assertSame(0, $result['exit'], $result['stderr']);
+            $this->assertStringNotContainsString('memory size', $result['stdout'] . $result['stderr']);
+            $this->assertNoPhpDiagnostics($result['stdout'], $result['stderr']);
         }
     }
 
