@@ -311,6 +311,7 @@ class SchiiModule extends Module
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
                 requestResolver: fn () => $c->get(\Phue\Core\Request::class),
                 userResolver: $userResolver,
+                csrfConfig: (array) $c->get(\Phue\Core\Config::class)->get('app.csrf', []),
             );
         });
 
@@ -350,6 +351,7 @@ class SchiiModule extends Module
                 ssrEngine: $c->get(NullSsrEngine::class),
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
                 requestResolver: fn () => $c->get(\Phue\Core\Request::class),
+                csrfConfig: (array) $c->get(\Phue\Core\Config::class)->get('app.csrf', []),
             );
         });
 

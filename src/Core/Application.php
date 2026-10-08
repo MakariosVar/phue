@@ -16,6 +16,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\Security\CurrentUserInterface;
 use Phue\Core\Security\SecurityMiddleware;
+use Phue\Core\Security\Csrf\CsrfMiddleware;
 use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Core\Ssr\NullSsrEngine;
 use Phue\Core\Ssr\SsrEngine;
@@ -238,6 +239,33 @@ class Application
         // Enable ErrorHandlerMiddleware at global middleware stack
         $this->use(\Phue\Core\ErrorPages\ErrorHandlerMiddleware::class);
 
+        // Register CSRF protection.
+        //
+        // Registered AFTER ErrorHandlerMiddleware on purpose. Application::use() appends
+        // and the pipeline is folded over the reversed list, so the first registration is
+        // the outermost layer. CSRF must sit inside the error handler, otherwise the 403 it
+        // throws is never rendered and the client gets a bare 500 for a rejected token.
+        $this->container->singleton(\Phue\Core\Security\Csrf\CsrfConfig::class, function (): \Phue\Core\Security\Csrf\CsrfConfig {
+            $csrf = (array) $this->config->get('app.csrf', []);
+
+            // The key lives at app.appKey so it is not duplicated inside the csrf block;
+            // an explicit app.csrf.appKey still wins for anyone who wants to separate them.
+            $csrf['appKey'] ??= $this->config->get('app.appKey');
+
+            return \Phue\Core\Security\Csrf\CsrfConfig::fromArray($csrf);
+        });
+
+        $this->container->singleton(\Phue\Core\Security\Csrf\CsrfMiddleware::class, function ($c): \Phue\Core\Security\Csrf\CsrfMiddleware {
+            return new \Phue\Core\Security\Csrf\CsrfMiddleware(
+                config: $c->get(\Phue\Core\Security\Csrf\CsrfConfig::class),
+                logger: $c->get(LoggerInterface::class),
+                router: $c->get(Router::class),
+                security: $c->get(SecurityMiddleware::class),
+            );
+        });
+
+        $this->use(\Phue\Core\Security\Csrf\CsrfMiddleware::class);
+
         // Register N+1 Query Detector (request-scoped, fresh per request)
         $this->container->scoped(\Phue\Core\Database\NPlusOneDetector::class, function (): \Phue\Core\Database\NPlusOneDetector {
             return new \Phue\Core\Database\NPlusOneDetector();
@@ -398,7 +426,8 @@ class Application
                 loaderRegistry: $c->get(ComponentLoaderRegistry::class),
                 themeConfig: $this->config->get('app.themeToggle', []),
                 metaConfig: $this->config->get('app.seo', []),
-                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null
+                logger: $c->has(LoggerInterface::class) ? $c->get(LoggerInterface::class) : null,
+                csrfConfig: (array) $this->config->get('app.csrf', [])
             );
         });
 
@@ -642,8 +671,17 @@ class Application
 
         /** @var SecurityMiddleware $security */
         $security = $this->container->get(SecurityMiddleware::class);
+        $response = $security->applyHeaders($response, $request);
 
-        return $security->applyHeaders($response, $request);
+        // Same reason security headers are applied here rather than only in the pipeline:
+        // the CSRF middleware sits inside the error handler, so a response produced by an
+        // exception never passes through it. Without this, an error page would carry no
+        // token and the client's next form submission would fail with a 403 that looks
+        // like the user's own mistake.
+        /** @var CsrfMiddleware $csrf */
+        $csrf = $this->container->get(CsrfMiddleware::class);
+
+        return $csrf->issueTokenCookie($response, $request);
     }
 
     /**
@@ -664,26 +702,28 @@ class Application
         $params = $routeMatch->getParams();
         $routeMiddlewares = $routeMatch->getMiddleware();
 
-        // Core controller execution (Innermost layer of the onion)
-        $coreHandler = function (Request $req) use ($handler, $params): Response {
+        // Core controller execution (Innermost layer of the onion).
+        // Use a static closure to avoid capturing $this, which would create
+        // reference cycles in exception stack traces when an exception is thrown
+        // from the handler or route middleware. The container and request are
+        // passed explicitly.
+        $coreHandler = static function (Request $req, mixed $handler, array $params, Container $container): Response {
             $resolvedHandler = $handler;
 
             if (is_string($resolvedHandler) && str_contains($resolvedHandler, '@')) {
                 [$class, $method] = explode('@', $resolvedHandler, 2);
-                $resolvedHandler = [$this->container->make($class), $method];
+                $resolvedHandler = [$container->make($class), $method];
             } elseif (is_array($resolvedHandler) && is_string($resolvedHandler[0])) {
-                $resolvedHandler[0] = $this->container->make($resolvedHandler[0]);
+                $resolvedHandler[0] = $container->make($resolvedHandler[0]);
             }
 
-            $coercedParams = $this->resolveActionParameters($resolvedHandler, $params);
+            $coercedParams = self::resolveActionParametersStatic($resolvedHandler, $params);
 
             if (is_array($resolvedHandler)) {
                 $reflection = new \ReflectionMethod($resolvedHandler[0], $resolvedHandler[1]);
             } elseif (is_object($resolvedHandler) && !($resolvedHandler instanceof \Closure)) {
-                // Invokable object: Reflect over the __invoke method
                 $reflection = new \ReflectionMethod($resolvedHandler, '__invoke');
             } else {
-                // Closures and global/namespaced functions
                 $reflection = new \ReflectionFunction($resolvedHandler);
             }
 
@@ -691,46 +731,43 @@ class Application
             foreach ($reflection->getParameters() as $param) {
                 $paramName = $param->getName();
                 $type = $param->getType();
-                $typeNames = $this->extractTypeNames($type);
+                $typeNames = self::extractTypeNamesStatic($param->getType());
 
-                // 1. Check for Request type (Request class or subclass/interface)
                 if (in_array(Request::class, $typeNames, true) || ($type instanceof \ReflectionNamedType && $type->getName() === Request::class)) {
                     $args[] = $req;
-                }                 // 2. Direct route path parameter match by name (e.g.$id)
-                elseif (array_key_exists($paramName, $coercedParams)) {
+                } elseif (array_key_exists($paramName, $coercedParams)) {
                     $args[] = $coercedParams[$paramName];
-                }
-                // 3. Any array-typed parameter receives the full route params map
-                elseif (in_array('array', $typeNames, true)) {
+                } elseif (in_array('array', $typeNames, true)) {
                     $args[] = $coercedParams;
-                }
-                // 4. Fallback to default parameter value if available
-                elseif ($param->isDefaultValueAvailable()) {
+                } elseif ($param->isDefaultValueAvailable()) {
                     $args[] = $param->getDefaultValue();
                 }
             }
 
             $result = call_user_func_array($resolvedHandler, $args);
-            return $this->normalizeResponse($result);
+            return self::normalizeResponseStatic($result);
         };
 
         // If no route-specific middlewares exist, invoke core handler directly
         if (empty($routeMiddlewares)) {
-            return $coreHandler($request);
+            return $coreHandler($request, $handler, $params, $this->container);
         }
 
-        // Build route-specific middleware pipeline (Class-level -> Method-level)
+        // Build route-specific middleware pipeline (Class-level -> Method-level).
+        // Use static closures to avoid capturing $this, preventing reference cycles
+        // in exception stack traces.
+        $container = $this->container;
+
+        // Build route-specific middleware pipeline (Class-level -> Method-level).
+        // Use static closures to avoid capturing $this, preventing reference cycles
+        // in exception stack traces.
         $routePipeline = array_reduce(
             array_reverse($routeMiddlewares),
-            fn(callable $next, callable|string $middleware) => function (Request $req) use ($next, $middleware): Response {
-                if (is_string($middleware)) {
-                    /** @var callable $middleware */
-                    $middleware = $this->container->get($middleware);
-                }
-
-                return $middleware($req, $next);
+            static fn(callable $next, callable|string $middleware): callable => static function (Request $req) use ($next, $middleware, $container): Response {
+                $middlewareInstance = is_string($middleware) ? $container->get($middleware) : $middleware;
+                return $middlewareInstance($req, $next);
             },
-            $coreHandler
+            fn(Request $req) => $coreHandler($req, $handler, $params, $this->container)
         );
 
         return $routePipeline($request);
@@ -835,6 +872,115 @@ class Application
      * @return Response Formatted response instance.
      */
     protected function normalizeResponse(mixed $result): Response
+    {
+        if ($result instanceof Response) {
+            return $result;
+        }
+
+        if (is_array($result)) {
+            return Response::json($result);
+        }
+
+        return new Response((string) $result, 200);
+    }
+
+    /**
+     * Static version of extractTypeNames for use in static closures.
+     *
+     * @param \ReflectionType|null $type
+     * @return array<int, string>
+     */
+    private static function extractTypeNamesStatic(?\ReflectionType $type): array
+    {
+        if ($type === null) {
+            return [];
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return [$type->getName()];
+        }
+
+        if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $subType) {
+                if ($subType instanceof \ReflectionNamedType) {
+                    $names[] = $subType->getName();
+                }
+            }
+            return $names;
+        }
+
+        return [];
+    }
+
+    /**
+     * Static version of resolveActionParameters for use in static closures.
+     *
+     * @param mixed $handler
+     * @param array<string, string> $rawParams
+     * @return array<string, mixed>
+     */
+    protected static function resolveActionParametersStatic(mixed $handler, array $rawParams): array
+    {
+        if (empty($rawParams)) {
+            return [];
+        }
+
+        try {
+            if (is_array($handler)) {
+                $reflection = new \ReflectionMethod($handler[0], $handler[1]);
+            } elseif (is_object($handler) && !$handler instanceof \Closure) {
+                $reflection = new \ReflectionMethod($handler, '__invoke');
+            } else {
+                $reflection = new \ReflectionFunction($handler);
+            }
+        } catch (\ReflectionException) {
+            return $rawParams;
+        }
+
+        $resolvedParams = $rawParams;
+
+        foreach ($reflection->getParameters() as $param) {
+            $name = $param->getName();
+
+            if (!array_key_exists($name, $rawParams)) {
+                continue;
+            }
+
+            $rawValue = $rawParams[$name];
+            $type = $param->getType();
+
+            if (!$type instanceof \ReflectionNamedType || !$type->isBuiltin()) {
+                continue;
+            }
+
+            $typeName = $type->getName();
+
+            $resolvedParams[$name] = match ($typeName) {
+                'int' => is_numeric($rawValue)
+                    ? (int) $rawValue
+                    : throw new \InvalidArgumentException("Parameter '{$name}' must be an integer."),
+                'float' => is_numeric($rawValue)
+                    ? (float) $rawValue
+                    : throw new \InvalidArgumentException("Parameter '{$name}' must be a float."),
+                'bool' => filter_var($rawValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (
+                    is_numeric($rawValue) ? (bool) (int) $rawValue : throw new \InvalidArgumentException("Parameter '{$name}' must be a boolean.")
+                ),
+                'string' => (string) $rawValue,
+                default => $rawValue,
+            };
+        }
+
+        return $resolvedParams;
+    }
+
+    /**
+     * Static version of normalizeResponse for use in static closures.
+     *
+     * @param mixed $result
+     * @return Response
+     */
+    protected static function normalizeResponseStatic(mixed $result): Response
     {
         if ($result instanceof Response) {
             return $result;
