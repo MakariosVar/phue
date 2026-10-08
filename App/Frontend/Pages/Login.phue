@@ -12,7 +12,7 @@ return [
 <div class="container py-5">
     <div class="row justify-content-center">
         <div class="col-12 col-sm-10 col-md-8 col-lg-5 col-xl-4">
-            <ph-card class="shadow-sm border-0">
+            <ph-card class="shadow border-0">
                 <div class="text-center mb-4">
                     <ph-heading :level="2" class="mb-1">Sign In</ph-heading>
                     <ph-text color="muted">Enter your credentials to access the console</ph-text>
