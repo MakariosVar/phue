@@ -59,7 +59,7 @@ Available templates (also listed with `--list-templates`):
 | `web` | `auth`, `schii` | Classic full-stack web app: admin console + auth |
 | `api` | `auth`, `rest`, `schii` | REST-first API with RBAC + schema admin |
 | `realtime` | `auth`, `events`, `rest` | SSE / Redis streaming apps |
-| `fullstack` | all 7 modules | Everything, like the framework demo repo |
+| `fullstack` | all the modules | Everything, like the framework demo repo |
 | `edge` | `compiler`, `server` | WASM / AOT experiments |
 
 ### Custom module set (non-interactive)
