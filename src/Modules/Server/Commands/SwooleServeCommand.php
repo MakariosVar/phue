@@ -252,7 +252,8 @@ final class SwooleServeCommand implements CommandInterface
             queryParams: $get,
             parsedBody: $post,
             headers: $headers,
-            serverParams: $server
+            serverParams: $server,
+            cookies: $cookie
         );
 
     }
@@ -275,6 +276,11 @@ final class SwooleServeCommand implements CommandInterface
             foreach ((array) $values as $value) {
                 $swooleResponse->header((string) $name, (string) $value);
             }
+        }
+
+        // Cookies live outside Response::getHeaders() by design, so they are emitted here.
+        foreach ($phueResponse->getCookies() as $cookie) {
+            $swooleResponse->header('Set-Cookie', $cookie->toHeaderString());
         }
 
         $swooleResponse->end($phueResponse->getContent());

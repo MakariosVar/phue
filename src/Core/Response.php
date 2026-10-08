@@ -4,12 +4,18 @@ namespace Phue\Core;
 
 use JsonException;
 use Nyholm\Psr7\Response as Psr7Response;
+use Phue\Core\Security\Cookie;
 use Psr\Http\Message\ResponseInterface;
 
 /**
  * Representation of an outgoing HTTP response.
  *
- * Holds HTTP status code, headers, and body payload ready to send to the browser.
+ * Holds HTTP status code, headers, cookies, and body payload ready to send to the browser.
+ *
+ * Cookies are held apart from $headers on purpose: $headers is a flat array<string, string>
+ * and setHeader() replaces case-insensitively, so a second Set-Cookie would silently evict
+ * the first. Each cookie is therefore emitted as its own header line, with PHP's
+ * header() replace flag turned off.
  *
  * @package Phue\Core
  */
@@ -21,11 +27,13 @@ class Response
      * @param string $content Response body content
      * @param int $statusCode HTTP response status code (default: 200 OK)
      * @param array<string, string> $headers Key-value array of HTTP headers
+     * @param array<int, \Phue\Core\Security\Cookie> $cookies Cookies to send with this response
      */
     public function __construct(
         private string $content = '',
         private int $statusCode = 200,
-        private array $headers = []
+        private array $headers = [],
+        private array $cookies = []
     ) {}
 
     /**
@@ -157,6 +165,44 @@ class Response
     }
 
     /**
+     * Attach a cookie to the response.
+     *
+     * A cookie already queued with the same name, path and domain is replaced rather than
+     * duplicated, so a middleware that runs twice over the same response (the pattern
+     * SecurityMiddleware::applyHeaders() already uses for headers) stays idempotent.
+     * Cookies that differ in path or domain are a genuinely different cookie and both
+     * survive, which is what a browser would store.
+     *
+     * @param \Phue\Core\Security\Cookie $cookie Cookie to send
+     * @return self Fluent instance
+     */
+    public function withCookie(Cookie $cookie): self
+    {
+        foreach ($this->cookies as $index => $queued) {
+            if ($queued->name === $cookie->name
+                && $queued->path === $cookie->path
+                && $queued->domain === $cookie->domain
+            ) {
+                $this->cookies[$index] = $cookie;
+                return $this;
+            }
+        }
+
+        $this->cookies[] = $cookie;
+        return $this;
+    }
+
+    /**
+     * Get all cookies queued for this response, in the order they will be emitted.
+     *
+     * @return array<int, \Phue\Core\Security\Cookie>
+     */
+    public function getCookies(): array
+    {
+        return $this->cookies;
+    }
+
+    /**
      * Get the raw body content.
      *
      * @return string
@@ -180,6 +226,13 @@ class Response
             foreach ($this->headers as $name => $value) {
                 header("{$name}: {$value}");
             }
+
+            // replace = false is mandatory here: PHP's header() replaces by header NAME,
+            // so the default true would make each Set-Cookie evict the previous one and
+            // only the last cookie would ever reach the client.
+            foreach ($this->cookies as $cookie) {
+                header('Set-Cookie: ' . $cookie->toHeaderString(), false);
+            }
         }
 
         // Echo response content payload
@@ -193,11 +246,18 @@ class Response
      */
     public function toPsr7(): ResponseInterface
     {
-        return new Psr7Response(
+        $psr7 = new Psr7Response(
             status: $this->statusCode,
             headers: $this->headers,
             body: $this->content,
             version: '1.1'
         );
+
+        // PSR-7 is multi-value natively, so each cookie becomes its own Set-Cookie line.
+        foreach ($this->cookies as $cookie) {
+            $psr7 = $psr7->withAddedHeader('Set-Cookie', $cookie->toHeaderString());
+        }
+
+        return $psr7;
     }
 }

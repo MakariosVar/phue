@@ -21,6 +21,8 @@ class Request
      * @param array<string, mixed> $parsedBody Body parameters ($_POST or JSON payload)
      * @param array<string, string> $headers HTTP request headers
      * @param array<string, mixed> $serverParams Server variables ($_SERVER)
+     * @param array<string, string> $cookies Cookie parameters; kept last so existing
+     *                                        positional and named calls stay valid.
      */
     public function __construct(
         private string $method,
@@ -28,7 +30,8 @@ class Request
         private array $queryParams = [],
         private array $parsedBody = [],
         private array $headers = [],
-        private array $serverParams = []
+        private array $serverParams = [],
+        private array $cookies = []
     ) {
         // Normalize method to uppercase regardless of manual instantiation or capture()
         $this->method = strtoupper($this->method);
@@ -86,7 +89,8 @@ class Request
             queryParams: $_GET,
             parsedBody: $parsedBody,
             headers: $headers,
-            serverParams: $_SERVER
+            serverParams: $_SERVER,
+            cookies: self::normalizeCookies($_COOKIE)
         );
     }
 
@@ -204,6 +208,57 @@ class Request
     }
 
     /**
+     * Get all request cookies.
+     *
+     * @return array<string, string>
+     */
+    public function getCookies(): array
+    {
+        return $this->cookies;
+    }
+
+    /**
+     * Get a specific cookie value by name.
+     *
+     * Cookie names are case-sensitive (RFC 6265 §5.4), unlike HTTP header names,
+     * so this deliberately does NOT fold case the way getHeader() does.
+     *
+     * @param string $name Cookie name (e.g., 'session')
+     * @param string|null $default Fallback value if the cookie is absent
+     * @return string|null
+     */
+    public function getCookie(string $name, ?string $default = null): ?string
+    {
+        return $this->cookies[$name] ?? $default;
+    }
+
+    /**
+     * Reduce a raw cookie bag to the string map the rest of the framework expects.
+     *
+     * A query such as "?token[]=a" makes PHP populate $_COOKIE['token'] with an
+     * array, so a raw bag is not trustworthy as array<string, string>. Anything
+     * that is not a scalar is dropped rather than coerced, and the key must be a
+     * usable cookie name.
+     *
+     * @param array<mixed> $cookies Raw cookie bag from the runtime
+     * @return array<string, string>
+     */
+    private static function normalizeCookies(array $cookies): array
+    {
+        $normalized = [];
+
+        foreach ($cookies as $name => $value) {
+            if (!is_string($name) || $name === '' || !is_scalar($value)) {
+                continue;
+            }
+
+            $normalized[$name] = is_bool($value) ? ($value ? '1' : '') : (string) $value;
+        }
+
+        return $normalized;
+    }
+
+    /**
      * Factory to instantiate a Phue Request from any PSR-7 ServerRequest.
      */
     public static function fromPsr7(ServerRequestInterface $psr7): self
@@ -227,7 +282,8 @@ class Request
             queryParams: $query,
             parsedBody: $bodyParams,
             headers: $headers,
-            serverParams: $server
+            serverParams: $server,
+            cookies: self::normalizeCookies($psr7->getCookieParams())
         );
     }
 }
