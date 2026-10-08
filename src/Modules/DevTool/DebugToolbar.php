@@ -341,7 +341,8 @@ class DebugToolbar
         return '<div id="' . $this->esc($rootId) . '" class="phue-dt-root bg-body-secondary text-body"'
             . ' data-bs-theme="' . $this->esc((string) $view['theme_fallback']) . '"'
             . ' data-tone="' . $this->esc($tone) . '" data-expanded="false" data-bar-visible="false">'
-            . '<div id="' . $this->esc($panelId) . '" class="phue-dt-panel bg-body-tertiary p-3 overflow-auto" hidden>'
+            . '<div id="' . $this->esc($panelId) . '" class="phue-dt-panel bg-body-tertiary p-3" hidden>'
+            . '<div class="phue-dt-resize-handle" data-phue-dt-resize></div>'
             . $this->renderNotices($profiler)
             . $this->renderTabs($rootId, $sections)
             . '</div>'
@@ -991,13 +992,30 @@ class DebugToolbar
         .phue-dt-reload:hover { background: var(--bs-secondary-bg); }
         .phue-dt-reload:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 1px; }
         .phue-dt-panel {
-            order: -1; flex: 0 1 auto; min-height: 0; max-height: 62vh;
+            position: relative;
+            order: -1; flex: 0 0 auto; min-height: 0;
+            height: 300px;
             border-bottom: 1px solid var(--bs-border-color);
+            display: flex; flex-direction: column;
         }
         .phue-dt-panel[hidden] { display: none; }
-        .phue-dt-tabs { flex-wrap: wrap; }
+        .phue-dt-resize-handle {
+            position: absolute; top: -3px; left: 0; right: 0; height: 7px;
+            cursor: ns-resize; z-index: 1; user-select: none;
+        }
+        .phue-dt-resize-handle::after {
+            content: ''; position: absolute; left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px; height: 3px; border-radius: 2px;
+            background: var(--bs-border-color); opacity: .5;
+            transition: opacity .15s;
+        }
+        .phue-dt-resize-handle:hover::after { opacity: 1; }
+        .phue-dt-notices { flex-shrink: 0; }
+        .phue-dt-tabs { flex-wrap: wrap; flex-shrink: 0; }
         .phue-dt-tabs .nav-link { font-size: 12.5px; border: 0; background: transparent; cursor: pointer; }
         .phue-dt-tabs .nav-link:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+        .phue-dt-tabpanel { flex: 1 1 0; min-height: 0; overflow-y: auto; }
         .phue-dt-tabpanel[hidden] { display: none; }
         .phue-dt-hint { font-size: 12px; margin: 0 0 8px; }
         .phue-dt-note { font-size: 12px; }
@@ -1044,7 +1062,7 @@ class DebugToolbar
         .phue-dt-root:not([data-bar-visible="true"]) .phue-dt-close,
         .phue-dt-root:not([data-bar-visible="true"]) .phue-dt-reload { display: none !important; }
         .phue-dt-root[data-bar-visible="true"] .phue-dt-fab { display: none; }
-        @media (prefers-reduced-motion: reduce) { .phue-dt-caret { transition: none; } .phue-dt-fab { transition: none; } }
+        @media (prefers-reduced-motion: reduce) { .phue-dt-caret { transition: none; } .phue-dt-fab { transition: none; } .phue-dt-resize-handle::after { transition: none; } }
         CSS . '</style>';
     }
 
@@ -1086,6 +1104,7 @@ class DebugToolbar
         (function () {
             var root = document.getElementById({$root});
             if (!root) { return; }
+            var barKey = 'phue-dt-bar-visible';
 
             var toggle = root.querySelector('.phue-dt-toggle');
             var panel = root.querySelector('.phue-dt-panel');
@@ -1109,6 +1128,7 @@ class DebugToolbar
 
             var collapseToFab = function () {
                 root.setAttribute('data-bar-visible', 'false');
+                try { localStorage.setItem(barKey, 'false'); } catch (e) {}
                 if (fab) { fab.setAttribute('aria-expanded', 'false'); }
                 if (toggle && panel) {
                     toggle.setAttribute('aria-expanded', 'false');
@@ -1125,12 +1145,46 @@ class DebugToolbar
                     } else {
                         root.setAttribute('data-bar-visible', 'true');
                         fab.setAttribute('aria-expanded', 'true');
+                        try { localStorage.setItem(barKey, 'true'); } catch (e) {}
                     }
                 });
             }
 
             if (closeBtn) {
                 closeBtn.addEventListener('click', function () { collapseToFab(); });
+            }
+
+            try {
+                if (localStorage.getItem(barKey) === 'true') {
+                    root.setAttribute('data-bar-visible', 'true');
+                    if (fab) { fab.setAttribute('aria-expanded', 'true'); }
+                }
+            } catch (e) {}
+
+            var handle = root.querySelector('[data-phue-dt-resize]');
+            if (handle && panel) {
+                var onMove, onUp;
+                var startDrag = function (startY) {
+                    var startH = panel.offsetHeight;
+                    onMove = function (e) {
+                        e.preventDefault();
+                        var y = e.touches ? e.touches[0].clientY : e.clientY;
+                        var h = Math.max(100, Math.min(window.innerHeight * 0.85, startH - (y - startY)));
+                        panel.style.height = h + 'px';
+                    };
+                    onUp = function () {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                        document.removeEventListener('touchmove', onMove);
+                        document.removeEventListener('touchend', onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                    document.addEventListener('touchmove', onMove, { passive: false });
+                    document.addEventListener('touchend', onUp);
+                };
+                handle.addEventListener('mousedown', function (e) { e.preventDefault(); startDrag(e.clientY); });
+                handle.addEventListener('touchstart', function (e) { e.preventDefault(); startDrag(e.touches[0].clientY); }, { passive: false });
             }
 
             var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-phue-dt-tab]'));
