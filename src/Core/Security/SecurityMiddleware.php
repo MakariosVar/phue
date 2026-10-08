@@ -89,11 +89,17 @@ final class SecurityMiddleware
      *
      * Checks direct HTTPS status or validates X-Forwarded-Proto against configured trusted proxies.
      *
+     * Public because it is not private knowledge of the header middleware: anything that
+     * decides on a transport-dependent attribute (a Secure cookie, a redirect) has to agree
+     * with this about what counts as HTTPS, including which proxies may assert it. Two
+     * copies of this logic would eventually disagree, and the disagreement would show up
+     * only behind a proxy in production.
+     *
      * @param Request $request Request object to inspect.
      * 
      * @return bool True if the connection is HTTPS/secure, false otherwise.
      */
-    private function isSecure(Request $request): bool
+    public function isSecure(Request $request): bool
     {
         $server = $request->getServerParams();
         $https = $server['HTTPS'] ?? '';
