@@ -110,7 +110,8 @@ Commands are grouped by their `getGroup()` assignment:
 | `make:model` | `MakeModelCommand` | Generates `App/Models/Xxx.php` extending `BaseActiveRecord` |
 | `make:migration` | `MakeMigrationCommand` | Generates a timestamped migration under `database/migrations/` |
 | `module:list` | `ModuleListCommand` | Lists installed modules + dependency graph |
-| `module:new` | `ModuleNewCommand` | Scaffolds a new framework module under `src/Modules/` |
+| `module:new`    | `ModuleNewCommand`  | Scaffolds a new framework module under `src/Modules/`   |
+| `generate:key`  | `GenerateKeyCommand` | Generates `APP_KEY` in `.env` (or fills it when empty); use `--force` to rotate an existing key |
 
 #### Database
 | Command | Class | What it does |

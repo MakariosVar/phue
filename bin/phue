@@ -28,6 +28,7 @@ use Phue\Core\Console\Commands\NpmRemoveCommand;
 use Phue\Core\Console\Commands\NpmListCommand;
 use Phue\Core\Console\Commands\CacheClearCommand;
 use Phue\Core\Console\Commands\OptimizeCommand;
+use Phue\Core\Console\Commands\GenerateKeyCommand;
 use Phue\Core\Console\Commands\RouteCacheCommand;
 use Phue\Core\Console\Commands\RouteClearCommand;
 use Phue\Core\Console\CommandInterface;
@@ -59,7 +60,8 @@ $app
     ->add(new CacheClearCommand())
     ->add(new OptimizeCommand())
     ->add(new RouteCacheCommand())
-    ->add(new RouteClearCommand());
+    ->add(new RouteClearCommand())
+    ->add(new GenerateKeyCommand());
 
 // Module-specific commands
 foreach ($modules as $moduleClass) {

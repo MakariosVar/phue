@@ -1044,6 +1044,77 @@ is a trusted reverse proxy:
 'trustedProxies' => ['10.0.0.0/8', '192.168.1.10'],  // or ['*'] behind a CDN
 ```
 
+### CSRF Protection (`CsrfMiddleware`)
+
+CSRF protection is enabled by default and is registered as a global middleware **inside** the
+error handler, so a rejected token is rendered as a proper 403 (JSON when the client asks
+for it) rather than escaping as a bare 500.
+
+#### How it works
+
+The framework uses a **signed double-submit cookie** pattern:
+
+1. A random nonce is generated for each session/render and signed with HMAC-SHA256 using
+   the application secret (`APP_KEY`). The signed token is issued in a **readable** cookie
+   (`phue_csrf` by default, `SameSite=Strict`, `Secure` on HTTPS).
+2. The client must return the full token on every state-changing request (POST, PUT,
+   PATCH, DELETE) either in the `X-CSRF-Token` header or in the `_csrf` form field.
+3. The middleware verifies the HMAC with `hash_equals` (constant-time) and rejects
+   malformed or missing tokens with a 403.
+
+#### What is exempt
+
+| Condition | Reason |
+|---|---|
+| Safe methods (GET, HEAD, OPTIONS, TRACE) | No state change, no CSRF risk. |
+| `Authorization: Bearer …` header present | A bearer token is attached by client code, not the browser, so it cannot be ridden cross-site. This keeps Schii/Rest APIs working untouched. |
+| `#[CsrfExempt]` on the route handler | For webhooks / callbacks that genuinely cannot carry a token. |
+| Request carries **no cookies** | No ambient credential → nothing to ride; a pure API client or a browser with an empty cookie jar is not forced to invent a token. |
+
+#### Token delivery to the client
+
+The token cookie is issued on every HTML response (see `CsrfConfig::issueTokenOnHtmlResponses`),
+and a synchronous `<head>` script patches `window.fetch` to attach the `X-CSRF-Token` header
+automatically on unsafe methods. This covers:
+
+- All `.phue` components' `api()` helpers (`Schii`, `Phii`, login)
+- Every third-party component that uses `fetch`/`XMLHttpRequest`
+- Native `<form>` submissions (the cookie value is echoed in a hidden `_csrf` field by the browser)
+
+A response that never passes through the middleware (e.g. an exception page) still receives
+the token cookie because `Application::handle()` re-applies it on the final response —
+exactly like `SecurityMiddleware::applyHeaders()`.
+
+#### Configuration (`config/app.php` → `app.csrf`)
+
+```php
+'csrf' => [
+    'enabled' => true,
+    'headerName' => 'X-CSRF-Token',
+    'fieldName'  => '_csrf',
+    'cookieName' => 'phue_csrf',
+    'cookiePath' => '/',
+    'cookieSameSite' => 'Strict',
+    'requireSecureCookie' => true,      // Secure flag forced on HTTPS
+    'issueTokenOnHtmlResponses' => true,
+    'safeMethods' => ['GET', 'HEAD', 'OPTIONS', 'TRACE'],
+    'nonAmbientAuthSchemes' => ['bearer'],
+],
+```
+
+#### Application secret (`APP_KEY`)
+
+The signing key is read from `app.appKey` (`config/app.php`) or `env('APP_KEY')`. A
+missing or malformed key is a **misconfiguration**, not a runtime fallback:
+
+```
+./phue generate:key          # writes APP_KEY into .env (creates it if empty)
+./phue generate:key --force  # rotates an existing key
+```
+
+Rotating the key invalidates every token issued under the old one — use `--force`
+intentionally, not as a troubleshooting step.
+
 ### Health probes (`HealthChecker` + `HealthController`)
 
 `HealthChecker` evaluates real-time metrics for Kubernetes / AWS ALB probes:
@@ -1089,31 +1160,12 @@ This matches standard CommonMark/GFM rendering behavior and eliminates the "unre
 
 A collection of choices worth documenting so future readers understand the *why*:
 
-- **Class-based events over string keys.** Type-safe, discoverable, and easily
-  refactored — you can't mis-type a magic string.
-- **`StoppableEventInterface` over `method_exists`.** Using an interface (via
-  `instanceof`) is explicit and semantic instead of relying on an arbitrary
-  method name existing on any object.
-- **Immutable request normalization in one place.** `Request::capture()` is the
-  only superglobal-touching code, and normalization (uppercase method, header
-  keys) lives in the constructor so hand-built and captured requests behave
-  identically.
-- **`get()` caches by default; `make()` is the explicit escape hatch.** You opt
-  *in* to a fresh instance rather than having to remember to opt out of caching.
-- **Case-insensitive headers on both Request and Response.** HTTP headers are
-  case-insensitive (RFC 7230), so both sides normalize and deduplicate
-  consistently — avoiding the classic "they differ in casing" bug.
-- **`RouteMatch` as a value object.** Dispatch returns structured data
-  (handler + params), not a bare tuple, keeping call sites readable.
-- **`Application` as composition root.** The app owns and wires the container,
-  router, and event dispatcher; components never reach for globals or construct
-  their own dependencies. This keeps wiring in one discoverable place and makes
-  the pipeline ("onion") behavior explicit and testable.
-- **Explicit request scoping instead of implicit state.** The container exposes
-  `singleton()` / `scoped()` and a single `flushScope()` that
-  `Application::handle()` runs automatically in a `finally`. This trades a bit
-  of coroutine-friendliness for a far simpler mental model — and it guarantees
-  request cleanup even on exceptions.
-- **Modules boot in two passes.** All modules mount first (with infrastructure
-  injected), *then* `requires` are verified — so module order in
-  `config/app.php` never causes ordering bugs.
+- **Class-based events over string keys.** Type-safe, discoverable, and easily refactored — you can't mis-type a magic string.
+- **`StoppableEventInterface` over `method_exists`.** Using an interface (via `instanceof`) is explicit and semantic instead of relying on an arbitrary method name existing on any object.
+- **Immutable request normalization in one place.** `Request::capture()` is the only superglobal-touching code, and normalization (uppercase method, header keys) lives in the constructor so hand-built and captured requests behave identically.
+- **`get()` caches by default; `make()` is the explicit escape hatch.** You opt *in* to a fresh instance rather than having to remember to opt out of caching.
+- **Case-insensitive headers on both Request and Response.** HTTP headers are case-insensitive (RFC 7230), so both sides normalize and deduplicate consistently — avoiding the classic "they differ in casing" bug.
+- **`RouteMatch` as a value object.** Dispatch returns structured data (handler + params), not a bare tuple, keeping call sites readable.
+- **`Application` as composition root.** The app owns and wires the container, router, and event dispatcher; components never reach for globals or construct their own dependencies. This keeps wiring in one discoverable place and makes the pipeline ("onion") behavior explicit and testable.
+- **Explicit request scoping instead of implicit state.** The container exposes `singleton()` / `scoped()` and a single `flushScope()` that `Application::handle()` runs automatically in a `finally`. This trades a bit of coroutine-friendliness for a far simpler mental model — and it guarantees request cleanup even on exceptions.
+- **Modules boot in two passes.** All modules mount first (with infrastructure injected), *then* `requires` are verified — so module order in `config/app.php` never causes ordering bugs.

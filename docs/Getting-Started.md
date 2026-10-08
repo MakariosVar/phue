@@ -192,6 +192,7 @@ DB_PASSWORD=
 | `DB_*` | The active database connection |
 | `QUEUE_DRIVER` | Active queue driver (`sync`, `database`) |
 | `APP_WEBSOCKET` | WebSocket real-time server toggle (persistent Swoole) |
+| `APP_KEY`      | **Required** — signing key for CSRF tokens. Leave empty in `.env.example`; run `./phue generate:key` to fill it. A missing key throws on any state-changing request. |
 
 Read any variable from PHP with the global helper:
 
