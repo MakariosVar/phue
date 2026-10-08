@@ -54,7 +54,8 @@ class ComponentRenderer
         private ?ComponentLoaderRegistry $loaderRegistry = null,
         private array $themeConfig = [],
         private array $metaConfig = [],
-        private ?LoggerInterface $logger = null
+        private ?LoggerInterface $logger = null,
+        private array $csrfConfig = []
     ) {}
 
     /**
@@ -311,6 +312,59 @@ JS,
             addslashes($defaultTheme),
             addslashes($defaultTheme)
         );
+
+        // The CSRF fetch patch rides in the same synchronous head script as the theme
+        // initialiser, and for the same reason: <head> runs before the body, so before
+        // anything on the page can issue a request. A deferred module would be too late for
+        // the first call and would leave an unprotected window.
+        if (($this->csrfConfig['enabled'] ?? true) === true) {
+            $themeInitScript .= sprintf(
+                <<<'JS'
+
+(function() {
+    if (typeof window.fetch !== 'function' || window.fetch.__phueCsrfPatched === true) { return; }
+    var cookie = '%s';
+    var header = '%s';
+    var safe = { GET: 1, HEAD: 1, OPTIONS: 1, TRACE: 1 };
+    var original = window.fetch.bind(window);
+    function token() {
+        var parts = document.cookie ? document.cookie.split(';') : [];
+        for (var i = 0; i < parts.length; i++) {
+            var eq = parts[i].indexOf('=');
+            if (eq === -1) { continue; }
+            if (parts[i].slice(0, eq).trim() === cookie) {
+                return decodeURIComponent(parts[i].slice(eq + 1).trim());
+            }
+        }
+        return '';
+    }
+    window.fetch = function (input, init) {
+        var options = init || {};
+        var method = String(options.method || (input && input.method) || 'GET').toUpperCase();
+        if (safe[method] === 1) { return original(input, options); }
+        var value = token();
+        if (value === '') { return original(input, options); }
+        var headers = options.headers;
+        var merged;
+        if (headers && typeof Headers !== 'undefined' && headers instanceof Headers) {
+            merged = new Headers(headers);
+            merged.set(header, value);
+        } else if (Array.isArray(headers)) {
+            merged = headers.filter(function (p) { return String(p[0]).toLowerCase() !== header.toLowerCase(); });
+            merged.push([header, value]);
+        } else {
+            merged = Object.assign({}, headers);
+            merged[header] = value;
+        }
+        return original(input, Object.assign({}, options, { headers: merged }));
+    };
+    window.fetch.__phueCsrfPatched = true;
+})();
+JS,
+                addslashes((string) ($this->csrfConfig['cookieName'] ?? 'phue_csrf')),
+                addslashes((string) ($this->csrfConfig['headerName'] ?? 'X-CSRF-Token'))
+            );
+        }
 
         $html = $this->shellRenderer->render(
             title: $title,
