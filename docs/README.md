@@ -22,6 +22,7 @@ This documentation is organized into focused guides. Pick the one that matches w
 | [Auth & RBAC](Auth-RBAC.md) | AuthManager, authenticators, BaseUser, RBAC roles & permissions |
 | [Schii](Schii.md) | Server-driven UI, zero-controller REST, JSON schema protocol, auto-migration |
 | [REST](REST.md) | Attribute-driven `#[Rest]` CRUD endpoints with RBAC enforcement |
+| [Queue](Queue.md) | Background jobs, sync/database drivers, atomic CAS claim, retry backoff, dead-letter queue |
 | [Events](Events.md) | Event bus drivers, SSE streaming, `#[Broadcastable]` models |
 | [WebSocket](WebSocket.md) | Named endpoints with per-endpoint auth and topics, `Broadcast`, retention, backpressure |
 
@@ -31,6 +32,7 @@ This documentation is organized into focused guides. Pick the one that matches w
 |---|---|
 | [Server Adapters](Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools, **live reload** |
 | [CLI](CLI.md) | `bin/phue` commands, the `phue-create` project installer, `phue-docker` wrapper, testing |
+| [Debugging](Debugging.md) | N+1 query guard, AsyncDumper, QueryBuilder::dd, EXPLAIN ANALYZE |
 | [PhUI Components](PhUI_Components.md) | Reference API for every built-in `.phue` component |
 
 ---

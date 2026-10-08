@@ -124,10 +124,14 @@ Commands are grouped by their `getGroup()` assignment:
 |---|---|---|
 | `cache:clear` | `CacheClearCommand` | Clears application cache by type: general, views, schemas, logs |
 | `optimize` | `OptimizeCommand` | Clears + warms caches (views, schemas, general) |
+| `route:cache` | `RouteCacheCommand` | Compiles and caches all controller routes into a PHP file for fast production loading |
+| `route:clear` | `RouteClearCommand` | Clears the compiled route cache file (`storage/cache/routes.php`) |
 | `npm:install` | `NpmInstallCommand` | Installs a JS vendor package (via Bun) into `storage/assets/vendor/` |
 | `npm:remove` | `NpmRemoveCommand` | Removes an installed JS vendor package |
 | `npm:list` | `NpmListCommand` | Lists currently installed JS vendor packages |
 | `schii:export` | `SchiiExportCommand` | Exports Schii schemas to standalone Phii files |
+
+> **Module Commands:** Modules contribute their own CLI commands dynamically via `registerCommands(Application $console)` when enabled in `config/app.php` (e.g. `queue:*` from `QueueModule`, see [Queue](Queue.md)).
 
 #### Server
 | Command | Class | What it does |
@@ -197,7 +201,11 @@ Clears **and warms** caches for production-ready performance.
 
 # Modules
 ./phue module:list
-./phue module:new Queue --type=layer --requires=auth
+./phue module:new MyModule --type=layer
+
+# Route caching
+./phue route:cache
+./phue route:clear
 
 # JS vendor packages
 ./phue npm:install vue

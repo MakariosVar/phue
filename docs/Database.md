@@ -287,6 +287,65 @@ runtimes where the container may swap the underlying connection per request.
 The static `$dbConnection` property is only used as a fallback when no resolver
 is set.
 
+### Relationships & Eager Loading
+
+`BaseActiveRecord` supports expressive model relationships:
+
+- **`hasMany(RelatedModel::class, ?foreignKey, ?localKey)`**
+- **`hasOne(RelatedModel::class, ?foreignKey, ?localKey)`**
+- **`belongsTo(RelatedModel::class, ?foreignKey, ?ownerKey)`**
+
+```php
+namespace App\Models;
+
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+
+class User extends BaseActiveRecord
+{
+    public function posts(): \Phue\Core\Database\ActiveRecord\Relations\HasMany
+    {
+        return $this->hasMany(Post::class);
+    }
+}
+
+class Post extends BaseActiveRecord
+{
+    public function user(): \Phue\Core\Database\ActiveRecord\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}
+```
+
+Lazy resolution caches the relation instance:
+```php
+$user = User::find(1);
+$posts = $user->posts; // Fetched via relationship and cached
+```
+
+**Eager loading (`with`)**: Avoids N+1 query loops by batching relation queries:
+```php
+$posts = Post::with('user')->limit(20)->get();
+```
+
+### Attribute Casting
+
+Models can declare cast types for columns:
+
+```php
+class Order extends BaseActiveRecord
+{
+    protected array $casts = [
+        'is_paid' => 'bool',
+        'items' => 'json',
+        'total' => 'float',
+        'created_at' => 'datetime',
+    ];
+}
+```
+
+Supported cast types: `int`, `float`, `bool`, `string`, `array`, `json`, `datetime`. Additionally, models using `#[Field(type: '...')]` automatically inherit casting metadata.
+
 ---
 
 ## 5. Data Mapper ORM (`Phue\Core\Database\DataMapper`)

@@ -105,10 +105,11 @@ Mark an Active Record model for real-time event broadcasting on CRUD
 mutations:
 
 ```php
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Modules\Events\Attribute\Broadcastable;
 
 #[Broadcastable(channel: 'orders', broadcastCreate: true, broadcastUpdate: true)]
-class Order extends ActiveRecord
+class Order extends BaseActiveRecord
 {
     // Model CRUD mutations automatically broadcast events to the 'orders' channel
 }

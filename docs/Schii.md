@@ -184,11 +184,12 @@ return [
     'entityNamespace' => 'App\\Models',
     'autoMigrate' => true,
     'cachePrefix' => 'schii_schema_',
-    'requireAuth' => false,
+    'requireAuth' => true,
     'middleware' => [],
     'exportDir' => 'storage/generated',
     'phiiNamespace' => 'App\\Models',
     'phiiPrefix' => '/phii',
+    'outputRoot' => '',
     'audit' => [
         'enabled' => true,
         'limit' => 200,
@@ -213,8 +214,9 @@ Two distinct settings drive URLs:
 | `prefix` | `/schii` | Where the **console page** is mounted |
 | `apiPrefix` | `/api/schii` | Where the **REST API** lives (`/{apiPrefix}/{entity}`, `/{apiPrefix}/schema`) |
 | `phiiPrefix` | `/phii` | Where the Phii generator panel is mounted |
+| `outputRoot` | `''` | Target root path for code generation output |
 | `entityNamespace` | `App\Models` | Namespace scanned for `#[UI]`/`#[Field]` entities |
-| `requireAuth` | `false` | When `true` (and auth is loaded), CRUD goes through `AuthorizedModelEndpoint` |
+| `requireAuth` | `true` | When `true` (and auth is loaded), CRUD goes through `AuthorizedModelEndpoint` |
 | `middleware` | `[]` | Route middleware applied to Schii endpoints |
 | `autoMigrate` | `true` | Auto-migration of missing tables/columns |
 | `audit` | enabled, limit 200 | Audit log endpoints |

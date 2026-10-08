@@ -3091,6 +3091,7 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhBox | `<ph-box>` | Layout |
 | PhBreadcrumb | `<ph-breadcrumb>` | Navigation |
 | PhButton | `<ph-button>` | Action |
+| PhCalendar | `<ph-calendar>` | Form control |
 | PhCard | `<ph-card>` | Data display |
 | PhCarousel | `<ph-carousel>` | Data display |
 | PhCheckbox | `<ph-checkbox>` | Form control |
@@ -3098,6 +3099,8 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhCode | `<ph-code>` | Data display |
 | PhCol | `<ph-col>` | Layout |
 | PhCollapse | `<ph-collapse>` | Data display |
+| PhColorPicker | `<ph-color-picker>` | Form control |
+| PhCommandPalette | `<ph-command-palette>` | Feedback |
 | PhConfirmDialog | `<ph-confirm-dialog>` | Feedback — **one per page**, self-registers on `window.confirm` |
 | PhDataTable | `<ph-data-table>` | Data display |
 | PhDatePicker | `<ph-date-picker>` | Form control |
@@ -3112,8 +3115,9 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhFormField | `<ph-form-field>` | Form control |
 | PhHeading | `<ph-heading>` | Typography |
 | PhIcon | `<ph-icon>` | Data display |
-| PhInput | `<ph-input>` | Form control |
+| PhImage | `<ph-image>` | Data display |
 | PhInlineEdit | `<ph-inline-edit>` | Form control |
+| PhInput | `<ph-input>` | Form control |
 | PhInputShell | `<ph-input-shell>` | Form control (bordered shell primitive for composite controls) |
 | PhLink | `<ph-link>` | Navigation |
 | PhListGroup | `<ph-list-group>` | Data display |
@@ -3121,19 +3125,21 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhModal | `<ph-modal>` | Feedback |
 | PhNavigation | `<ph-navigation>` | Navigation (hybrid SSR partial + client Vue) |
 | PhNumberInput | `<ph-number-input>` | Form control |
-| PhPagination | `<ph-pagination>` | Navigation |
 | PhOtpInput | `<ph-otp-input>` | Form control |
+| PhPagination | `<ph-pagination>` | Navigation |
 | PhPopover | `<ph-popover>` | Feedback |
 | PhProgressBar | `<ph-progress-bar>` | Feedback |
 | PhRadio | `<ph-radio>` | Form control |
 | PhRange | `<ph-range>` | Form control |
-| PhRow | `<ph-row>` | Layout |
 | PhRichText | `<ph-rich-text>` | Form control (sanitised HTML / Markdown editor and renderer) |
+| PhRow | `<ph-row>` | Layout |
 | PhSearchInput | `<ph-search-input>` | Form control |
+| PhSegmentedControl | `<ph-segmented-control>` | Form control |
 | PhSelect | `<ph-select>` | Form control |
 | PhSelect3 | `<ph-select3>` | Form control |
-| PhSegmentedControl | `<ph-segmented-control>` | Form control |
 | PhSkeleton | `<ph-skeleton>` | Feedback |
+| PhSortable | `<ph-sortable>` | Data display |
+| PhSpacer | `<ph-spacer>` | Layout |
 | PhSpinner | `<ph-spinner>` | Feedback |
 | PhStack | `<ph-stack>` | Layout |
 | PhStat | `<ph-stat>` | Data display |
@@ -3148,7 +3154,6 @@ $navHtml = $partialRenderer->renderPartial('PhNavigation', [
 | PhTooltip | `<ph-tooltip>` | Feedback |
 | PhTreeNode | `<ph-tree-node>` | Internal — recursion helper rendered by `<ph-tree-view>`; not for direct use |
 | PhTreeView | `<ph-tree-view>` | Data display |
-| Spacer | `<ph-spacer>` | Layout |
 
 Live demonstrations of every component live on the built-in `/ui` showcase page
 (`App/Frontend/Pages/UI.phue`).

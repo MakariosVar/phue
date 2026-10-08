@@ -67,9 +67,6 @@ class User extends BaseUser
     // privileged path.
     #[Field(type: 'json', writable: false)]
     public array $roles = [];
-
-    // Hide credentials from serialization (toArray/jsonSerialize)
-    protected array $hidden = ['password_hash', 'auth_key'];
 }
 ```
 

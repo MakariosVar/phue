@@ -190,6 +190,8 @@ DB_PASSWORD=
 | `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §5](Server-Adapters.md) |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
+| `QUEUE_DRIVER` | Active queue driver (`sync`, `database`) |
+| `APP_WEBSOCKET` | WebSocket real-time server toggle (persistent Swoole) |
 
 Read any variable from PHP with the global helper:
 
@@ -198,28 +200,6 @@ use function Phue\Core\env;
 
 $name = env('APP_NAME', 'Phue App');
 ```
-
----
-
-## 5. First run
-
-```bash
-cd my-app
-composer install
-./phue serve:php        # http://localhost:8000, docroot public/
-```
-
-Then:
-
-| URL | What you see |
-|---|---|
-| `/` | The Home page (`.phue` rendered through AppLayout) |
-| `/docs` | The Docs page |
-| `/ui` | The PhUI component showcase |
-| `/schii` | The Schii admin console (when `schii` is installed) |
-| `/phii` | The Phii code generator panel (when `schii` is installed) |
-
-If the SQLite database doesn't exist yet, Schii's auto-migration creates tables for your `#[UI]` models on the fly — see [Schii](Schii.md).
 
 ---
 
@@ -253,6 +233,13 @@ Clear caches during development:
 ./phue cache:clear --type=views       # compiled views
 ./phue cache:clear --type=schemas     # generated DB schemas
 ./phue cache:clear --type=logs        # application logs
+```
+
+Route caching (zero-reflection production performance):
+
+```bash
+./phue route:cache                    # compile and cache controller routes to storage/cache/routes.php
+./phue route:clear                    # remove compiled route cache file
 ```
 
 Optimize (clear + warm) for production-ready performance:

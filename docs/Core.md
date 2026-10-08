@@ -112,6 +112,7 @@ The constructor does, in order:
 | `ComponentLoaderRegistry` | singleton | Composite loader — priority: App/Frontend → PhUI |
 | `ComponentDiscoverer`, `PhuePartialRenderer`, `ComponentRenderer` | singleton | Rendering pipeline |
 | `AssetRegistry`, `AssetServer`, `HtmlShellRenderer` | singleton | Asset infra (global + request-scoped styles/scripts, font preloads) |
+| `NPlusOneDetector` | scoped | Request-isolated SQL query frequency and N+1 detector |
 
 ### Database connection is a singleton
 
@@ -445,6 +446,7 @@ dependencies.
 |---|---|
 | `bindings(): void` *(protected)* | Register DI bindings |
 | `routes(): void` *(protected)* | Register application routes |
+| `getRoutesForCaching(): array` *(public)* | Return programmatic routes for CLI route caching (`route:cache`) |
 | `registerCommands(Application): void` | Register console commands on the CLI |
 | `config(): void` *(protected)* | Merge default config with `config/<id>.php` |
 | `nav(): array` *(protected)* | Navigation items for `AppLayout` |
@@ -530,8 +532,8 @@ distinguishes two scopes:
 
 | Scope | Method | Lifetime | Examples |
 |---|---|---|---|
-| **Application** | `singleton($id, ?$factory)` | Lives as long as the app | Router, Config, Logger |
-| **Request** | `scoped($id, ?$factory)` | One per request, flushed after | Auth user, DB connection, current request |
+| **Application** | `singleton($id, ?$factory)` | Lives as long as the app | Router, Config, Logger, DB Connection |
+| **Request** | `scoped($id, ?$factory)` | One per request, flushed after | Auth user (`UserAccessor`), Current request (`Request`), `NPlusOneDetector` |
 
 ```php
 $container->singleton(Router::class, fn () => new Router());        // app-scoped
@@ -612,19 +614,6 @@ This eliminates the "two buckets" problem where services resolved outside a
 scope were invisible inside a request scope, and the fallback bucket was never
 flushed. Now there is **one storage location per scope**, and `flushScope(null)`
 explicitly drains the fallback bucket.
-
-### Flushing request state (`flushScope()`)
-
-At the end of a request you clear all request-scoped instances:
-
-```php
-$container->flushScope();
-```
-
-Before purging, the container calls `reset()` on every instance that implements
-`ResettableInterface` (in `src/Core/Interfaces/`), so a service can clean up its
-own state. `Application::handle()` does this automatically in a `finally` block,
-so request state is always cleaned — even when an exception was thrown.
 
 ### Request-scope flush with fallback (kernel pattern)
 
@@ -1000,6 +989,15 @@ This guarantees that a static path like `/users/new` is evaluated before
 
 `MethodNotAllowedException` exposes `getAllowedMethods()`, returning the list of
 methods allowed for that path (so you can send back a correct `Allow` header).
+
+### 8.5 Route Caching (`route:cache`)
+
+For production performance, Phue can compile all controller and module routes into a single PHP array file (`storage/cache/routes.php`), eliminating filesystem scanning and Reflection at boot:
+
+- **Enabled via config**: `'routeCache' => true` in `config/app.php` (or auto-detected when cache exists).
+- **Compile routes**: `./phue route:cache` runs `RouteCacheCommand` to generate the cache file with a source fingerprint.
+- **Clear cache**: `./phue route:clear` removes `storage/cache/routes.php`.
+- **Integrity safeguards**: `AttributeRouteLoader::loadCached()` checks the file, validates the source fingerprint against controllers and modules, and ensures framework-required paths (like `/health/live` and `/assets/*`) are present before accepting the cache. If any check fails, it cleanly falls back to live scanning.
 
 ---
 

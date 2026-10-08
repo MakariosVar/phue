@@ -60,7 +60,8 @@ class ExampleModule extends Module
 | `config(): void` *(protected)* | Read `config/<id>.php` and bind config value objects |
 | `bindings(): void` *(protected)* | Register services in the DI container |
 | `routes(): void` *(protected)* | Add routes to the router |
-| `registerCommands(Application): void` | Add CLI commands |
+| `getRoutesForCaching(): array` *(public)* | Return programmatic routes for CLI route caching (`route:cache`) |
+| `registerCommands(Application): void` | Add CLI commands (`Application` is `Phue\Core\Console\Application`) |
 | `nav(): array` *(protected)* | Navigation items for `AppLayout` |
 | `permissions(): array` *(protected)* | RBAC permission seeds |
 | `assets(): array` *(protected)* | Register CSS/JS assets |
@@ -111,6 +112,7 @@ Inspect the current graph any time with:
 | `Phue\Modules\Auth\AuthModule` | `auth` | *(none)* | `AuthManager` (request-scoped), `RbacManager` (singleton), Bearer authenticator wired to `config/auth.php` |
 | `Phue\Modules\Schii\SchiiModule` | `schii` | *(none; `auth` added at runtime when `requireAuth`)* | Schema registry, zero-controller REST, Schii admin console at `/schii`, Phii panel at `/phii` |
 | `Phue\Modules\Rest\RestModule` | `rest` | `auth` | Attribute-driven `#[Rest]` CRUD endpoints under `config/rest.php` prefix |
+| `Phue\Modules\Queue\QueueModule` | `queue` | *(none)* | Background job processing, sync/database drivers, atomic CAS claim, dead-letter queue, CLI worker (`queue:*`) |
 | `Phue\Modules\Server\ServerModule` | `server` | *(none)* | Registers the Swoole serve command (`serve`) |
 | `Phue\Modules\Events\EventModule` | `events` | *(none)* | Event bus drivers, SSE response/streamer, `#[Broadcastable]` |
 | `Phue\Modules\Websocket\WebsocketModule` | `websocket` | *(none; uses `auth` when present)* | Named WebSocket **endpoints**, each with its own topics, origins and authentication. `Broadcast` for publishing. Needs the Swoole adapter |
@@ -119,6 +121,7 @@ Inspect the current graph any time with:
 
 Notes worth knowing:
 
+- **QueueModule**: provides `Queue` facade (`Queue::push()`, `Queue::later()`), `JobInterface`, `#[Job]` attribute, and database-backed worker commands (`queue:install`, `queue:work`, `queue:status`, `queue:failed`, `queue:prune`). Requires a DB connection only when `queue.driver` is set to `database`. See [Queue](Queue.md).
 - **Schii + auth**: `SchiiModule` reads `schii.requireAuth` from
   `config/schii.php`. When it is `true` **and** the auth module is loaded, it
   appends `'auth'` to its own `requires` and routes CRUD through
