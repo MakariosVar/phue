@@ -150,6 +150,7 @@ return [
                         :error="fieldErrors[field.name]"
                         :helper-text="fieldHelper(field)"
                         :disabled="isEditing && field.name === 'id'"
+                        @update:model-value="clearServerError(field.name)"
                         @blur="touchField(field.name)"
                     />
                     <ph-form-field
@@ -165,6 +166,7 @@ return [
                                 :name="'schii-' + field.name"
                                 :value="opt.value"
                                 :label="opt.label"
+                                @update:model-value="clearServerError(field.name)"
                             />
                         </div>
                     </ph-form-field>
@@ -175,6 +177,7 @@ return [
                         :options="selectOptions(field)"
                         :required="field.required"
                         :error="fieldErrors[field.name]"
+                        @update:model-value="clearServerError(field.name)"
                     />
                     <ph-textarea
                         v-else-if="field.widget === 'textarea' || field.type === 'json'"
@@ -184,12 +187,18 @@ return [
                         :required="field.required"
                         :error="fieldErrors[field.name]"
                         :helper-text="field.type === 'json' ? 'JSON object' : undefined"
+                        @update:model-value="clearServerError(field.name)"
                     />
-                    <ph-checkbox
+                    <ph-form-field
                         v-else-if="field.type === 'boolean' || field.type === 'bool' || field.widget === 'checkbox'"
-                        v-model="form[field.name]"
                         :label="field.label || field.name"
-                    />
+                        :error="fieldErrors[field.name]"
+                    >
+                        <ph-checkbox
+                            v-model="form[field.name]"
+                            @update:model-value="clearServerError(field.name)"
+                        />
+                    </ph-form-field>
                 </ph-col>
             </ph-row>
         </form>
@@ -360,6 +369,23 @@ export default function mountApp() {
             const dirtySnapshot = ref({});
             const touched = ref({});
             const fieldErrors = ref({});
+            /**
+             * Verdicts from the server, keyed by field, kept apart from the
+             * client's own presence check.
+             *
+             * They have to be separate. The client no longer carries a rule
+             * vocabulary — that lives in Core, and is applied once, on the
+             * server — so anything it computes here is only "is this filled
+             * in". Running that over fieldErrors on every blur therefore
+             * REPLACED a message like "must be at least 3 characters" with
+             * nothing, because the client cannot reproduce it and does not
+             * know it was ever true. The user was left with a generic banner
+             * and no reason.
+             *
+             * A server verdict is now dropped only when the user edits that
+             * specific field, and re-established by submitting again.
+             */
+            const serverFieldErrors = ref({});
             const pendingClose = ref(false);
             const confirmCloseOpen = ref(false);
 
@@ -596,6 +622,7 @@ export default function mountApp() {
                 formError.value = null;
                 touched.value = {};
                 fieldErrors.value = {};
+                serverFieldErrors.value = {};
                 dirtySnapshot.value = JSON.stringify({ ...form });
                 dirty.value = false;
             };
@@ -661,16 +688,34 @@ export default function mountApp() {
              * first.
              */
             const currentFieldsValidate = () => {
-                const errors = {};
+                const required = {};
                 writableFields.value.forEach(f => {
                     const value = form[f.name];
                     const isMissing = value === '' || value === null || value === undefined;
                     if (f.required && isMissing) {
-                        errors[f.name] = `${f.label || f.name} is required.`;
+                        required[f.name] = `${f.label || f.name} is required.`;
                     }
                 });
-                fieldErrors.value = errors;
-                return errors;
+                // Presence wins over a server verdict on the same field: an
+                // empty required field is missing before it is anything else.
+                fieldErrors.value = { ...serverFieldErrors.value, ...required };
+                return fieldErrors.value;
+            };
+
+            /**
+             * Drop the server's verdict for ONE field, because the user just
+             * changed it. Not the whole map — the client cannot recompute the
+             * others, so discarding them would be discarding information it
+             * does not have.
+             */
+            const clearServerError = (name) => {
+                if (!(name in serverFieldErrors.value)) {
+                    return;
+                }
+                const next = { ...serverFieldErrors.value };
+                delete next[name];
+                serverFieldErrors.value = next;
+                currentFieldsValidate();
             };
 
             const touchField = (name) => {
@@ -700,13 +745,17 @@ export default function mountApp() {
                         const errData = await res.json().catch(() => ({}));
                         const serverErrors = errData.errors;
                         if (serverErrors && typeof serverErrors === 'object') {
-                            currentFieldsValidate();
                             const mapped = {};
                             Object.entries(serverErrors).forEach(([k, v]) => {
                                 const fieldName = writableFields.value.find(f => f.name === k) ? k : k.replace(/[^a-zA-Z0-9_]/g, '_');
                                 mapped[fieldName] = typeof v === 'string' ? v : v.error || String(v);
                             });
-                            fieldErrors.value = { ...fieldErrors.value, ...mapped };
+                            // Into its own store, not onto fieldErrors directly:
+                            // currentFieldsValidate() owns that map now, and
+                            // writing to it here would be overwritten by the
+                            // next blur.
+                            serverFieldErrors.value = { ...serverFieldErrors.value, ...mapped };
+                            currentFieldsValidate();
                             throw new Error(errData.error || 'Validation failed.');
                         }
                         throw new Error(errData.error || errData.message || 'Failed to save record.');
@@ -977,6 +1026,7 @@ export default function mountApp() {
                 form,
                 dirty,
                 fieldErrors,
+                clearServerError,
                 confirmCloseOpen,
                 confirmOpen,
                 pendingDeleteId,
