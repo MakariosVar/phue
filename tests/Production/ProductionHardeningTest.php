@@ -28,9 +28,32 @@ final class ProductionHardeningTest extends TestCase
      *
      * @return void
      */
+    /**
+     * A memory threshold guaranteed to sit above this process's current usage.
+     *
+     * HealthChecker measures the PROCESS, not the test. Both "everything is
+     * healthy" tests below therefore inherited a result that depended on how
+     * much of the suite had already allocated: they passed in isolation and
+     * failed in a full run that peaks around 150 MB against the 128 MB default,
+     * which reads as a flaky framework bug and is not one.
+     *
+     * The budget boundary itself is what
+     * testHealthCheckerMemoryDownWhenThresholdExceeded pins, and it pins it
+     * explicitly. What is left for the "healthy" tests is the aggregation and
+     * the three checks they control, so the threshold belongs to the test
+     * rather than to whatever the runner happens to be holding at the time.
+     */
+    private function memoryHeadroomMb(): float
+    {
+        return memory_get_usage(true) / 1024 / 1024 + 1.0;
+    }
+
     public function testHealthCheckerBaseline(): void
     {
-        $checker = new HealthChecker(basePath: sys_get_temp_dir());
+        $checker = new HealthChecker(
+            maxMemoryThresholdMb: $this->memoryHeadroomMb(),
+            basePath: sys_get_temp_dir(),
+        );
         $report = $checker->check();
 
         $this->assertTrue($report['healthy']);
@@ -184,7 +207,8 @@ final class ProductionHardeningTest extends TestCase
         $checker = new HealthChecker(
             pdo: $pdo,
             redis: $redis,
-            basePath: sys_get_temp_dir()
+            maxMemoryThresholdMb: $this->memoryHeadroomMb(),
+            basePath: sys_get_temp_dir(),
         );
         $report = $checker->check();
 
