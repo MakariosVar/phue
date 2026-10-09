@@ -646,21 +646,21 @@ export default function mountApp() {
             };
 
             /**
- * Client-side presence check only. Rule MEANING is the server's.
- *
- * This used to re-implement the rule vocabulary in JavaScript, and the two
- * copies disagreed: min:N compared the VALUE on the server and the STRING
- * LENGTH here, so #[Field(type: 'float', rules: ['min:1000'])] rejected 1200
- * in the browser and accepted it on save. A rule that means one thing to the
- * form and another to the database is worse than a rule that is not enforced
- * in the form at all — the user is told their input is wrong and it is not.
- *
- * The rules are still surfaced (fieldHelper above), so the constraint stays
- * visible while editing. The browser's own required/min/max still apply
- * through PhForm; what is gone is the second opinion that could contradict the
- * first.
- */
-const currentFieldsValidate = () => {
+             * Client-side presence check only. Rule MEANING is the server's.
+             *
+             * This used to re-implement the rule vocabulary in JavaScript, and the two
+             * copies disagreed: min:N compared the VALUE on the server and the STRING
+             * LENGTH here, so #[Field(type: 'float', rules: ['min:1000'])] rejected 1200
+             * in the browser and accepted it on save. A rule that means one thing to the
+             * form and another to the database is worse than a rule that is not enforced
+             * in the form at all — the user is told their input is wrong and it is not.
+             *
+             * The rules are still surfaced (fieldHelper above), so the constraint stays
+             * visible while editing. The browser's own required/min/max still apply
+             * through PhForm; what is gone is the second opinion that could contradict the
+             * first.
+             */
+            const currentFieldsValidate = () => {
                 const errors = {};
                 writableFields.value.forEach(f => {
                     const value = form[f.name];
