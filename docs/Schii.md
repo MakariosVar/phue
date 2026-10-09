@@ -64,8 +64,8 @@ key is always stripped from inbound payloads.
 namespace App\Models;
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Schii\Attribute\UI;
-use Phue\Modules\Schii\Attribute\Field;
 
 #[UI(label: 'Products', icon: 'box', layout: 'grid')]
 class Product extends BaseActiveRecord

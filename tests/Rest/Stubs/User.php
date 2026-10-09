@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Phue\Tests\Rest\Stubs;
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Rest\Attribute\Rest;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 
 #[UI(label: 'User', icon: 'user')]

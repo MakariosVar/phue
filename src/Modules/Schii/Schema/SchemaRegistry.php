@@ -6,7 +6,7 @@ namespace Phue\Modules\Schii\Schema;
 
 use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Modules\Schii\Attribute\Field;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Psr\SimpleCache\CacheInterface;

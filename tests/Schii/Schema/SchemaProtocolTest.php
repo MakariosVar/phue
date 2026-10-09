@@ -7,7 +7,7 @@ namespace Phue\Tests\Schii\Schema;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Modules\Schii\Attribute\Field;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\FieldSchema;
 use Phue\Modules\Schii\Schema\ModelSchema;

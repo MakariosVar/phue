@@ -8,10 +8,10 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Console\Commands\DeployCommand;
 use Phue\Core\Console\Commands\MigrateCommand;
 use Phue\Core\Console\Commands\MigrateRollbackCommand;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Schii\Commands\SchiiMigrateCommand;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 
 /**

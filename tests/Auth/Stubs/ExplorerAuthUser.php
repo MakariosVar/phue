@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Auth\Stubs;
 
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Auth\BaseUser;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 
 #[UI(label: 'ExplorerAuthUser', icon: 'user')]

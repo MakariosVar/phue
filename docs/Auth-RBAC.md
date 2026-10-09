@@ -45,8 +45,8 @@ column), and `validatePassword()` with zero boilerplate.
 namespace App\Models;
 
 use Phue\Modules\Auth\BaseUser;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\Field;
 
 class User extends BaseUser
 {

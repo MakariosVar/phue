@@ -669,6 +669,10 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Build auto-casts map from Field attributes.
      *
+     * Reads \Phue\Core\Database\Attributes\Field, which is a Core class on
+     * purpose: the cast a property receives is a persistence decision, so it
+     * must hold for an application that installs no admin module at all.
+     *
      * @return array<string, string>
      */
     protected static function getAutoCasts(): array
@@ -683,12 +687,12 @@ abstract class BaseActiveRecord implements JsonSerializable
         $refClass = new ReflectionClass($class);
 
         foreach ($refClass->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
-            $fieldAttrs = $property->getAttributes(\Phue\Modules\Schii\Attribute\Field::class);
+            $fieldAttrs = $property->getAttributes(\Phue\Core\Database\Attributes\Field::class);
             if (empty($fieldAttrs)) {
                 continue;
             }
 
-            /** @var \Phue\Modules\Schii\Attribute\Field $field */
+            /** @var \Phue\Core\Database\Attributes\Field $field */
             $field = $fieldAttrs[0]->newInstance();
             $propertyName = $property->getName();
             $type = strtolower($field->type);

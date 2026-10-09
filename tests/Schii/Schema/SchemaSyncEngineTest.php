@@ -6,8 +6,8 @@ namespace Phue\Tests\Schii\Schema;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\SchemaInspector;
 use Phue\Modules\Schii\Schema\SchemaOperation;

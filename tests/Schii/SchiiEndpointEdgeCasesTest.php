@@ -6,10 +6,10 @@ namespace Phue\Tests\Schii;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Core\Response;
-use Phue\Modules\Schii\Attribute\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;

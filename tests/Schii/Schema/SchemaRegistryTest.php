@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Schii\Schema;
 
 use PHPUnit\Framework\TestCase;
-use Phue\Modules\Schii\Attribute\Field;
+use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace {{ NAMESPACE }};
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
-use Phue\Modules\Schii\Attribute\Field;
+use Phue\Core\Database\Attributes\Field;
 
 /**
  * ActiveRecord model for {{ MODEL_NAME }}.
