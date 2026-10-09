@@ -255,8 +255,8 @@ class Application
             return \Phue\Core\Security\Csrf\CsrfConfig::fromArray($csrf);
         });
 
-        $this->container->singleton(\Phue\Core\Security\Csrf\CsrfMiddleware::class, function ($c): \Phue\Core\Security\Csrf\CsrfMiddleware {
-            return new \Phue\Core\Security\Csrf\CsrfMiddleware(
+        $this->container->singleton(CsrfMiddleware::class, function ($c): CsrfMiddleware {
+            return new CsrfMiddleware(
                 config: $c->get(\Phue\Core\Security\Csrf\CsrfConfig::class),
                 logger: $c->get(LoggerInterface::class),
                 router: $c->get(Router::class),
@@ -264,11 +264,33 @@ class Application
             );
         });
 
-        $this->use(\Phue\Core\Security\Csrf\CsrfMiddleware::class);
+        $this->use(CsrfMiddleware::class);
 
         // Register N+1 Query Detector (request-scoped, fresh per request)
         $this->container->scoped(\Phue\Core\Database\NPlusOneDetector::class, function (): \Phue\Core\Database\NPlusOneDetector {
             return new \Phue\Core\Database\NPlusOneDetector();
+        });
+
+        // Translator: REQUEST-SCOPED, never a singleton.
+        $this->container->scoped(\Phue\Core\I18n\Translator::class, function (): \Phue\Core\I18n\Translator {
+            $translator = new \Phue\Core\I18n\Translator(
+                defaultLocale: (string) $this->config->get('app.locale', 'en'),
+                appLocalePath: (string) $this->basePath . '/Resources/locales',
+            );
+            $translator->activate();
+
+            return $translator;
+        });
+
+        // Locale detection, given the resolved locale as a fallback.
+        $this->container->singleton(\Phue\Core\I18n\LocaleResolver::class, function ($c): \Phue\Core\I18n\LocaleResolver {
+            /** @var \Phue\Core\I18n\Translator $translator */
+            $translator = $c->get(\Phue\Core\I18n\Translator::class);
+
+            return new \Phue\Core\I18n\LocaleResolver(
+                defaultLocale: $translator->getLocale(),
+                supportedLocales: $translator->supportedLocales(),
+            );
         });
 
         // Register TemplateCompilerBridge Singleton for SSR/Client Template Compilations
@@ -596,6 +618,14 @@ class Application
 
         $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
 
+        // Resolve the language for THIS request, before any middleware or
+        // controller can emit a user-facing string. The resolver is a
+        // singleton (it holds no request state) but is handed the translator,
+        // which is request-scoped, so the detected locale lands on an instance
+        // that is discarded at the end of this request and cannot leak into
+        // the next one.
+        $this->resolveRequestLocale($request);
+
         // Build the global middleware pipeline
         $pipeline = array_reduce(
             array_reverse($this->middlewareStack),
@@ -691,6 +721,72 @@ class Application
      *
      * @return Response Evaluated controller or middleware response.
      */
+    /**
+     * Decide the language for one request and apply it to the translator.
+     *
+     * A signed-in user's stored preference is consulted only when the Auth
+     * module is present and the visitor is actually signed in; it is
+     * opportunistic in that order, so an application without auth is not made
+     * to care.
+     *
+     * Never throws. A locale that cannot be resolved falls back to the
+     * configured default, and a translator that cannot be built leaves `t()`
+     * returning source text — which is the correct answer for a page nobody
+     * has translated yet, and a far better one than a failed request.
+     */
+    private function resolveRequestLocale(Request $request): void
+    {
+        try {
+            /** @var \Phue\Core\I18n\Translator $translator */
+            $translator = $this->container->get(\Phue\Core\I18n\Translator::class);
+
+            /** @var \Phue\Core\I18n\LocaleResolver $resolver */
+            $resolver = $this->container->get(\Phue\Core\I18n\LocaleResolver::class);
+
+            $translator->setLocale(
+                $resolver->resolve($request, $this->currentUserLocalePreference()),
+            );
+        } catch (Throwable) {
+            // A missing translation must never become an outage.
+        }
+    }
+
+    /**
+     * The locale the signed-in user chose, if the Auth module provides one.
+     */
+    private function currentUserLocalePreference(): ?string
+    {
+        try {
+            if (!$this->container->has(\Phue\Modules\Auth\AuthManager::class)) {
+                return null;
+            }
+
+            /** @var \Phue\Modules\Auth\AuthManager $auth */
+            $auth = $this->container->get(\Phue\Modules\Auth\AuthManager::class);
+
+            if (!method_exists($auth, 'authenticate')) {
+                return null;
+            }
+
+            $user = $auth->authenticate(new Request('GET', '/'));
+
+            // IdentityInterface promises only getId(), findIdentity() and
+            // getAuthKey(). A locale preference is an application's own
+            // column, so the accessor has to be checked for rather than
+            // assumed — calling it on an identity that lacks it is a fatal
+            // error on every request, not a missing preference.
+            if ($user === null || !method_exists($user, 'getAttribute')) {
+                return null;
+            }
+
+            $preference = $user->getAttribute('locale');
+
+            return is_string($preference) && trim($preference) !== '' ? $preference : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     protected function dispatchToRouter(Request $request): Response
     {
         $routeMatch = $this->router->dispatch(
