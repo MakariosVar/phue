@@ -258,10 +258,20 @@ final class ModelEndpoint
         $model->fill($inputData);
 
         if (!$model->save()) {
+            // save() returns false for two unrelated reasons, and conflating
+            // them told the client its input was wrong when the database was.
+            // Validation failures carry getErrors(); a write that failed for
+            // any other reason carries none, and that is a server fault.
+            $modelErrors = $model->getErrors();
+
+            if ($modelErrors === []) {
+                return Response::json(["error" => "Failed to save record"], 500);
+            }
+
             return Response::json(
                 [
                     "error" => "Validation failed",
-                    "errors" => $model->getErrors(),
+                    "errors" => $modelErrors,
                 ],
                 422,
             );
@@ -327,10 +337,20 @@ final class ModelEndpoint
         $model->fill($inputData);
 
         if (!$model->save()) {
+            // save() returns false for two unrelated reasons, and conflating
+            // them told the client its input was wrong when the database was.
+            // Validation failures carry getErrors(); a write that failed for
+            // any other reason carries none, and that is a server fault.
+            $modelErrors = $model->getErrors();
+
+            if ($modelErrors === []) {
+                return Response::json(["error" => "Failed to save record"], 500);
+            }
+
             return Response::json(
                 [
                     "error" => "Validation failed",
-                    "errors" => $model->getErrors(),
+                    "errors" => $modelErrors,
                 ],
                 422,
             );

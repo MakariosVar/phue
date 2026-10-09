@@ -15,6 +15,7 @@ use Phue\Core\Database\ActiveRecord\Relations\Relation;
 use Phue\Core\Database\ActiveRecord\Relations\HasMany;
 use Phue\Core\Database\ActiveRecord\Relations\HasOne;
 use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
+use Phue\Core\Validation\RuleEngine;
 
 /**
  * Abstract Base Active Record Model providing ORM, persistence, relationship logic,
@@ -43,7 +44,7 @@ abstract class BaseActiveRecord implements JsonSerializable
      *
      * @var array<string, array<string, string>>
      */
-    protected static array $autoCastsCache = [];
+    protected static array $fieldMetaCache = [];
 
     /**
      * Database table associated with the model.
@@ -667,23 +668,24 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Build auto-casts map from Field attributes.
+     * Read every #[Field] on the class once: declared type, the cast it implies,
+     * and the validation it asks for.
      *
-     * Reads \Phue\Core\Database\Attributes\Field, which is a Core class on
-     * purpose: the cast a property receives is a persistence decision, so it
-     * must hold for an application that installs no admin module at all.
+     * One reflection walk for all three, because two walks that both read the
+     * same attribute are two things that can disagree about it. getAutoCasts()
+     * and validate() are both answers to "what did this property declare?".
      *
-     * @return array<string, string>
+     * @return array<string, array{type: string, cast: ?string, rules: array<string>, required: bool}>
      */
-    protected static function getAutoCasts(): array
+    protected static function getFieldMeta(): array
     {
         $class = static::class;
 
-        if (isset(self::$autoCastsCache[$class])) {
-            return self::$autoCastsCache[$class];
+        if (isset(self::$fieldMetaCache[$class])) {
+            return self::$fieldMetaCache[$class];
         }
 
-        $autoCasts = [];
+        $meta = [];
         $refClass = new ReflectionClass($class);
 
         foreach ($refClass->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
@@ -694,24 +696,46 @@ abstract class BaseActiveRecord implements JsonSerializable
 
             /** @var \Phue\Core\Database\Attributes\Field $field */
             $field = $fieldAttrs[0]->newInstance();
-            $propertyName = $property->getName();
             $type = strtolower($field->type);
 
-            $cast = match ($type) {
-                'json' => 'json',
-                'boolean', 'bool' => 'bool',
-                'integer', 'int' => 'int',
-                'float', 'number', 'decimal', 'numeric' => 'float',
-                'datetime', 'timestamp' => 'datetime',
-                default => null,
-            };
+            $meta[$property->getName()] = [
+                'type' => $type,
+                'cast' => match ($type) {
+                    'json' => 'json',
+                    'boolean', 'bool' => 'bool',
+                    'integer', 'int' => 'int',
+                    'float', 'number', 'decimal', 'numeric' => 'float',
+                    'datetime', 'timestamp' => 'datetime',
+                    default => null,
+                },
+                'rules' => $field->rules,
+                'required' => $field->required,
+            ];
+        }
 
-            if ($cast !== null) {
-                $autoCasts[$propertyName] = $cast;
+        return self::$fieldMetaCache[$class] = $meta;
+    }
+
+    /**
+     * Build auto-casts map from Field attributes.
+     *
+     * Reads \Phue\Core\Database\Attributes\Field, which is a Core class on
+     * purpose: the cast a property receives is a persistence decision, so it
+     * must hold for an application that installs no admin module at all.
+     *
+     * @return array<string, string>
+     */
+    protected static function getAutoCasts(): array
+    {
+        $autoCasts = [];
+
+        foreach (self::getFieldMeta() as $propertyName => $meta) {
+            if ($meta['cast'] !== null) {
+                $autoCasts[$propertyName] = $meta['cast'];
             }
         }
 
-        return self::$autoCastsCache[$class] = $autoCasts;
+        return $autoCasts;
     }
 
     /**
@@ -759,14 +783,79 @@ abstract class BaseActiveRecord implements JsonSerializable
         return $dirty;
     }
 
-    /**
-     * Persists the current model state into the database (INSERT or UPDATE).
-     *
-     * @return bool
-     */
-    public function save(): bool
-    {
-        $builder = static::query();
+/**
+ * Check this model against the rules its #[Field] attributes declare.
+ *
+ * Fills getErrors() and returns whether the model is fit to persist. The
+ * schema is the single declaration of what a model requires, so enforcing it
+ * here — not only inside an HTTP endpoint — is what makes the rules mean the
+ * same thing whether a record arrives from a controller, a queue worker, a CLI
+ * command, or a seed script.
+ *
+ * Before this existed, getErrors() had no writer at all. Every caller that
+ * read it was reading an array that could only ever be empty, and a caller
+ * reacting to it had nothing to react to.
+ *
+ * `required` applies to INSERT only. On update the record was loaded whole, so
+ * a missing attribute means the column is null and demanding it would make
+ * every partial write fail.
+ *
+ * @return bool True when no rule was violated.
+ */
+public function validate(): bool
+{
+    $this->errors = [];
+
+    foreach (self::getFieldMeta() as $propertyName => $meta) {
+        $rules = $meta['rules'];
+
+        if ($rules === [] && !$meta['required']) {
+            continue;
+        }
+
+        $value = $this->attributes[$propertyName] ?? null;
+        $isMissing = $value === null || $value === '';
+
+        if (!$this->exists && ($meta['required'] || RuleEngine::isRequired($rules)) && $isMissing) {
+            $this->errors[$propertyName] = sprintf("Field '%s' is required", $propertyName);
+            continue;
+        }
+
+        if ($isMissing) {
+            continue;
+        }
+
+        // A numeric column that received text is corrupt wherever it came from.
+        if (RuleEngine::isNumericType($meta['type'])) {
+            $rules[] = RuleEngine::RULE_NUMERIC;
+        }
+
+        $failure = RuleEngine::check($rules, $value, $meta['type'], $propertyName);
+
+        if ($failure !== null) {
+            $this->errors[$propertyName] = $failure;
+        }
+    }
+
+    return $this->errors === [];
+}
+
+/**
+ * Persists the current model state into the database (INSERT or UPDATE).
+ *
+ * Validation runs first. Returning false with getErrors() populated is how a
+ * caller learns the model was refused; a false with NO errors means the write
+ * itself failed, and the two must not be reported as the same thing.
+ *
+ * @return bool
+ */
+public function save(): bool
+{
+    if (!$this->validate()) {
+        return false;
+    }
+
+    $builder = static::query();
 
         if ($this->exists) {
             $dirty = $this->getDirty();
