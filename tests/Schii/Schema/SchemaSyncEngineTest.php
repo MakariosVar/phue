@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\SchemaInspector;
 use Phue\Modules\Schii\Schema\SchemaOperation;
@@ -26,7 +27,8 @@ class SyncWidget extends BaseActiveRecord
 {
     protected string $table = 'sync_widgets';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text', required: true)]
@@ -38,7 +40,8 @@ class SyncWidgetV2 extends BaseActiveRecord
 {
     protected string $table = 'sync_widgets';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text', required: true)]
@@ -53,7 +56,8 @@ class SyncWidgetV3 extends BaseActiveRecord
 {
     protected string $table = 'sync_widgets';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text')]
@@ -65,7 +69,8 @@ class SyncIndexed extends BaseActiveRecord
 {
     protected string $table = 'sync_indexed';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text', required: true)]
@@ -80,7 +85,8 @@ class SyncIndexedV2 extends BaseActiveRecord
 {
     protected string $table = 'sync_indexed';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text', required: true)]
@@ -95,7 +101,8 @@ class SyncTyped extends BaseActiveRecord
 {
     protected string $table = 'sync_typed';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'json')]

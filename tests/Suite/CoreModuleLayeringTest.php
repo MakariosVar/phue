@@ -92,12 +92,21 @@ final class CoreModuleLayeringTest extends TestCase
     }
 
     /**
-     * `Phue\Modules\` occurrences, with the line they appear on.
+     * `Phue\Modules\` references in CODE, with the line they appear on.
      *
-     * Both spellings are matched. `use Phue\Modules\X;` is the ordinary case,
-     * but a fully-qualified reference written inline (`new \Phue\Modules\...`,
-     * `getAttributes(\Phue\Modules\...::class)`) bypasses the import block
-     * entirely, and that is precisely how the original defect was written.
+     * Tokenized rather than pattern-matched, because a prose mention is not a
+     * dependency. This class's own file has to say "presentation lives in
+     * \Phue\Modules\Schii\Attribute\Column" in order to explain where it went,
+     * and a substring scan reads that sentence as the violation it is
+     * forbidding. The same trap already cost the suite one guard in
+     * KnownVulnerabilityRatchetTest, where an all-caps defect marker written
+     * in prose was indistinguishable from a real one.
+     *
+     * Both spellings are caught, because an inline fully-qualified reference
+     * bypasses the import block entirely — which is how the original defect was
+     * written. Comments are skipped; strings are not, since a module class name
+     * reaches the token stream as a name token rather than inside a literal in
+     * every case that matters.
      *
      * @return list<array{file: string, line: int, text: string}>
      */
@@ -106,16 +115,28 @@ final class CoreModuleLayeringTest extends TestCase
         $found = [];
 
         foreach (self::persistenceFiles() as $path) {
-            $lines = explode("\n", (string) file_get_contents($path));
+            $tokens = token_get_all((string) file_get_contents($path));
 
-            foreach ($lines as $index => $text) {
-                if (str_contains($text, 'Phue\\Modules\\')) {
-                    $found[] = [
-                        'file' => $path,
-                        'line' => $index + 1,
-                        'text' => trim($text),
-                    ];
+            foreach ($tokens as $index => $token) {
+                if (!is_array($token)) {
+                    continue;
                 }
+
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+
+                if (!str_contains($token[1], 'Phue\\Modules\\')) {
+                    continue;
+                }
+
+                $found[] = [
+                    'file' => $path,
+                    'line' => $token[2],
+                    'text' => trim($token[1]),
+                ];
+
+                unset($index);
             }
         }
 

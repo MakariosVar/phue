@@ -17,10 +17,11 @@ use Attribute;
  * application built without the admin module got no auto-casts at all, and
  * every typed property silently reached the database as a string.
  *
- * The UI-shaped parameters (label, searchable, sortable, widget, options, ...)
- * are declared here too rather than in a second attribute, so a property is
- * described in exactly one place and cannot disagree with itself. Modules read
- * what they need and ignore the rest; nothing in Core interprets them.
+ * Every parameter here is interpreted by Core, or by the validation that
+ * consumes `rules`. Presentation — label, widget, search, filter, sort,
+ * options — belongs to \Phue\Modules\Schii\Attribute\Column and is deliberately
+ * absent, so that a model can be described in a project that installs no admin
+ * module. A property may carry both attributes.
  *
  * @package Phue\Core\Database\Attributes
  */
@@ -29,14 +30,8 @@ final readonly class Field
 {
     /**
      * @param string $type Persistence type, e.g. 'string', 'integer', 'float', 'json', 'boolean', 'datetime'
-     * @param string $label Display label for admin forms and list columns
-     * @param string $widget Admin form widget hint
      * @param bool $column Whether the property maps to a database column
      * @param bool $required Whether the value must be present on create
-     * @param bool $searchable Whether the column participates in admin search
-     * @param bool $filterable Whether the column is offered as an admin filter
-     * @param bool $sortable Whether the column is offered for admin sorting
-     * @param array<string, mixed> $options Options for select, radio, etc.
      * @param array<string> $rules Validation rules (e.g., ['required', 'email', 'min:3'])
      * @param bool $writable Whether client payloads may assign this property
      * @param bool $readonly Whether the value is read-only after creation
@@ -45,14 +40,8 @@ final readonly class Field
      */
     public function __construct(
         public string $type = 'text',
-        public string $label = '',
-        public string $widget = 'input',
         public bool $column = true,
         public bool $required = false,
-        public bool $searchable = false,
-        public bool $filterable = false,
-        public bool $sortable = false,
-        public array $options = [],
         public array $rules = [],
         public bool $writable = true,
         public bool $readonly = false,

@@ -111,8 +111,15 @@ final class ModelGenerator
                 default => 'string',
             };
 
+            // Persistence and presentation are separate attributes now:
+            // #[Field] is the Core contract (type, required) and #[Column] is
+            // the Schii one (search, filter, sort). A generated model that
+            // crammed all six into #[Field] would not load, because #[Field]
+            // no longer accepts search/filter/sort.
             $lines[] = sprintf(
-                "    #[Field(type: '%s', required: %s, searchable: %s, filterable: %s, sortable: %s)]\n    public %s \$%s;",
+                "    #[Field(type: '%s', required: %s)]\n"
+                . "    #[Column(searchable: %s, filterable: %s, sortable: %s)]\n"
+                . "    public %s \$%s;",
                 $type,
                 ($field->required ?? false) ? 'true' : 'false',
                 ($field->searchable ?? false) ? 'true' : 'false',

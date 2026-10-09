@@ -7,6 +7,7 @@ namespace Phue\Tests\Schii;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\ModelSchema;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
@@ -17,7 +18,8 @@ class TaggedCat extends BaseActiveRecord
 {
     protected string $table = 'tagged_cats';
 
-    #[Field(type: 'text', label: 'Cat Name', searchable: true)]
+    #[Field(type: 'text')]
+    #[Column(label: 'Cat Name', searchable: true)]
     public string $name = '';
 }
 

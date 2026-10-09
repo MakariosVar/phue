@@ -9,6 +9,7 @@ use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Tests\Support\RestoresActiveRecordConnection;
 use Phue\Tests\Support\SqliteFactory;
 
@@ -61,19 +62,24 @@ class CastWidget extends BaseActiveRecord
 {
     protected string $table = 'cast_widgets';
 
-    #[Field(type: 'json', label: 'Roles')]
+    #[Field(type: 'json')]
+    #[Column(label: 'Roles')]
     public array $roles = [];
 
-    #[Field(type: 'boolean', label: 'Active')]
+    #[Field(type: 'boolean')]
+    #[Column(label: 'Active')]
     public bool $active = false;
 
-    #[Field(type: 'integer', label: 'Quantity')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'Quantity')]
     public int $quantity = 0;
 
-    #[Field(type: 'float', label: 'Price')]
+    #[Field(type: 'float')]
+    #[Column(label: 'Price')]
     public float $price = 0.0;
 
-    #[Field(type: 'text', label: 'Name')]
+    #[Field(type: 'text')]
+    #[Column(label: 'Name')]
     public string $name = '';
 }
 

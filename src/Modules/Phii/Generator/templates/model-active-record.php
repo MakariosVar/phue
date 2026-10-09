@@ -6,6 +6,7 @@ namespace {{ NAMESPACE }};
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 
 /**
  * ActiveRecord model for {{ MODEL_NAME }}.

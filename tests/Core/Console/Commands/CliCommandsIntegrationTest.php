@@ -9,6 +9,7 @@ use Phue\Core\Console\Commands\DeployCommand;
 use Phue\Core\Console\Commands\MigrateCommand;
 use Phue\Core\Console\Commands\MigrateRollbackCommand;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Commands\SchiiMigrateCommand;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
@@ -27,7 +28,8 @@ class CliWidget extends BaseActiveRecord
 {
     protected string $table = 'cli_widgets';
 
-    #[Field(type: 'text', required: true, searchable: true)]
+    #[Field(type: 'text', required: true)]
+    #[Column(searchable: true)]
     public string $name = '';
 
     #[Field(type: 'number')]

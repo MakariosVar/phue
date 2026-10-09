@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\FieldSchema;
 use Phue\Modules\Schii\Schema\ModelSchema;
@@ -18,25 +19,32 @@ class ProtocolProductStub extends BaseActiveRecord
 {
     protected string $table = 'protocol_products';
 
-    #[Field(type: 'int', label: 'ID', primaryKey: true, writable: false)]
+    #[Field(type: 'int', primaryKey: true, writable: false)]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
-    #[Field(type: 'text', label: 'Title', required: true, searchable: true, sortable: true)]
+    #[Field(type: 'text', required: true)]
+    #[Column(label: 'Title', searchable: true, sortable: true)]
     public string $title = '';
 
-    #[Field(type: 'email', label: 'Support Email')]
+    #[Field(type: 'email')]
+    #[Column(label: 'Support Email')]
     public string $support_email = '';
 
-    #[Field(type: 'select', label: 'Category', options: ['electronics', 'books'])]
+    #[Field(type: 'select')]
+    #[Column(label: 'Category', options: ['electronics', 'books'])]
     public string $category = '';
 
-    #[Field(type: 'date', label: 'Release Date')]
+    #[Field(type: 'date')]
+    #[Column(label: 'Release Date')]
     public string $release_date = '';
 
-    #[Field(type: 'email', label: 'Custom Widget Email', widget: 'custom_input')]
+    #[Field(type: 'email')]
+    #[Column(label: 'Custom Widget Email', widget: 'custom_input')]
     public string $custom_widget_field = '';
 
-    #[Field(type: 'text', label: 'Readonly Code', readonly: true)]
+    #[Field(type: 'text', readonly: true)]
+    #[Column(label: 'Readonly Code')]
     public string $internal_code = 'FIXED';
 }
 

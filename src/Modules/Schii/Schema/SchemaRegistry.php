@@ -7,6 +7,7 @@ namespace Phue\Modules\Schii\Schema;
 use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Psr\SimpleCache\CacheInterface;
@@ -286,23 +287,36 @@ final class SchemaRegistry
         $fields = [];
         foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
             $fieldAttrs = $property->getAttributes(Field::class);
-            if (empty($fieldAttrs)) {
+            $columnAttrs = $property->getAttributes(Column::class);
+
+            // A property with neither attribute is not part of the entity.
+            if (empty($fieldAttrs) && empty($columnAttrs)) {
                 continue;
             }
 
-            /** @var Field $field */
-            $field = $fieldAttrs[0]->newInstance();
+            /** @var Field|null $field */
+            $field = empty($fieldAttrs) ? null : $fieldAttrs[0]->newInstance();
+
+            /** @var Column|null $column */
+            $column = empty($columnAttrs) ? null : $columnAttrs[0]->newInstance();
+
             $propertyName = $property->getName();
 
-            $fieldLabel = $field->label !== '' 
-                ? $field->label 
+            $fieldLabel = $column !== null && $column->label !== ''
+                ? $column->label
                 : $this->humanize($propertyName);
 
-            $normalizedType = $this->normalizeType($field->type);
+            // A property that declared only how it should look has said nothing
+            // about where its value may come from, so it is exposed for display
+            // and withheld from mass assignment. Only #[Field] grants that.
+            $declaresPersistence = $field !== null;
+            $writable = $declaresPersistence && $field->writable;
 
-            // Smart widget assignment: if widget is default ('input') and type is select, email, or date, 
+            $normalizedType = $this->normalizeType($field?->type ?? 'text');
+
+            // Smart widget assignment: if widget is default ('input') and type is select, email, or date,
             // set widget to match the type unless explicitly overridden.
-            $widget = $field->widget;
+            $widget = $column?->widget ?? 'input';
             if ($widget === 'input' && in_array($normalizedType, ['select', 'email', 'date'], true)) {
                 $widget = $normalizedType;
             }
@@ -312,18 +326,18 @@ final class SchemaRegistry
                 type: $normalizedType,
                 label: $fieldLabel,
                 widget: $widget,
-                column: $field->column,
-                required: $field->required,
-                searchable: $field->searchable,
-                filterable: $field->filterable,
-                sortable: $field->sortable,
-                options: $field->options,
-                rules: $field->rules,
-                writable: $field->writable,
-                readonly: $field->readonly,
-                primaryKey: $field->primaryKey,
-                indexed: $field->indexed,
-                length: $field->length ?? 0
+                column: $declaresPersistence && $field->column,
+                required: $declaresPersistence && $field->required,
+                searchable: $column?->searchable ?? false,
+                filterable: $column?->filterable ?? false,
+                sortable: $column?->sortable ?? false,
+                options: $column?->options ?? [],
+                rules: $declaresPersistence ? $field->rules : [],
+                writable: $writable,
+                readonly: $declaresPersistence && $field->readonly,
+                primaryKey: $declaresPersistence && $field->primaryKey,
+                indexed: $declaresPersistence && $field->indexed,
+                length: 0
             );
         }
 

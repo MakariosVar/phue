@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Phue\Core\Database\Attributes\Field;
 use Phue\Modules\Auth\BaseUser;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 
 /**
@@ -29,51 +30,23 @@ class User extends BaseUser
      */
     protected array $hidden = ['password_hash', 'auth_key'];
 
-    #[Field(
-        type: 'integer',
-        primaryKey: true,
-        readonly: true,
-        sortable: true,
-    )]
+    #[Field(type: 'integer', primaryKey: true, readonly: true)]
+    #[Column(sortable: true)]
     public int $id;
 
-    #[Field(
-        type: 'string',
-        label: 'Username',
-        required: true,
-        searchable: true,
-        filterable: true,
-        sortable: true,
-        indexed: true,
-        rules: ['required', 'min:3', 'max:50'],
-    )]
+    #[Field(type: 'string', required: true, indexed: true, rules: ['required', 'min:3', 'max:50'])]
+    #[Column(label: 'Username', searchable: true, filterable: true, sortable: true)]
     public string $username;
 
-    #[Field(
-        type: 'string',
-        label: 'Password Hash',
-        writable: false,
-        readonly: true,
-        column: false,
-    )]
+    #[Field(type: 'string', writable: false, readonly: true, column: false)]
+    #[Column(label: 'Password Hash')]
     public string $password_hash;
 
-    #[Field(
-        type: 'string',
-        label: 'Auth Key',
-        writable: false,
-        readonly: true,
-        column: false,
-    )]
+    #[Field(type: 'string', writable: false, readonly: true, column: false)]
+    #[Column(label: 'Auth Key')]
     public ?string $auth_key = null;
 
-    #[Field(
-        type: 'json',
-        label: 'Roles',
-        writable: false,
-        searchable: false,
-        filterable: false,
-        sortable: false,
-    )]
+    #[Field(type: 'json', writable: false)]
+    #[Column(label: 'Roles', searchable: false, filterable: false, sortable: false)]
     public array $roles = [];
 }

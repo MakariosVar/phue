@@ -6,6 +6,7 @@ namespace Phue\Tests\Schii\Schema;
 
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
 
@@ -40,7 +41,8 @@ class IndexedUser extends \Phue\Core\Database\ActiveRecord\BaseActiveRecord
 {
     protected string $table = 'indexed_users';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'text', required: true)]
@@ -55,7 +57,8 @@ class TypedRecord extends \Phue\Core\Database\ActiveRecord\BaseActiveRecord
 {
     protected string $table = 'typed_records';
 
-    #[Field(type: 'integer', label: 'ID')]
+    #[Field(type: 'integer')]
+    #[Column(label: 'ID')]
     public ?int $id = null;
 
     #[Field(type: 'bool')]

@@ -10,6 +10,7 @@ use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
@@ -40,13 +41,16 @@ class EdgeProduct extends BaseActiveRecord
 {
     protected string $table = 'edge_products';
 
-    #[Field(type: 'text', searchable: true, sortable: true, required: true)]
+    #[Field(type: 'text', required: true)]
+    #[Column(searchable: true, sortable: true)]
     public string $name = '';
 
-    #[Field(type: 'number', filterable: true, sortable: true)]
+    #[Field(type: 'number')]
+    #[Column(filterable: true, sortable: true)]
     public float $price = 0.0;
 
-    #[Field(type: 'select', filterable: true, options: ['active', 'inactive'])]
+    #[Field(type: 'select')]
+    #[Column(filterable: true, options: ['active', 'inactive'])]
     public string $status = 'active';
 
     /**

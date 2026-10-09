@@ -11,6 +11,7 @@ use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
@@ -27,7 +28,8 @@ class TestProduct extends BaseActiveRecord
 {
     protected string $table = 'test_products';
 
-    #[Field(type: 'text', label: 'Product Name', searchable: true)]
+    #[Field(type: 'text')]
+    #[Column(label: 'Product Name', searchable: true)]
     public string $name = '';
 }
 
