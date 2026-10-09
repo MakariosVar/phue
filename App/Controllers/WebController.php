@@ -21,7 +21,7 @@ class WebController extends Controller
     public function index(): Response
     {
         return $this->ui->render('Pages/Home', [
-            'testValue' => t('Home Page')
+            'testValue' => t('Home')
         ]);
     }
 

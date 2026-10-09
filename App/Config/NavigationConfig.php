@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Config;
 
 use function Phue\Core\env;
+use function Phue\Core\t;
 use Phue\Modules\Auth\IdentityInterface;
 
 /**
@@ -41,14 +42,14 @@ class NavigationConfig
     public static function getAppItems(?IdentityInterface $user = null): array
     {
         $allItems = [
-            self::item('Home', '/'),
-            self::item('Docs', '/docs'),
-            self::item('PHUI Components', '/phui'),
+            self::item(t('Home'), '/'),
+            self::item(t('Docs'), '/docs'),
+            self::item(t('PHUI Components'), '/phui'),
         ];
 
         if ((bool) env('SCHII_ENABLED', true)) {
-            $allItems[] =  self::grouped(self::item('Schii', '/schii'), 'Modules');
-            $allItems[] =  self::grouped(self::item('Phii', '/phii'), 'Modules');
+            $allItems[] =  self::grouped(self::item(t('Schii'), '/schii'), t('Modules'));
+            $allItems[] =  self::grouped(self::item(t('Phii'), '/phii'), t('Modules'));
         }
 
         return self::filterVisible($allItems, $user);
@@ -145,11 +146,11 @@ class NavigationConfig
     {
         $actions = [
             self::visible(
-                self::item('Login', '/login'),
+                self::item(t('Login'), '/login'),
                 fn (?IdentityInterface $u): bool => $u === null
             ),
             self::visible(
-                self::item('Logout', 'POST /logout'),
+                self::item(t('Logout'), 'POST /logout'),
                 fn (?IdentityInterface $u): bool => $u !== null
             ),
         ];

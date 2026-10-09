@@ -7,5 +7,7 @@
  */
 return [
     // App-specific
-    'Home Page' => 'Αρχική Σελίδα'
+    'Home' => 'Αρχική Σελίδα',
+    'Login' => 'Σύνδεση',
+    'Logout' => 'Αποσύνδεση'
 ];
