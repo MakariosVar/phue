@@ -72,19 +72,6 @@ class FieldOnlyItem extends BaseActiveRecord
     public string $bare_column = '';
 }
 
-/** #[Column] alone: presentation declared, persistence NOT declared. */
-class ColumnOnlyItem extends BaseActiveRecord
-{
-    protected string $table = 'column_only_items';
-
-    #[Column(label: 'Display Only', searchable: true)]
-    public string $display_only = '';
-
-    #[Field(type: 'text')]
-    #[Column(label: 'Real Column')]
-    public string $real_column = '';
-}
-
 #[Group('unit')]
 final class FieldColumnAttributeSplitTest extends TestCase
 {
@@ -188,11 +175,11 @@ final class FieldColumnAttributeSplitTest extends TestCase
 
     public function testColumnOnlyPropertyIsPresentButNotWritable(): void
     {
-        $display = $this->schemaOf(ColumnOnlyItem::class)['display_only'];
+        $display = $this->schemaOf(\Phue\Tests\Schii\Schema\ColumnOnlyItem::class)['display_only'];
 
         $this->assertArrayHasKey(
             'display_only',
-            $this->schemaOf(ColumnOnlyItem::class),
+            $this->schemaOf(\Phue\Tests\Schii\Schema\ColumnOnlyItem::class),
             '#[Column] declares that the property is part of the entity, so it belongs in the schema.',
         );
 
@@ -207,7 +194,7 @@ final class FieldColumnAttributeSplitTest extends TestCase
 
     public function testColumnOnlyPropertyCarriesItsPresentation(): void
     {
-        $display = $this->schemaOf(ColumnOnlyItem::class)['display_only'];
+        $display = $this->schemaOf(\Phue\Tests\Schii\Schema\ColumnOnlyItem::class)['display_only'];
 
         $this->assertSame('Display Only', $display->label);
         $this->assertTrue($display->searchable);
@@ -215,89 +202,9 @@ final class FieldColumnAttributeSplitTest extends TestCase
 
     public function testColumnOnlyPropertyDoesNotDisturbItsNeighbour(): void
     {
-        $schema = $this->schemaOf(ColumnOnlyItem::class);
+        $schema = $this->schemaOf(\Phue\Tests\Schii\Schema\ColumnOnlyItem::class);
 
         $this->assertTrue($schema['real_column']->writable, 'A neighbouring #[Column] must not grant or revoke writability.');
         $this->assertSame('Real Column', $schema['real_column']->label);
-    }
-}
-
-#[Group('integration')]
-final class ColumnOnlyMassAssignmentTest extends TestCase
-{
-    use RestoresActiveRecordConnection;
-
-    private Connection $db;
-    private ModelEndpoint $endpoint;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->db = SqliteFactory::memory();
-        $connection = $this->db;
-        BaseActiveRecord::setConnection($connection);
-        BaseActiveRecord::setConnectionResolver(static fn(): Connection => $connection);
-
-        $this->db->execute('DROP TABLE IF EXISTS column_only_items');
-        $this->db->execute('
-            CREATE TABLE column_only_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                display_only TEXT,
-                real_column TEXT
-            );
-        ');
-
-        $this->endpoint = new ModelEndpoint(new SchemaRegistry());
-        $this->endpoint->registerEntity('items', ColumnOnlyItem::class);
-    }
-
-    /**
-     * A client posting a #[Column]-only property name gets no write, and no
-     * "unknown field" rejection either.
-     *
-     * The rejection is the subtle half. extractInputData() intersects the
-     * payload with writable schema fields, so the value is dropped and the row
-     * is written correctly — but validateData() runs first and treats the
-     * property as unknown, answering 422. Both halves are correct; this asserts
-     * the one an application author actually sees.
-     */
-    public function testPostingAColumnOnlyPropertyIsRejectedAsUnknown(): void
-    {
-        $response = $this->endpoint->store(
-            new Request('POST', '/schii/items', [], [
-                'real_column' => 'kept',
-                'display_only' => 'injected',
-            ]),
-            'items'
-        );
-
-        $this->assertSame(
-            422,
-            $response->getStatusCode(),
-            '#[Column] alone must not make a property a valid write target.',
-        );
-
-        $data = json_decode((string) $response->getContent(), true);
-        $this->assertArrayHasKey('display_only', $data['errors']);
-    }
-
-    /**
-     * The same property, presented but not persisted.
-     *
-     * Proves the value really is refused rather than merely reported: the row
-     * that lands carries only the declared column.
-     */
-    public function testColumnOnlyPropertyIsNeverWrittenToTheRow(): void
-    {
-        $this->endpoint->store(
-            new Request('POST', '/schii/items', [], ['real_column' => 'kept']),
-            'items'
-        );
-
-        $row = $this->db->query('SELECT real_column, display_only FROM column_only_items')->fetch();
-
-        $this->assertSame('kept', (string) $row['real_column']);
-        $this->assertNull($row['display_only']);
     }
 }

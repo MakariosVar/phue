@@ -7,6 +7,7 @@ namespace Phue\Modules\Schii\Schema;
 use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Core\Validation\RuleEngine;
 use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
@@ -321,6 +322,14 @@ final class SchemaRegistry
                 $widget = $normalizedType;
             }
 
+            // An unknown rule is refused here rather than skipped by the
+            // endpoint. This is the earliest point at which the declaration can
+            // be attributed to a model, so it is the point at which an author
+            // can be told which model and which rule. Deferring it means the
+            // first sign is a rule that quietly does nothing.
+            $rules = $declaresPersistence ? $field->rules : [];
+            RuleEngine::assertKnownRules($rules, $modelClass . '::$' . $propertyName);
+
             $fields[$propertyName] = new FieldSchema(
                 name: $propertyName,
                 type: $normalizedType,
@@ -332,7 +341,7 @@ final class SchemaRegistry
                 filterable: $column?->filterable ?? false,
                 sortable: $column?->sortable ?? false,
                 options: $column?->options ?? [],
-                rules: $declaresPersistence ? $field->rules : [],
+                rules: $rules,
                 writable: $writable,
                 readonly: $declaresPersistence && $field->readonly,
                 primaryKey: $declaresPersistence && $field->primaryKey,

@@ -31,25 +31,41 @@ You annotate models; the module discovers them from the configured
 
 ## 2. Annotating a model
 
-Attributes live in `Phue\Modules\Schii\Attribute`:
+A property is described by up to three attributes, each trusted for one job:
 
-- **`#[UI]`** — class attribute: entity `label`, `icon`, `layout`
-  (`grid` | `list`), `description`.
-- **`#[Field]`** — property attribute:
+- **`#[UI]`** (`Phue\Modules\Schii\Attribute`) — class attribute: entity `label`,
+  `icon`, `layout` (`grid` | `list`), `description`.
+- **`#[Field]`** (`Phue\Core\Database\Attributes`) — persistence and validation.
+  It lives in Core, not in a module, because `type` decides the auto-cast that
+  `BaseActiveRecord` applies and a model in a project with no admin module still
+  needs that:
   - `type` — data type (`text`, `string`, `integer`, `number`, `boolean`,
     `json`, `date`, `email`, `select`, …).
-  - `widget` — form-control override (`input`, `textarea`, `select`, `radio`,
-    `checkbox`, `password`, `date`, …). It defaults to `input`, whose HTML input
-    type is derived from `type` (`email`, `number`, `date`, …).
-  - `label`, `options`, `rules` — display text, `select`/`radio` choices, and
-    validation rules.
-  - `searchable`, `filterable`, `sortable` — the `index()` query features.
-  - `column` — show/hide the field in the list/grid and the column toggle
-    (`column: false` removes it from the table entirely).
+  - `column` — whether the property maps to a database column
+    (`column: false` removes it from the list/grid and the column toggle).
   - `required` — must be present on create.
+  - `rules` — validation rules; see [The rule vocabulary](#the-rule-vocabulary).
   - `writable`, `readonly` — write-path enforcement (see below).
   - `primaryKey`, `indexed` — schema-sync hints: a real primary key and a real
     database index.
+- **`#[Column]`** (`Phue\Modules\Schii\Attribute`) — presentation:
+  - `label` — display text; defaults to a humanized property name.
+  - `widget` — form-control override (`input`, `textarea`, `select`, `radio`,
+    `checkbox`, `password`, `date`, …). It defaults to `input`, whose HTML input
+    type is derived from `type` (`email`, `number`, `date`, …).
+  - `options` — `select`/`radio` choices.
+  - `searchable`, `filterable`, `sortable` — the `index()` query features.
+
+A property may carry `#[Field]` and `#[Column]` together, or either alone.
+`#[Column]` alone declares that the property belongs to the entity but says
+nothing about where its value may come from, so it is **never writable**:
+write access is granted by `#[Field]` and by nothing else.
+
+```php
+#[Field(type: 'string', required: true, indexed: true, rules: ['min:3', 'max:50'])]
+#[Column(label: 'Username', searchable: true, sortable: true)]
+public string $username;
+```
 
 ### Write-path flags
 
@@ -65,6 +81,7 @@ namespace App\Models;
 
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
 
 #[UI(label: 'Products', icon: 'box', layout: 'grid')]
@@ -72,13 +89,16 @@ class Product extends BaseActiveRecord
 {
     protected string $table = 'products';
 
-    #[Field(type: 'text', label: 'Product Name', searchable: true, sortable: true, required: true)]
+    #[Field(type: 'text', required: true, rules: ['min:3'])]
+    #[Column(label: 'Product Name', searchable: true, sortable: true)]
     public string $name;
 
-    #[Field(type: 'number', label: 'Price ($)', filterable: true, sortable: true)]
+    #[Field(type: 'number', rules: ['min:0'])]
+    #[Column(label: 'Price ($)', filterable: true, sortable: true)]
     public float $price;
 
-    #[Field(type: 'select', filterable: true, options: ['active', 'inactive'])]
+    #[Field(type: 'select')]
+    #[Column(filterable: true, options: ['active', 'inactive'])]
     public string $status;
 }
 ```
@@ -168,6 +188,40 @@ test suite — changing any of them is a breaking change:
 | Escaped `LIKE` search | The wildcard characters `%` and `_` in `q` are escaped (the underlying `QueryBuilder` appends an `ESCAPE '\'` clause), so a bare `q=%` matches nothing instead of returning the whole table. |
 | Unregistered entities → `404` | Requesting `/api/schii/unknown` returns `404 Not Found` instead of throwing. |
 | Pagination clamps | `limit` is clamped to `[1, 100]` and `page` to `>= 1`; garbage values fall back to defaults. |
+
+### The rule vocabulary
+
+`rules` on `#[Field]` is a **closed vocabulary**, defined by
+`Phue\Core\Validation\RuleEngine`. Anything outside it stops the schema from
+being built rather than being skipped, because a constraint that is neither
+enforced nor reported is worse than no constraint — the author believes the
+field is protected and it is not:
+
+```
+#[Field(type: 'string', rules: ['in:active,inactive'])]
+#                                            ^^^^^^^^^^^^^^
+  InvalidArgumentException: Unknown rule 'in:active,inactive' on App\Models\User::$status.
+  Supported: required, numeric, integer, email, min:<number>, max:<number>.
+```
+
+| Rule | Meaning |
+|---|---|
+| `required` | The value must be present. Same semantics as `required: true` — enforced on create, not on update, so a partial `PUT` is not asked for every column. Declaring it in both places is harmless. |
+| `numeric` | The value parses as a number. Applied automatically to numeric field types. |
+| `integer` | The value is a whole number. |
+| `email` | The value is a valid e-mail address. |
+| `min:<n>` / `max:<n>` | On a **numeric** field, bounds the value. On a **string** field, bounds the length. |
+
+`min`/`max` follow the **declared type**, not the shape of the incoming value:
+`#[Field(type: 'float', rules: ['min:1000'])]` means the number must be at least
+1000, whether the client sends `1200` or `"1200"`.
+
+Validation runs on the **server only**. The admin form shows the rules as a
+hint (`Rules: min:3, email`) and lets the browser apply its own native
+`required`/`min`/`max`, but it does not re-implement the vocabulary — two copies
+of these rules disagreed with each other, and a rule that means one thing to the
+form and another to the database tells the user their input is wrong when it is
+not.
 
 ---
 

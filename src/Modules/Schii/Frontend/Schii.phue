@@ -645,35 +645,28 @@ export default function mountApp() {
                 return '';
             };
 
-            const currentFieldsValidate = () => {
+            /**
+ * Client-side presence check only. Rule MEANING is the server's.
+ *
+ * This used to re-implement the rule vocabulary in JavaScript, and the two
+ * copies disagreed: min:N compared the VALUE on the server and the STRING
+ * LENGTH here, so #[Field(type: 'float', rules: ['min:1000'])] rejected 1200
+ * in the browser and accepted it on save. A rule that means one thing to the
+ * form and another to the database is worse than a rule that is not enforced
+ * in the form at all — the user is told their input is wrong and it is not.
+ *
+ * The rules are still surfaced (fieldHelper above), so the constraint stays
+ * visible while editing. The browser's own required/min/max still apply
+ * through PhForm; what is gone is the second opinion that could contradict the
+ * first.
+ */
+const currentFieldsValidate = () => {
                 const errors = {};
                 writableFields.value.forEach(f => {
                     const value = form[f.name];
                     const isMissing = value === '' || value === null || value === undefined;
                     if (f.required && isMissing) {
                         errors[f.name] = `${f.label || f.name} is required.`;
-                        return;
-                    }
-                    if (isMissing || value === false) return;
-                    const rules = Array.isArray(f.rules) ? f.rules : [];
-                    const str = String(value);
-                    for (const rule of rules) {
-                        if (rule === 'email' && str && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
-                            errors[f.name] = `${f.label || f.name} must be a valid email address.`;
-                            return;
-                        }
-                        if ((rule === 'numeric' || f.type === 'int' || f.type === 'float') && str && Number.isNaN(Number(str))) {
-                            errors[f.name] = `${f.label || f.name} must be a number.`;
-                            return;
-                        }
-                        if (String(rule).startsWith('min:') && str && str.length < parseInt(rule.slice(4), 10)) {
-                            errors[f.name] = `${f.label || f.name} must be at least ${rule.slice(4)} characters.`;
-                            return;
-                        }
-                        if (String(rule).startsWith('max:') && str && str.length > parseInt(rule.slice(4), 10)) {
-                            errors[f.name] = `${f.label || f.name} must be at most ${rule.slice(4)} characters.`;
-                            return;
-                        }
                     }
                 });
                 fieldErrors.value = errors;

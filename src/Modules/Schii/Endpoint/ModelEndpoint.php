@@ -8,6 +8,7 @@ use Phue\Core\Database\ActiveRecord\ActiveQuery;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Request;
 use Phue\Core\Response;
+use Phue\Core\Validation\RuleEngine;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Schii\Audit\SchiiAudit;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
@@ -812,6 +813,12 @@ final class ModelEndpoint
     /**
      * Validates input data against Schema Field attributes, rules and unknown fields.
      *
+     * Rule MEANING lives in \Phue\Core\Validation\RuleEngine; this method only
+     * decides which value is tested against which rules, and with which
+     * create-vs-update semantics. The vocabulary is deliberately not repeated
+     * here — an earlier version carried its own copy of it, and the copy and
+     * the engine were free to drift.
+     *
      * @param array<string, mixed>            $data       Incoming payload data.
      * @param class-string<BaseActiveRecord> $modelClass Target model class name.
      * @param bool                            $isUpdate   Flag denoting whether the operation is an update.
@@ -845,11 +852,13 @@ final class ModelEndpoint
         foreach ($schema->fields as $fieldName => $fieldSchema) {
             $value = $data[$fieldName] ?? null;
 
-            if (
-                !$isUpdate &&
-                $fieldSchema->required &&
-                ($value === null || $value === "")
-            ) {
+            // A value that is absent has no type to validate against, so
+            // presence is settled first and the rest of the rules are skipped.
+            // `required` reaches the same conclusion as the field's own flag:
+            // a partial update must not be asked for every column.
+            $required = $fieldSchema->required || RuleEngine::isRequired($fieldSchema->rules);
+
+            if (!$isUpdate && $required && ($value === null || $value === "")) {
                 $errors[$fieldName] = "Field '{$fieldName}' is required";
                 continue;
             }
@@ -859,65 +868,19 @@ final class ModelEndpoint
             }
 
             $rules = $fieldSchema->rules;
-            if (
-                $fieldSchema->type === "int" ||
-                $fieldSchema->type === "float" ||
-                $fieldSchema->type === "number" ||
-                $fieldSchema->type === "numeric"
-            ) {
-                $rules[] = "numeric";
+
+            // A numeric column holds a number or it is corrupt, whether or not
+            // the author restated it. The type is normalised by the schema
+            // registry, so 'number' and 'numeric' have already become 'float'
+            // by this point and must not be listed again.
+            if (RuleEngine::isNumericType($fieldSchema->type)) {
+                $rules[] = RuleEngine::RULE_NUMERIC;
             }
 
-            foreach ($rules as $rule) {
-                if ($rule === "numeric" && !is_numeric($value)) {
-                    $errors[
-                        $fieldName
-                    ] = "Field '{$fieldName}' must be numeric";
-                }
-                if (
-                    $rule === "integer" &&
-                    filter_var($value, FILTER_VALIDATE_INT) === false
-                ) {
-                    $errors[
-                        $fieldName
-                    ] = "Field '{$fieldName}' must be an integer";
-                }
-                if (
-                    $rule === "email" &&
-                    filter_var($value, FILTER_VALIDATE_EMAIL) === false
-                ) {
-                    $errors[
-                        $fieldName
-                    ] = "Field '{$fieldName}' must be a valid email";
-                }
+            $failure = RuleEngine::check($rules, $value, $fieldSchema->type, $fieldName);
 
-                // Parse min:N rule
-                if (str_starts_with($rule, "min:")) {
-                    $min = (float) substr($rule, 4);
-                    if (is_numeric($value)) {
-                        if ((float) $value < $min) {
-                            $errors[$fieldName] = "Field '{$fieldName}' must be at least {$min}";
-                        }
-                    } else {
-                        if (mb_strlen((string) $value) < $min) {
-                            $errors[$fieldName] = "Field '{$fieldName}' must be at least {$min} characters";
-                        }
-                    }
-                }
-
-                // Parse max:N rule
-                if (str_starts_with($rule, "max:")) {
-                    $max = (float) substr($rule, 4);
-                    if (is_numeric($value)) {
-                        if ((float) $value > $max) {
-                            $errors[$fieldName] = "Field '{$fieldName}' may not be greater than {$max}";
-                        }
-                    } else {
-                        if (mb_strlen((string) $value) > $max) {
-                            $errors[$fieldName] = "Field '{$fieldName}' may not be greater than {$max} characters";
-                        }
-                    }
-                }
+            if ($failure !== null) {
+                $errors[$fieldName] = $failure;
             }
         }
 
