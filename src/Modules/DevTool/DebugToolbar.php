@@ -1000,7 +1000,7 @@ class DebugToolbar
         }
         .phue-dt-panel[hidden] { display: none; }
         .phue-dt-resize-handle {
-            position: absolute; top: -3px; left: 0; right: 0; height: 7px;
+            position: absolute; top: -3px; left: 0; right: 0;
             cursor: ns-resize; z-index: 1; user-select: none;
         }
         .phue-dt-resize-handle::after {
