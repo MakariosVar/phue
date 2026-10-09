@@ -7,6 +7,7 @@ namespace App\Controllers;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Route;
+use function Phue\Core\t;
 
 /**
  * WebController handles primary HTTP routes and orchestrates page rendering.
@@ -20,7 +21,7 @@ class WebController extends Controller
     public function index(): Response
     {
         return $this->ui->render('Pages/Home', [
-            'testValue' => 'HomePage'
+            'testValue' => t('Home Page')
         ]);
     }
 
