@@ -9,6 +9,7 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Validation\RuleEngine;
+use function Phue\Core\t;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Schii\Audit\SchiiAudit;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
@@ -114,7 +115,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $schema = $this->schemaRegistry->get($modelClass);
@@ -141,7 +142,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         // Delegate query construction to buildQuery (Single Source of Truth)
@@ -199,12 +200,12 @@ final class ModelEndpoint
 
         $modelClass = $this->resolveModelClass((string) $entity);
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $model = $modelClass::find($id);
         if (!$model) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         return Response::json(["data" => $model->toArray()]);
@@ -229,7 +230,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         /** @var array<string, mixed> $rawBody */
@@ -244,7 +245,7 @@ final class ModelEndpoint
         if (!empty($errors)) {
             return Response::json(
                 [
-                    "error" => "Validation failed",
+                    "error" => t('Validation failed'),
                     "errors" => $errors,
                 ],
                 422,
@@ -265,12 +266,12 @@ final class ModelEndpoint
             $modelErrors = $model->getErrors();
 
             if ($modelErrors === []) {
-                return Response::json(["error" => "Failed to save record"], 500);
+                return Response::json(["error" => t('Failed to save record')], 500);
             }
 
             return Response::json(
                 [
-                    "error" => "Validation failed",
+                    "error" => t('Validation failed'),
                     "errors" => $modelErrors,
                 ],
                 422,
@@ -305,12 +306,12 @@ final class ModelEndpoint
 
         $modelClass = $this->resolveModelClass((string) $entity);
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $model = $modelClass::find($id);
         if (!$model) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         /** @var array<string, mixed> $rawBody */
@@ -325,7 +326,7 @@ final class ModelEndpoint
         if (!empty($errors)) {
             return Response::json(
                 [
-                    "error" => "Validation failed",
+                    "error" => t('Validation failed'),
                     "errors" => $errors,
                 ],
                 422,
@@ -344,12 +345,12 @@ final class ModelEndpoint
             $modelErrors = $model->getErrors();
 
             if ($modelErrors === []) {
-                return Response::json(["error" => "Failed to save record"], 500);
+                return Response::json(["error" => t('Failed to save record')], 500);
             }
 
             return Response::json(
                 [
-                    "error" => "Validation failed",
+                    "error" => t('Validation failed'),
                     "errors" => $modelErrors,
                 ],
                 422,
@@ -384,17 +385,17 @@ final class ModelEndpoint
 
         $modelClass = $this->resolveModelClass((string) $entity);
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $model = $modelClass::find($id);
         if (!$model) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         if (!$model->delete()) {
             return Response::json(
-                ["error" => "Failed to delete resource"],
+                ["error" => t('Failed to delete resource')],
                 500,
             );
         }
@@ -407,7 +408,7 @@ final class ModelEndpoint
             ['id' => $id]
         );
 
-        return Response::json(["message" => "Resource deleted successfully"]);
+        return Response::json(["message" => t('Resource deleted successfully')]);
     }
 
     /**
@@ -429,7 +430,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         /** @var array<string, mixed> $rawBody */
@@ -442,12 +443,12 @@ final class ModelEndpoint
         $data = $rawBody["data"] ?? [];
 
         if (!in_array($action, ["update", "delete"], true) || !is_array($ids) || empty($ids)) {
-            return Response::json(["error" => "Invalid bulk action or empty ids"], 422);
+            return Response::json(["error" => t('Invalid bulk action or empty ids')], 422);
         }
 
         $ids = array_values(array_unique(array_filter($ids, static fn($id) => !is_array($id))));
         if (empty($ids)) {
-            return Response::json(["error" => "Invalid ids provided"], 422);
+            return Response::json(["error" => t('Invalid ids provided')], 422);
         }
 
         $updatedCount = 0;
@@ -478,7 +479,7 @@ final class ModelEndpoint
                         );
                     } else {
                         $failedCount++;
-                        $results[] = ["id" => $id, "status" => "failed", "error" => "Deletion failed"];
+                        $results[] = ["id" => $id, "status" => "failed", "error" => t('Deletion failed')];
                     }
                 } elseif ($action === "update") {
                     $errors = $this->validateData($data, $modelClass, isUpdate: true);
@@ -542,7 +543,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $schema = $this->schemaRegistry->get($modelClass);
@@ -570,7 +571,7 @@ final class ModelEndpoint
         // CSV Streaming via php://temp
         $stream = fopen("php://temp", "w+");
         if ($stream === false) {
-            return Response::json(["error" => "Failed to open temporary stream"], 500);
+            return Response::json(["error" => t('Failed to open temporary stream')], 500);
         }
 
         if (!empty($rows)) {
@@ -609,7 +610,7 @@ final class ModelEndpoint
         $modelClass = $this->resolveModelClass((string) $entity);
 
         if ($modelClass === null) {
-            return Response::json(["error" => "Resource not found"], 404);
+            return Response::json(["error" => t('Resource not found')], 404);
         }
 
         $format = strtolower((string) ($request->input("format") ?? $request->getQuery("format") ?? "json"));
@@ -621,17 +622,17 @@ final class ModelEndpoint
         $matchBy = $rawBody["matchBy"] ?? null;
 
         if ($dataInput === null) {
-            return Response::json(["error" => "Data payload is required"], 400);
+            return Response::json(["error" => t('Data payload is required')], 400);
         }
 
         $rows = [];
         if ($format === "csv") {
             if (!is_string($dataInput)) {
-                return Response::json(["error" => "CSV data must be a string"], 400);
+                return Response::json(["error" => t('CSV data must be a string')], 400);
             }
             $lines = array_filter(explode("\n", str_replace("\r\n", "\n", $dataInput)));
             if (empty($lines)) {
-                return Response::json(["error" => "Empty CSV payload"], 400);
+                return Response::json(["error" => t('Empty CSV payload')], 400);
             }
             $headers = str_getcsv(array_shift($lines), ',', '"', '\\');
             foreach ($lines as $line) {
@@ -665,7 +666,7 @@ final class ModelEndpoint
         foreach ($rows as $index => $row) {
             if (!is_array($row)) {
                 $failed++;
-                $errors[] = ["row" => $index, "error" => "Row must be an array"];
+                $errors[] = ["row" => $index, "error" => t('Row must be an array')];
                 continue;
             }
 
@@ -864,7 +865,7 @@ final class ModelEndpoint
                 continue;
             }
             if (!in_array($field, $allowedFields, true)) {
-                $errors[$field] = "Unknown field '{$field}' is not allowed";
+                $errors[$field] = t("Unknown field '{field}' is not allowed", ['field' => $field]);
             }
         }
 

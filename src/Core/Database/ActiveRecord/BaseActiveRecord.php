@@ -16,6 +16,7 @@ use Phue\Core\Database\ActiveRecord\Relations\HasMany;
 use Phue\Core\Database\ActiveRecord\Relations\HasOne;
 use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
 use Phue\Core\Validation\RuleEngine;
+use function Phue\Core\t;
 
 /**
  * Abstract Base Active Record Model providing ORM, persistence, relationship logic,
@@ -817,7 +818,7 @@ public function validate(): bool
         $isMissing = $value === null || $value === '';
 
         if (!$this->exists && ($meta['required'] || RuleEngine::isRequired($rules)) && $isMissing) {
-            $this->errors[$propertyName] = sprintf("Field '%s' is required", $propertyName);
+            $this->errors[$propertyName] = t("Field '{propertyName}' is required", ['propertyName' => $propertyName]);
             continue;
         }
 

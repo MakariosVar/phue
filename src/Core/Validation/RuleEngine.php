@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Core\Validation;
 
 use InvalidArgumentException;
+use function Phue\Core\t;
 
 /**
  * The one place a #[Field(rules: [...])] array is given meaning.
@@ -226,21 +227,21 @@ final class RuleEngine
             }
 
             if ($trimmed === self::RULE_NUMERIC && !is_numeric($value)) {
-                return sprintf("Field '%s' must be numeric", $field);
+                return t('Field \'{field}\' must be numeric', ['field' => $field]);
             }
 
             if (
                 $trimmed === self::RULE_INTEGER
                 && filter_var($value, FILTER_VALIDATE_INT) === false
             ) {
-                return sprintf("Field '%s' must be an integer", $field);
+                return t('Field \'{field}\' must be an integer', ['field' => $field]);
             }
 
             if (
                 $trimmed === self::RULE_EMAIL
                 && filter_var($value, FILTER_VALIDATE_EMAIL) === false
             ) {
-                return sprintf("Field '%s' must be a valid email", $field);
+                return t('Field \'{field}\' must be a valid email', ['field' => $field]);
             }
 
             if (!str_contains($trimmed, ':')) {
@@ -267,13 +268,11 @@ final class RuleEngine
                 continue;
             }
 
+            $formatted = self::formatBound($bound);
+
             return $numericType
-                ? sprintf("Field '%s' must be at least %s", $field, self::formatBound($bound))
-                : sprintf(
-                    "Field '%s' must be at least %s characters",
-                    $field,
-                    self::formatBound($bound),
-                );
+                ? t('Field \'{field}\' must be at least {min}', ['field' => $field, 'min' => $formatted])
+                : t('Field \'{field}\' must be at least {min} characters', ['field' => $field, 'min' => $formatted]);
         }
 
         return null;

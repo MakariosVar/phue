@@ -39,6 +39,16 @@ if (!function_exists('Phue\Core\env')) {
 if (!function_exists('Phue\Core\t')) {
     function t(string $message, array $params = [], ?string $locale = null): string
     {
-        return Translator::active()?->t($message, $params, $locale) ?? $message;
+        $translator = Translator::active();
+
+        if ($translator !== null) {
+            return $translator->t($message, $params, $locale);
+        }
+
+        // No request in progress. The message still has to come out READY to
+        // display: returning it unsubstituted would put a literal {field} in
+        // front of a user, which reads as a broken template rather than as an
+        // untranslated string.
+        return Translator::substitute($message, $params);
     }
 }

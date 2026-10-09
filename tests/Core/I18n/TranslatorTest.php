@@ -264,7 +264,30 @@ final class TranslatorTest extends TestCase
     {
         $this->assertNull(Translator::active());
         $this->assertSame('Hello', \Phue\Core\t('Hello'));
-        $this->assertSame('Hi {name}', \Phue\Core\t('Hi {name}', ['name' => 'x']));
+    }
+
+    /**
+     * The bug this caught.
+     *
+     * The helper used to return the message untouched when no translator was
+     * installed — which meant a message rendered outside a request shipped a
+     * literal "{field}" to whoever saw it. That reads as a broken template, not
+     * as an untranslated string, and no catalog can hide it.
+     */
+    public function testTheHelperStillInterpolatesWithoutATranslator(): void
+    {
+        $this->assertNull(Translator::active());
+
+        $this->assertSame('Hi x', \Phue\Core\t('Hi {name}', ['name' => 'x']));
+    }
+
+    /**
+     * Including a missing parameter, which stays visible rather than blanked.
+     */
+    public function testTheHelperLeavesUnmatchedPlaceholdersVisibleWithoutATranslator(): void
+    {
+        $this->assertSame('Hi {name}', \Phue\Core\t('Hi {name}'));
+        $this->assertSame('Hi {name}', \Phue\Core\t('Hi {name}', ['other' => 'x']));
     }
 
     public function testTheHelperFollowsTheActiveTranslator(): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Phue\Modules\Auth\Middleware;
 
+use function Phue\Core\t;
+
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\RbacManager;
 use Phue\Core\Request;
@@ -34,11 +36,11 @@ final class AccessControlMiddleware
         $user = $this->auth->getUser();
 
         if ($user === null) {
-            return Response::json(['error' => 'Unauthorized access. Authentication required.'], 401);
+            return Response::json(['error' => t('Unauthorized access. Authentication required.')], 401);
         }
 
         if (!$this->rbac->checkAccess($user->getId(), $this->requiredPermission)) {
-            return Response::json(['error' => 'Forbidden. Insufficient permissions.'], 403);
+            return Response::json(['error' => t('Forbidden. Insufficient permissions.')], 403);
         }
 
         return $next($request);

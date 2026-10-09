@@ -301,6 +301,22 @@ final class Translator implements ResettableInterface
      */
     private function interpolate(string $message, array $params): string
     {
+        return self::substitute($message, $params);
+    }
+
+    /**
+     * Placeholder substitution, usable with no translator in hand.
+     *
+     * Static and separate because the t() helper must interpolate even when no
+     * request is in progress — a console command, a queue worker before its
+     * scope exists, a test. Returning the raw message there would put a
+     * literal {field} in front of a user, which reads as a broken template
+     * rather than as an untranslated string.
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function substitute(string $message, array $params): string
+    {
         $replacements = [];
 
         foreach ($params as $key => $value) {
