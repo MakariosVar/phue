@@ -68,7 +68,7 @@ final class Translator implements ResettableInterface
         private readonly string $defaultLocale = 'en',
         ?string $appLocalePath = null,
     ) {
-        $this->paths = [__DIR__];
+        $this->paths = [__DIR__ . '/locales'];
 
         if ($appLocalePath !== null && $appLocalePath !== '') {
             $this->paths[] = rtrim($appLocalePath, '/');
