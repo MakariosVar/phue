@@ -64,10 +64,23 @@ class NavigationConfig
      */
     public static function item(string $label, string $href): array
     {
-        return [
+        $method = null;
+
+        if (preg_match('/^(GET|POST|PUT|PATCH|DELETE)\s+(.+)$/i', $href, $m)) {
+            $method = strtoupper($m[1]);
+            $href   = $m[2];
+        }
+
+        $item = [
             'label' => $label,
             'href'  => $href,
         ];
+
+        if ($method !== null && $method !== 'GET') {
+            $item['method'] = $method;
+        }
+
+        return $item;
     }
 
     /**
@@ -136,7 +149,7 @@ class NavigationConfig
                 fn (?IdentityInterface $u): bool => $u === null
             ),
             self::visible(
-                self::item('Logout', '/logout'),
+                self::item('Logout', 'POST /logout'),
                 fn (?IdentityInterface $u): bool => $u !== null
             ),
         ];

@@ -21,6 +21,9 @@
             :href="item.href || '#'" 
             :class="['nav-link', { active: isRouteActive(item.href) }]" 
             :aria-current="isRouteActive(item.href) ? 'page' : null"
+            :data-no-spa="item.method && item.method !== 'GET' ? '' : null"
+            :data-method="item.method && item.method !== 'GET' ? item.method : null"
+            @click="onLinkClick($event, item)"
           >
             {{ item.label }}
           </a>
@@ -40,6 +43,9 @@
               :href="node.item.href || '#'" 
               :class="['nav-link', { active: isRouteActive(node.item.href) }]" 
               :aria-current="isRouteActive(node.item.href) ? 'page' : null"
+              :data-no-spa="node.item.method && node.item.method !== 'GET' ? '' : null"
+              :data-method="node.item.method && node.item.method !== 'GET' ? node.item.method : null"
+              @click="onLinkClick($event, node.item)"
             >
               {{ node.item.label }}
             </a>
@@ -71,9 +77,11 @@
                 <a 
                   v-else 
                   :href="child.href || '#'" 
-:class="['dropdown-item', { active: isRouteActive(child.href) }]"
+                  :class="['dropdown-item', { active: isRouteActive(child.href) }]"
                   :aria-current="isRouteActive(child.href) ? 'page' : null"
-                  @click="closeDropdown"
+                  :data-no-spa="child.method && child.method !== 'GET' ? '' : null"
+                  :data-method="child.method && child.method !== 'GET' ? child.method : null"
+                  @click="onLinkClick($event, child, true)"
                 >
                   {{ child.label }}
                 </a>
@@ -95,6 +103,9 @@
             :href="action.href || '#'"
             :class="['nav-link', { active: isRouteActive(action.href) }]"
             :aria-current="isRouteActive(action.href) ? 'page' : null"
+            :data-no-spa="action.method && action.method !== 'GET' ? '' : null"
+            :data-method="action.method && action.method !== 'GET' ? action.method : null"
+            @click="onLinkClick($event, action)"
           >
             {{ action.label }}
           </a>
@@ -107,6 +118,9 @@
             :href="action.href || '#'"
             :class="['nav-link', { active: isRouteActive(action.href) }]"
             :aria-current="isRouteActive(action.href) ? 'page' : null"
+            :data-no-spa="action.method && action.method !== 'GET' ? '' : null"
+            :data-method="action.method && action.method !== 'GET' ? action.method : null"
+            @click="onLinkClick($event, action)"
           >
             {{ action.label }}
           </a>
@@ -300,6 +314,52 @@ const options = {
       return nodes;
     });
 
+    function onLinkClick(event, item, isDropdown = false) {
+      if (isDropdown) {
+        closeDropdown();
+      }
+      if (!item || !item.method || item.method === 'GET') {
+        return;
+      }
+      event.preventDefault();
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = item.href || '#';
+      form.style.display = 'none';
+
+      if (item.method !== 'POST') {
+        const methodInput = document.createElement('input');
+        methodInput.type = 'hidden';
+        methodInput.name = '_method';
+        methodInput.value = item.method;
+        form.appendChild(methodInput);
+      }
+
+      let csrf = '';
+      if (typeof document !== 'undefined') {
+        const m = document.cookie.match(/(?:^|;\s*)phue_csrf=([^;]*)/);
+        if (m) {
+          csrf = decodeURIComponent(m[1]);
+        } else {
+          const meta = document.querySelector('meta[name="csrf-token"]') || document.querySelector('meta[name="_csrf"]');
+          if (meta) {
+            csrf = meta.getAttribute('content') || '';
+          }
+        }
+      }
+
+      if (csrf) {
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_csrf';
+        csrfInput.value = csrf;
+        form.appendChild(csrfInput);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
+    }
+
     return {
       isSidebar,
       navClasses,
@@ -312,6 +372,7 @@ const options = {
       closeDropdown,
       toggle,
       onNavClick,
+      onLinkClick,
       isThemePrefix,
       isRouteActive,
       groupedNodes

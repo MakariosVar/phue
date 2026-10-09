@@ -52,6 +52,42 @@ final class NavigationConfigTest extends TestCase
         );
     }
 
+    public function testItemBuilderParsesMethodPrefix(): void
+    {
+        $postItem = NavigationConfig::item('Logout', 'POST /logout');
+        $this->assertSame([
+            'label'  => 'Logout',
+            'href'   => '/logout',
+            'method' => 'POST',
+        ], $postItem);
+
+        $getItem = NavigationConfig::item('Profile', 'GET /profile');
+        $this->assertSame([
+            'label' => 'Profile',
+            'href'  => '/profile',
+        ], $getItem);
+
+        $lowercasePost = NavigationConfig::item('Logout', 'post /logout');
+        $this->assertSame([
+            'label'  => 'Logout',
+            'href'   => '/logout',
+            'method' => 'POST',
+        ], $lowercasePost);
+
+        $deleteItem = NavigationConfig::item('Delete', 'DELETE /account');
+        $this->assertSame([
+            'label'  => 'Delete',
+            'href'   => '/account',
+            'method' => 'DELETE',
+        ], $deleteItem);
+
+        $plainItem = NavigationConfig::item('Home', '/');
+        $this->assertSame([
+            'label' => 'Home',
+            'href'  => '/',
+        ], $plainItem);
+    }
+
     public function testDisabledBuilderAddsDisabledFlag(): void
     {
         $item = NavigationConfig::disabled(NavigationConfig::item('X', '/x'));
@@ -113,6 +149,17 @@ final class NavigationConfigTest extends TestCase
 
         $this->assertContains('Logout', array_column($actions, 'label'));
         $this->assertNotContains('Login', array_column($actions, 'label'));
+
+        $logout = null;
+        foreach ($actions as $action) {
+            if ($action['label'] === 'Logout') {
+                $logout = $action;
+                break;
+            }
+        }
+        $this->assertNotNull($logout);
+        $this->assertSame('/logout', $logout['href']);
+        $this->assertSame('POST', $logout['method'] ?? null);
     }
 
     public function testAppItemsAreReachableAsFlatList(): void
