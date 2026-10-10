@@ -12,6 +12,31 @@ the DOM being there.
 
 ---
 
+## Not here: the always-on runtime
+
+This directory is **opt-in**. A helper reaches your script only because you named
+it in `composables: [...]`.
+
+`src/Core/UI/runtime/` is the opposite: `createPhueApp`, `installI18n` and `t` are
+injected into every module the loader builds, whether you asked for them or not, and
+they resolve through the reserved `phue` import-map entry rather than being copied
+into your file. They are ES modules the browser fetches once and caches, not source
+the loader inlines — which is what lets `createPhueApp` `import … from "vue"` without
+colliding with the loader's own `const createApp` proxy.
+
+| | `js/` (this directory) | `runtime/` |
+|---|---|---|
+| opt-in | yes, via `composables:` | no |
+| how it arrives | source copied into your module | `import … from 'phue'` |
+| cost | duplicated per component | fetched once, cached |
+| browser-only | yes | yes — SSR installs translations itself |
+
+The split is not cosmetic. A helper inlined into a module cannot `import` anything
+(an import binding and the loader's module-scope `const` for the same name is a
+`SyntaxError`), so anything that needs Vue itself has to live in `runtime/`.
+
+---
+
 ## Consuming a composable
 
 Declare it in the `<script>` frontmatter and call the helper normally. There is no
@@ -197,3 +222,16 @@ no state.
 `tests/Core/UI/js/dom-double.mjs` is the shared DOM double. The window double records
 the `capture` flag of every listener — that is the only way to catch a scroll
 listener that silently became bubbling.
+
+The runtime has its own suites, in `tests/Core/UI/runtime/`:
+
+| suite | what it pins |
+| --- | --- |
+| `createPhueApp.test.mjs` | hydrate/render choice, teardown of the previous app, `mount:false`, `t()` wiring |
+| `i18n.parity.test.mjs` | the client reproduces `Translator::t()` byte-for-byte, against a PHP-generated fixture |
+| `PhueRuntimeExportsTest.php` | every symbol the loader injects is actually exported — a missing one breaks every component in the browser, after the page was already served |
+
+`createPhueApp.test.mjs` doubles Vue rather than importing it, because mounting needs
+a real DOM and Node has none. The double records which factory was chosen, which is
+what makes the hydrate decision observable. The mounting half is covered by the SSR
+sidecar tests and by the live page.

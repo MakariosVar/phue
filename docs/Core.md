@@ -173,7 +173,7 @@ The `AssetRegistry` manages three pools — two for scripts/styles, one for font
   stylesheets            (AssetRegistry::getStyles())
 <body>
   component markup
-  __INITIAL_STATE__ → __NAV_STATE__ → scripts → inline scripts
+  __INITIAL_STATE__ → __PHUE_I18N__ → __NAV_STATE__ → scripts → inline scripts
 ```
 
 The import map and the module preloads are emitted **before** any `<script type="module">` and inside `<head>`, because a bare specifier (`import { ref } from 'vue'`) can only be resolved by a map the browser has already parsed. Moving the import map out of `<body>` is therefore a hard requirement of the no-build architecture, not a cosmetic choice.
@@ -184,6 +184,8 @@ The import map and the module preloads are emitted **before** any `<script type=
 - **SPA navigation** → shipped in the JSON payload under the `modulePreload` key; `phue-explorer.js` appends a matching `<link>` per entry before executing the incoming page scripts, so the dependency graph is already in the HTTP cache when the modules are requested. Entries are deduped against existing `link[rel="modulepreload"]` so a re-navigation does not re-add them.
 
 `ImportMapManager` maps `vue` to the **production** build (`vue.runtime.esm-browser.prod.js`). The `__DEV__` branches, devtools hooks and HMR wiring of the dev build are ~31.5 KiB of extra transfer on the critical path for zero runtime value. A stale import map entry puts the browser and the SSR sidecar on different Vue builds, which surfaces as a hydration mismatch rather than an error.
+
+Two specifiers are **reserved**, and a package manifest cannot overwrite either: `vue`, and `phue` (the runtime entry carrying `createPhueApp`, `installI18n` and `t`, served from `/assets/runtime/`). Every built component module imports from `phue`, so an entry that resolved to the wrong URL would break every component on the page rather than one.
 
 ### 2.2.3 SPA navigation contract (`phue-explorer.js`)
 
@@ -281,6 +283,71 @@ The `ComponentRenderer` is wired with everything a page needs:
 
 Two controllers are auto-registered on the router: `AssetsController` (serves
 `/assets/*`) and `HealthController`.
+
+### 2.2.6 `createPhueApp()` — the page app factory
+
+A `.phue` page used to repeat four lines of bootstrap: unmount the previous app, create one, publish it on `window.__phueApp`, mount it into `#app`. `createPhueApp()` does all four and returns the app.
+
+```js
+export default function mountApp() {
+    return createPhueApp({ setup() { /* ... */ } });
+}
+```
+
+**Nothing is imported.** `PhueComponentLoader` injects `import { createPhueApp, installI18n, t } from 'phue'` into every module it builds; `phue` is a reserved import-map entry (like `vue`) that no package manifest can override, served from `/assets/runtime/`.
+
+**The hydrate/render decision is the factory's, not the page's.** It inspects the mount target: markup present → `createSSRApp` (hydrate); empty → `createApp` (render). One call is therefore correct on a full page load and on an SPA re-mount. Vue's own `createSSRApp` would recover from an empty container too, but by warning — and that warning would fire on *every* SPA navigation, because the previous app was unmounted and its markup went with it. `hydrate: true` / `hydrate: false` override the heuristic when the caller knows better.
+
+Re-mounting is safe: `createPhueApp` unmounts whatever it published under the same `window` key before building the new app. Vue keeps no registry of applications, so without that the old instance stays wired to the container and its watchers keep firing.
+
+The factory is **browser-only** — it mounts into a DOM. The SSR build therefore does not import the runtime module at all; the sidecar installs translations on its own. `config.mount: false` builds and publishes an app without attaching it, for a page that needs the instance rather than the mount.
+
+Components that still call the raw `createApp()`/`createSSRApp()` keep working: the loader's proxies inject the compiled render function *and* call `installI18n`, so `t()` resolves in their templates too.
+
+### 2.2.7 Translations: `t()` in PHP and in the browser
+
+`Phue\Core\t()` translates a message. The source-language text **is** the key — there is no extraction step, and an untranslated key falls back to itself. Locale is resolved once per request (`?locale=` → user preference → `Accept-Language` → configured default) by `LocaleResolver`, and the `Translator` is request-scoped, so a locale never leaks into the next request in a persistent runtime.
+
+```php
+t('Home');                                  // the message is the key
+t('Hello {name}', ['name' => $user->name]); // {placeholder} substitution
+t('Save', [], 'de');                         // force a locale
+```
+
+**The catalogue snapshot.** Before the page is served, `Translator::snapshot()` flattens the whole locale chain (`el-GR → el → default → source`) into one map and returns it as a `CatalogSnapshot`. `ComponentRenderer` ships that snapshot in the document as `window.__PHUE_I18N__`:
+
+```
+<body>
+  component markup
+  __INITIAL_STATE__ → __PHUE_I18N__ → __NAV_STATE__ → scripts → inline scripts
+```
+
+Two consequences worth stating plainly:
+
+- **The snapshot never travels in `state`.** `state` is produced by the component's own `<php>` block, so an application could omit the snapshot or shadow it. The renderer adds it, after the block has been evaluated.
+- **`<html lang>` carries the resolved locale**, not a hardcoded `en`. The lang attribute on `ErrorPageRenderer` is still `en`: error pages render without a resolved locale.
+
+**The client runtime.** `src/Core/UI/runtime/i18n.js` turns the snapshot into a lookup:
+
+```js
+phueT('Home')                                  // in a component script
+app.config.globalProperties.t('Home')          // in a template, as t('Home')
+```
+
+It reproduces PHP semantics exactly, which is why each rule below is written out rather than left to the reader:
+
+| input | PHP `substitute()` | the client |
+|---|---|---|
+| `null` | `""` | `""` (not `"null"`) |
+| `true` / `false` | `"1"` / `""` | same — PHP casting, not JS `String()` |
+| `[1,2]` | not substituted, `{x}` stays | same |
+| unmatched `{x}` | stays visible | same |
+| value containing `$&` | literal | literal — hence the function replacer |
+
+`installI18n()` puts `t` on `app.config.globalProperties`, which Vue's instance proxy resolves for **bare** identifiers in templates — a component needs no import and no registration to call `t('Home')` from its template. It also exposes a read-only `$locale`.
+
+**Under SSR** the sidecar installs translations itself (`ssr/server.ts`), closing over the payload it received for that request. Nothing is parked on a global: the Bun sidecar serves requests concurrently, so a snapshot on `globalThis` would be read by whichever render ran next. This is the same guarantee `Container::flushScope()` gives the PHP side.
+
 
 ### 2.3 Global middleware pipeline (`use()`)
 
