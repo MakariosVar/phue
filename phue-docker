@@ -33,23 +33,28 @@ usage() {
 }
 
 # Show help if no arguments are provided or if -h/--help is passed
-if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    usage
+# Only when executed directly, not sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+        usage
+    fi
 fi
 
-# Pre-flight checks
-if ! docker info > /dev/null 2>&1; then
-    echo "❌ Error: Docker daemon is not running or permission denied."
-    exit 1
-fi
+# Only run main logic when executed directly, not sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Pre-flight checks
+    if ! docker info > /dev/null 2>&1; then
+        echo "❌ Error: Docker daemon is not running or permission denied."
+        exit 1
+    fi
 
-if [ ! -f "$COMPOSE_FILE" ]; then
-    echo "❌ Error: $COMPOSE_FILE not found at $COMPOSE_FILE"
-    exit 1
-fi
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        echo "❌ Error: $COMPOSE_FILE not found at $COMPOSE_FILE"
+        exit 1
+    fi
 
-ACTION="$1"
-shift || true
+    ACTION="$1"
+    shift || true
 
 # Parse flags (detach, cache, optimize) into CLEAR_CACHE / OPTIMIZE / DETACH.
 # Shared by start and restart — supports combinations like -cod, -do, etc.
@@ -230,6 +235,12 @@ case "$ACTION" in
         docker compose -f "$COMPOSE_FILE" build
         docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans
         echo "✅ Rebuild complete."
+        # Reload completions on host and in container after rebuild
+        if [[ -f "$(dirname "${BASH_SOURCE[0]}")/phue-source" ]]; then
+            source "$(dirname "${BASH_SOURCE[0]}")/phue-source"
+            echo "  ✓ Host completions reloaded"
+        fi
+        docker exec phue_app bash -c "source /app/phue-source" 2>/dev/null && echo "  ✓ Container completions reloaded"
         ;;
 
     restart)
@@ -282,10 +293,52 @@ case "$ACTION" in
             echo "❌ Action cancelled."
         fi
         ;;
+*)
 
-    *)
         echo "❌ Unknown command: $ACTION"
         echo ""
         usage
         ;;
 esac
+fi
+
+# Auto-completion for bash/zsh
+# Usage: source ./phue-docker && complete -F _phue_docker_complete phue-docker
+# Or add to .bashrc: source /path/to/phue-docker
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]] || [[ -n "${ZSH_VERSION:-}" ]]; then
+    _phue_docker_complete() {
+        local cur prev opts
+        COMPREPLY=()
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        prev="${COMP_WORDS[COMP_CWORD-1]}"
+        opts="up start down build restart shell exec logs watcher status clean"
+
+        # Sub-command options
+        if [[ "$prev" == "exec" ]]; then
+            # Could complete with docker commands, but keep simple
+            return 0
+        fi
+
+        if [[ "$prev" == "start" || "$prev" == "restart" ]]; then
+            local subopts="--detach --clear-cache --optimize -d -c -o"
+            COMPREPLY=( $(compgen -W "${subopts}" -- "${cur}") )
+            return 0
+        fi
+
+        if [[ "${cur}" == -* ]]; then
+            local flagopts="--detach --clear-cache --optimize --help -d -c -o -h"
+            COMPREPLY=( $(compgen -W "${flagopts}" -- "${cur}") )
+            return 0
+        fi
+
+        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+    }
+
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        compdef _phue_docker_complete phue-docker
+        compdef _phue_docker_complete ./phue-docker
+    else
+        complete -F _phue_docker_complete phue-docker
+        complete -F _phue_docker_complete ./phue-docker
+    fi
+fi

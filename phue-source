@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Phue Framework - Completion Setup Script
+# Usage: source ./phue-source
+# Adds tab completion for both ./phue and ./phue-docker
+
+set -euo pipefail
+
+PHUE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "Setting up Phue completions..."
+
+# Setup phue-docker completion
+if [[ -f "$PHUE_ROOT/phue-docker" ]]; then
+    # shellcheck source=/dev/null
+    source "$PHUE_ROOT/phue-docker"
+    echo "  ✓ phue-docker completion loaded"
+else
+    echo "  ✗ ./phue-docker not found"
+fi
+
+echo ""
+echo "Done! Tab completion is now active for:"
+echo "  ./phue <TAB>"
+echo "  ./phue-docker <TAB>"
+echo ""
+echo "To make this permanent, add to your ~/.bashrc:"
+echo "  source $PHUE_ROOT/phue-source"
