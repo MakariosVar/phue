@@ -64,5 +64,7 @@ return [
         // Rate limiting for routes via #[RateLimit] attribute. Uses Redis for distributed
         // rate limiting with sliding window or token bucket algorithms.
         \Phue\Modules\RateLimit\RateLimitModule::class,
+        // HTTP Response Signing - adds integrity/authenticity signatures to responses
+        \Phue\Modules\HttpSigning\HttpSigningModule::class,
     ],
 ];

@@ -20,14 +20,15 @@ $guides = [
     'debugging'       => ['label' => 'Debugging',       'file' => 'Debugging.md',       'badge' => 'core'],
     'server'          => ['label' => 'Server Adapters', 'file' => 'Server-Adapters.md', 'badge' => 'core'],
     'cli'             => ['label' => 'CLI',             'file' => 'CLI.md',             'badge' => 'core'],
+    'phui'            => ['label' => 'PhUI',            'file' => 'PhUI_Components.md', 'badge' => 'core'],
     'auth'            => ['label' => 'Auth & RBAC',     'file' => 'Auth-RBAC.md',       'badge' => 'module'],
     'rate-limiting'   => ['label' => 'Rate Limiting',   'file' => 'Rate-Limits.md',     'badge' => 'module'],
+    'http-signing'    => ['label' => 'HTTP Signing',    'file' => 'Http-Signing.md',    'badge' => 'module'],
     'schii'           => ['label' => 'Schii',           'file' => 'Schii.md',           'badge' => 'module'],
     'rest'            => ['label' => 'REST',            'file' => 'REST.md',            'badge' => 'module'],
     'websocket'       => ['label' => 'WebSocket',       'file' => 'WebSocket.md',       'badge' => 'module'],
     'queue'           => ['label' => 'Queue',           'file' => 'Queue.md',           'badge' => 'module'],
     'events'          => ['label' => 'Events',          'file' => 'Events.md',          'badge' => 'module'],
-    'phui'            => ['label' => 'PhUI Components', 'file' => 'PhUI_Components.md', 'badge' => 'frontend'],
 ];
 
 /** @var string|null $doc */

@@ -55,6 +55,9 @@
         <testsuite name="suite">
             <directory suffix="Test.php">tests/Suite</directory>
         </testsuite>
+        <testsuite name="httpsigning">
+            <directory suffix="Test.php">tests/Modules/HttpSigning</directory>
+        </testsuite>
     </testsuites>
 
     <source>
