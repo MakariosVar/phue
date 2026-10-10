@@ -111,13 +111,23 @@ final class SwooleServeCommand implements CommandInterface
         $app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
 
 
+        $websocketEnabled = (bool) $app->getConfig()->get('websocket.enabled', false);
+
         try {
-            $server = new SwooleServer($host, $port);
+            $server = $websocketEnabled
+                ? new SwooleServer($host, $port)
+                : new \Swoole\Http\Server($host, $port);
 
             $server->set([
                 'document_root' => $baseDir . '/public',
                 'enable_static_handler' => true
             ]);
+
+            // WebSocket server requires onMessage; provide no-op when disabled to satisfy Swoole
+            if (!$websocketEnabled) {
+                $server->on('message', static function (): void {
+                });
+            }
 
             // Realtime-capable modules attach here, and this command does not know which ones
             // exist: the Websocket module pushes a closure that hooks the server's open, message
