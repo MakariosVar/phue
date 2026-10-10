@@ -153,6 +153,39 @@ final class Translator implements ResettableInterface
     // ------------------------------------------------------------ translating
 
     /**
+     * Creates a snapshot of the translation catalog for the specified locale.
+     *
+     * The whole locale chain is flattened into one map, ordered so that a
+     * more specific spelling wins over the default locale. The client runtime
+     * therefore performs a single lookup with no chain logic of its own — the
+     * rules live here, on the side that already has them tested.
+     *
+     * @param string|null $locale Force a specific locale; null uses the active one.
+     */
+    public function snapshot(?string $locale = null): CatalogSnapshot
+    {
+        $targetLocale = $locale ?? $this->getLocale();
+        $chain = array_reverse($this->chain($targetLocale));
+        $merged = [];
+
+        foreach ($chain as $candidate) {
+            try {
+                $catalog = $this->catalog($candidate);
+                // Union operator (+): preserves existing keys from earlier
+                // (default) entries while letting later, more specific
+                // entries overwrite them.
+                $merged = $catalog + $merged;
+            } catch (\Throwable) {
+                // A broken catalogue must never become an outage: the
+                // remaining candidates still contribute, and anything
+                // missing falls back to the source message.
+            }
+        }
+
+        return new CatalogSnapshot($targetLocale, $merged);
+    }
+
+    /**
      * Translate a message, falling back to the message itself.
      *
      * @param string               $message Source-language text, used as the key.
@@ -214,14 +247,14 @@ final class Translator implements ResettableInterface
         return array_values(array_unique($chain));
     }
 
-/**
- * Locale names appear on disk as `el`, `el-GR`, `el_GR` or any case. All
- * four are plausible in a header, a query string, or a filename — and the
- * BASE language has to be among the candidates, or `el-GR` would never reach
- * the `el` catalog that exists to serve it.
- *
- * @return list<string>
- */
+    /**
+     * Locale names appear on disk as `el`, `el-GR`, `el_GR` or any case. All
+     * four are plausible in a header, a query string, or a filename — and the
+     * BASE language has to be among the candidates, or `el-GR` would never reach
+     * the `el` catalog that exists to serve it.
+     *
+     * @return list<string>
+     */
     private function spellings(string $locale): array
     {
         $locale = trim($locale);
