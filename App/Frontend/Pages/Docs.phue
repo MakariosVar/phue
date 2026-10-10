@@ -18,6 +18,8 @@ $guides = [
     'modules'         => ['label' => 'Modules',         'file' => 'Modules.md',         'badge' => 'core'],
     'database'        => ['label' => 'Database',        'file' => 'Database.md',        'badge' => 'core'],
     'debugging'       => ['label' => 'Debugging',       'file' => 'Debugging.md',       'badge' => 'core'],
+    'server'          => ['label' => 'Server Adapters', 'file' => 'Server-Adapters.md', 'badge' => 'core'],
+    'cli'             => ['label' => 'CLI',             'file' => 'CLI.md',             'badge' => 'core'],
     'auth'            => ['label' => 'Auth & RBAC',     'file' => 'Auth-RBAC.md',       'badge' => 'module'],
     'rate-limiting'   => ['label' => 'Rate Limiting',   'file' => 'Rate-Limits.md',     'badge' => 'module'],
     'schii'           => ['label' => 'Schii',           'file' => 'Schii.md',           'badge' => 'module'],
@@ -25,8 +27,6 @@ $guides = [
     'websocket'       => ['label' => 'WebSocket',       'file' => 'WebSocket.md',       'badge' => 'module'],
     'queue'           => ['label' => 'Queue',           'file' => 'Queue.md',           'badge' => 'module'],
     'events'          => ['label' => 'Events',          'file' => 'Events.md',          'badge' => 'module'],
-    'server'          => ['label' => 'Server Adapters', 'file' => 'Server-Adapters.md', 'badge' => 'runtime'],
-    'cli'             => ['label' => 'CLI',             'file' => 'CLI.md',             'badge' => 'tooling'],
     'phui'            => ['label' => 'PhUI Components', 'file' => 'PhUI_Components.md', 'badge' => 'frontend'],
 ];
 
@@ -226,22 +226,24 @@ return [
         label="Search the documentation"
         @select="onPaletteSelect"
     />
-    <doc-section
-        :id="docKey"
-        :title="docTitle"
-        :badge="docBadge"
-        description="Phue Framework documentation (v0.0.1)">
-        <ph-row>
-            <ph-col span="12" lg="2">
-                <div class="position-sticky" style="top: 5rem;">
-                    <doc-sidebar
+    <ph-row>
+        <ph-col span="12" lg="2">
+            <div class="position-sticky" style="top: 5rem;">
+                <doc-sidebar
                     :items="sidebarItems"
                     :active="docKey"
+                    title="Phue Docs"
+                    description="Documentation (v0.0.1)"
                     @open-search="paletteOpen = true"
                 />
-                </div>
-            </ph-col>
-            <ph-col span="12" lg="10">
+            </div>
+        </ph-col>
+        <ph-col span="12" lg="10">
+            <doc-section
+                :id="docKey"
+                :title="docTitle"
+                :badge="docBadge"
+            >
                 <ph-card>
                     <div class="doc-content" v-html="content"></div>
                 </ph-card>
@@ -250,9 +252,9 @@ return [
                     <span v-else></span>
                     <ph-link v-if="next" :href="next.href">{{ next.label }}</ph-link>
                 </div>
-            </ph-col>
-        </ph-row>
-    </doc-section>
+            </doc-section>
+        </ph-col>
+    </ph-row>
 </div>
 </template>
 
