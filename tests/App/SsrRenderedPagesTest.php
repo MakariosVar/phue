@@ -67,14 +67,17 @@ final class SsrRenderedPagesTest extends TestCase
 
     public function testHomeRendersControllerStateIntoMountContainer(): void
     {
-        $response = $this->app->handle(new Request('GET', '/'));
+        $response = $this->app->handle(new Request('GET', '/', queryParams: ['locale' => 'el']));
 
         $this->assertSame(200, $response->getStatusCode());
 
         $container = $this->mountContainer($response->getContent());
         $this->assertNotNull($container, 'Home page must render a mount container.');
 
-        $this->assertStringContainsString('HomePage', $container);
+        // Pinned to 'el': the English catalogue is intentionally empty, so under
+        // 'en' the value would be the untranslated source and this assertion
+        // would pass without proving the controller actually translated it.
+        $this->assertStringContainsString('Αρχική Σελίδα', $container);
         $this->assertStringNotContainsString('{{', $container);
     }
 
@@ -129,7 +132,7 @@ final class SsrRenderedPagesTest extends TestCase
     public function testHomeSpaNavigationReturnsInterpolatedMarkup(): void
     {
         $response = $this->app->handle(
-            new Request('GET', '/', [], [], ['X-Phue-SPA' => 'true'])
+            new Request('GET', '/', ['locale' => 'el'], [], ['X-Phue-SPA' => 'true'])
         );
 
         $this->assertSame(200, $response->getStatusCode());
@@ -138,9 +141,9 @@ final class SsrRenderedPagesTest extends TestCase
         $payload = json_decode($response->getContent(), true);
 
         $this->assertIsArray($payload);
-        $this->assertStringContainsString('HomePage', $payload['html']);
+        $this->assertStringContainsString('Αρχική Σελίδα', $payload['html']);
         $this->assertStringNotContainsString('{{', $payload['html']);
-        $this->assertSame('HomePage', $payload['state']['testValue']);
+        $this->assertSame('Αρχική Σελίδα', $payload['state']['testValue']);
     }
 
     public function testUiMountContainerLeaksNoRawTemplate(): void

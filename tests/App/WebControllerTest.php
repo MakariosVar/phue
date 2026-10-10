@@ -65,7 +65,7 @@ final class WebControllerTest extends TestCase
 
     public function testRootRouteEmbedsHomeState(): void
     {
-        $content = $this->app->handle(new Request('GET', '/'))->getContent();
+        $content = $this->app->handle(new Request('GET', '/', queryParams: ['locale' => 'en']))->getContent();
 
         $this->assertStringContainsString('window.__INITIAL_STATE__', $content);
 
@@ -74,7 +74,38 @@ final class WebControllerTest extends TestCase
 
         $decoded = json_decode($state[1], true);
         $this->assertIsArray($decoded);
-        $this->assertSame('HomePage', $decoded['testValue'] ?? null);
+        // Asserted against t() rather than a literal: the controller translates
+        // the key 'Home', so the rendered value is whatever the ACTIVE locale
+        // resolves it to. Hardcoding either the English or the Greek string
+        // pins the test to one catalogue.
+        $this->assertSame(\Phue\Core\t('Home'), $decoded['testValue'] ?? null);
+    }
+
+    public function testRootRouteEmbedsTheResolvedCatalogueSnapshot(): void
+    {
+        $content = $this->app->handle(new Request('GET', '/', queryParams: ['locale' => 'el']))->getContent();
+
+        preg_match('/window\.__PHUE_I18N__ = (\{.*?\});/s', $content, $i18n);
+        $this->assertArrayHasKey(1, $i18n, 'catalogue snapshot missing from the document');
+
+        $decoded = json_decode($i18n[1], true);
+        $this->assertIsArray($decoded);
+        $this->assertSame('el', $decoded['locale'] ?? null);
+        // Compared against the shipped catalogue rather than against t():
+        // the request scope is already flushed here, so the global helper has
+        // no active translator and would answer with the source string.
+        $this->assertSame(
+            'Αρχική Σελίδα',
+            $decoded['messages']['Home'] ?? null,
+            'the el catalogue entry for "Home" should be in the snapshot'
+        );
+    }
+
+    public function testHtmlLangCarriesTheResolvedLocale(): void
+    {
+        $content = $this->app->handle(new Request('GET', '/', queryParams: ['locale' => 'de']))->getContent();
+
+        $this->assertStringContainsString('<html lang="de">', $content);
     }
 
     public function testRootRouteServesHomeModuleScript(): void

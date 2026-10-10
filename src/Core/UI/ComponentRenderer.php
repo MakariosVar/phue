@@ -8,6 +8,7 @@ use App\Config\NavigationConfig;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
+use Phue\Core\I18n\Translator;
 use Phue\Core\Response;
 use Phue\Core\Ssr\SsrEngine;
 use Psr\Log\LoggerInterface;
@@ -178,11 +179,22 @@ class ComponentRenderer
             }
         }
 
+        // The catalogue snapshot for this request. It travels as a standalone
+        // payload (never inside `state`) so an application's <php> block can
+        // neither omit it nor shadow it. Translator::active() is the same
+        // handle the global t() helper uses, so SSR and client render from one
+        // locale by construction.
+        $translator = Translator::active();
+        $i18nPayload = $translator?->snapshot()->toPayload();
+
         $ssrFailed = false;
 
         if (!$view->hasHtml() && $this->ssrEngine !== null) {
             $state = $view->getState();
             $context = ['name' => $title, 'uri' => $uri];
+            if ($i18nPayload !== null) {
+                $context['i18n'] = $i18nPayload;
+            }
 
             if (!empty($deps)) {
                 $components = [];
@@ -295,7 +307,7 @@ class ComponentRenderer
         }
 
         $mountedPageContent = '<div id="app">' . $pageMarkup . '</div>';
-        $appContent = $this->applyLayoutIfConfigured($mountedPageContent);
+        $appContent = $this->applyLayoutIfConfigured($mountedPageContent, '', $i18nPayload);
 
         $storageKey = $this->themeConfig['storageKey'] ?? 'phue-theme';
         $defaultTheme = $this->themeConfig['defaultTheme'] ?? 'system';
@@ -370,6 +382,7 @@ JS,
             title: $title,
             appId: 'app',
             initialState: $view->getState(),
+            i18n: $i18nPayload,
             content: $appContent,
             inlineScript: $view->getInlineScript(),
             wrapInAppContainer: false,
@@ -385,7 +398,7 @@ JS,
     /**
      * Applies configured layout template around page markup.
      */
-    private function applyLayoutIfConfigured(string $pageMarkup, string $navHtml = ''): string
+    private function applyLayoutIfConfigured(string $pageMarkup, string $navHtml = '', ?array $i18nPayload = null): string
     {
         if ($this->layoutName === null) {
             return $pageMarkup;
@@ -464,7 +477,9 @@ JS,
                     $navHtml = $this->ssrEngine->render(
                         template: $navComponent->view->getTemplate(),
                         state: $navState,
-                        context: $context
+                        context: $i18nPayload !== null
+                            ? [...$context, 'i18n' => $i18nPayload]
+                            : $context
                     ) ?? '';
                 }
 

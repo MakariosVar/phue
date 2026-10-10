@@ -39,6 +39,7 @@ class HtmlShellRenderer
      * @param array $navState State object for PhNavigation injected into window.__NAV_STATE__.
      * @param string|null $metaDescription Meta description for the page.
      * @param array<int, string> $modulePreloads Array of module URLs to generate <link rel="modulepreload"> tags.
+     * @param array|null $i18n I18n snapshot payload to inject into window.__PHUE_I18N__ (`['locale' => string, 'messages' => array<string,string>]`).
      * @return string Complete HTML document markup.
      */
     public function render(
@@ -51,11 +52,16 @@ class HtmlShellRenderer
         ?string $headScript = null,
         array $navState = [],
         ?string $metaDescription = null,
-        array $modulePreloads = []
+        array $modulePreloads = [],
+        ?array $i18n = null
     ): string {
         $safeTitle = $this->escape($title);
         $safeAppId = $this->escape($appId);
         $safeMetaDescription = $this->escape($metaDescription ?? '');
+
+        // Extract and escape the active locale for the <html> tag (defaults to 'en')
+        $lang = $i18n['locale'] ?? 'en';
+        $safeLang = $this->escape($lang);
 
         $modulePreloadMarkup = implode(
             "\n    ",
@@ -132,6 +138,19 @@ class HtmlShellRenderer
             $stateMarkup = "<script>window.__INITIAL_STATE__ = {$jsonState};</script>\n    ";
         }
 
+        $i18nMarkup = "";
+        if ($i18n !== null) {
+            try {
+                $jsonI18n = json_encode(
+                    $i18n,
+                    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+                );
+            } catch (JsonException) {
+                $jsonI18n = "{}";
+            }
+            $i18nMarkup = "<script>window.__PHUE_I18N__ = {$jsonI18n};</script>\n    ";
+        }
+
         $navStateMarkup = "";
         if (!empty($navState)) {
             try {
@@ -156,7 +175,7 @@ class HtmlShellRenderer
 
         return <<<HTML
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="{$safeLang}">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -167,7 +186,7 @@ class HtmlShellRenderer
         </head>
         <body>
             {$bodyContent}
-            {$stateMarkup}{$navStateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
+            {$stateMarkup}{$i18nMarkup}{$navStateMarkup}{$scriptsMarkup}{$inlineScriptMarkup}</body>
         </html>
         HTML;
     }

@@ -147,6 +147,10 @@ class BunSsrEngine implements SsrEngine
             'data' => $state,
         ];
 
+        if (isset($context['i18n']) && is_array($context['i18n'])) {
+            $envelope['i18n'] = $context['i18n'];
+        }
+
         $pendingHashes = [];
 
         if (isset($context['components']) && is_array($context['components']) && $context['components'] !== []) {
