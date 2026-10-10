@@ -61,5 +61,8 @@ return [
         // configured it runs jobs inline, which is what development wants and what makes a
         // dropped job impossible to mistake for a working one.
         \Phue\Modules\Queue\QueueModule::class,
+        // Rate limiting for routes via #[RateLimit] attribute. Uses Redis for distributed
+        // rate limiting with sliding window or token bucket algorithms.
+        \Phue\Modules\RateLimit\RateLimitModule::class,
     ],
 ];
