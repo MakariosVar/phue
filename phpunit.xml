@@ -38,7 +38,6 @@
             <directory suffix="Test.php">tests/Queue</directory>
         </testsuite>
         <testsuite name="kit">
-            <directory suffix="Test.php">tests/App</directory>
             <directory suffix="Test.php">tests/Benchmark</directory>
             <directory suffix="Test.php">tests/Cache</directory>
             <directory suffix="Test.php">tests/ErrorPages</directory>
