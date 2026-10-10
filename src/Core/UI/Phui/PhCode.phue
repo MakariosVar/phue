@@ -54,7 +54,7 @@
     </div>
     <pre
       data-phui="code-pre"
-      class="m-0 p-3 overflow-auto rounded-bottom font-monospace small mb-0"
+      class="m-0 overflow-auto rounded-bottom font-monospace small mb-0"
       :class="[codeClasses, { 'line-numbers': lineNumbers }]"
       :style="preStyles"
     ><code
