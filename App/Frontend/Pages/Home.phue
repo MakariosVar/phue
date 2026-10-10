@@ -46,7 +46,7 @@ return [
                         PhUI
                     </ph-heading>
                     <template #footer>
-                        <ph-link variant="secondary" href="/ui">
+                        <ph-link variant="secondary" href="/phui">
                             View PhUI components
                         </ph-link>
                     </template>
