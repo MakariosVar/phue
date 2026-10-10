@@ -316,7 +316,9 @@ final class SchemaSyncEngine
                 $pdo->exec($sql);
             }
 
-            $pdo->commit();
+            if ($pdo->inTransaction()) {
+                $pdo->commit();
+            }
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
