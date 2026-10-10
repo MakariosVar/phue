@@ -12,6 +12,7 @@ use Phue\Modules\Auth\Jwt\Jwt;
 use Phue\Modules\Auth\Jwt\JwtConfig;
 use Phue\Core\Config;
 use Phue\Core\Security\Attributes\CsrfExempt;
+use Phue\Modules\RateLimit\Attribute\RateLimit;
 
 /**
  * AuthController handles authentication routes and session management.
@@ -106,6 +107,7 @@ class AuthController extends Controller
     }
 
     #[Route('/jwt', methods: ['POST'])]
+    #[RateLimit(requests: 10, window: 'minute')]
     #[CsrfExempt]
     public function jwt(Request $request): Response
     {

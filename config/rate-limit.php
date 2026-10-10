@@ -14,12 +14,14 @@ return [
      * Default policy applied when no attribute is present.
      * Set to null to disable global rate limiting.
      */
-    'default' => [
-        'requests' => env('RATE_LIMIT_DEFAULT_REQUESTS', 100),
-        'window'   => env('RATE_LIMIT_DEFAULT_WINDOW', 'minute'), // second, minute, hour, day
-        'algorithm' => env('RATE_LIMIT_DEFAULT_ALGORITHM', 'sliding_window'), // sliding_window, token_bucket
-        'key'      => 'ip', // ip, user, api_key, or callable
-    ],
+    'default' => null,
+    // Or set global default rate limiting
+    // 'default' => [
+    //     'requests' => env('RATE_LIMIT_DEFAULT_REQUESTS', 100),
+    //     'window'   => env('RATE_LIMIT_DEFAULT_WINDOW', 'minute'), // second, minute, hour, day
+    //     'algorithm' => env('RATE_LIMIT_DEFAULT_ALGORITHM', 'sliding_window'), // sliding_window, token_bucket
+    //     'key'      => 'ip', // ip, user, api_key, or callable
+    // ],
 
     /**
      * Named policies that can be referenced by #[RateLimit(policy: 'name')].

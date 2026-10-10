@@ -41,14 +41,14 @@ final class PolicyResolver
             return null;
         }
 
-        // 1. Start with global default
+        // 1. Start with global default (may be null)
         $policy = $this->getDefaultPolicy();
 
         // 2. Apply middleware group policy if applicable
         if ($groupName !== null) {
             $groupPolicy = $this->getGroupPolicy($groupName);
             if ($groupPolicy !== null) {
-                $policy = $policy->merge($groupPolicy);
+                $policy = $policy !== null ? $policy->merge($groupPolicy) : $groupPolicy;
             }
         }
 
@@ -57,7 +57,7 @@ final class PolicyResolver
         if ($controllerAttr !== null) {
             $controllerPolicy = $this->createPolicyFromAttribute($controllerAttr);
             if ($controllerPolicy !== null) {
-                $policy = $policy->merge($controllerPolicy);
+                $policy = $policy !== null ? $policy->merge($controllerPolicy) : $controllerPolicy;
             }
         }
 
@@ -66,7 +66,7 @@ final class PolicyResolver
         if ($methodAttr !== null) {
             $methodPolicy = $this->createPolicyFromAttribute($methodAttr);
             if ($methodPolicy !== null) {
-                $policy = $policy->merge($methodPolicy);
+                $policy = $policy !== null ? $policy->merge($methodPolicy) : $methodPolicy;
             }
         }
 
@@ -84,11 +84,11 @@ final class PolicyResolver
     /**
      * Get default policy from config.
      */
-    private function getDefaultPolicy(): RateLimitPolicy
+    private function getDefaultPolicy(): ?RateLimitPolicy
     {
-        $default = $this->config->get('rate-limit.default', []);
+        $default = $this->config->get('rate-limit.default');
         if ($default === null) {
-            return new RateLimitPolicy('default', 100, 'minute');
+            return null;
         }
         return RateLimitPolicy::fromArray('default', $default);
     }

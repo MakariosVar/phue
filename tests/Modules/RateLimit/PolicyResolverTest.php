@@ -36,10 +36,7 @@ class PolicyResolverTest extends TestCase
 
         $policy = $this->resolver->resolve($class, $method);
 
-        $this->assertNotNull($policy);
-        $this->assertEquals('default', $policy->name);
-        $this->assertEquals(100, $policy->requests);
-        $this->assertEquals('minute', $policy->window);
+        $this->assertNull($policy); // Default is now null (opt-in)
     }
 
     public function testControllerAttribute(): void
