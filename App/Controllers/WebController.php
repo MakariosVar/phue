@@ -20,9 +20,7 @@ class WebController extends Controller
     #[Route('/', methods: ['GET'])]
     public function index(): Response
     {
-        return $this->ui->render('Pages/Home', [
-            'testValue' => t('Home')
-        ]);
+        return $this->ui->render('Pages/Home');
     }
 
     #[Route('/docs', methods: ['GET'])]
