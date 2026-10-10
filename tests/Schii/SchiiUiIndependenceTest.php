@@ -74,7 +74,7 @@ PHP);
 return [
     'apiPrefix' => '{$schiiApiPrefix}',
     'entityNamespace' => '{$entityNamespace}',
-    'requireAuth' => true,
+    'requireAuth' => false,
 ];
 PHP);
     }

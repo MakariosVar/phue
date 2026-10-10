@@ -54,6 +54,19 @@ return [
     'requireAuth' => {$this->boolExpr($requireAuth)},
 ];
 PHP);
+
+        file_put_contents($this->tmpBase . '/config/database.php', <<<PHP
+<?php
+return [
+    'default' => 'sqlite',
+    'connections' => [
+        'sqlite' => [
+            'driver' => 'sqlite',
+            'database' => '/app/database/phue.sqlite',
+        ],
+    ],
+];
+PHP);
     }
 
     private function entityNamespace(): string

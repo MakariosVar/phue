@@ -134,6 +134,30 @@ class AuthorizedModelEndpoint
     }
 
     /**
+     * Handles schema metadata requests with RBAC read permission check.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters containing target entity.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function schema(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'read', fn() => $this->delegate->schema($request, $params));
+    }
+
+    /**
+     * Handles schema list requests with RBAC read permission check.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function listSchemas(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'read', fn() => $this->delegate->listSchemas($request, $params));
+    }
+
+    /**
      * Evaluates 401/403 authorization logic before invoking target delegate callback.
      *
      * @param Request $request Framework Request instance.
