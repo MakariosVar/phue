@@ -8,6 +8,10 @@ use App\Models\User;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Routing\Attribute\Route;
+use Phue\Modules\Auth\Jwt\Jwt;
+use Phue\Modules\Auth\Jwt\JwtConfig;
+use Phue\Core\Config;
+use Phue\Core\Security\Attributes\CsrfExempt;
 
 /**
  * AuthController handles authentication routes and session management.
@@ -99,5 +103,42 @@ class AuthController extends Controller
         }
 
         return new Response('', 302, ['Location' => '/login']);
+    }
+
+    #[Route('/jwt', methods: ['POST'])]
+    #[CsrfExempt]
+    public function jwt(Request $request): Response
+    {
+        $data = $request->getParsedBody();
+        $username = $data['username'] ?? '';
+        $password = $data['password'] ?? '';
+
+        // Find and validate user
+        $user = User::findByUsername($username);
+        if (!$user || !$user->validatePassword($password)) {
+            return Response::json(['error' => 'Invalid username or password.'], 401);
+        }
+
+        // Get JWT config from app config
+        /** @var Config $appConfig */
+        $appConfig = $this->container->get(Config::class);
+        $jwtConfig = $appConfig->get('auth.jwt', []);
+
+        if (empty($jwtConfig['secret'])) {
+            return Response::json(['error' => 'JWT not configured.'], 500);
+        }
+
+        // Generate JWT token
+        $config = new JwtConfig($jwtConfig['secret'], $jwtConfig);
+        $token = Jwt::encode([
+            'sub' => $user->getAuthKey() ?? (string) $user->getId(),
+            'name' => $user->username,
+            'roles' => $user->getRoles(),
+        ], $config);
+
+        return Response::json([
+            'token' => $token,
+            'expires_in' => $jwtConfig['ttl'] ?? 3600,
+        ]);
     }
 }

@@ -9,6 +9,7 @@ return [
         'secret' => env('JWT_SECRET', 'test-secret-key-for-testing'),
         'ttl' => env('JWT_TTL', 3600),
         'algorithm' => 'HS256',
-        'audience' => 'test-audience'
+        'issuer' => 'app-name', // Optional
+        'audience' => 'test-audience' // Optional
     ]
 ];

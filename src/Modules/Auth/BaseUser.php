@@ -40,6 +40,19 @@ abstract class BaseUser extends BaseActiveRecord implements IdentityInterface
     }
 
     /**
+     * Finds an identity by username.
+     *
+     * @param string $username The username to search for.
+     * @return static|null The identity instance if found, or null otherwise.
+     */
+    public static function findByUsername(string $username): ?static
+    {
+        return static::query()
+            ->where('username', '=', $username)
+            ->first();
+    }
+
+    /**
      * Retrieves primary key value.
      *
      * @return int|string
