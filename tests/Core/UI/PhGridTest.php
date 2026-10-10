@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\UI;
 
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Core\Stubs\PhueComponentRuntime;
 use Phue\Tests\Core\Stubs\AssertsPhueJsModuleContract;
 use PHPUnit\Framework\TestCase;
 use Phue\Tests\Support\TestComponentLoader;
@@ -53,7 +54,9 @@ final class PhGridTest extends TestCase
         $module = $this->loader->moduleFor($name, $hash);
         $this->assertIsString($module, "moduleFor must serve {$name} for its own hash");
 
-        return $module;
+        // The Bun harness resolves no packages, so the runtime imports and the
+        // app-factory proxies that call them come off.
+        return PhueComponentRuntime::stripRuntimeImport($module, keepVue: true);
     }
 
     // ── Module contract ────────────────────────────────────────────────

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\UI;
 
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Core\Stubs\PhueComponentRuntime;
 use Phue\Core\UI\PhueTemplateParser;
 use PHPUnit\Framework\TestCase;
 use Phue\Tests\Support\TestComponentLoader;
@@ -174,7 +175,10 @@ final class PhNavigationRemountE2ETest extends TestCase
 
         $parser = new PhueTemplateParser();
         $structure = $parser->parseStructure($file);
-        $module = TestComponentLoader::moduleFor($structure['template'], $structure['script']);
+        $module = PhueComponentRuntime::stripRuntimeImport(
+            TestComponentLoader::moduleFor($structure['template'], $structure['script']),
+            keepVue: true,
+        );
 
         $module = preg_replace_callback(
             '~/assets/phue/([A-Za-z0-9_]+)\.[a-f0-9]{8}\.phue\.js~',

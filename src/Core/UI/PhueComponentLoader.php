@@ -763,10 +763,11 @@ class PhueComponentLoader
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
         $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+        $hasFactory = preg_match('/\bcreatePhueApp\b/', $scriptContent) === 1;
 
         $proxyBlock = '';
 
-        if ($hasSsrApp || $hasApp) {
+        if ($hasSsrApp || $hasApp || $hasFactory) {
             $scriptContent = preg_replace_callback(
                 '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
                 function ($matches) {
@@ -782,16 +783,19 @@ class PhueComponentLoader
                 1
             );
 
-            $componentsProp = !empty($componentsObj) 
-                ? ", components: { ...(opts.components || {}), {$componentsObj} }" 
+            $componentsProp = !empty($componentsObj)
+                ? ", components: { ...(opts.components || {}), {$componentsObj} }"
                 : '';
 
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = "const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createSSRApp = (opts, rootProps) => { const __app = __phueOrigCreateSSRApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps); if (typeof installI18n === 'function') if (typeof installI18n === 'function') installI18n(__app); return __app; };";
             }
             if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps);";
+                $proxies[] = "const createApp = (opts, rootProps) => { const __app = __phueOrigCreateApp({ render: __phueRender, ...opts{$componentsProp} }, rootProps); if (typeof installI18n === 'function') if (typeof installI18n === 'function') installI18n(__app); return __app; };";
+            }
+            if ($hasFactory) {
+                $proxies[] = "const createPhueApp = (opts, config) => __phueOrigCreatePhueApp({ render: __phueRender, ...opts{$componentsProp} }, config);";
             }
 
             $proxyBlock = implode("\n", $proxies) . "\n";
@@ -807,6 +811,7 @@ class PhueComponentLoader
         // Append $prelude at the very end
         $code = "{$importStatements}{$renderFnCode}\n"
              . "export const __phueRender = render;\n"
+             . $this->runtimeImport()
              . "{$proxyBlock}{$scriptContent}{$prelude}";
 
         $hash = substr(sha1($code), 0, 8);
@@ -920,11 +925,18 @@ class PhueComponentLoader
                 if (str_contains($scriptContent, '__phueOrigCreateApp')) {
                     $proxies[] = "const createApp = (opts, rootProps) => __phueOrigCreateApp({ ssrRender: __phueSsrRender, ...opts }, rootProps);";
                 }
+                // No createPhueApp proxy: it is not imported by the SSR build, and it mounts
+                // into a DOM that does not exist on the server.
 
                 $proxyBlock = implode("\n", $proxies) . "\n";
             }
 
             // B4. Append $prelude at the very end
+            //
+            // No runtime import here: createPhueApp mounts into a DOM, so SSR
+            // never needs it — and it would drag a bare `vue` import into a
+            // build whose module resolves vue from the sidecar's own
+            // node_modules. The sidecar installs translations itself.
             $code = "{$ssrRenderFnCode}\n"
                   . "export const __phueSsrRender = ssrRender;\n"
                   . "{$proxyBlock}{$scriptContent}{$prelude}";
@@ -981,10 +993,11 @@ class PhueComponentLoader
 
         $hasSsrApp = preg_match('/\bcreateSSRApp\b/', $scriptContent) === 1;
         $hasApp    = preg_match('/\bcreateApp\b/', $scriptContent) === 1;
+        $hasFactory = preg_match('/\bcreatePhueApp\b/', $scriptContent) === 1;
 
         $proxyBlock = '';
 
-        if ($hasSsrApp || $hasApp) {
+        if ($hasSsrApp || $hasApp || $hasFactory) {
             $scriptContent = preg_replace_callback(
                 '/import\s+\{([^}]+)\}\s+from\s+([\'"].*?[\'"])/s',
                 function ($matches) {
@@ -1002,10 +1015,18 @@ class PhueComponentLoader
 
             $proxies = [];
             if (str_contains($scriptContent, '__phueOrigCreateSSRApp')) {
-                $proxies[] = 'const createSSRApp = (opts, rootProps) => __phueOrigCreateSSRApp({ render: __phueRender, ...opts }, rootProps);';
+                $proxies[] = "const createSSRApp = (opts, rootProps) => { const __app = __phueOrigCreateSSRApp({ render: __phueRender, ...opts }, rootProps); if (typeof installI18n === 'function') installI18n(__app); return __app; };";
             }
             if (str_contains($scriptContent, '__phueOrigCreateApp')) {
-                $proxies[] = 'const createApp = (opts, rootProps) => __phueOrigCreateApp({ render: __phueRender, ...opts }, rootProps);';
+                $proxies[] = "const createApp = (opts, rootProps) => { const __app = __phueOrigCreateApp({ render: __phueRender, ...opts }, rootProps); if (typeof installI18n === 'function') installI18n(__app); return __app; };";
+            }
+            // createPhueApp() is a framework factory rather than a Vue import:
+            // it resolves to its own module through the `phue` import-map entry
+            // and needs the SAME render injection as the raw Vue factories,
+            // otherwise the compiled template is dropped from the app. It
+            // installs i18n itself, so no wrapper here.
+            if ($hasFactory) {
+                $proxies[] = 'const createPhueApp = (opts, config) => __phueOrigCreatePhueApp({ render: __phueRender, ...opts }, config);';
             }
 
             $proxyBlock = implode("\n", $proxies) . "\n";
@@ -1013,6 +1034,7 @@ class PhueComponentLoader
 
         return "{$renderFnCode}\n"
              . "export const __phueRender = render;\n"
+             . $this->runtimeImport()
              . "{$proxyBlock}{$scriptContent}{$prelude}";
     }
 
@@ -1584,6 +1606,30 @@ class PhueComponentLoader
         }
 
         return $identities;
+    }
+
+    /**
+     * The import statement injected into every built module.
+     *
+     * This is what makes `createPhueApp`, `t` and `installI18n` available in a
+     * component without the component writing an import. It resolves through
+     * the `phue` import-map entry (see ImportMapManager), so it is one shared,
+     * cached module rather than a copy inlined per component.
+     *
+     * `installI18n` is what makes `t()` work in a template of a component that
+     * still calls the raw `createApp()`/`createSSRApp()`: the proxies below
+     * install it on every app they build, so a component only has to migrate to
+     * `createPhueApp()` when it wants the rest of the factory's behaviour.
+     *
+     * `createPhueApp` is imported under an alias because the build also emits
+     * a module-scope `const createPhueApp` proxy that injects the compiled
+     * render function; the alias leaves the original name free for that proxy.
+     *
+     * @return string
+     */
+    private function runtimeImport(): string
+    {
+        return "import { createPhueApp as __phueOrigCreatePhueApp, installI18n, t } from 'phue';\n";
     }
 
     private function composablePrelude(string $scriptContent): ?string

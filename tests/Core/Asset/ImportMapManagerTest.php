@@ -135,13 +135,15 @@ final class ImportMapManagerTest extends TestCase
         return new ImportMapManager($this->dir, $debug, self::urlRoot());
     }
 
-    public function testAbsentManifestFallsBackToOnlyVue(): void
+    public function testAbsentManifestFallsBackToTheCoreSpecifiers(): void
     {
         $manager = new ImportMapManager($this->dir, vendorRoot: self::urlRoot());
 
         $imports = $manager->getImportMap()['imports'];
 
-        $this->assertSame(['vue'], array_keys($imports), 'Vue is the only default import.');
+        // `vue` and `phue` are framework-reserved; every built .phue module
+        // imports `phue`, so an entry missing there breaks the whole app.
+        $this->assertSame(['vue', 'phue'], array_keys($imports));
         $this->assertAssetResolves($imports['vue']);
     }
 

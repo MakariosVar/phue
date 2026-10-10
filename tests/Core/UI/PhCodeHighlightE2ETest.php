@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Tests\Core\UI;
 
 use Phue\Core\UI\PhueComponentLoader;
+use Phue\Tests\Core\Stubs\PhueComponentRuntime;
 use Phue\Core\UI\PhueTemplateParser;
 use PHPUnit\Framework\TestCase;
 use Phue\Tests\Support\TestComponentLoader;
@@ -71,7 +72,10 @@ final class PhCodeHighlightE2ETest extends TestCase
             $structure = $parser->parseStructure($file);
             file_put_contents(
                 $this->workDir . '/' . $name . '.mjs',
-                TestComponentLoader::moduleFor($structure['template'], $structure['script']),
+                PhueComponentRuntime::stripRuntimeImport(
+                    TestComponentLoader::moduleFor($structure['template'], $structure['script']),
+                    keepVue: true,
+                ),
             );
         }
 

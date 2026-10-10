@@ -475,6 +475,14 @@ class Application
                 $registry->registerSource('/assets/js', $jsPath);
             }
 
+            // The framework runtime served at /assets/runtime/. This is the
+            // target of the `phue` import-map entry, which every built .phue
+            // module imports: createPhueApp, t and the i18n runtime.
+            $runtimePath = __DIR__ . '/UI/runtime';
+            if (is_dir($runtimePath)) {
+                $registry->registerSource('/assets/runtime', $runtimePath);
+            }
+
             // Register global default assets directly onto AssetRegistry
             $registry->addStyle('/assets/vendor/bootstrap/bootstrap.min.css');
             $registry->addStyle('/assets/vendor/bootstrap-icons/bootstrap-icons.min.css');

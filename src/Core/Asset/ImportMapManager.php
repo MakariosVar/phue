@@ -49,6 +49,11 @@ class ImportMapManager
             $imports['vue'] = $vueUrl;
         }
 
+        // The framework runtime. Reserved the same way as 'vue': a package
+        // manifest must never be able to redefine what `createPhueApp` and
+        // `t` resolve to, because every built .phue module imports from here.
+        $imports['phue'] = $this->resolveRuntimeUrl();
+
         if (!file_exists($this->manifestPath)) {
             return ['imports' => $imports];
         }
@@ -68,8 +73,9 @@ class ImportMapManager
         if (is_array($packages)) {
             foreach ($packages as $pkgName => $pkgData) {
                 $name = is_string($pkgName) ? $pkgName : ($pkgData['name'] ?? null);
-                if (!$name || $name === 'vue') {
-                    // Explicitly guard against manifest overwriting core 'vue' mapping
+                if (!$name || $name === 'vue' || $name === 'phue') {
+                    // Explicitly guard against manifest overwriting the core
+                    // 'vue' and 'phue' mappings
                     continue;
                 }
 
@@ -126,6 +132,19 @@ class ImportMapManager
         }
 
         return $this->resolvedVueUrl;
+    }
+
+    /**
+     * The URL the bare `phue` specifier resolves to.
+     *
+     * The runtime module imports `./i18n.js` as a sibling, so the URL must
+     * point at a directory whose relative imports are servable — which is why
+     * it is published under /assets/runtime/ alongside its dependency rather
+     * than being inlined into a page.
+     */
+    private function resolveRuntimeUrl(): string
+    {
+        return '/assets/runtime/createPhueApp.js';
     }
 
     /**

@@ -53,20 +53,40 @@ final class PhueComponentRuntime
     }
 
     /**
-     * Remove the framework's runtime import from a compiled module.
+ * Remove the framework's runtime imports from a compiled module.
      *
-     * Only the leading `import { ... } from "vue";` statement is removed, and
-     * only its bindings — the render function is left intact but never called.
-     * The result is a module with no dependencies at all.
+     * A built module imports two bare specifiers: `vue` and `phue` (the runtime
+     * entry carrying createPhueApp, installI18n and t).
+     *
+     * @param bool $keepVue Leave the `vue` import AND the loader's app-factory
+     *                      proxies in place, for harnesses that symlink a real
+     *                      node_modules and actually mount the app. Those
+     *                      proxies carry the compiled render function, so
+     *                      stripping them would blank the render.
+     *                      When false the module must end up with no
+     *                      dependencies at all, and the proxies have to go
+     *                      because they call bindings that no longer exist.
+     *
+     * @return string
      */
-    public static function stripRuntimeImport(string $module): string
+    public static function stripRuntimeImport(string $module, bool $keepVue = false): string
     {
+        $bareSpecifiers = $keepVue ? 'phue' : '(?:vue|phue)';
+
         $stripped = preg_replace(
-            '/^\s*import\s*\{[^}]*\}\s*from\s*["\']vue["\']\s*;?/m',
+            "/^\s*import\s*\{[^}]*\}\s*from\s*[\"'](?:{$bareSpecifiers})[\"']\s*;?/m",
             '',
-            $module,
-            1,
-            $count
+            $module
+        );
+
+        if ($keepVue || !is_string($stripped)) {
+            return is_string($stripped) ? $stripped : $module;
+        }
+
+        $stripped = preg_replace(
+            '/^\s*const\s+(?:createApp|createSSRApp|createPhueApp)\s*=.*$/m',
+            '',
+            $stripped
         );
 
         return is_string($stripped) ? $stripped : $module;
