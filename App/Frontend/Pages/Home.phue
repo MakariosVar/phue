@@ -15,16 +15,13 @@ return [
 </template>
 
 <script>
-import { createSSRApp, ref } from 'vue';
+import { ref } from 'vue';
 export default function mountApp() {
-    window.__phueApp?.unmount?.();
-
-    window.__phueApp = createSSRApp({
+    window.__phueApp = createPhueApp({
         setup() {
             const testValue = ref(window.__INITIAL_STATE__.testValue);
             return { testValue };
         }
     });
-    window.__phueApp.mount('#app');
 }
 </script>

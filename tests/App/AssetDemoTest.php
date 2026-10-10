@@ -75,8 +75,8 @@ final class AssetDemoTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('createSSRApp', $response->getContent());
-        $this->assertStringContainsString(".mount('#app')", $response->getContent());
+        $this->assertStringContainsString('createPhueApp', $response->getContent());
+        $this->assertStringNotContainsString(".mount('#app')", $response->getContent());
     }
 
     public function testUnknownModuleScriptUrlReturnsNonHtml404(): void

@@ -187,16 +187,50 @@ $bindings = array_values(array_unique(array_diff($roots, $locals)));
         }
     }
 
-    #[DataProvider('demoPages')]
-    public function testPageHydratesInsteadOfMounting(string $file, array $params): void
+#[DataProvider('demoPages')]
+    public function testPageDelegatesTheHydrateDecisionToTheFactory(string $file, array $params): void
     {
         $parser = new PhueTemplateParser();
         $script = (string) $parser->parseStructure($file)['script'];
 
-        $this->assertStringContainsString('createSSRApp', $script, sprintf('%s must use the SSR-capable app factory.', basename($file)));
-        $this->assertStringContainsString('createSSRApp({', $script, sprintf('%s must instantiate the app with createSSRApp.', basename($file)));
-        $this->assertStringContainsString(".mount('#app')", $script, sprintf('%s must mount the SSR app — createSSRApp().mount() hydrates the server DOM.', basename($file)));
-        $this->assertStringNotContainsString('createApp(', $script, sprintf('%s must not create a fresh CSR app (Phase 4).', basename($file)));
-        $this->assertStringNotContainsString(".hydrate('#app')", $script, sprintf('%s: app.hydrate() is not a Vue 3 API — hydration happens inside mount().', basename($file)));
+        $name = basename($file);
+
+        // The page must go through the factory: it picks createSSRApp or
+        // createApp from what the container holds, so a page cannot get the
+        // hydrate/render choice wrong. That is the whole point of the switch —
+        // the old contract made every page repeat createSSRApp + .mount('#app')
+        // and relied on a string-matching test to catch the ones that didn't.
+        $this->assertStringContainsString(
+            'createPhueApp',
+            $script,
+            sprintf('%s must build its app with the Phue factory.', $name),
+        );
+
+        // And must not reach for the raw Vue factories: doing so would opt out
+        // of the decision above and re-introduce the bug this factory removed.
+        $this->assertStringNotContainsString(
+            'createSSRApp(',
+            $script,
+            sprintf('%s must not call createSSRApp directly — the factory decides.', $name),
+        );
+        $this->assertStringNotContainsString(
+            'createApp(',
+            $script,
+            sprintf('%s must not call createApp directly — the factory decides.', $name),
+        );
+
+        // Mounting is the factory's job; a page-level .mount() means the app
+        // is mounted twice.
+        $this->assertStringNotContainsString(
+            ".mount('#app')",
+            $script,
+            sprintf('%s must not mount itself — createPhueApp already mounts.', $name),
+        );
+
+        $this->assertStringNotContainsString(
+            ".hydrate('#app')",
+            $script,
+            sprintf('%s: app.hydrate() is not a Vue 3 API.', $name),
+        );
     }
 }

@@ -118,8 +118,10 @@ final class WebControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $response->getHeader('content-type'));
-        $this->assertStringContainsString('createSSRApp', $response->getContent());
-        $this->assertStringContainsString(".mount('#app')", $response->getContent());
+        // createPhueApp mounts internally, so the page script carries neither
+        // the raw Vue factory nor its own .mount() call.
+        $this->assertStringContainsString('createPhueApp', $response->getContent());
+        $this->assertStringNotContainsString(".mount('#app')", $response->getContent());
     }
 
     public function testRootRouteTitleContainsPhue(): void

@@ -181,9 +181,9 @@ PHP);
         $module = $app->handle(new Request('GET', $m[0]));
         $this->assertSame(200, $module->getStatusCode());
         $this->assertSame('text/javascript; charset=utf-8', $module->getHeader('Content-Type'));
-        $this->assertStringContainsString('createApp', $module->getContent());
+        $this->assertStringContainsString('createPhueApp', $module->getContent());
         $this->assertStringContainsString("/schema", $module->getContent());
-        $this->assertStringContainsString(".mount('#app')", $module->getContent());
+        $this->assertStringNotContainsString(".mount('#app')", $module->getContent());
     }
 
     public function testSchiiStateCarriesConfiguredApiPrefix(): void

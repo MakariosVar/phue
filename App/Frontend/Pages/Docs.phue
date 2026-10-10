@@ -224,7 +224,6 @@ return [
         label="Search the documentation"
         @select="onPaletteSelect"
     />
-
     <doc-section
         :id="docKey"
         :title="docTitle"
@@ -256,16 +255,15 @@ return [
 </template>
 
 <script>
-import { createSSRApp, ref } from 'vue';
+import { ref } from 'vue';
 
 export default function mountApp() {
-    window.__phueApp?.unmount?.();
 
     if ('scrollRestoration' in window.history) {
         window.history.scrollRestoration = 'manual';
     }
 
-    window.__phueApp = createSSRApp({
+    window.__phueApp = createPhueApp({
         setup() {
             const sidebarItems = ref(window.__INITIAL_STATE__?.sidebarItems ?? []);
             const docKey = ref(window.__INITIAL_STATE__?.docKey ?? 'getting-started');
@@ -309,8 +307,6 @@ export default function mountApp() {
             };
         }
     });
-
-    window.__phueApp.mount('#app');
 
     // Sticky topbar height (matches the sidebar's sticky `top: 5rem`).
     const headerOffset = 80;

@@ -785,7 +785,7 @@ return [
 </template>
 
 <script>
-import { createSSRApp, reactive, toRefs, computed, watch, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
+import { reactive, toRefs, computed, watch, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 
 const SHELL_FALLBACK_HEIGHT = 'calc(100dvh - 4.75rem)';
 
@@ -817,10 +817,6 @@ const SIDEBAR_WIDTH = '260px';
 const SIDEBAR_DRAWER_WIDTH = 'min(300px, 85vw)';
 
 export default function mountApp(injectedContext = null) {
-    if (typeof window !== 'undefined' && window.__phueApp?.unmount) {
-        window.__phueApp.unmount();
-    }
-
     // Safely retrieve state across all possible PHP/V8Js and Browser environments
     const getInitialState = () => {
         if (injectedContext) return injectedContext;
@@ -830,7 +826,7 @@ export default function mountApp(injectedContext = null) {
         return {};
     };
 
-    const app = createSSRApp({
+    const app = createPhueApp({
         name: 'PhUI',
         setup() {
             const initState = getInitialState();
@@ -1404,13 +1400,6 @@ export default function mountApp(injectedContext = null) {
             };
         }
     });
-
-    // Ensure we only attach to window and mount if we are in the browser
-    if (typeof window !== 'undefined') {
-        window.__phueApp = app;
-        window.__phueApp.mount('#app');
-    }
-
     return app;
 };
 </script>
