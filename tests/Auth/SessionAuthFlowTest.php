@@ -41,7 +41,8 @@ final class SessionAuthFlowTest extends TestCase
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             auth_key TEXT,
-            roles TEXT
+            roles TEXT,
+            deleted_at DATETIME NULL
         )');
 
         $admin = new User();

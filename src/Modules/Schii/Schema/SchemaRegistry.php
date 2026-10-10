@@ -7,6 +7,7 @@ namespace Phue\Modules\Schii\Schema;
 use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Attributes\Field;
+use Phue\Core\Database\Attributes\SoftDelete;
 use Phue\Core\Validation\RuleEngine;
 use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
@@ -348,6 +349,40 @@ final class SchemaRegistry
                 indexed: $declaresPersistence && $field->indexed,
                 length: 0
             );
+        }
+
+        /**
+         * Add soft delete column to schema if model has #[SoftDelete] attribute.
+         *
+         * This ensures the auto-migrator creates the column and the admin UI can manage it.
+         */
+        $softDeleteAttrs = $reflection->getAttributes(SoftDelete::class);
+        if (!empty($softDeleteAttrs)) {
+            /** @var SoftDelete $softDelete */
+            $softDelete = $softDeleteAttrs[0]->newInstance();
+            $columnName = $softDelete->column;
+
+            // Only add if not already defined as a property
+            if (!isset($fields[$columnName])) {
+                $fields[$columnName] = new FieldSchema(
+                    name: $columnName,
+                    type: 'datetime',
+                    label: $this->humanize($columnName),
+                    widget: 'datetime',
+                    column: true,
+                    required: false,
+                    searchable: false,
+                    filterable: true,
+                    sortable: true,
+                    options: [],
+                    rules: [],
+                    writable: false,
+                    readonly: true,
+                    primaryKey: false,
+                    indexed: false,
+                    length: 0
+                );
+            }
         }
 
         return new ModelSchema(

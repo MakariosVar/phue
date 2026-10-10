@@ -102,7 +102,7 @@ final class AuthorisationGrantWritePathTest extends TestCase
 
         $this->db->execute(
             'CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, '
-            . "password_hash TEXT, auth_key TEXT, roles TEXT DEFAULT '[]')"
+            . "password_hash TEXT, auth_key TEXT, roles TEXT DEFAULT '[]', deleted_at DATETIME NULL)"
         );
     }
 
