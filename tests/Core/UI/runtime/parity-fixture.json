@@ -1,0 +1,121 @@
+[
+    {
+        "locale": "el",
+        "message": "Hello {name}",
+        "params": {
+            "name": "Nikos"
+        },
+        "expected": "Γεια Nikos"
+    },
+    {
+        "locale": "el",
+        "message": "Save",
+        "params": [],
+        "expected": "Αποθήκευση"
+    },
+    {
+        "locale": "el",
+        "message": "Only de",
+        "params": [],
+        "expected": "Only de"
+    },
+    {
+        "locale": "el",
+        "message": "Unknown key",
+        "params": [],
+        "expected": "Unknown key"
+    },
+    {
+        "locale": "de",
+        "message": "Save",
+        "params": [],
+        "expected": "Speichern"
+    },
+    {
+        "locale": "de",
+        "message": "Hello {name}",
+        "params": {
+            "name": "Niko"
+        },
+        "expected": "Hello Niko"
+    },
+    {
+        "locale": "de",
+        "message": "Only de",
+        "params": [],
+        "expected": "Nur de"
+    },
+    {
+        "locale": "el",
+        "message": "{n} items",
+        "params": {
+            "n": 5
+        },
+        "expected": "5 στοιχεία"
+    },
+    {
+        "locale": "el",
+        "message": "Weird",
+        "params": {
+            "x": "v"
+        },
+        "expected": "$& v %s"
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": null
+        },
+        "expected": "τύπος "
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": true
+        },
+        "expected": "τύπος 1"
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": false
+        },
+        "expected": "τύπος "
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": [
+                1,
+                2
+            ]
+        },
+        "expected": "τύπος {v}"
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": 1.5
+        },
+        "expected": "τύπος 1.5"
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": [],
+        "expected": "τύπος {v}"
+    },
+    {
+        "locale": "el",
+        "message": "Nulled",
+        "params": {
+            "v": []
+        },
+        "expected": "τύπος {v}"
+    }
+]

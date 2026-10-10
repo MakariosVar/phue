@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync, existsSync, renameSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import vuePkg from "vue/package.json" with { type: "json" };
+import { installI18n } from "../src/Core/UI/runtime/i18n.js";
 
 interface ComponentEntry {
     h: string;
@@ -25,6 +26,11 @@ interface CompilePayload {
 
 const SOCKET_PATH = process.env.PHUE_SSR_SOCKET || "/tmp/phue-ssr.sock";
 const CACHE_DIR = join(import.meta.dir, ".cache");
+
+// Where the `phue` import-map specifier actually lives on disk. Resolved from
+// this file so a deployed app finds the runtime wherever the installer put
+// src/Core, rather than at a path hardcoded here.
+const RUNTIME_MODULE_PATH = join(import.meta.dir, "..", "src", "Core", "UI", "runtime", "createPhueApp.js");
 
 // In-memory cache: hash -> module namespace object
 const moduleCache = new Map<string, any>();
@@ -94,9 +100,16 @@ async function resolveModule(entry: ComponentEntry | string, missingHashes?: Set
 
     // 2. Transmit/Write source if present
     if (source) {
+        // Safety net: the SSR build no longer imports `phue`, but if one ever
+        // does, Bun has no import map. Rewritten after the hash is taken, so
+        // the PHP-side cache still matches.
+        const resolvable = source.replace(
+            /(['"])phue\1/g,
+            JSON.stringify(RUNTIME_MODULE_PATH)
+        );
         if (!existsSync(filePath)) {
             const tempPath = join(CACHE_DIR, `.${hash}.mjs.tmp`);
-            writeFileSync(tempPath, source, "utf-8");
+            writeFileSync(tempPath, resolvable, "utf-8");
             renameSync(tempPath, filePath);
         }
     } else if (!existsSync(filePath)) {
@@ -205,6 +218,13 @@ Bun.serve({
                             template: payload.template,
                             data: () => payload.data || {},
                         });
+                    }
+
+                    // Bound AFTER construction: the snapshot is closed over the
+                    // app instance rather than parked on globalThis, so a
+                    // concurrent render cannot read another request's locale.
+                    if (payload.i18n) {
+                        installI18n(app, payload.i18n);
                     }
 
                     if (payload.components && typeof payload.components === "object") {
