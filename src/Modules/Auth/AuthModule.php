@@ -13,6 +13,8 @@ use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\Persistence\LoginStoreInterface;
 use Phue\Modules\Auth\Persistence\SessionLoginStore;
+use Phue\Modules\Auth\Jwt\JwtAuthenticator;
+use Phue\Modules\Auth\Jwt\JwtConfig;
 
 /**
  * Class AuthModule
@@ -100,7 +102,28 @@ class AuthModule extends Module
                     loginStore: $c->get(LoginStoreInterface::class)
                 );
 
-                return new AuthManager([$sessionAuth, $bearerAuth]);
+                $authenticators = [$sessionAuth, $bearerAuth];
+
+                // Add JWT authenticator if configured
+                if (!empty($authConfig['jwt'])) {
+                    $jwtConfig = $authConfig['jwt'];
+                    $jwtSecret = $jwtConfig['secret'] ?? '';
+                    $jwtConfigObj = new JwtConfig($jwtSecret, $jwtConfig);
+
+                    $jwtAuthenticator = new JwtAuthenticator(
+                        identityResolver: static function (string $identifier) use ($resolver): mixed {
+                            if (is_callable($resolver)) {
+                                return $resolver($identifier);
+                            }
+                            return null;
+                        },
+                        config: $jwtConfigObj
+                    );
+
+                    $authenticators[] = $jwtAuthenticator;
+                }
+
+                return new AuthManager($authenticators);
             }
         );
 
