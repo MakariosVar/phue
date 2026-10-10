@@ -548,3 +548,158 @@ quoting: backticks for MySQL/SQLite, double quotes for PostgreSQL.
 
 For query debugging (N+1 guard, EXPLAIN ANALYZE) and persistent-safe dumping,
 see [Debugging](Debugging.md).
+
+---
+
+## 8. Soft Deletes
+
+Models can opt into soft deletes using the `#[SoftDelete]` attribute. Instead of
+removing rows, `delete()` sets a timestamp column; queries automatically exclude
+soft-deleted records unless explicitly opted in.
+
+### Enabling soft deletes
+
+```php
+use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\Attributes\SoftDelete;
+
+#[SoftDelete]
+class User extends BaseActiveRecord
+{
+    protected string $table = 'users';
+}
+```
+
+The attribute accepts optional configuration:
+
+```php
+// Default: column = 'deleted_at', cascade = false
+#[SoftDelete(column: 'deleted_at', cascade: false)]
+class User extends BaseActiveRecord { }
+
+// Custom column name
+#[SoftDelete(column: 'archived_at')]
+class Post extends BaseActiveRecord { }
+```
+
+The column must be a nullable datetime/timestamp column in the database.
+
+### Migration helper
+
+Use `addSoftDeleteColumn()` in a migration:
+
+```php
+use Phue\Core\Database\Migration;
+
+final class M2026_10_10_120000_Add_Soft_Delete_To_Users extends Migration
+{
+    public function up(): void
+    {
+        $this->addSoftDeleteColumn('users');           // adds deleted_at
+        $this->addSoftDeleteColumn('posts', 'archived_at'); // custom column
+    }
+
+    public function down(): void
+    {
+        // Revert manually if needed
+    }
+}
+```
+
+### Model methods
+
+| Method | Behavior |
+|--------|----------|
+| `delete()` | **Soft delete** — sets `deleted_at = NOW()`, marks model as not persisted (`exists = false`). |
+| `forceDelete()` | **Hard delete** — permanently removes the row, bypassing soft delete. |
+| `restore()` | Sets `deleted_at = NULL`, marks model as persisted again. Only works on soft-deleted models. |
+| `isTrashed()` | Returns `true` if the model has a non-null deletion timestamp. |
+| `isPersisted()` | Returns `true` if the model exists in the database (inserted or loaded). |
+
+```php
+$user = User::create(['name' => 'Makarios', 'email' => 'makarios@example.com']);
+
+// Soft delete
+$user->delete();
+$user->isTrashed();      // true
+$user->isPersisted();    // false
+
+// Restore
+$user->restore();
+$user->isTrashed();      // false
+$user->isPersisted();    // true
+
+// Permanent removal
+$user->forceDelete();
+```
+
+### Query scopes
+
+Soft delete models have an **automatic global scope**: `WHERE deleted_at IS NULL`
+is applied to all queries by default.
+
+```php
+// Excludes soft-deleted (default)
+User::all();
+User::find(1);
+User::where('status', 'active')->get();
+
+// Include soft-deleted
+User::withTrashed()->all();
+User::withTrashed()->find(1);
+
+// Only soft-deleted
+User::onlyTrashed()->all();
+User::onlyTrashed()->where('email', 'test@example.com')->first();
+
+// Static forwarding works too
+User::withTrashed()->count();
+```
+
+| Scope | SQL condition |
+|-------|---------------|
+| Default | `deleted_at IS NULL` |
+| `withTrashed()` | (no condition) |
+| `onlyTrashed()` | `deleted_at IS NOT NULL` |
+
+### Bulk operations
+
+For bulk soft deletes, use the query builder directly:
+
+```php
+$now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+User::query()
+    ->whereIn('email', ['a@test.com', 'b@test.com'])
+    ->update(['deleted_at' => $now]);
+```
+
+### Custom column names
+
+If you use a custom column (e.g., `archived_at`), all methods and scopes work
+transparently:
+
+```php
+#[SoftDelete(column: 'archived_at')]
+class Post extends BaseActiveRecord { }
+
+$post = Post::create(['title' => 'Hello']);
+$post->delete();           // sets archived_at
+$post->isTrashed();        // true
+$post->restore();          // sets archived_at = NULL
+
+Post::onlyTrashed()->get(); // WHERE archived_at IS NOT NULL
+```
+
+### Important notes
+
+- **Models without `#[SoftDelete]` are completely unaffected** — zero overhead.
+- **Relations are not cascaded automatically** (the `cascade` option is reserved
+  for future use). Use explicit queries for related records:
+  ```php
+  $user->posts()->withTrashed()->get(); // include trashed posts
+  ```
+- **Unique indexes**: If you need unique constraints that ignore soft-deleted
+  rows, use a partial/filtered index (PostgreSQL `WHERE deleted_at IS NULL`,
+  MySQL 8.0+ filtered index).
+- **Works with all drivers**: SQLite, MySQL, PostgreSQL, Turso, Neon.

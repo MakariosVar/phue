@@ -76,6 +76,32 @@ abstract class Migration
     }
 
     /**
+     * Adds a soft delete timestamp column to a table.
+     *
+     * Creates a nullable datetime/timestamp column suitable for storing
+     * the deletion timestamp. The column defaults to 'deleted_at' but can
+     * be customized.
+     *
+     * @param string $tableName Name of the target table.
+     * @param string $columnName Column name (default: 'deleted_at').
+     * @return void
+     */
+    protected function addSoftDeleteColumn(string $tableName, string $columnName = 'deleted_at'): void
+    {
+        $driver = $this->getDriverName();
+        $quotedTable = SqlIdentifier::quote($tableName, $driver);
+        $quotedColumn = SqlIdentifier::quote($columnName, $driver);
+
+        $type = match ($driver) {
+            'pgsql' => 'TIMESTAMP NULL',
+            'mysql' => 'TIMESTAMP NULL',
+            default => 'DATETIME NULL',
+        };
+
+        $this->connection->execute("ALTER TABLE {$quotedTable} ADD COLUMN {$quotedColumn} {$type}");
+    }
+
+    /**
      * Resolves normalized active database driver name.
      *
      * @return string Normalized driver identifier ('sqlite'|'mysql'|'pgsql').

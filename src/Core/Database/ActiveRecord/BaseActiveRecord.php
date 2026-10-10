@@ -15,6 +15,7 @@ use Phue\Core\Database\ActiveRecord\Relations\Relation;
 use Phue\Core\Database\ActiveRecord\Relations\HasMany;
 use Phue\Core\Database\ActiveRecord\Relations\HasOne;
 use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
+use Phue\Core\Database\Attributes\SoftDelete;
 use Phue\Core\Validation\RuleEngine;
 use function Phue\Core\t;
 
@@ -46,6 +47,15 @@ abstract class BaseActiveRecord implements JsonSerializable
      * @var array<string, array<string, string>>
      */
     protected static array $fieldMetaCache = [];
+
+    /**
+     * Soft delete metadata cache: class => [hasSoftDelete, column, cascade].
+     *
+     * @var array<string, array{hasSoftDelete: bool, column: string, cascade: bool}>
+     */
+    protected static array $softDeleteMetaCache = [];
+
+    
 
     /**
      * Database table associated with the model.
@@ -189,6 +199,16 @@ abstract class BaseActiveRecord implements JsonSerializable
     public function getPrimaryKey(): string
     {
         return $this->primaryKey;
+    }
+
+    /**
+     * Checks if the model instance has been persisted to the database.
+     *
+     * @return bool True if the model exists in the database (either inserted or loaded).
+     */
+    public function isPersisted(): bool
+    {
+        return $this->exists;
     }
 
     /**
@@ -482,13 +502,26 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Forward static calls to ActiveQuery.
      *
+     * Handles withTrashed() and onlyTrashed() specially to return the query
+     * instance for chaining, while forwarding all other methods to ActiveQuery.
+     *
      * @param string $method Method name.
      * @param array<int, mixed> $arguments Method parameters.
      * @return mixed
      */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        return call_user_func_array([static::query(), $method], $arguments);
+        $query = static::query();
+
+        if ($method === 'withTrashed') {
+            return $query->withTrashed();
+        }
+
+        if ($method === 'onlyTrashed') {
+            return $query->onlyTrashed();
+        }
+
+        return call_user_func_array([$query, $method], $arguments);
     }
 
     /**
@@ -718,6 +751,64 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
+     * Retrieves soft delete metadata for the model class.
+     *
+     * Reads the #[SoftDelete] attribute once per class and caches the result.
+     * Returns an array with keys: hasSoftDelete (bool), column (string), cascade (bool).
+     *
+     * @return array{hasSoftDelete: bool, column: string, cascade: bool}
+     */
+    private static function getSoftDeleteMeta(): array
+    {
+        $class = static::class;
+
+        if (isset(self::$softDeleteMetaCache[$class])) {
+            return self::$softDeleteMetaCache[$class];
+        }
+
+        $refClass = new ReflectionClass($class);
+        $attrs = $refClass->getAttributes(SoftDelete::class);
+
+        if (empty($attrs)) {
+            return self::$softDeleteMetaCache[$class] = [
+                'hasSoftDelete' => false,
+                'column' => 'deleted_at',
+                'cascade' => false,
+            ];
+        }
+
+        /** @var SoftDelete $attr */
+        $attr = $attrs[0]->newInstance();
+
+        return self::$softDeleteMetaCache[$class] = [
+            'hasSoftDelete' => true,
+            'column' => $attr->column,
+            'cascade' => $attr->cascade,
+        ];
+    }
+
+    /**
+     * Returns the soft delete column name if the model uses soft deletes.
+     *
+     * @return string|null The column name (e.g., 'deleted_at') or null if not a soft-delete model.
+     */
+    public function getSoftDeleteColumn(): ?string
+    {
+        $meta = static::getSoftDeleteMeta();
+        return $meta['hasSoftDelete'] ? $meta['column'] : null;
+    }
+
+    /**
+     * Checks whether the model uses soft deletes.
+     *
+     * @return bool True if the model has the #[SoftDelete] attribute.
+     */
+    public function hasSoftDelete(): bool
+    {
+        return static::getSoftDeleteMeta()['hasSoftDelete'];
+    }
+
+    /**
      * Build auto-casts map from Field attributes.
      *
      * Reads \Phue\Core\Database\Attributes\Field, which is a Core class on
@@ -912,7 +1003,11 @@ public function save(): bool
     /**
      * Deletes the model from the database.
      *
-     * @return bool
+     * If the model uses soft deletes ([#SoftDelete] attribute), this performs
+     * a soft delete by updating the deletion timestamp column instead of
+     * removing the row. Use forceDelete() to permanently remove the record.
+     *
+     * @return bool True on success, false if the model doesn't exist or the delete failed.
      */
     public function delete(): bool
     {
@@ -920,6 +1015,28 @@ public function save(): bool
             return false;
         }
 
+        $softDeleteColumn = $this->getSoftDeleteColumn();
+
+        if ($softDeleteColumn !== null) {
+            // Soft delete: UPDATE deleted_at = NOW()
+            $builder = static::query();
+            $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+            $affected = $builder
+                ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
+                ->update([$softDeleteColumn => $now]);
+
+            if ($affected > 0) {
+                $this->setAttribute($softDeleteColumn, $now);
+                $this->original[$softDeleteColumn] = $now;
+                $this->exists = false;
+                return true;
+            }
+
+            return false;
+        }
+
+        // Hard delete (default behavior for models without soft delete)
         $affected = static::query()
             ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
             ->delete();
@@ -930,6 +1047,84 @@ public function save(): bool
         }
 
         return false;
+    }
+
+    /**
+     * Permanently deletes the model from the database, bypassing soft delete.
+     *
+     * This method ignores the #[SoftDelete] attribute and executes a hard DELETE
+     * statement. Use with caution — the record cannot be restored.
+     *
+     * Works on both active and soft-deleted models.
+     *
+     * @return bool True on success, false if the model doesn't exist or the delete failed.
+     */
+    public function forceDelete(): bool
+    {
+        $pk = $this->getPrimaryKey();
+        $pkValue = $this->attributes[$pk] ?? null;
+
+        if ($pkValue === null) {
+            return false; // no primary key, can't delete
+        }
+
+        $affected = static::query()
+            ->withTrashed()
+            ->where($pk, '=', $pkValue)
+            ->delete();
+
+        if ($affected > 0) {
+            $this->exists = false;
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Restores a soft-deleted model.
+     *
+     * Sets the deletion timestamp column to NULL, marking the record as active again.
+     * Only works on models that use soft deletes and are currently soft-deleted.
+     *
+     * @return bool True on success, false if the model doesn't exist, isn't soft-deleted,
+     *              doesn't use soft deletes, or the update failed.
+     */
+    public function restore(): bool
+    {
+        if ($this->exists) {
+            return false; // already alive
+        }
+
+        $softDeleteColumn = $this->getSoftDeleteColumn();
+        if ($softDeleteColumn === null) {
+            return false; // not a soft-delete model
+        }
+
+        $affected = static::query()
+            ->withTrashed()
+            ->where($this->getPrimaryKey(), '=', $this->attributes[$this->getPrimaryKey()])
+            ->update([$softDeleteColumn => null]);
+
+        if ($affected > 0) {
+            $this->setAttribute($softDeleteColumn, null);
+            $this->original[$softDeleteColumn] = null;
+            $this->exists = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if the model instance has been soft-deleted.
+     *
+     * @return bool True if the model uses soft deletes and the deletion timestamp is set.
+     */
+    public function isTrashed(): bool
+    {
+        $column = $this->getSoftDeleteColumn();
+        return $column !== null && isset($this->attributes[$column]) && $this->attributes[$column] !== null;
     }
 
     /**
