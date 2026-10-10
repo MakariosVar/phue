@@ -36,6 +36,11 @@ class DummyUser implements IdentityInterface
     {
         return $this->token;
     }
+
+    public static function findByUsername(string $username): ?IdentityInterface
+    {
+        return null;
+    }
 }
 
 #[\PHPUnit\Framework\Attributes\Group('unit')]

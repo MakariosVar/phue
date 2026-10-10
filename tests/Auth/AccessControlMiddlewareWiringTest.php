@@ -46,6 +46,12 @@ final class WiringIdentity implements IdentityInterface
     {
         return new self($id);
     }
+
+    public static function findByUsername(string $username): ?IdentityInterface
+    {
+        // Not used in these tests, but required by interface
+        return null;
+    }
 }
 
 /**
