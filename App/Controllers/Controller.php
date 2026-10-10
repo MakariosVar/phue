@@ -19,6 +19,6 @@ abstract class Controller
 {
     public function __construct(
         protected ComponentRenderer $ui,
-        protected Container $container
+        protected ?Container $container = null
     ) {}
 }

@@ -43,4 +43,9 @@ final class SessionUser implements IdentityInterface
     {
         return $this->username;
     }
+
+    public static function findByUsername(string $username): ?self
+    {
+        return new self(123, $username);
+    }
 }

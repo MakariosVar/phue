@@ -130,6 +130,11 @@ class JwtAuthenticatorTest extends TestCase
             public function getAuthKey(): ?string {
                 return $this->authKey;
             }
+
+            public static function findByUsername(string $username): ?IdentityInterface
+            {
+                return new self(123, $username);
+            }
         };
 
         $authenticator = new JwtAuthenticator(

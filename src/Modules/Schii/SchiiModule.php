@@ -521,9 +521,9 @@ class SchiiModule extends Module
             $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}/structure", [$schemaInspectorHandler, 'structure'], middleware: $middleware);
             $this->router->addRoute('POST', "{$apiPrefix}/schema/{entity}/sync", [$schemaSyncHandler, 'sync'], middleware: $middleware);
 
-            // Schema Metadata Endpoints (respect requireAuth via CRUD handler)
-            $this->router->addRoute('GET', "{$apiPrefix}/schema", [$crudHandler, 'listSchemas'], middleware: $middleware);
-            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [$crudHandler, 'schema'], middleware: $middleware);
+            // Public Schema Metadata Endpoints (always non-authorized - metadata is public)
+            $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
+            $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
 
             // Audit Log Routes
             $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);

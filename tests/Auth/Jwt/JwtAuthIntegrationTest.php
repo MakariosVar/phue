@@ -38,6 +38,11 @@ class TestUser implements IdentityInterface
     {
         return $this->authKey;
     }
+
+    public static function findByUsername(string $username): ?IdentityInterface
+    {
+        return new self(123, 'user123');
+    }
 }
 
 /**

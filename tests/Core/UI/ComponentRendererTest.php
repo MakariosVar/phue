@@ -234,6 +234,11 @@ final class ComponentRendererTest extends TestCase
             {
                 return $this->authKey;
             }
+
+            public static function findByUsername(string $username): ?IdentityInterface
+            {
+                return new self(123);
+            }
         };
     }
 }

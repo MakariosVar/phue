@@ -41,6 +41,11 @@ final class AuthorizedAdminUser implements IdentityInterface
     {
         return 'test-token';
     }
+
+    public static function findByUsername(string $username): ?IdentityInterface
+    {
+        return new self(123);
+    }
 }
 
 final class StaticAuthenticator implements AuthenticatorInterface

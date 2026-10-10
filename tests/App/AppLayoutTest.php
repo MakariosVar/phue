@@ -314,6 +314,11 @@ final class AppLayoutTest extends TestCase
             {
                 return $this->authKey;
             }
+
+            public static function findByUsername(string $username): ?self
+            {
+                return new self($username);
+            }
         };
     }
 }
