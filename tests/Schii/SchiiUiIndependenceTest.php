@@ -79,11 +79,36 @@ return [
 PHP);
     }
 
+    /**
+     * Registers the component loaders the Schii console page needs.
+     *
+     * The PhUI library is framework source and belongs on the registry. The layout is NOT:
+     * the application's real App/Frontend tree is off limits to the suite, because a page
+     * rename or a layout rewrite there would change what this test asserts. A minimal
+     * layout fixture pins the only thing the page render actually depends on — a shell
+     * that wraps content and reports back markup.
+     */
     private function addPhuiLoader(Application $app): void
     {
+        $layoutDir = $this->tmpBase . '/App/Frontend';
+        mkdir($layoutDir, 0777, true);
+        file_put_contents($layoutDir . '/AppLayout.phue', <<<'PHUE'
+<php>
+/** @var string $content */
+$content = $content ?? '';
+
+return [
+    'html' => '<div class="app-layout"><main class="app-content">' . $content . '</main></div>',
+];
+</php>
+<template>
+<!-- Layout shell -->
+</template>
+PHUE);
+
         $registry = $app->getContainer()->get(ComponentLoaderRegistry::class);
         $registry->addLoader(TestComponentLoader::make(dirname(__DIR__, 2) . '/src/Core/UI/Phui'));
-        $registry->addLoader(TestComponentLoader::make(dirname(__DIR__, 2) . '/App/Frontend'));
+        $registry->addLoader(TestComponentLoader::make($layoutDir));
     }
 
     private function authedSession(Application $app): void

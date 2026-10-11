@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Auth;
 
-use App\Controllers\AuthController;
-use App\Models\User;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\Connection;
 use Phue\Core\Request;
-use Phue\Core\UI\ComponentRenderer;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\Persistence\SessionLoginStore;
@@ -19,6 +16,7 @@ use Phue\Modules\Auth\RbacManager;
 use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
 use Phue\Modules\Schii\Schema\SchemaRegistry;
+use Phue\Tests\Auth\Stubs\User;
 use Phue\Tests\Support\UsesIsolatedDatabase;
 
 #[Group('integration')]
@@ -79,75 +77,6 @@ final class SessionAuthFlowTest extends TestCase
         $this->assertSame(['admin'], $user->getRoles());
     }
 
-    public function testAuthControllerShowLoginReturnsViewOrRedirects(): void
-    {
-        $renderer = $this->createMock(ComponentRenderer::class);
-        $renderer->expects($this->once())
-            ->method('render')
-            ->with('Pages/Login')
-            ->willReturn(\Phue\Core\Response::html('<div>Login Page</div>'));
-
-        $controller = new AuthController($renderer);
-
-        $req = new Request('GET', '/login');
-        $res = $controller->showLogin($req);
-        $this->assertSame(200, $res->getStatusCode());
-
-        // When already logged in
-        $_SESSION['__user_id'] = 1;
-        $resLoggedIn = $controller->showLogin($req);
-        $this->assertSame(302, $resLoggedIn->getStatusCode());
-        $this->assertSame('/schii', $resLoggedIn->getHeader('Location'));
-    }
-
-    public function testAuthControllerLoginRejectsInvalidCredentials(): void
-    {
-        $renderer = $this->createMock(ComponentRenderer::class);
-        $controller = new AuthController($renderer);
-
-        // Missing fields
-        $reqEmpty = new Request('POST', '/login', [], ['username' => '', 'password' => ''], ['Accept' => 'application/json']);
-        $resEmpty = $controller->login($reqEmpty);
-        $this->assertSame(422, $resEmpty->getStatusCode());
-
-        // Wrong password
-        $reqBad = new Request('POST', '/login', [], ['username' => 'admin', 'password' => 'wrong'], ['Accept' => 'application/json']);
-        $resBad = $controller->login($reqBad);
-        $this->assertSame(401, $resBad->getStatusCode());
-        $this->assertEmpty($_SESSION['__user_id'] ?? null);
-    }
-
-    public function testAuthControllerLoginAuthenticatesAndSetsSession(): void
-    {
-        $renderer = $this->createMock(ComponentRenderer::class);
-        $controller = new AuthController($renderer);
-
-        $req = new Request('POST', '/login', [], ['username' => 'admin', 'password' => 'secret123'], ['Accept' => 'application/json']);
-        $res = $controller->login($req);
-
-        $this->assertSame(200, $res->getStatusCode());
-        $this->assertSame(1, $_SESSION['__user_id']);
-
-        $data = json_decode($res->getContent(), true);
-        $this->assertTrue($data['success']);
-        $this->assertSame('/schii', $data['redirect']);
-    }
-
-    public function testAuthControllerLogoutClearsSession(): void
-    {
-        $_SESSION['__user_id'] = 1;
-
-        $renderer = $this->createMock(ComponentRenderer::class);
-        $controller = new AuthController($renderer);
-
-        $req = new Request('POST', '/logout');
-        $res = $controller->logout($req);
-
-        $this->assertSame(302, $res->getStatusCode());
-        $this->assertSame('/login', $res->getHeader('Location'));
-        $this->assertEmpty($_SESSION['__user_id'] ?? null);
-    }
-
     public function testAuthorizedModelEndpointAllowsAccessWithSessionAuth(): void
     {
         $sessionAuth = new SessionAuthenticator(User::class, new SessionLoginStore());
@@ -157,7 +86,7 @@ final class SessionAuthFlowTest extends TestCase
         $rbacManager->addRole('admin', ['*']);
 
         $registry = new SchemaRegistry();
-        $delegate = new ModelEndpoint($registry, entityNamespace: 'App\\Models');
+        $delegate = new ModelEndpoint($registry, entityNamespace: 'Phue\\Tests\\Auth\\Stubs');
 
         $authorizedEndpoint = new AuthorizedModelEndpoint($delegate, $authManager, $rbacManager, $registry);
 

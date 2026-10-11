@@ -84,17 +84,21 @@ final class PhiiCommandsTest extends TestCase
     }
 
     /**
-     * Snapshot of the real application tree that generators must never touch.
+     * Snapshot of an application tree that generators must never touch.
+     *
+     * Takes the root as a parameter instead of reaching for the real App/ directory:
+     * a generator resolves its default output from getcwd(), so pointing the process at
+     * a sandbox reproduces the exact behaviour being guarded while leaving the developer's
+     * tree unreadable by this test.
      *
      * @return array<int, string> Sorted relative paths under App/Models, App/Modules and App/Controllers.
      */
-    private function appTreeSnapshot(): array
+    private function appTreeSnapshot(string $appRoot): array
     {
-        $app = dirname(__DIR__, 3) . '/App';
         $files = [];
 
         foreach (['Models', 'Modules', 'Controllers'] as $dir) {
-            $base = "{$app}/{$dir}";
+            $base = "{$appRoot}/{$dir}";
             if (!is_dir($base)) {
                 continue;
             }
@@ -103,13 +107,58 @@ final class PhiiCommandsTest extends TestCase
                 \RecursiveIteratorIterator::LEAVES_ONLY
             );
             foreach ($iterator as $entry) {
-                $files[] = "{$dir}/" . substr($entry->getPathname(), strlen($app) + 1);
+                $files[] = "{$dir}/" . substr($entry->getPathname(), strlen($appRoot) + 1);
             }
         }
 
         sort($files);
 
         return $files;
+    }
+
+    /**
+     * Builds a throwaway application tree holding one marker file per directory, so an
+     * unexpected write is visible as a changed snapshot rather than as a silent creation.
+     *
+     * @return string Absolute path of the sandbox App/ root.
+     */
+    private function seedSandboxAppTree(): string
+    {
+        $appRoot = $this->dump . '/sandbox/App';
+
+        foreach (['Models', 'Modules', 'Controllers'] as $dir) {
+            mkdir("{$appRoot}/{$dir}", 0777, true);
+            file_put_contents("{$appRoot}/{$dir}/.keep", 'untouched');
+        }
+
+        return $appRoot;
+    }
+
+    /**
+     * Runs a callback with the process working directory moved, always restoring it.
+     *
+     * A leaked chdir would make every later test in this file resolve its relative paths
+     * from the wrong place, which is exactly the kind of cross-file state leak that makes
+     * a suite depend on run order.
+     *
+     * @template T
+     * @param callable(): T $callback
+     * @return T
+     */
+    private function withCwd(string $dir, callable $callback): mixed
+    {
+        $previous = getcwd();
+        if ($previous === false) {
+            throw new \RuntimeException('Unable to resolve the current working directory.');
+        }
+
+        chdir($dir);
+
+        try {
+            return $callback();
+        } finally {
+            chdir($previous);
+        }
     }
 
     public function testAllCommandsExposeRegisteredNames(): void
@@ -167,8 +216,14 @@ final class PhiiCommandsTest extends TestCase
     public function testCrudCommandGeneratesAllArtifacts(): void
     {
         $command = new CrudGeneratorCommand(generator: null, schemaRegistry: $this->registry);
-        $leftovers = $this->appTreeSnapshot();
-        $result = $this->runCommand($command, [Profile::class, '--output=' . $this->dump, '--module=admin']);
+
+        $appRoot = $this->seedSandboxAppTree();
+        $leftovers = $this->appTreeSnapshot($appRoot);
+
+        $result = $this->withCwd(
+            dirname($appRoot),
+            fn(): array => $this->runCommand($command, [Profile::class, '--output=' . $this->dump, '--module=admin']),
+        );
 
         $this->assertSame(CommandInterface::SUCCESS, $result['code'], $result['err']);
 
@@ -188,10 +243,18 @@ final class PhiiCommandsTest extends TestCase
 
         $this->assertStringContainsString($this->dump, $result['out']);
 
+        $this->assertNotEmpty(
+            $leftovers,
+            'The sandbox tree must be populated, otherwise the comparison below is '
+            . 'comparing two empty lists and guards nothing.'
+        );
+
         $this->assertSame(
             $leftovers,
-            $this->appTreeSnapshot(),
-            'The CRUD command must never write outside --output (App/Models, App/Modules, App/Controllers must stay untouched).'
+            $this->appTreeSnapshot($appRoot),
+            'The CRUD command must never write outside --output, even when the working '
+            . 'directory holds a populated App/ tree (App/Models, App/Modules and '
+            . 'App/Controllers must stay untouched).'
         );
     }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Core\UI;
 
-use App\Config\NavigationConfig;
+
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Request;
