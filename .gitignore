@@ -18,6 +18,8 @@ composer.lock
 /database/migrations/*
 /storage/cache
 /storage/generated
+# Metrics reports and baselines are per-machine artifacts, never source.
+/storage/metrics/
 
 tests/Production/_tmp_conftest/storage/logs
 tests/Production/_tmp_conftest/storage/cache

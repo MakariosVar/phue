@@ -3,3 +3,4 @@ vscode-phue/out/
 vscode-phue/*.vsix
 
 tracker/
+metrics/
