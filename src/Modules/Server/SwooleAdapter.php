@@ -12,6 +12,7 @@ use Phue\Core\ScopeContext;
 use Swoole\Http\Request as SwooleRequest;
 use Swoole\Http\Response as SwooleResponse;
 use Swoole\WebSocket\Server as SwooleHttpServer;
+use Throwable;
 
 /**
  * Async Coroutine-based Swoole HTTP Server Adapter.
@@ -20,6 +21,8 @@ use Swoole\WebSocket\Server as SwooleHttpServer;
  */
 final class SwooleAdapter implements ServerAdapterInterface
 {
+    use AdapterErrorBoundaryTrait;
+
     private ?Application $app = null;
 
     /**
@@ -88,6 +91,11 @@ final class SwooleAdapter implements ServerAdapterInterface
             $scope = $this->container->createScope();
             $this->container->setScope($scope);
 
+            // Stays null until the native request is translated. A failure raised during
+            // translation still has to produce a response, so the backstop below cannot
+            // assume that a Phue request exists.
+            $phueRequest = null;
+
             try {
                 // A WebSocket handshake is answered by the server and then becomes a
                 // connection, not a response. Running it through the HTTP pipeline as well
@@ -105,26 +113,39 @@ final class SwooleAdapter implements ServerAdapterInterface
 
                 // 3. Process via Phue Application Kernel
                 $phueResponse = $this->handleRequest($phueRequest);
-
-                // 4. Emit headers and status code to Swoole Response
-                $swResponse->status($phueResponse->getStatusCode());
-                foreach ($phueResponse->getHeaders() as $name => $value) {
-                    $swResponse->header($name, (string) $value);
-                }
-
-                // 5. Send payload
-                $swResponse->end($phueResponse->getContent());
-            } catch (\Throwable $e) {
-                $swResponse->status(500);
-                $swResponse->end('Internal Server Error: ' . $e->getMessage());
+            } catch (Throwable $e) {
+                $phueResponse = $this->renderFailure($e, $phueRequest);
             } finally {
                 // Flush scoped instances and detach active context
                 $this->container->flushScope($scope);
                 $this->container->setScope(null);
             }
+
+            // 4. Emit headers and status code to Swoole Response.
+            // Outside the try: a worker must send exactly one well-formed response per
+            // request, and a failure to serialise must never become a second response.
+            $swResponse->status($phueResponse->getStatusCode());
+            foreach ($phueResponse->getHeaders() as $name => $value) {
+                $swResponse->header($name, (string) $value);
+            }
+
+            // 5. Send payload
+            $swResponse->end($phueResponse->getContent());
         });
 
         $this->server->start();
+    }
+
+    /**
+     * Resolves the container the error boundary renders through.
+     *
+     * Swoole caches it at boot, so the failure path costs no container work.
+     *
+     * @return Container|null Null when the adapter has not been booted.
+     */
+    protected function errorBoundaryContainer(): ?Container
+    {
+        return $this->container;
     }
 
     public function shutdown(): void

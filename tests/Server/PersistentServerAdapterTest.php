@@ -199,7 +199,11 @@ final class PersistentServerAdapterTest extends TestCase
         $responded = $worker->getResponded();
         $this->assertCount(1, $responded);
         $this->assertSame(500, $responded[0]->getStatusCode());
-        $this->assertStringContainsString('kaboom', (string) $responded[0]->getBody());
+        // The worker loop lives outside the kernel's error boundary, so the adapter owns
+        // the response. An internal exception must never reach the client as body text;
+        // see AdapterErrorContractTest for the full contract.
+        $this->assertStringNotContainsString('kaboom', (string) $responded[0]->getBody());
+        $this->assertSame(['error' => 'Internal Server Error'], json_decode((string) $responded[0]->getBody(), true));
     }
 
     public function testRoadRunnerRunWithEmptyWorkerDoesNothing(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phue\Modules\Server;
 
 use Phue\Core\Application;
+use Phue\Core\Container;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use RuntimeException;
@@ -21,6 +22,8 @@ use Throwable;
  */
 final class RoadRunnerAdapter implements ServerAdapterInterface
 {
+    use AdapterErrorBoundaryTrait;
+
     /**
      * The application instance.
      */
@@ -78,18 +81,36 @@ final class RoadRunnerAdapter implements ServerAdapterInterface
         }
 
         while ($psr7Request = $this->worker?->waitRequest()) {
+            // Stays null until the PSR-7 request is converted, because a conversion
+            // failure still has to produce a response.
+            $request = null;
+
             try {
                 // Convert incoming PSR-7/RR Request to native Phue Request
                 $request = Request::fromPsr7($psr7Request);
 
-                $response = $this->handleRequest($request);
-
-                // Send back native response
-                $this->worker->respond($response->toPsr7());
+                $psr7Response = $this->handleRequest($request)->toPsr7();
             } catch (Throwable $e) {
-                $this->worker->respond(new \Nyholm\Psr7\Response(500, [], $e->getMessage()));
+                $psr7Response = $this->renderFailure($e, $request)->toPsr7();
             }
+
+            // Outside the try: exactly one response per request. A worker that fails while
+            // serialising must not be answered twice, and must keep serving the next one.
+            $this->worker->respond($psr7Response);
         }
+    }
+
+    /**
+     * Resolves the container the error boundary renders through.
+     *
+     * Resolved lazily and only from the failure path, so a request that is handled
+     * normally never pays for a container lookup it does not need.
+     *
+     * @return Container|null Null when the adapter has not been booted.
+     */
+    protected function errorBoundaryContainer(): ?Container
+    {
+        return $this->app?->getContainer();
     }
 
     /**
