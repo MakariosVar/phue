@@ -55,7 +55,6 @@ return [
         \Phue\Modules\Rest\RestModule::class,
         \Phue\Modules\Server\ServerModule::class,
         \Phue\Modules\Events\EventModule::class,
-        \Phue\Modules\Compiler\CompilerModule::class,
         \Phue\Modules\DevTool\DevToolsModule::class,
         // Background jobs. No module is required, so mounting this cannot fail; with no driver
         // configured it runs jobs inline, which is what development wants and what makes a

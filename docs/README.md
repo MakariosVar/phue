@@ -1,6 +1,6 @@
 # Phue Framework — Documentation
 
-**Phue** is a modular PHP framework for building modern web applications: attribute-based routing, a scoped DI container, Active Record + Data Mapper ORM, server-driven UI, and a no-build Vue 3 component kit — all designed to stay fast on both classic FPM and persistent runtimes (Swoole, RoadRunner, WASM).
+**Phue** is a modular PHP framework for building modern web applications: attribute-based routing, a scoped DI container, Active Record + Data Mapper ORM, server-driven UI, and a no-build Vue 3 component kit — all designed to stay fast on both classic FPM and persistent runtimes (Swoole, RoadRunner).
 
 This documentation is organized into focused guides. Pick the one that matches what you are doing:
 
@@ -30,7 +30,7 @@ This documentation is organized into focused guides. Pick the one that matches w
 
 | Guide | What it covers |
 |---|---|
-| [Server Adapters](Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools, **live reload** |
+| [Server Adapters](Server-Adapters.md) | FPM, Swoole, RoadRunner — plus the SSR sidecar, DevTools, **live reload** |
 | [CLI](CLI.md) | `bin/phue` commands, the `phue-create` project installer, `phue-docker` wrapper, testing |
 | [Debugging](Debugging.md) | N+1 query guard, AsyncDumper, QueryBuilder::dd, EXPLAIN ANALYZE |
 | [PhUI Components](PhUI_Components.md) | Reference API for every built-in `.phue` component |

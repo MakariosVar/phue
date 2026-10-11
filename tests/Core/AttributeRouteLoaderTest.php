@@ -57,7 +57,18 @@ class AttributeRouteLoaderTest extends TestCase
       */
     public function testLoadReturnsEmptyForNonInstantiableClass(): void
     {
-        $routes = $this->loader->load(\Phue\Tests\Compiler\Fixtures\AbstractAotTargetClass::class);
+        $routes = $this->loader->load(AbstractRouteTarget::class);
+
+        $this->assertIsArray($routes);
+        $this->assertEmpty($routes);
+    }
+
+    /**
+      * Tests that load returns empty array for an interface.
+      */
+    public function testLoadReturnsEmptyForInterface(): void
+    {
+        $routes = $this->loader->load(LoaderContract::class);
 
         $this->assertIsArray($routes);
         $this->assertEmpty($routes);
@@ -112,4 +123,18 @@ class DummyAttributeController
     public function show(): void
     {
     }
+}
+/**
+ * Non-instantiable route target. The loader must return no routes rather than
+ * blowing up when it is handed something it cannot construct.
+ */
+abstract class AbstractRouteTarget
+{
+}
+
+/**
+ * Interface route target, the other half of "cannot be instantiated".
+ */
+interface LoaderContract
+{
 }

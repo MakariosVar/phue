@@ -283,7 +283,7 @@ The middleware **skips signing** for:
 
 - **HMAC-SHA256**: ~0.1-0.3ms per response (negligible)
 - **RSA-PSS-SHA256**: ~1-3ms per response (use only when asymmetric verification is required)
-- No session storage, no database writes, no locks — works identically under FPM, Swoole, RoadRunner, and WASM
+- No session storage, no database writes, no locks — works identically under FPM, Swoole and RoadRunner
 
 ## Testing
 

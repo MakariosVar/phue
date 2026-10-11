@@ -28,9 +28,6 @@
         <testsuite name="events">
             <directory suffix="Test.php">tests/Events</directory>
         </testsuite>
-        <testsuite name="compiler">
-            <directory suffix="Test.php">tests/Compiler</directory>
-        </testsuite>
         <testsuite name="devtools">
             <directory suffix="Test.php">tests/DevTools</directory>
         </testsuite>

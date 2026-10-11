@@ -75,8 +75,8 @@ step for your views, Vue 3 powered, no-bundle by design.
   one server without sharing one policy.
 - **Live reload** — save a `.phue` file and the open tab reloads. Realtime push
   with a polling fallback, so it also works on `serve:php`.
-- **Edge-ready** — runs on classic **FPM**, persistent **Swoole**, **RoadRunner**,
-  and even **WASM** at the edge. Same application code, different adapter.
+- **Runs anywhere PHP does** — classic **FPM**, persistent **Swoole** or
+  **RoadRunner**. Same application code, different adapter.
 
 ## The module system
 
@@ -93,7 +93,6 @@ modules a project needs — everything else stays out.
 | `server` | Swoole persistent server adapter (and friends) | [Server Adapters](docs/Server-Adapters.md) |
 | `events` | Redis Streams event bus + SSE streaming, `#[Broadcastable]` | [Events](docs/Events.md) |
 | `websocket` | Named endpoints, each with its own topics, origins and authentication; `Broadcast` for publishing | [WebSocket](docs/WebSocket.md) |
-| `compiler` | AOT compiler & wiring generation | [Server Adapters](docs/Server-Adapters.md) |
 | `devtools` | Collapsible debug toolbar + request profiler: timeline, SSR round trips, component builds, SQL — plus live reload (development) | [Server Adapters](docs/Server-Adapters.md) |
 
 > Want to know how it all fits together? Read [Core](docs/Core.md) and
@@ -171,7 +170,6 @@ If you omit the project name, the installer prompts for one:
   ◻ rest     —  REST API: attribute-driven #[Rest] CRUD endpoints
   ◻ server   —  Swoole persistent server adapter
   ◻ events   —  Events: Redis Streams bus + SSE
-  ◻ compiler —  AOT compiler: wiring generation
   ◻ devtools —  Dev tools: collapsible debug toolbar + request profiler (spans, SSR, components, SQL)
 ```
 
@@ -194,8 +192,7 @@ Available templates (also listed with `--list-templates`):
 | `web` | `auth`, `schii` | Classic full-stack web app: admin console + auth |
 | `api` | `auth`, `rest`, `schii` | REST-first API with RBAC + schema admin |
 | `realtime` | `auth`, `events`, `rest` | SSE / Redis streaming apps |
-| `fullstack` | all 7 modules | Everything, like the framework demo repo |
-| `edge` | `compiler`, `server` | WASM / AOT experiments |
+| `fullstack` | all 6 modules | Everything, like the framework demo repo |
 
 ### Custom module set (non-interactive)
 
@@ -402,13 +399,13 @@ See [CLI](docs/CLI.md) for the full command list.
 | [Getting Started](docs/Getting-Started.md) | Installing Phue with `phue-create`, project structure, environment, first run |
 | [Core](docs/Core.md) | `Application`, the Module contract, DI Container, Config, Request/Response, Router, EventDispatcher |
 | [Modules](docs/Modules.md) | The module contract in depth: hooks, dependencies, `module:new`, available modules |
-| [Database](docs/Database.md) | Connections, drivers (PDO + HTTP edge), QueryBuilder, Active Record, Data Mapper, migrations |
+| [Database](docs/Database.md) | Connections, drivers (PDO + HTTP-based), QueryBuilder, Active Record, Data Mapper, migrations |
 | [Auth & RBAC](docs/Auth-RBAC.md) | `AuthManager`, authenticators, `BaseUser`, RBAC roles & permissions |
 | [Schii](docs/Schii.md) | Server-driven UI, zero-controller REST, JSON schema protocol, auto-migration |
 | [REST](docs/REST.md) | Attribute-driven `#[Rest]` CRUD endpoints with RBAC enforcement |
 | [Events](docs/Events.md) | Event bus drivers, SSE streaming, `#[Broadcastable]` models |
 | [WebSocket](docs/WebSocket.md) | Named endpoints with per-endpoint auth and topics, `Broadcast`, retention, backpressure |
-| [Server Adapters](docs/Server-Adapters.md) | FPM, Swoole, RoadRunner, WASM/edge — plus SSR sidecar, AOT compiler, DevTools, live reload |
+| [Server Adapters](docs/Server-Adapters.md) | FPM, Swoole, RoadRunner — plus the SSR sidecar, DevTools and live reload |
 | [CLI](docs/CLI.md) | `bin/phue` commands, the `phue-create` project installer, `phue-docker` wrapper, testing |
 | [PhUI Components](docs/PhUI_Components.md) | Reference API for every built-in `.phue` component |
 

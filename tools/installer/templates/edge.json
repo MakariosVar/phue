@@ -1,8 +1,0 @@
-{
-    "name": "edge",
-    "description": "WASM / AOT experiments: compiler + Swoole server adapter",
-    "modules": [
-        "compiler",
-        "server"
-    ]
-}

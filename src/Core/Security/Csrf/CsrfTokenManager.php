@@ -17,7 +17,7 @@ use Phue\Core\Security\Csrf\Exceptions\MissingApplicationKeyException;
  *
  * Nothing is stored server-side. That is the whole point: the hot path is one HMAC over
  * ~43 bytes and one hash_equals, with no session write, no lock, no database. It is
- * therefore identical under FPM, RoadRunner, Swoole and WASM, and needs no sticky
+ * therefore identical under FPM, RoadRunner and Swoole, and needs no sticky
  * sessions when an application runs on more than one worker.
  *
  * @package Phue\Core\Security\Csrf

@@ -116,7 +116,6 @@ Inspect the current graph any time with:
 | `Phue\Modules\Server\ServerModule` | `server` | *(none)* | Registers the Swoole serve command (`serve`) |
 | `Phue\Modules\Events\EventModule` | `events` | *(none)* | Event bus drivers, SSE response/streamer, `#[Broadcastable]` |
 | `Phue\Modules\Websocket\WebsocketModule` | `websocket` | *(none; uses `auth` when present)* | Named WebSocket **endpoints**, each with its own topics, origins and authentication. `Broadcast` for publishing. Needs the Swoole adapter |
-| `Phue\Modules\Compiler\CompilerModule` | `compiler` | *(none)* | AOT wiring generator, compatibility checker, fallback strategy |
 | `Phue\Modules\DevTool\DevToolsModule` | `devtools` | *(none)* | Request profiler + collapsible debug toolbar, instrumenting the SSR transport, component loaders and the database driver (enabled when `app.debug` **and** `app.devTool`) |
 
 Notes worth knowing:

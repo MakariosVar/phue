@@ -1,8 +1,7 @@
-# Server Adapters, SSR & the AOT Compiler
+# Server Adapters, SSR & DevTools
 
 How Phue runs on different server runtimes: classic FPM, persistent Swoole and
-RoadRunner, and WASM/edge — plus the Bun SSR sidecar, the hybrid AOT compiler,
-and the DevTools instrumentation.
+RoadRunner — plus the Bun SSR sidecar and the DevTools instrumentation.
 
 Related guides: [Core](Core.md), [CLI](CLI.md), [Events](Events.md) (SSE).
 
@@ -16,7 +15,6 @@ Related guides: [Core](Core.md), [CLI](CLI.md), [Events](Events.md) (SSE).
 | `FpmAdapter` | `Modules/Server/FpmAdapter.php` | Standard PHP-FPM / CGI — stateless single-request execution |
 | `RoadRunnerAdapter` | `Modules/Server/RoadRunnerAdapter.php` | Persistent Go server worker loop using PSR-7 conversion |
 | `SwooleAdapter` | `Modules/Server/SwooleAdapter.php` | Async coroutine HTTP server (`Swoole\Http\Server`) |
-| `WasmAdapter` | `Modules/Server/WasmAdapter.php` | WebAssembly / Cloudflare edge runtimes |
 
 > Historical note: these used to live in `Phue\Server` (`src/Server/`). After
 > the modulezied restructuring they are `Phue\Modules\Server`
@@ -96,90 +94,7 @@ servers:
 Locally: `cd ssr && bun server.ts` — the sidecar listens on the configured Unix
 socket and renders component HTML on request.
 
----
-
-## 3. The hybrid AOT compiler (`Phue\Modules\Compiler`)
-
-Phue supports ahead-of-time (AOT) static compilation for native C++
-translation, with graceful fallback when AOT isn't possible.
-
-| Component | File | Responsibility |
-|---|---|---|
-| `WiringGenerator` | `Modules/Compiler/WiringGenerator.php` | Build-phase scanner emitting zero-reflection static dependency & routing maps |
-| `AotCompatibilityChecker` | `Modules/Compiler/AotCompatibilityChecker.php` | Evaluates classes for AOT compliance |
-| `AotCompatibilityReport` | `Modules/Compiler/AotCompatibilityReport.php` | Report value object |
-| `FallbackStrategy` | `Modules/Compiler/FallbackStrategy.php` | Resolves execution mode with graceful fallback |
-
-> Historical note: these used to live in `Phue\Compiler` (`src/Compiler/`).
-> After the modulezied restructuring they are `Phue\Modules\Compiler`
-> (`src/Modules/Compiler/`).
-
-### Generating static wiring artifacts
-
-```php
-use Phue\Modules\Compiler\WiringGenerator;
-
-$generator = new WiringGenerator(
-    scanDirectories: ['src', 'App'],
-    outputDir: 'build'
-);
-
-// Emits build/wiring.php and build/wiring.cpp
-$result = $generator->generate();
-echo "Generated static wiring for {$result['count']} classes.\n";
-```
-
-- `build/wiring.php` — optimized PHP return array.
-- `build/wiring.cpp` — native C++ struct array for TypePHP native compilation.
-
-### AOT compatibility rules
-
-`AotCompatibilityChecker` inspects classes for forbidden dynamic constructs:
-`eval()`, `extract()`, `$$var`, dynamic `call_user_func_array`. The framework's
-non-negotiables: stateless modules, declarative-only global scope, no `eval()`,
-no dynamic class definitions, `main()`-based boot, hot paths with native types.
-Anything new must pass the checker or degrade gracefully through
-`FallbackStrategy` (which resolves `AOT_NATIVE` → `PHP_JIT` →
-`PHP_INTERPRETER`) — the framework never crashes on AOT failure.
-
----
-
-## 4. WASM / edge infrastructure
-
-### WasmAdapter
-
-Stateless adapter (no `Container` in its constructor) for executing Phue inside
-WebAssembly contexts — it transmutes WASM environment arrays into
-`Phue\Core\Request` objects and returns standard status/headers/body arrays.
-Scope flushing lives in `Application::handle()`, not here.
-
-```php
-use Phue\Modules\Server\WasmAdapter;
-use Phue\Core\Cache\EdgeKvCache;
-
-// Memory-backed KV cache for read-only edge filesystems
-$cache = new EdgeKvCache();
-
-$adapter = new WasmAdapter();
-
-$result = $adapter->handleWasmRequest([
-    'REQUEST_METHOD' => 'GET',
-    'REQUEST_URI' => '/api/edge',
-    'HEADERS' => ['Accept' => 'application/json'],
-], fn($request) => $app->handle($request));
-```
-
-### Edge parity guarantees
-
-Edge runtimes have no raw TCP: the HTTP-based DB drivers
-([Turso](Database.md), [Neon](Database.md)) and `EdgeKvCache`
-(`Phue\Core\Cache\EdgeKvCache` — read-only FS, memory-backed KV) must keep
-working when PDO is unavailable. Protected by the test suite
-(`tests/Cache/EdgeKvCacheTest.php`, `tests/Core/Database/EdgeDriverTest.php`).
-
----
-
-## 5. DevTools (`Phue\Modules\DevTool`)
+## 3. DevTools (`Phue\Modules\DevTool`)
 
 Developer instrumentation, gated so it never runs in production.
 
@@ -338,7 +253,7 @@ schema or the data.
 
 ---
 
-## 6. Live reload
+## 4. Live reload
 
 Save a `.phue` file, and the open tab reloads. No build step, no manual refresh.
 
@@ -483,14 +398,15 @@ list that starts drifting the first time a module registers a loader of its own.
 In practice: your `.phue` component directories. PHP under `App/` is **not**
 watched; a change there is picked up by the next request.
 
-## 7. Performance & benchmarks
+## 5. Performance & benchmarks
 
 The framework's performance posture:
 
 - **Persistent runtimes** — request isolation via the scoped container and a
   single `flushScope()` per request; no `gc_collect_cycles()` on the hot path.
-- **AOT-forward design** — hot paths with native types, no reflection in the
-  request path (the `WiringGenerator` emits zero-reflection maps).
+- **Hot paths without reflection** — the router and the DI container keep their
+  resolution work off the request path where they can, so a warm worker does not
+  re-reflect on every request.
 - **Automated benchmarks** — `tests/Benchmark/BenchmarkRunner.php` measures
   container DI resolution latency (nanoseconds per operation) and full
   end-to-end kernel throughput (`benchmarkKernelThroughput($app)`, in requests

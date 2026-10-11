@@ -29,7 +29,7 @@ fi
 
 # ---------------------------------------------------------------- module metadata
 
-readonly MODULE_ORDER=(auth schii rest server events compiler devtools)
+readonly MODULE_ORDER=(auth schii rest server events devtools)
 
 declare -Ar MODULE_CLASS_MAP=(
     [auth]="Auth/AuthModule"
@@ -37,7 +37,6 @@ declare -Ar MODULE_CLASS_MAP=(
     [rest]="Rest/RestModule"
     [server]="Server/ServerModule"
     [events]="Events/EventModule"
-    [compiler]="Compiler/CompilerModule"
     [devtools]="DevTool/DevToolsModule"
 )
 
@@ -47,7 +46,6 @@ declare -Ar MODULE_REQUIRES=(
     [rest]="auth"
     [server]=""
     [events]=""
-    [compiler]=""
     [devtools]=""
 )
 
@@ -57,7 +55,6 @@ declare -Ar MODULE_TEST_DIR=(
     [rest]="Rest"
     [server]="Server"
     [events]="Events"
-    [compiler]="Compiler"
     [devtools]="DevTools"
 )
 
@@ -67,7 +64,6 @@ declare -Ar MODULE_DESCRIPTIONS=(
     [rest]="REST API: attribute-driven #[Rest] CRUD endpoints"
     [server]="Swoole persistent server adapter"
     [events]="Events: Redis Streams bus + SSE"
-    [compiler]="AOT compiler: wiring generation"
     [devtools]="Dev tools: debug toolbar, profiler"
 )
 

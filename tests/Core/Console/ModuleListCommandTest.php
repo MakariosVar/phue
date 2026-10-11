@@ -65,7 +65,7 @@ class ModuleListCommandTest extends TestCase
         $result = $this->runCli('module:list');
 
         // These modules are registered in config/app.php
-        foreach (['auth', 'schii', 'rest', 'server', 'events', 'compiler', 'devtools'] as $id) {
+        foreach (['auth', 'schii', 'rest', 'server', 'events', 'devtools'] as $id) {
             $this->assertStringContainsString($id, $result['stdout'], "Missing module ID: {$id}");
         }
     }
@@ -74,7 +74,7 @@ class ModuleListCommandTest extends TestCase
     {
         $result = $this->runCli('module:list');
 
-        foreach (['AuthModule', 'SchiiModule', 'RestModule', 'ServerModule', 'EventModule', 'CompilerModule', 'DevToolsModule'] as $class) {
+        foreach (['AuthModule', 'SchiiModule', 'RestModule', 'ServerModule', 'EventModule', 'DevToolsModule'] as $class) {
             $this->assertStringContainsString($class, $result['stdout'], "Missing class: {$class}");
         }
     }

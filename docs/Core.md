@@ -549,7 +549,6 @@ checked.
     \Phue\Modules\Rest\RestModule::class,
     \Phue\Modules\Server\ServerModule::class,
     \Phue\Modules\Events\EventModule::class,
-    \Phue\Modules\Compiler\CompilerModule::class,
     \Phue\Modules\DevTool\DevToolsModule::class,
 ],
 ```

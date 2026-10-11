@@ -465,9 +465,10 @@ $found = $repo->findById('C-200');    // $found === $cus (identity map hit)
 
 ---
 
-## 6. Serverless / edge HTTP drivers
+## 6. Serverless / HTTP-only drivers
 
-For environments without raw TCP sockets (WASM, edge runtimes), Phue provides
+For databases reached over HTTPS instead of a raw TCP socket — serverless Postgres,
+libSQL, or any host whose outbound sockets are restricted — Phue provides
 HTTP-based drivers implementing `HttpDriverInterface`
 (`setEndpoint()`, `setAuthToken()`, `query()`, `execute()`, `getName()`):
 

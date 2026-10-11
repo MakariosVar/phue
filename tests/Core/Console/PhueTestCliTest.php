@@ -292,9 +292,10 @@ class PhueTestCliTest extends TestCase
         file_put_contents($cacheFile, json_encode(['failures' => [], 'at' => date('c')]));
 
         try {
-            // A skipped test that skips for the same reason this environment would: no OPcache JIT.
-            // Whatever the wording, the run is clean and must be recorded as clean.
-            $result = $this->runCli('--filter=testFallbackStrategyResolvesJitWhenEnabled', '--display-skipped');
+            // A test that skips unconditionally: SkipPathFixtureTest, which exists
+            // precisely so this skip path stays exercised. Whatever the wording,
+            // the run is clean and must be recorded as clean.
+            $result = $this->runCli('--filter=testSkipsUnconditionally', '--display-skipped');
 
             $this->assertSame(0, $result['exit']);
 

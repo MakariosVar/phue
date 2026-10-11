@@ -1,13 +1,12 @@
 {
     "name": "fullstack",
-    "description": "Everything: all 7 core modules, like the framework demo repo",
+    "description": "Everything: all 6 core modules, like the framework demo repo",
     "modules": [
         "auth",
         "schii",
         "rest",
         "server",
         "events",
-        "compiler",
         "devtools"
     ]
 }

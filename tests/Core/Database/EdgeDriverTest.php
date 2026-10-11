@@ -8,12 +8,12 @@ use PHPUnit\Framework\TestCase;
 use Phue\Core\Cache\EdgeKvCache;
 use Phue\Core\Database\Drivers\NeonDriver;
 use Phue\Core\Database\Drivers\TursoDriver;
-use Phue\Core\Request;
-use Phue\Core\Response;
-use Phue\Modules\Server\WasmAdapter;
 
 /**
- * Unit tests for Edge & WASM components including TursoDriver, NeonDriver, WasmAdapter, and EdgeKvCache.
+ * Unit tests for the HTTP-based database drivers — TursoDriver, NeonDriver — and
+ * the EdgeKvCache. These speak HTTPS rather than raw TCP, which is what lets them
+ * serve any host whose network or filesystem is constrained. They are HTTP clients,
+ * not a runtime: nothing here is tied to a particular deployment target.
  *
  * @package Phue\Tests\Core\Database
  */
@@ -40,31 +40,6 @@ final class EdgeDriverTest extends TestCase
     {
         $driver = new NeonDriver('https://test-project.neon.tech', 'test_token');
         $this->assertSame('pgsql', $driver->getName());
-    }
-
-    /**
-     * Tests WasmAdapter HTTP lifecycle transformation into a native Request/Response round-trip.
-     *
-     * @return void
-     */
-    public function testWasmAdapterLifecycleAndHttpTransformation(): void
-    {
-        $adapter = new WasmAdapter();
-
-        $env = [
-            'REQUEST_METHOD' => 'POST',
-            'REQUEST_URI' => '/api/edge',
-            'HEADERS' => ['Content-Type' => 'application/json'],
-            'BODY' => (string) json_encode(['hello' => 'wasm']),
-        ];
-
-        $result = $adapter->handleWasmRequest($env, function (Request $req) {
-            return new Response('OK: ' . $req->getMethod(), 200, ['X-Edge-Header' => 'PhueWasm']);
-        });
-
-        $this->assertSame(200, $result['status']);
-        $this->assertSame('PhueWasm', $result['headers']['X-Edge-Header']);
-        $this->assertSame('OK: POST', $result['body']);
     }
 
     /**

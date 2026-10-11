@@ -37,7 +37,6 @@ If you omit the project name, the installer prompts for one:
   ◻ rest     —  REST API: attribute-driven #[Rest] CRUD endpoints
   ◻ server   —  Swoole persistent server adapter
   ◻ events   —  Events: Redis Streams bus + SSE
-  ◻ compiler —  AOT compiler: wiring generation
   ◻ devtools —  Dev tools: collapsible debug toolbar + request profiler (spans, SSR, components, SQL)
 ```
 
@@ -59,8 +58,7 @@ Available templates (also listed with `--list-templates`):
 | `web` | `auth`, `schii` | Classic full-stack web app: admin console + auth |
 | `api` | `auth`, `rest`, `schii` | REST-first API with RBAC + schema admin |
 | `realtime` | `auth`, `events`, `rest` | SSE / Redis streaming apps |
-| `fullstack` | all the modules | Everything, like the framework demo repo |
-| `edge` | `compiler`, `server` | WASM / AOT experiments |
+| `fullstack` | all 6 modules | Everything, like the framework demo repo |
 
 ### Custom module set (non-interactive)
 

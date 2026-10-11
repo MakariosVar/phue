@@ -119,11 +119,11 @@ t_help_exits_zero() {
     assert_output_contains "Usage: phue-create.sh"
 }
 
-t_list_templates_lists_all_six() {
+t_list_templates_lists_all_five() {
     setup
     run_installer --list-templates
     assert_exit 0 "$INSTALLER_EXIT"
-    for t in blank web api realtime fullstack edge; do
+    for t in blank web api realtime fullstack; do
         assert_output_contains "$t"
     done
 }
@@ -200,15 +200,15 @@ t_template_blank_no_modules() {
     assert_file "$TARGET/tests/App/.gitkeep"
 }
 
-t_template_fullstack_all_seven() {
+t_template_fullstack_all_modules() {
     setup
     run_installer "$TARGET" --template=fullstack
     assert_exit 0 "$INSTALLER_EXIT"
 
-    for d in Auth Schii Rest Server Events Compiler DevTool; do
+    for d in Auth Schii Rest Server Events DevTool; do
         assert_dir "$TARGET/src/Modules/$d"
     done
-    for c in AuthModule SchiiModule RestModule ServerModule EventModule CompilerModule DevToolsModule; do
+    for c in AuthModule SchiiModule RestModule ServerModule EventModule DevToolsModule; do
         assert_contains "$TARGET/config/app.php" "$c"
     done
 }
@@ -223,16 +223,6 @@ t_template_realtime() {
     assert_dir "$TARGET/src/Modules/Rest"
     assert_contains "$TARGET/config/app.php" "EventModule"
     assert_contains "$TARGET/config/app.php" "RestModule"
-}
-
-t_template_edge() {
-    setup
-    run_installer "$TARGET" --template=edge
-    assert_exit 0 "$INSTALLER_EXIT"
-
-    assert_dir "$TARGET/src/Modules/Compiler"
-    assert_dir "$TARGET/src/Modules/Server"
-    assert_not_contains "$TARGET/config/app.php" "AuthModule"
 }
 
 t_modules_flag_custom_set() {
@@ -367,13 +357,12 @@ t_composer_uses_phue_script() {
 # ---------------------------------------------------------------- run
 
 run_test "help exits zero" t_help_exits_zero
-run_test "list-templates lists all six templates" t_list_templates_lists_all_six
+run_test "list-templates lists all five templates" t_list_templates_lists_all_five
 run_test "template web: structure + config + isolation" t_template_web_structure_and_config
 run_test "template api: includes auth, rest, schii" t_template_api_includes_auth_rest_schii
 run_test "template blank: no modules" t_template_blank_no_modules
-run_test "template fullstack: all seven modules" t_template_fullstack_all_seven
+run_test "template fullstack: all modules" t_template_fullstack_all_modules
 run_test "template realtime: auth, events, rest" t_template_realtime
-run_test "template edge: compiler, server, no auth" t_template_edge
 run_test "--modules flag: custom selection" t_modules_flag_custom_set
 run_test "dependency auto-resolution: rest adds auth" t_dependency_auto_resolution
 run_test "invalid template fails" t_invalid_template_fails

@@ -47,14 +47,14 @@ final class RequestScopeSpy
  * nothing. So the adapter that the CLI never uses has the isolation, and the
  * adapter the CLI does use does not.
  *
- * RoadRunner and Wasm never create a scope either, so they always run the flat
+ * RoadRunner never creates a scope either, so it always runs the flat
  * FPM fallback branch of flushScope() — which is precisely the branch that
  * never releases array-valued instances and never sees alias-resolved ones.
  *
  * The architectural fix is to move the scope lifecycle into the kernel:
  * Application::handle() should establish a scope when none is active and
- * release it when it returns. Then every adapter — Swoole, RoadRunner, Wasm,
- * FPM, and `phue serve` — inherits isolation from one chokepoint instead of
+ * release it when it returns. Then every adapter — Swoole, RoadRunner, FPM,
+ * and `phue serve` — inherits isolation from one chokepoint instead of
  * each having to remember.
  *
  * These tests encode that guarantee. They use reflection to read the
