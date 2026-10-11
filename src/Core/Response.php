@@ -37,6 +37,49 @@ class Response
     ) {}
 
     /**
+     * Lowercased header name => the cased key actually stored in $headers.
+     *
+     * Maintained alongside $headers so case-insensitive lookup is a hash probe
+     * instead of a scan. It is a cache of $headers, never a second source of
+     * truth: getHeader() falls back to scanning when the index misses, so a
+     * Response built with headers passed straight to the constructor is read
+     * correctly even before the index has seen them.
+     *
+     * @var array<string, string>
+     */
+    private array $headerIndex = [];
+
+    /**
+     * Whether $headerIndex has been derived from the constructor-supplied headers.
+     *
+     * @var bool
+     */
+    private bool $headerIndexBuilt = false;
+
+    /**
+     * Derive the index from $headers the first time it is needed.
+     *
+     * Headers handed to the constructor never passed through setHeader(), so
+     * without this a later setHeader() carrying a different casing for the same
+     * header would fail to evict it and both variants would be sent — which the
+     * previous linear scan handled correctly. The flag is not "is the index
+     * empty": it is "has the index seen every header yet", because a response
+     * whose first header arrives through setHeader() would otherwise look built.
+     */
+    private function ensureHeaderIndex(): void
+    {
+        if ($this->headerIndexBuilt) {
+            return;
+        }
+
+        foreach ($this->headers as $key => $value) {
+            $this->headerIndex[strtolower((string) $key)] = (string) $key;
+        }
+
+        $this->headerIndexBuilt = true;
+    }
+
+    /**
      * Create an HTML HTTP response object.
      *
      * @param string $content HTML payload
@@ -112,14 +155,30 @@ class Response
      */
     public function setHeader(string $name, string $value): self
     {
+        // Case-insensitive replacement through an index rather than a scan.
+        //
+        // This used to walk every registered header and strtolower() each key on
+        // every call. That is O(n) per header, and the kernel applies the security
+        // block twice by design — once in the middleware for the normal path and
+        // once after the pipeline so an exception-produced response cannot escape
+        // without them — so a single request paid for twelve such scans and roughly
+        // a hundred strtolower() calls to set six headers twice.
+        //
+        // The duplicate application is deliberate and must stay; only the cost of
+        // being idempotent was the problem. Observable behaviour is unchanged: the
+        // surviving header carries the casing of the name passed in here, exactly
+        // as before, and a differently-cased duplicate is still removed.
         $normalizedName = strtolower($name);
-        foreach (array_keys($this->headers) as $key) {
-            if (strtolower($key) === $normalizedName) {
-                unset($this->headers[$key]);
-            }
+
+        $this->ensureHeaderIndex();
+
+        if (isset($this->headerIndex[$normalizedName])) {
+            unset($this->headers[$this->headerIndex[$normalizedName]]);
         }
 
         $this->headers[$name] = $value;
+        $this->headerIndex[$normalizedName] = $name;
+
         return $this;
     }
 
@@ -143,8 +202,20 @@ class Response
     public function getHeader(string $name, ?string $default = null): ?string
     {
         $normalizedName = strtolower($name);
-        foreach ($this->headers as $key => $value) {
-            if (strtolower($key) === $normalizedName) {
+
+        $this->ensureHeaderIndex();
+
+        $key = $this->headerIndex[$normalizedName] ?? null;
+
+        if ($key !== null && array_key_exists($key, $this->headers)) {
+            return $this->headers[$key];
+        }
+
+        // Fall back to a scan. Reaching here means the index points at a header
+        // that is no longer present, and a wrong answer would be a security header
+        // silently reported as absent — so it is cheaper to be correct than fast.
+        foreach ($this->headers as $headerKey => $value) {
+            if (strtolower((string) $headerKey) === $normalizedName) {
                 return $value;
             }
         }
