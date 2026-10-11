@@ -18,8 +18,6 @@ use Phue\Core\UI\PhuePartialRenderer;
 use Phue\Core\Database\Connection;
 use Phue\Core\Ssr\NullSsrEngine;
 use Phue\Core\UI\TemplateCompilerBridge;
-use Phue\Core\Ssr\UnixSsrClient;
-use Phue\Core\Ssr\BunSsrEngine;
 use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Endpoint\AuthorizedModelEndpoint;
 use Phue\Modules\Schii\Endpoint\ModelEndpoint;
@@ -36,11 +34,9 @@ use Phue\Modules\Schii\Controller\ConsoleController;
 use Phue\Modules\Schii\Controller\PhiiController;
 use Phue\Modules\Schii\Generator\BuildGenerator;
 use Phue\Modules\Schii\Generator\RuntimeGenerator;
-use Phue\Core\Ssr\SsrEngine;
 use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\AuthManager;
 use Phue\Modules\Auth\RbacManager;
-use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
 /**
@@ -86,7 +82,7 @@ class SchiiModule extends Module
     }
 
     /**
-     * Configures Schii configuration and core UI loaders.
+     * Configures Schii configuration.
      *
      * @return void
      */
@@ -114,20 +110,6 @@ class SchiiModule extends Module
                 return SchiiConfig::fromArray($rawConfig);
             }
         );
-
-        // Directory where compiled component PHP blocks are written for OPCache execution
-        $viewsCacheDir = $this->basePath . '/storage/cache/views';
-
-        // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
-        $this->container->singleton('phui.loader', function () use ($viewsCacheDir): PhueComponentLoader {
-            return new PhueComponentLoader(
-                componentsDir: $this->basePath . '/src/Core/UI/Phui',
-                parser: null,
-                persistentCache: $this->container->get(CacheInterface::class),
-                viewsCacheDir: $viewsCacheDir,
-                compilerBridge: $this->container->get(TemplateCompilerBridge::class)
-            );
-        });
     }
 
     /**
