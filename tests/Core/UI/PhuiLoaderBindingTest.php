@@ -221,7 +221,6 @@ PHP);
     private static function readPrivate(object $subject, string $property): mixed
     {
         $reflection = new ReflectionProperty($subject, $property);
-        $reflection->setAccessible(true);
 
         return $reflection->isInitialized($subject) ? $reflection->getValue($subject) : null;
     }
