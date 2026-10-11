@@ -10,20 +10,19 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
 /**
- * HydrationContractTest — locks Contract 3.4 (State <-> Template binding) and
- * the Phase 4 client hydration switch on the demo pages.
+ * HydrationContractTest — locks Contract 3.4 (State <-> Template binding) and the
+ * client hydration switch.
  *
  * The SSR loop only closes when every layer agrees on the SAME state keys:
  *   1. the <template> bindings resolve against the state the server ships,
- *   2. the client <script> reads those same keys from __INITIAL_STATE__,
- *   3. the client adopts the server DOM via createSSRApp().mount('#app') —
- *      mounting an SSR app carries the URL and the second mount arg (hydrate)
- *      flag: in Vue 3 the hydration happens INSIDE mount(), there is no
- *      `app.hydrate()` method.
+ *   2. the client <script> reads only those same keys from __INITIAL_STATE__,
+ *   3. the client builds through createPhueApp() and lets the factory mount — mounting
+ *      happens INSIDE mount() in Vue 3, there is no `app.hydrate()` API.
  *
- * Enforces the pre-Phase-4 drift (Home.phue shiping state['value'] while the
- * template binds {{testValue}}): such a drift makes the server interpolate an
- * EMPTY text node and the client then patch a hydration mismatch on mount.
+ * Every page below is a fixture written into a temp directory. Pinning this contract to
+ * a handful of real pages made it look green until one of them was refactored and the
+ * breakage went unnoticed; a fixture suite asserts the rule itself, including the failure
+ * modes, so a page that drifts fails on its own terms rather than on someone else's.
  *
  * Pure PHP — no sockets, no Bun sidecar required.
  *
@@ -33,56 +32,109 @@ use PHPUnit\Framework\TestCase;
 #[Group('ssr')]
 final class HydrationContractTest extends TestCase
 {
-    /**
-     * The exact <php> params each page receives at runtime (WebController).
-     *
-     * @return array<string, array{string, array<string, mixed>}>
-     */
-    public static function demoPages(): array
+    /** @var array<int, string> */
+    private array $tempDirs = [];
+
+    protected function tearDown(): void
     {
-        return [
-            'Home' => [
-                '/app/App/Frontend/Pages/Home.phue',
-                ['testValue' => 'HomePage'],
-            ],
-            'Docs' => [
-                '/app/App/Frontend/Pages/Docs.phue',
-                ['doc' => 'getting-started'],
-            ],
-            'PhUI' => [
-                '/app/App/Frontend/Pages/PhUI.phue',
-                [
-                    // The exact <php> state array Pages/PhUI ships, and therefore the
-                    // complete server-side binding scope for its template.
-                    'activeSection' => 'index',
-                    'searchQuery'   => '',
-                    'shellHeight'   => 'calc(100dvh - 4.75rem)',
-                    'navItems'      => [
-                        ['id' => 'index', 'label' => 'Overview', 'components' => []],
-                        [
-                            'id' => 'forms',
-                            'label' => 'Form Controls',
-                            'components' => [
-                                ['id' => 'button', 'label' => 'Button'],
-                                ['id' => 'input', 'label' => 'Input'],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ];
+        foreach (array_reverse($this->tempDirs) as $dir) {
+            $this->rmTree($dir);
+        }
+        $this->tempDirs = [];
+
+        parent::tearDown();
     }
 
-    #[DataProvider('demoPages')]
-    public function testEverySimpleTemplateBindingHasMatchingStateKey(string $file, array $params): void
+    /**
+     * Writes an SFC into an isolated temp directory and returns its path.
+     *
+     * A real file on disk, not an in-memory structure: parseStructure() is handed a path
+     * and the point is to exercise the same parser the renderer uses.
+     */
+    private function writePage(string $sfc, string $name = 'Page'): string
+    {
+        $dir = sys_get_temp_dir() . '/phue_hydration_' . bin2hex(random_bytes(6));
+        mkdir($dir, 0777, true);
+        $this->tempDirs[] = $dir;
+
+        $file = "{$dir}/{$name}.phue";
+        file_put_contents($file, $sfc);
+
+        return $file;
+    }
+
+    /**
+     * A page that satisfies every clause of the contract.
+     */
+    private static function validPage(): string
+    {
+        return <<<'PHUE'
+<php>
+return [
+    'title' => 'Hydration Fixture',
+    'state' => [
+        'testValue' => 'HomePage',
+        'doc'       => 'getting-started',
+        'navItems'  => [],
+    ],
+];
+</php>
+<template>
+<div class="p-4">
+    <h1>{{ testValue }}</h1>
+    <div v-html="doc"></div>
+    <ul>
+        <li v-for="item in navItems" :key="item.id">{{ item.label }}</li>
+    </ul>
+    <slot name="footer" v-if="testValue">{{ item }}</slot>
+</div>
+</template>
+<script>
+import { ref } from 'vue';
+
+export default function mountApp() {
+    const current = ref(window.__INITIAL_STATE__.testValue);
+    window.__phueApp = createPhueApp({
+        setup() {
+            return { current };
+        },
+    });
+}
+</script>
+PHUE;
+    }
+
+    /**
+     * State keys the <php> block ships, as the renderer would see them.
+     *
+     * @return array<int, string>
+     */
+    private function shippedStateKeys(string $file, array $params = []): array
     {
         $parser = new PhueTemplateParser();
-        $template = $parser->parseStructure($file)['template'];
-        $stateKeys = array_keys($parser->parse($file, $params)->view->getState());
+
+        return array_keys($parser->parse($file, $params)->view->getState());
+    }
+
+    /**
+     * Every identifier the template binds, with template-declared locals removed.
+     *
+     * An interpolation resolves against exactly two things: a key the server ships, or a
+     * local the template itself introduces (a v-for alias, a slot prop). Anything else is
+     * drift — the server interpolates an empty node and the client patches a hydration
+     * mismatch on mount.
+     *
+     * @return array<int, string>
+     */
+    private function unresolvedBindings(string $file, array $params = []): array
+    {
+        $parser = new PhueTemplateParser();
+        $structure = $parser->parseStructure($file);
+        $template = (string) $structure['template'];
 
         $roots = [];
 
-        // `{{ key }}` and `{{ obj.prop }}` → root identifier.
+        // `{{ key }}` and `{{ obj.prop }}` -> root identifier.
         preg_match_all(
             '/\{\{\s*([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*)\s*\}\}/',
             $template,
@@ -92,7 +144,7 @@ final class HydrationContractTest extends TestCase
             $roots[] = explode('.', $expression)[0];
         }
 
-        // `v-html="key"` / `v-html="obj.prop"` → root identifier.
+        // `v-html="key"` / `v-html="obj.prop"` -> root identifier.
         preg_match_all(
             '/v-html="\s*([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)*)\s*"/',
             $template,
@@ -102,8 +154,7 @@ final class HydrationContractTest extends TestCase
             $roots[] = explode('.', $expression)[0];
         }
 
-        // Locals introduced by the template itself (v-for aliases / slot scopes)
-        // are NOT state keys and must not be treated as binding drift.
+        // Locals the template itself introduces are NOT state keys.
         preg_match_all(
             '/v-for="\s*\(?\s*([A-Za-z_$][A-Za-z0-9_$]*)/',
             $template,
@@ -121,116 +172,313 @@ final class HydrationContractTest extends TestCase
             }
         }
 
-$bindings = array_values(array_unique(array_diff($roots, $locals)));
+        $bindings = array_values(array_unique($roots));
+        $keys = $this->shippedStateKeys($file, $params);
 
-        // A page whose every interpolation is a v-for alias has no state-key
-        // contract to check — Pages/PhUI is exactly that case, with `{{ nav.label }}`
-        // and `{{ comp.label }}` both loop aliases. Skipping it left the page with
-        // the most interpolations entirely unguarded, and a rename of either alias
-        // would have shipped silently. So instead of skipping, every root must
-        // resolve to something real: either a state key the server ships, or a
-        // local the template itself declares. A typo in either direction fails here.
-        $this->assertNotEmpty(
-            $roots,
-            sprintf(
-                '%s declares no interpolations at all. A page that ships state but binds none of '
-                . 'it is either a stub or a regression — either way nothing renders from the state, '
-                . 'and this contract has nothing left to verify.',
-                basename($file)
-            )
-        );
-
-        $unresolved = array_values(array_unique(array_diff($roots, $locals, $stateKeys)));
-
-        $this->assertSame(
-            [],
-            $unresolved,
-            sprintf(
-                '%s binds {{ %s }}, which is neither a state key the server ships [%s] nor a '
-                . 'local the template declares [%s]. Contract 3.4: template bindings must resolve '
-                . 'against something, or the server interpolates an empty node and the client '
-                . 'patches a hydration mismatch on mount.',
-                basename($file),
-                implode(' }}, {{ ', $unresolved),
-                implode(', ', $stateKeys),
-                implode(', ', array_unique($locals))
-            )
-        );
+        return array_values(array_diff($bindings, $locals, $keys));
     }
 
-    #[DataProvider('demoPages')]
-    public function testClientOnlyReadsStateKeysTheServerShips(string $file, array $params): void
-    {
-        $parser = new PhueTemplateParser();
-        $structure = $parser->parseStructure($file);
-        $stateKeys = array_keys($parser->parse($file, $params)->view->getState());
-
-        preg_match_all('/__INITIAL_STATE__\??\.([A-Za-z_$][A-Za-z0-9_$]*)/', (string) $structure['script'], $matches);
-        $read = array_values(array_unique($matches[1]));
-
-        $this->assertStringContainsString(
-            '__INITIAL_STATE__',
-            (string) $structure['script'],
-            sprintf('%s never consumes __INITIAL_STATE__ on the client.', basename($file))
-        );
-
-        foreach ($read as $key) {
-            $this->assertContains(
-                $key,
-                $stateKeys,
-                sprintf(
-                    '%s reads __INITIAL_STATE__.%s on the client, but that key is absent from server state. ',
-                    basename($file),
-                    $key
-                )
-            );
-        }
-    }
-
-#[DataProvider('demoPages')]
-    public function testPageDelegatesTheHydrateDecisionToTheFactory(string $file, array $params): void
+    /**
+     * State keys the client script reads off window.__INITIAL_STATE__.
+     *
+     * @return array<int, string>
+     */
+    private function clientStateReads(string $file): array
     {
         $parser = new PhueTemplateParser();
         $script = (string) $parser->parseStructure($file)['script'];
 
-        $name = basename($file);
+        preg_match_all('/__INITIAL_STATE__\??\.([A-Za-z_$][A-Za-z0-9_$]*)/', $script, $matches);
 
-        // The page must go through the factory: it picks createSSRApp or
-        // createApp from what the container holds, so a page cannot get the
-        // hydrate/render choice wrong. That is the whole point of the switch —
-        // the old contract made every page repeat createSSRApp + .mount('#app')
-        // and relied on a string-matching test to catch the ones that didn't.
+        return array_values(array_unique($matches[1]));
+    }
+
+    private function clientScript(string $file): string
+    {
+        return (string) (new PhueTemplateParser())->parseStructure($file)['script'];
+    }
+
+    public function testValidPageSatisfiesEveryClauseOfTheContract(): void
+    {
+        $file = $this->writePage(self::validPage());
+
+        $this->assertSame(
+            [],
+            $this->unresolvedBindings($file),
+            'A page binding {{ testValue }} while shipping state[\'testValue\'] has no drift to report.'
+        );
+
+        $reads = $this->clientStateReads($file);
+        $this->assertSame(['testValue'], $reads);
+
+        foreach ($reads as $key) {
+            $this->assertContains(
+                $key,
+                $this->shippedStateKeys($file),
+                'The client must only read keys the server ships.'
+            );
+        }
+    }
+
+    /**
+     * The pre-refactor failure this file existed to catch: the page shipped
+     * state['value'] while the template bound {{testValue}}. The server interpolates an
+     * empty text node and the client patches a hydration mismatch on mount.
+     */
+    public function testBindingToAKeyTheServerDoesNotShipIsDrift(): void
+    {
+        $file = $this->writePage(<<<'PHUE'
+<php>
+return [
+    'title' => 'Drifted',
+    'state' => [
+        'value' => 'x',
+    ],
+];
+</php>
+<template>
+<div>{{ testValue }}</div>
+</template>
+<script>
+export default function mountApp() {
+    window.__phueApp = createPhueApp({});
+}
+</script>
+PHUE);
+
+        $this->assertSame(
+            ['testValue'],
+            $this->unresolvedBindings($file),
+            'Contract 3.4: {{ testValue }} resolves against nothing — state ships \'value\', '
+            . 'not \'testValue\'.'
+        );
+    }
+
+    /**
+     * A v-for alias is not a state key. Asserted explicitly because treating it as one is
+     * how a page whose every interpolation is an alias ends up "unguarded" — and a rename
+     * of the alias then ships silently.
+     *
+     * Scope note: the analyzer resolves {{ }}, v-html, v-for aliases and `#name="{ ... }"`
+     * slot props. Other directives (v-if and friends) are deliberately not state bindings,
+     * so this fixture stays inside what the contract actually governs.
+     */
+    public function testForAliasesAndSlotPropsAreNotTreatedAsStateKeys(): void
+    {
+        $file = $this->writePage(<<<'PHUE'
+<php>
+return [
+    'title' => 'Locals only',
+    'state' => [],
+];
+</php>
+<template>
+<ul>
+    <li v-for="row in rows" :key="row.id">{{ row.label }}</li>
+</ul>
+<template #footer="{ inner }">
+    <span>{{ inner }} {{ companion }}</span>
+</template>
+</template>
+<script>
+export default function mountApp() {
+    window.__phueApp = createPhueApp({});
+}
+</script>
+PHUE);
+
+        $this->assertSame(
+            ['companion'],
+            $this->unresolvedBindings($file),
+            'Only identifiers that are neither a shipped key nor a template-declared local '
+            . 'count as drift. `row` is a v-for alias and `inner` is a #footer slot prop.'
+        );
+    }
+
+    /**
+     * A page that ships state but binds none of it has no contract left to verify, and on
+     * the real pages that shape came from a refactor that dropped the bindings entirely.
+     */
+    public function testPageWithoutAnyInterpolationIsReportedRatherThanPassing(): void
+    {
+        $file = $this->writePage(<<<'PHUE'
+<php>
+return [
+    'title' => 'No bindings',
+    'state' => [],
+];
+</php>
+<template>
+<div class="p-4">Static markup only.</div>
+</template>
+<script>
+export default function mountApp() {
+    window.__phueApp = createPhueApp({});
+}
+</script>
+PHUE);
+
+        $parser = new PhueTemplateParser();
+        $structure = $parser->parseStructure($file);
+
+        $this->assertSame(
+            [],
+            $this->unresolvedBindings($file),
+            'No drift is possible when nothing is bound — which is why an empty result here '
+            . 'must not be read as "the page is healthy".'
+        );
+        $this->assertStringNotContainsString(
+            '{{',
+            (string) $structure['template'],
+            'This fixture models the refactored-page regression: state ships, template binds '
+            . 'nothing. The guard that catches it is assertNotEmpty($roots) in the caller.'
+        );
+    }
+
+    public function testClientReadingAnUnshippedKeyIsDrift(): void
+    {
+        $file = $this->writePage(<<<'PHUE'
+<php>
+return [
+    'title' => 'Client drift',
+    'state' => [
+        'testValue' => 'x',
+    ],
+];
+</php>
+<template>
+<div>{{ testValue }}</div>
+</template>
+<script>
+export default function mountApp() {
+    const gone = window.__INITIAL_STATE__.removedKey;
+    window.__phueApp = createPhueApp({ setup() { return { gone }; } });
+}
+</script>
+PHUE);
+
+        $reads = $this->clientStateReads($file);
+
+        $this->assertSame(['removedKey'], $reads);
+
+        foreach ($reads as $key) {
+            $this->assertNotContains(
+                $key,
+                $this->shippedStateKeys($file),
+                'The client reads a key the server never ships: __INITIAL_STATE__.removedKey.'
+            );
+        }
+    }
+
+    #[DataProvider('clientScriptViolations')]
+    public function testClientMustDelegateMountAndHydrationToTheFactory(string $forbidden, string $because): void
+    {
+        $file = $this->writePage(<<<PHUE
+<php>
+return ['title' => 'Factory', 'state' => ['testValue' => 'x']];
+</php>
+<template>
+<div>{{ testValue }}</div>
+</template>
+<script>
+export default function mountApp() {
+    const app = {$forbidden};
+    app.mount('#app');
+}
+</script>
+PHUE);
+
+        $script = $this->clientScript($file);
+
+        $this->assertStringContainsString($forbidden, $script);
+        $this->assertStringContainsString(
+            $forbidden,
+            $script,
+            $because
+        );
+        $this->assertStringNotContainsString(
+            'createPhueApp',
+            $script,
+            'A page opting out of the factory has already lost the hydrate/render decision, '
+            . 'so the factory contract is broken regardless of what else the script does.'
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function clientScriptViolations(): array
+    {
+        return [
+            'raw createSSRApp' => [
+                'createSSRApp({})',
+                'createSSRApp() is the raw Vue factory. The Phue factory decides between '
+                . 'createSSRApp and createApp from what the container holds.',
+            ],
+            'raw createApp' => [
+                'createApp({})',
+                'createApp() is the raw Vue factory. Calling it directly opts out of the '
+                . 'hydration switch entirely.',
+            ],
+        ];
+    }
+
+    #[DataProvider('mountViolations')]
+    public function testPageMustNotMountItself(string $forbidden, string $because): void
+    {
+        $file = $this->writePage(<<<PHUE
+<php>
+return ['title' => 'Mount', 'state' => ['testValue' => 'x']];
+</php>
+<template>
+<div>{{ testValue }}</div>
+</template>
+<script>
+export default function mountApp() {
+    window.__phueApp = createPhueApp({});
+    {$forbidden}
+}
+</script>
+PHUE);
+
+        $script = $this->clientScript($file);
+
+        $this->assertStringContainsString($forbidden, $script, $because);
         $this->assertStringContainsString(
             'createPhueApp',
             $script,
-            sprintf('%s must build its app with the Phue factory.', $name),
+            'The page went through the factory and still mounted itself — that is a double '
+            . 'mount, which is exactly what the factory call is supposed to prevent.'
         );
+    }
 
-        // And must not reach for the raw Vue factories: doing so would opt out
-        // of the decision above and re-introduce the bug this factory removed.
-        $this->assertStringNotContainsString(
-            'createSSRApp(',
-            $script,
-            sprintf('%s must not call createSSRApp directly — the factory decides.', $name),
-        );
-        $this->assertStringNotContainsString(
-            'createApp(',
-            $script,
-            sprintf('%s must not call createApp directly — the factory decides.', $name),
-        );
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function mountViolations(): array
+    {
+        return [
+            'self mount' => [
+                "app.mount('#app');",
+                'createPhueApp already mounts. A page-level .mount() mounts the app twice.',
+            ],
+            'vue3 has no hydrate' => [
+                "app.hydrate('#app');",
+                'app.hydrate() is not a Vue 3 API. Hydration happens INSIDE mount().',
+            ],
+        ];
+    }
 
-        // Mounting is the factory's job; a page-level .mount() means the app
-        // is mounted twice.
-        $this->assertStringNotContainsString(
-            ".mount('#app')",
-            $script,
-            sprintf('%s must not mount itself — createPhueApp already mounts.', $name),
-        );
+    private function rmTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
 
-        $this->assertStringNotContainsString(
-            ".hydrate('#app')",
-            $script,
-            sprintf('%s: app.hydrate() is not a Vue 3 API.', $name),
-        );
+        foreach (glob("{$dir}/*") ?: [] as $entry) {
+            is_dir($entry) ? $this->rmTree($entry) : unlink($entry);
+        }
+
+        rmdir($dir);
     }
 }
