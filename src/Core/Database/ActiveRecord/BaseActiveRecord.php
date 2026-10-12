@@ -55,7 +55,15 @@ abstract class BaseActiveRecord implements JsonSerializable
      */
     protected static array $softDeleteMetaCache = [];
 
-    
+    /**
+     * Cache of class::method => is that a relation accessor?
+     *
+     * Resolved once per pair: __get() reaches this on every attribute miss,
+     * including from serialisers walking a model they know nothing about.
+     *
+     * @var array<string, bool>
+     */
+    private static array $relationMethodCache = [];
 
     /**
      * Database table associated with the model.
@@ -316,7 +324,7 @@ abstract class BaseActiveRecord implements JsonSerializable
             return $this->relations[$key];
         }
 
-        if (method_exists($this, $key)) {
+        if ($this->isRelationMethod($key)) {
             $relation = $this->$key();
 
             if ($relation instanceof Relation) {
@@ -327,6 +335,53 @@ abstract class BaseActiveRecord implements JsonSerializable
         }
 
         return null;
+    }
+
+    /**
+     * Whether a zero-argument method on this model is a relation accessor.
+     *
+     * Role, not existence. The previous check was method_exists(), which also
+     * matched delete(), save(), forceDelete(), restore(), validate() and load()
+     * — so a plain property read such as `$model->delete` in a template, a
+     * debug dump or a serialiser actually executed the method before the return
+     * value could be discarded. A read that can write is not a magic getter.
+     *
+     * The declared return type is the discriminator, because it is the one thing
+     * a relation accessor cannot avoid writing down. Demanding a naming
+     * convention instead would have made every existing model wrong.
+     *
+     * @param string $key Method name.
+     * @return bool
+     */
+    protected function isRelationMethod(string $key): bool
+    {
+        if (!method_exists($this, $key)) {
+            return false;
+        }
+
+        $cacheKey = static::class . '::' . $key;
+
+        if (isset(self::$relationMethodCache[$cacheKey])) {
+            return self::$relationMethodCache[$cacheKey];
+        }
+
+        try {
+            $method = new \ReflectionMethod($this, $key);
+        } catch (\ReflectionException) {
+            return self::$relationMethodCache[$cacheKey] = false;
+        }
+
+        if ($method->isStatic() || $method->getNumberOfRequiredParameters() > 0) {
+            return self::$relationMethodCache[$cacheKey] = false;
+        }
+
+        $returnType = $method->getReturnType();
+
+        $isRelation = $returnType instanceof \ReflectionNamedType
+            && !$returnType->isBuiltin()
+            && is_a($returnType->getName(), Relation::class, true);
+
+        return self::$relationMethodCache[$cacheKey] = $isRelation;
     }
 
     /**

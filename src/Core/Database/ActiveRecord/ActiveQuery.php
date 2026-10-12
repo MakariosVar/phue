@@ -98,10 +98,22 @@ class ActiveQuery extends QueryBuilder
         }
 
         // Default: exclude soft-deleted records
-        $this->whereClauses[] = [
+        $clause = [
             'boolean' => 'AND',
             'sql'     => "{$quotedColumn} IS NULL",
         ];
+
+        // get() and first() re-apply the scope on every call, and appending
+        // blindly grew one clause per terminal call on a reused query object —
+        // the SQL got longer each time and no longer matched what ran. Idempotent
+        // application is what "global scope" is supposed to mean.
+        foreach ($this->whereClauses as $existing) {
+            if ($existing['sql'] === $clause['sql']) {
+                return;
+            }
+        }
+
+        $this->whereClauses[] = $clause;
     }
 
     /**
@@ -210,9 +222,13 @@ class ActiveQuery extends QueryBuilder
      */
     public function first(): ?BaseActiveRecord
     {
+        $previousLimit = $this->limitValue;
+
         $this->limit(1);
         $this->applySoftDeleteScope();
         $records = parent::get();
+
+        $this->limitValue = $previousLimit;
 
         if (empty($records) || !is_array($records[0])) {
             return null;
