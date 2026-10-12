@@ -102,7 +102,11 @@ class QueryBuilder
      */
     public function where(string $column, mixed $operator = null, mixed $value = null): static
     {
-        return $this->addWhereClause('AND', $column, $operator, $value);
+        // func_num_args(), because `$value === null` cannot tell the two-argument
+        // shorthand from an explicit three-argument comparison against NULL. On
+        // that collision the operator string was promoted into the value slot, so
+        // where('c','=',null) bound the literal '='.
+        return $this->addWhereClause('AND', $column, $operator, $value, func_num_args());
     }
 
     /**
@@ -115,7 +119,7 @@ class QueryBuilder
      */
     public function orWhere(string $column, mixed $operator = null, mixed $value = null): static
     {
-        return $this->addWhereClause('OR', $column, $operator, $value);
+        return $this->addWhereClause('OR', $column, $operator, $value, func_num_args());
     }
 
     /**
@@ -185,12 +189,15 @@ class QueryBuilder
      * @param string $column Column name to compare.
      * @param mixed $operator Comparison operator or value.
      * @param mixed $value Target comparison value.
+     * @param int $argc Argument count as seen by the public where()/orWhere(),
+     *                  so the two-argument shorthand stays distinguishable from
+     *                  a three-argument comparison against NULL.
      * @return static
      * @throws InvalidArgumentException If an invalid operator is provided.
      */
-    protected function addWhereClause(string $boolean, string $column, mixed $operator = null, mixed $value = null): static
+    protected function addWhereClause(string $boolean, string $column, mixed $operator = null, mixed $value = null, int $argc = 4): static
     {
-        if ($value === null) {
+        if ($argc < 3) {
             $value = $operator;
             $operator = '=';
         }
@@ -207,6 +214,26 @@ class QueryBuilder
 
         if (!in_array($cleanOperator, $allowedOperators, true)) {
             throw new InvalidArgumentException("Invalid operator provided for WHERE clause: [{$operator}]");
+        }
+
+        // NULL has no equality in SQL: `col = NULL` is never true, so binding a
+        // null placeholder makes the clause match zero rows and reads as "the
+        // filter is broken". IS NULL takes no placeholder at all.
+        if ($value === null) {
+            $nullClause = match ($cleanOperator) {
+                '=', 'IS'     => "{$quotedColumn} IS NULL",
+                '!=', '<>', 'IS NOT' => "{$quotedColumn} IS NOT NULL",
+                default       => null,
+            };
+
+            if ($nullClause !== null) {
+                $this->whereClauses[] = [
+                    'boolean' => $boolean,
+                    'sql'     => $nullClause,
+                ];
+
+                return $this;
+            }
         }
 
         // Append ESCAPE clause when doing LIKE queries to correctly handle escaped wildcards
@@ -335,9 +362,18 @@ class QueryBuilder
      */
     public function first(): array|object|null
     {
+        $previousLimit = $this->limitValue;
+
         $this->limit(1);
         $stmt = $this->connection->query($this->toSql(), $this->getBindings());
         $result = $stmt->fetch();
+
+        // A builder is reusable, so a terminal method must consume the
+        // accumulator without changing it. Leaving LIMIT 1 behind meant the
+        // next get() on the same builder silently returned one row, and a
+        // caller who had set their own limit lost it. count() below already
+        // does this; first() is the one that was missing.
+        $this->limitValue = $previousLimit;
 
         return $result !== false ? $result : null;
     }
