@@ -9,6 +9,7 @@ use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\I18n\Translator;
+use Phue\Core\ResettableInterface;
 use Phue\Core\Response;
 use Phue\Core\Ssr\SsrEngine;
 use Psr\Log\LoggerInterface;
@@ -18,7 +19,7 @@ use Throwable;
 /**
  * Renders Phue components into HTTP responses.
  */
-class ComponentRenderer
+class ComponentRenderer implements ResettableInterface
 {
     /**
      * Track rendered component styles to deduplicate per request.
@@ -58,6 +59,23 @@ class ComponentRenderer
         private ?LoggerInterface $logger = null,
         private array $csrfConfig = []
     ) {}
+
+    /**
+     * Clears per-response render bookkeeping.
+     *
+     * This class is a container singleton, so it serves every request a worker
+     * process handles. $renderedStyles exists to emit a component's inline
+     * <style> block once per *response*; without this reset the "once" became
+     * "once per process" and every request after the first shipped the page
+     * with no CSS. Deduplication within a single response still works, because
+     * this runs at the scope boundary, not during the render.
+     *
+     * @return void
+     */
+    public function reset(): void
+    {
+        $this->renderedStyles = [];
+    }
 
     /**
      * Renders a component by name or title, returning a Response.

@@ -27,6 +27,11 @@ class Container
     private const FALLBACK_SCOPE = '__none__';
 
     /**
+     * Key the active scope is stored under inside coroutine-local storage.
+     */
+    private const COROUTINE_SCOPE_KEY = 'phue.container.scope';
+
+    /**
      * Registered service factories indexed by ID/Class name.
      *
      * @var array<string, callable>
@@ -156,6 +161,43 @@ class Container
     }
 
     /**
+     * Returns the coroutine-local storage bag, or null outside a coroutine.
+     *
+     * Why this exists
+     * ---------------
+     * The scope *key* is already coroutine-specific — createScope() derives it
+     * from Swoole\Coroutine::getCid(). But the pointer saying "which scope is
+     * active" was a single instance property, read by getEffectiveScopeKey().
+     * Under `enable_coroutine => true` (the SwooleAdapter default) two requests
+     * interleave at every I/O point, so the second one to call setScope() while
+     * the first is yielded overwrote the pointer, and the first resolved its
+     * services against the second's bucket.
+     *
+     * Swoole\Coroutine::getContext() is the per-coroutine bag that survives a
+     * yield. Storing the pointer there makes setScope/getScope/getEffectiveScopeKey
+     * observe the same execution unit as createScope() does.
+     *
+     * Outside a coroutine (FPM, RoadRunner, CLI, the test suite) there is no
+     * bag to use and the plain property remains the single source of truth.
+     *
+     * @return \ArrayAccess|null Coroutine context bag, or null when not in a coroutine.
+     */
+    private function coroutineScopeStore(): ?\ArrayAccess
+    {
+        if (!class_exists('\Swoole\Coroutine')) {
+            return null;
+        }
+
+        if (\Swoole\Coroutine::getCid() <= 0) {
+            return null;
+        }
+
+        $context = \Swoole\Coroutine::getContext();
+
+        return $context instanceof \ArrayAccess ? $context : null;
+    }
+
+    /**
      * Set active scope context for the container.
      *
      * @param ScopeContext|null $scope
@@ -163,6 +205,18 @@ class Container
      */
     public function setScope(?ScopeContext $scope): void
     {
+        $store = $this->coroutineScopeStore();
+
+        if ($store !== null) {
+            if ($scope === null) {
+                unset($store[self::COROUTINE_SCOPE_KEY]);
+            } else {
+                $store[self::COROUTINE_SCOPE_KEY] = $scope;
+            }
+
+            return;
+        }
+
         $this->currentScope = $scope;
     }
 
@@ -173,6 +227,14 @@ class Container
      */
     public function getScope(): ?ScopeContext
     {
+        $store = $this->coroutineScopeStore();
+
+        if ($store !== null) {
+            $scope = $store[self::COROUTINE_SCOPE_KEY] ?? null;
+
+            return $scope instanceof ScopeContext ? $scope : null;
+        }
+
         return $this->currentScope;
     }
 
@@ -199,10 +261,14 @@ class Container
 
     /**
      * Resolves current effective scope storage key.
+     *
+     * Reads through getScope() rather than the raw property so that every
+     * consumer — get(), has(), bound(), bind() — partitions by the scope the
+     * *current execution unit* owns, not by whichever coroutine wrote last.
      */
     private function getEffectiveScopeKey(?ScopeContext $scope = null): string
     {
-        $targetScope = $scope ?? $this->currentScope;
+        $targetScope = $scope ?? $this->getScope();
         return $targetScope?->id ?? self::FALLBACK_SCOPE;
     }
 
@@ -354,6 +420,35 @@ class Container
     }
 
     /**
+     * Place an already-constructed instance into a scope bucket.
+     *
+     * Why this exists
+     * ---------------
+     * The kernel has to tell the container "the Request for *this* scope is
+     * this object". scoped()/bind() cannot express that: bind() writes
+     * $this->factories[$id], and the factory table is shared by every scope on
+     * the container. Under concurrency the last coroutine to bind decides what
+     * all the others resolve — one request receiving another's headers, body,
+     * cookies and IP address.
+     *
+     * Writing the instance straight into $scopedInstances keeps the value
+     * partitioned by scope id, which is the same boundary get() already trusts.
+     *
+     * @param string $id Service identifier or class/interface FQCN.
+     * @param mixed $instance The instance this scope resolves the id to.
+     * @param ScopeContext|null $scope Target scope, or null for the active one.
+     * @return void
+     */
+    public function scopedInstance(string $id, mixed $instance, ?ScopeContext $scope = null): void
+    {
+        $targetId = $this->resolveAliasTarget($id);
+        $scopeKey = $this->getEffectiveScopeKey($scope);
+
+        $this->scopedKeys[$targetId] = true;
+        $this->scopedInstances[$scopeKey][$targetId] = $instance;
+    }
+
+    /**
      * Register an alias for an existing abstract binding or service.
      *
      * @param string $alias    Alias identifier (e.g. 'db').
@@ -370,6 +465,19 @@ class Container
     /**
      * Clear all request-scoped instances for a given scope and trigger optional reset logic.
      *
+     * Singletons live in $instances and a scope flush never removes them, so the
+     * scoped walk below cannot reach them. A singleton that carries per-request
+     * state — an open transaction, a per-response dedup map — implements
+     * ResettableInterface precisely to be told "this request is over". Until now
+     * that declaration was inert for singletons: only Connection::reset() ran,
+     * and only because Application::handle() and QueueWorker each remembered to
+     * call it by hand. Any other long-lived worker following the documented
+     * pattern got no reset at all.
+     *
+     * Only for a concrete ScopeContext: the fallback bucket is not a request
+     * boundary, and Application::handle() flushes both buckets, so counting it
+     * here would reset every singleton twice per request.
+     *
      * @param ScopeContext|null $scope Target scope to flush, or null to flush the fallback bucket (__none__).
      * @return void
      */
@@ -384,6 +492,16 @@ class Container
                 }
             }
             unset($this->scopedInstances[$scopeKey]);
+        }
+
+        if ($scope === null) {
+            return;
+        }
+
+        foreach ($this->instances as $instance) {
+            if ($instance instanceof ResettableInterface) {
+                $instance->reset();
+            }
         }
     }
 

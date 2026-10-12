@@ -109,7 +109,7 @@ final class SwooleAdapter implements ServerAdapterInterface
                 $phueRequest = $this->transformSwooleRequest($swRequest);
 
                 // 2. Bind coroutine-scoped Request into container
-                $this->container->scoped(Request::class, fn () => $phueRequest);
+                $this->container->scopedInstance(Request::class, $phueRequest, $scope);
 
                 // 3. Process via Phue Application Kernel
                 $phueResponse = $this->handleRequest($phueRequest);

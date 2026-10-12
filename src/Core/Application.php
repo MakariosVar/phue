@@ -624,7 +624,11 @@ class Application
             $scope = $existingScope;
         }
 
-        $this->container->scoped(\Phue\Core\Request::class, fn(): Request => $request);
+        // Into the scope bucket, not through scoped()/bind(): the factory table is
+        // shared by every scope on this container, so registering the Request
+        // factory here let a concurrent request's binding overwrite this one and
+        // hand a coroutine someone else's headers, body, cookies and IP address.
+        $this->container->scopedInstance(\Phue\Core\Request::class, $request, $scope);
 
         // Resolve the language for THIS request, before any middleware or
         // controller can emit a user-facing string. The resolver is a
