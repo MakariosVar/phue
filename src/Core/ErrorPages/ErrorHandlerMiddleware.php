@@ -51,6 +51,15 @@ class ErrorHandlerMiddleware
                 default => 500,
             };
 
+            // An HttpException's message is the one message the framework treats as
+            // client-facing, and that is what distinguishes the class from a
+            // RuntimeException. The tests name the contract outright:
+            // RestErrorProductionTest::testHttpExceptionKeepsItsMessageInProduction
+            // and AdapterErrorContractTest::...PreservesHttpExceptionStatusAndMessage
+            // sit directly beside assertions that an ordinary RuntimeException
+            // is masked. The choice of exception class is where the decision
+            // gets made, so the message crosses and the status below it never
+            // applies to this class.
             $message = $e instanceof HttpException ? $e->getMessage() : null;
 
             if ($acceptsJson) {
@@ -65,8 +74,15 @@ class ErrorHandlerMiddleware
 
                 $errorMsg = $message ?? match ($statusCode) {
                     400 => 'Bad Request',
+                    401 => 'Unauthorized',
+                    403 => 'Forbidden',
                     404 => 'Not Found',
                     405 => 'Method Not Allowed',
+                    409 => 'Conflict',
+                    419 => 'Session Expired',
+                    422 => 'Unprocessable Entity',
+                    429 => 'Too Many Requests',
+                    503 => 'Service Unavailable',
                     default => 'Internal Server Error',
                 };
 
@@ -92,7 +108,7 @@ class ErrorHandlerMiddleware
         }
     }
 
-    /**
+/**
      * Run garbage collection periodically to break circular references
      * in exception stack traces (frames may capture $this from closures/objects).
      * Cheap amortized cost; critical for Swoole workers that run indefinitely.

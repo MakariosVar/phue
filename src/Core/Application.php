@@ -667,6 +667,11 @@ class Application
         } catch (\Phue\Core\Http\Exceptions\HttpException $e) {
             $statusCode = $e->getStatusCode();
             $logger->warning('HTTP ' . $statusCode . ' Client Error: ' . $e->getMessage(), ['exception' => $e]);
+            // An HttpException's message is client-facing by contract — that is what
+            // separates it from a RuntimeException, whose message is masked below
+            // by renderExceptionResponse(). RestErrorProductionTest and
+            // AdapterErrorContractTest both pin this, so the kernel branch must
+            // not start disagreeing with the middleware it sits behind.
             $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
                 || $request->isXmlHttpRequest();
             $response = $acceptsJson
@@ -1181,8 +1186,11 @@ class Application
         $logger = $this->container->get(LoggerInterface::class);
         $logger->error('HTTP 500 Unhandled Exception: ' . $e->getMessage(), ['exception' => $e]);
 
+        // isXmlHttpRequest() rather than a hand comparison: it is case-insensitive,
+        // and this was the one place that was not, so the same request shape got
+        // JSON from the 400 branch and an HTML page from the 500 branch.
         $acceptsJson = str_contains($request->getHeader('Accept', ''), 'application/json')
-            || $request->getHeader('X-Requested-With', '') === 'XMLHttpRequest';
+            || $request->isXmlHttpRequest();
 
         if ($acceptsJson) {
             if ($this->debug) {
