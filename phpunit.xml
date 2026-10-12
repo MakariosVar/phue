@@ -51,8 +51,17 @@
         <testsuite name="suite">
             <directory suffix="Test.php">tests/Suite</directory>
         </testsuite>
+        <!--
+            Modules that live under tests/Modules rather than tests/<Module>.
+            The runner derives its file list from these entries, so a module
+            missing here is silently untested. tests/Suite/TestLayoutTest.php
+            fails the moment that happens again.
+        -->
         <testsuite name="httpsigning">
             <directory suffix="Test.php">tests/Modules/HttpSigning</directory>
+        </testsuite>
+        <testsuite name="ratelimit">
+            <directory suffix="Test.php">tests/Modules/RateLimit</directory>
         </testsuite>
     </testsuites>
 

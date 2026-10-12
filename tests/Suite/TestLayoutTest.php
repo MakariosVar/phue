@@ -18,6 +18,12 @@ use PHPUnit\Framework\TestCase;
  * The failure surfaces much later as "Cannot redeclare class" the day someone
  * creates a file at the path the class name actually claims. Both guards below
  * exist to move that failure to the moment it is introduced.
+ *
+ * There is a third, quieter version of the same mistake: a test file that is
+ * perfectly well placed, correctly namespaced, and never executed. The runner
+ * takes its file list from the testsuites in phpunit.xml rather than from the
+ * filesystem, so a directory nobody declared is a directory whose tests do not
+ * exist as far as CI is concerned. That is the guard at the bottom.
  */
 final class TestLayoutTest extends TestCase
 {
@@ -187,6 +193,87 @@ final class TestLayoutTest extends TestCase
             '#^' . preg_quote(self::testsRoot(), '#') . '/#',
             '',
             $path
+        );
+    }
+
+    /**
+     * Every tests/<path> a configured testsuite claims, exactly as bin/phue_test
+     * reads them.
+     *
+     * The query and the leading-slash trim are copied from discoverTestFiles()
+     * in bin/phue_test on purpose. A guard that parses phpunit.xml its own way
+     * would agree with itself while disagreeing with the runner, which is the
+     * failure it exists to prevent.
+     *
+     * @return list<string>
+     */
+    private static function configuredTestsuitePaths(): array
+    {
+        $config = self::testsRoot() . '/../phpunit.xml';
+
+        if (!is_file($config)) {
+            return [];
+        }
+
+        $dom = new \DOMDocument();
+        $dom->load($config);
+        $xpath = new \DOMXPath($dom);
+
+        $paths = [];
+
+        foreach ($xpath->query('//testsuites/testsuite') ?: [] as $suite) {
+            foreach ($xpath->query('.//directory|.//file', $suite) ?: [] as $node) {
+                $paths[] = ltrim(trim((string) $node->textContent), '/');
+            }
+        }
+
+        return $paths;
+    }
+
+    /**
+     * A test file no testsuite claims is never executed.
+     *
+     * It is not reported by any runner, it cannot fail, and it contributes
+     * nothing to the number of green tests — so the suite looks complete while
+     * a module sits entirely untested. Nothing else in this file catches it:
+     * the namespace is right, the filename is right, and no symbol collides.
+     * The class is simply never asked to run.
+     */
+    public function testEveryTestFileIsReachableFromAConfiguredTestsuite(): void
+    {
+        $configured = self::configuredTestsuitePaths();
+
+        $this->assertNotSame(
+            [],
+            $configured,
+            'phpunit.xml declares no testsuite entries, so the runner would find no tests at all.'
+        );
+
+        $unreachable = [];
+
+        foreach (self::testFiles() as $path) {
+            // relative() strips the tests/ root; the phpunit.xml entries keep it.
+            $candidate = 'tests/' . self::relative($path);
+            $matched = false;
+
+            foreach ($configured as $suitePath) {
+                if ($candidate === $suitePath || str_starts_with($candidate, rtrim($suitePath, '/') . '/')) {
+                    $matched = true;
+                    break;
+                }
+            }
+
+            if (!$matched) {
+                $unreachable[] = $candidate;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $unreachable,
+            "These test files are not under any testsuite directory in phpunit.xml, so no runner "
+            . "executes them. Add the directory to a <testsuite>, or move the file into one that "
+            . "already exists.\n" . implode("\n", $unreachable)
         );
     }
 }
