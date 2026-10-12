@@ -180,7 +180,6 @@ final class InProcessPublicationBusTest extends TestCase
         }
 
         $property = new \ReflectionProperty(InProcessPublicationBus::class, 'queue');
-        $property->setAccessible(true);
 
         $queue = $property->getValue($this->bus);
 

@@ -281,10 +281,6 @@ final class TestDatabase
             $driver = $connection->getDriver();
             $property = (new \ReflectionClass($driver))->getProperty('config');
 
-            if (!$property->isPublic() && !$property->isProtected()) {
-                $property->setAccessible(true);
-            }
-
             $config = $property->getValue($driver);
 
             if (!is_array($config)) {
