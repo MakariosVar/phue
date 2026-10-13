@@ -4,5 +4,5 @@
     "title": "From scratch",
     "description": "No modules at all. Add them one at a time later with: php phue module:new.",
     "tags": ["minimal", "manual"],
-    "modules": []
+    "modules": ["server"]
 }

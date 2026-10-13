@@ -4,5 +4,5 @@
     "title": "REST API",
     "description": "Secured #[Rest] endpoints with rate limiting and a schema admin console.",
     "tags": ["api", "jwt", "rateLimit"],
-    "modules": ["auth", "rest", "rateLimit", "schii", "devtools"]
+    "modules": ["auth", "rest", "rateLimit", "schii", "devtools", "server"]
 }

@@ -4,5 +4,5 @@
     "title": "Web app",
     "description": "Server-rendered app with login, RBAC and the Schii admin console.",
     "tags": ["html", "admin", "crud"],
-    "modules": ["auth", "schii", "devtools"]
+    "modules": ["auth", "schii", "devtools", "server"]
 }
