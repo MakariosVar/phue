@@ -1,0 +1,28 @@
+# Keep the build context small and the image cache useful.
+#
+# vendor/ and node_modules/ are the reason this file exists at all: they are
+# installed *inside* the image from the manifests, so sending a host copy of
+# them would be slower and would let a stale host install overwrite the one the
+# Dockerfile just produced.
+.git
+.gitignore
+node_modules
+vendor
+
+# Test and analysis output from the host — never part of a runtime image.
+.phpunit.cache
+.phpunit.result.cache
+storage/cache/*
+storage/logs/*
+storage/generated/*
+coverage
+.php-cs-fixer.cache
+
+# Editor and OS noise.
+.idea
+.vscode
+.DS_Store
+*.swp
+
+# Documentation is not needed at runtime.
+docs

@@ -2,13 +2,25 @@ version: '3.8'
 services:
     app:
         build:
-            context: .
-            dockerfile: Dockerfile
+            # The project root, not docker/dev: the image installs the
+            # dependencies from composer.json and ssr/package.json, and those
+            # files do not live next to the Dockerfile. A context of "." here
+            # builds an image that has no manifest to install from.
+            context: ../..
+            dockerfile: docker/dev/Dockerfile
         container_name: phue_app
         user: "1000:1000"
         network_mode: host
         volumes:
             - ../..:/app
+            # The bind mount above replaces the whole of /app, which would hide
+            # the vendor/ and node_modules/ baked into the image. These two
+            # anonymous volumes are seeded from the image on first use and then
+            # shadow the bind mount for those paths only, so dependencies
+            # installed at build time survive the mount while application source
+            # stays live-mounted for hot reload.
+            - /app/vendor
+            - /app/ssr/node_modules
         working_dir: /app
         stdin_open: true # keeping interactive terminal alive
         tty: true        # keeping interactive terminal alive
