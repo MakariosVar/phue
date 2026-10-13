@@ -489,6 +489,48 @@ declare -gA COMPANION_REQUIRES=(
     ["App/Controllers/AuthController.php"]="ratelimit"
 )
 
+# Modules every project gets, whatever was asked for.
+#
+# This is a different kind of rule from MODULE_REQUIRES. A module's own requires
+# are facts about that module and are read out of its class; this list is
+# installer policy about what a Phue project *is*. The Swoole adapter is the
+# main server — it is what `serve` runs, what the WebSocket transport is built
+# on, and what the dev image installs the extension for. A project without it is
+# not a smaller Phue project, it is a Phue project that cannot serve, and the
+# user finds out from a fatal at `./phue serve` rather than from the installer.
+#
+# So it is added to every template, shown pre-ticked in the manual picker, and
+# cannot be unticked there. The alternative — leaving it optional and letting
+# the docs mention it — has already been tried and produces exactly the
+# surprise this is meant to remove.
+declare -ga MANDATORY_MODULES=("server")
+
+is_mandatory() {
+    local wanted="$1" m
+
+    for m in ${MANDATORY_MODULES[@]+"${MANDATORY_MODULES[@]}"}; do
+        [[ "$m" == "$wanted" ]] && return 0
+    done
+
+    return 1
+}
+
+# The mandatory modules this framework actually ships. Filtering rather than
+# trusting the list keeps the installer working against a framework that has
+# dropped or renamed one of them: a mandatory module that does not exist is a
+# selection referring to nothing, which validate_templates() rejects outright.
+mandatory_modules() {
+    local m
+    local -a present=()
+
+    for m in ${MANDATORY_MODULES[@]+"${MANDATORY_MODULES[@]}"}; do
+        [[ -n "${MODULE_CLASS[$m]:-}" ]] && present+=("$m")
+    done
+
+    printf '%s' "${present[*]-}"
+    return 0
+}
+
 # ---------------------------------------------------------------- load modules
 
 declare -a MODULE_IDS=()
@@ -747,12 +789,22 @@ template_count() {
 }
 
 # The selection a template stands for, with "*" already expanded.
+#
+# The mandatory modules are appended here rather than written into each
+# templates/*.json, so a template file cannot forget one. A template that lists
+# them is still correct — the duplicate is dropped by contains() downstream —
+# but the list in code is the one that is guaranteed to be applied.
 template_selection() {
     local name="$1" list="${TEMPLATE_MODULES[$1]}"
+    local m
 
     if [[ "$list" == "*" || "$list" == *,\* ]]; then
         list="$(join_comma $(module_ids))"
     fi
+
+    for m in $(mandatory_modules); do
+        contains "$m" ${list//,/ } || list="${list:+$list,}$m"
+    done
 
     printf '%s' "$list"
 }
@@ -945,16 +997,40 @@ warn_unsatisfiable_requires() {
 resolve_dependencies() {
     warn_unsatisfiable_requires
 
-    local expanded m
-    expanded="$(expand_dependencies "$(join_comma ${SELECTED_MODULES[@]+"${SELECTED_MODULES[@]}"})")"
+    local expanded m mandatory
+    mandatory="$(mandatory_modules)"
+
+    # The mandatory modules are folded into the selection here, at the one place
+    # every path goes through — template, manual picker and --modules alike. A
+    # rule applied only where it was remembered is a rule that holds until
+    # someone adds a fourth path.
+    #
+    # Note the difference between $(mandatory_modules) and
+    # ${mandatory_modules:+...}: the latter tests whether a *variable* by that
+    # name is set, and mandatory_modules is a function, so it never is. The
+    # expansion is silently empty and the modules are silently not added.
+    #
+    # The selection is flattened into the call rather than passed as an array
+    # plus a scalar: "${arr[@]+"${arr[@]}"}" inside a nested command substitution
+    # is quoted twice over, and the parser loses track of it.
+    local selection
+    selection="$(join_comma ${SELECTED_MODULES[@]+"${SELECTED_MODULES[@]}"} $mandatory)"
+    expanded="$(expand_dependencies "$selection")"
     split_csv "$expanded"
 
     for m in ${SPLIT[@]+"${SPLIT[@]}"}; do
         is_selected "$m" && continue
         SELECTED_MODULES+=("$m")
-        printf '  %s+%s %s%s%s %sadded automatically — %s requires it%s\n' \
-            "$C_YELLOW" "$C_RESET" "$C_BOLD" "$m" "$C_RESET" \
-            "$C_DIM" "$(module_requiring "$m")" "$C_RESET"
+
+        if is_mandatory "$m"; then
+            printf '  %s+%s %s%s%s %srequired by every Phue project%s\n' \
+                "$C_YELLOW" "$C_RESET" "$C_BOLD" "$m" "$C_RESET" \
+                "$C_DIM" "$C_RESET"
+        else
+            printf '  %s+%s %s%s%s %sadded automatically — %s requires it%s\n' \
+                "$C_YELLOW" "$C_RESET" "$C_BOLD" "$m" "$C_RESET" \
+                "$C_DIM" "$(module_requiring "$m")" "$C_RESET"
+        fi
     done
 
     return 0
@@ -1029,11 +1105,13 @@ normalize_selection_order() {
 # lines the last frame printed, which is wrong only for a frame that wrapped.
 
 UI_WIDTH=80
+UI_HEIGHT=24
 UI_TOP=''
 UI_LINES=0
 UI_ACTIVE=0
 UI_TTY_SAVED=''
 UI_KEY=''
+UI_VIEW_FROM=0
 
 ui_width() {
     local cols="${COLUMNS:-}"
@@ -1043,6 +1121,63 @@ ui_width() {
 
     (( cols < 60 )) && cols=60
     UI_WIDTH=$cols
+}
+
+# The height matters for the same reason the width does, and more so: a frame
+# taller than the terminal cannot be drawn at all. The terminal scrolls, the
+# anchor row captured before the first frame no longer points at the top of it,
+# and every redraw from that row pushes the menu one frame further down. The
+# menu then walks off the screen a keypress at a time — which reads as the whole
+# TUI being reprinted from the bottom, and is why a menu that is merely "a bit
+# too tall" is unusable rather than cosmetic.
+ui_height() {
+    local rows="${LINES:-}"
+
+    [[ -z "$rows" ]] && rows="$(tput lines 2>/dev/null || true)"
+    [[ "$rows" =~ ^[0-9]+$ ]] || rows=24
+
+    # Below this the chrome alone does not fit and there is nothing sensible to
+    # draw, so the minimum is deliberately generous rather than exact.
+    (( rows < 10 )) && rows=10
+    UI_HEIGHT=$rows
+}
+
+# How many list rows the terminal has room for, once the heading, the hint, the
+# preview and the footer have taken theirs.
+#
+# The footer is two lines — the bar and the label under it — and the blank line
+# before it is a third. Getting this number wrong is not a cosmetic problem: the
+# frame comes out taller than the window, the terminal scrolls, and the menu
+# degrades on every keypress.
+ui_body_rows() {
+    local rows=$(( UI_HEIGHT - 9 ))
+
+    (( rows < 2 )) && rows=2
+    printf '%s' "$rows"
+}
+
+# Keep the cursor inside the window, and slide the window when it cannot.
+# Both ends are handled because a list that is scrolled to the bottom with the
+# cursor above the fold is a menu the user cannot leave: pressing up moves the
+# highlight but not the list, so nothing appears to happen.
+ui_scroll_window() {
+    local total="$1" visible="$2" cursor="$3"
+    local max_from
+
+    (( visible < 1 )) && visible=1
+    max_from=$(( total - visible ))
+    (( max_from < 0 )) && max_from=0
+
+    if (( cursor < UI_VIEW_FROM )); then
+        UI_VIEW_FROM=$cursor
+    elif (( cursor >= UI_VIEW_FROM + visible )); then
+        UI_VIEW_FROM=$(( cursor - visible + 1 ))
+    fi
+
+    (( UI_VIEW_FROM > max_from )) && UI_VIEW_FROM=$max_from
+    (( UI_VIEW_FROM < 0 )) && UI_VIEW_FROM=0
+
+    return 0
 }
 
 # Raw mode for the duration of the interactive session.
@@ -1067,7 +1202,13 @@ ui_raw_on() {
 
 ui_raw_off() {
     [[ -n "$UI_TTY_SAVED" ]] && stty "$UI_TTY_SAVED" 2>/dev/null
-    UI_TTY_SAVED=''
+
+    # The saved settings are deliberately NOT cleared here. Ctrl-C runs cleanup
+    # twice — once from the INT trap, once from the EXIT trap that the INT trap's
+    # own `exit` triggers — and the settings are the only record of what the
+    # terminal looked like before the menu touched it. Forgetting them on the
+    # first call leaves the second call with nothing to restore, so the safety
+    # net exists only for the paths that did not need it.
     return 0
 }
 
@@ -1100,9 +1241,11 @@ ui_begin() {
         || die "No interactive terminal detected. Use --template=<name> or --modules=a,b,c (see --help)."
 
     ui_width
+    ui_height
     ui_raw_on
     ui_anchor
     UI_LINES=0
+    UI_VIEW_FROM=0
     UI_ACTIVE=1
     printf '\033[?25l'
     cleanup_on_exit
@@ -1112,6 +1255,12 @@ ui_end() {
     (( UI_ACTIVE )) || { ui_raw_off; return 0; }
 
     UI_ACTIVE=0
+
+    # Erase the frame before handing the terminal back. The menu is drawn with
+    # the cursor hidden, so whatever was last painted stays painted; without
+    # this the shell prompt lands in the middle of a half-drawn menu and the
+    # terminal reads as broken even though every mode was restored correctly.
+    ui_home
     printf '\033[?25h\n'
     ui_raw_off
     return 0
@@ -1126,6 +1275,13 @@ ui_home() {
         printf '\r\033[J'
     fi
 
+    # Every frame starts from zero. Left to accumulate, the count is the total
+    # of all frames drawn so far rather than the height of the last one, so the
+    # fallback branch moves up twice as far on the second frame and three times
+    # as far on the third — the menu climbs off the top of the screen and each
+    # redraw appears somewhere new.
+    UI_LINES=0
+
     return 0
 }
 
@@ -1136,15 +1292,48 @@ ui_line() {
     UI_LINES=$(( UI_LINES + 1 ))
 }
 
+# Shorten plain text to fit a width, marking that it was cut.
+#
+# Wrapping is what makes an over-long frame unrepairable rather than merely ugly.
+# UI_LINES counts the lines the script *thinks* it printed, so a description that
+# wraps costs two rows on the terminal while counting as one — the redraw erases
+# one row short, the tail of the previous frame survives above the new one, and
+# the menu degrades into a column of fragments as the cursor moves. Nothing
+# downstream can recover from that, so the text is cut here instead.
+ui_fit() {
+    local text="$1" width="$2"
+
+    (( width < 8 )) && width=8
+
+    if (( ${#text} > width )); then
+        printf '%s…' "${text:0:width-1}"
+    else
+        printf '%s' "$text"
+    fi
+
+    return 0
+}
+
 ui_blank() {
     ui_line ''
 }
 
 ui_rule() {
     local bar
+
     printf -v bar '%*s' "$(( UI_WIDTH - 4 ))" ''
     printf '  %s%s%s\n' "$C_DIM" "${bar// /─}" "$C_RESET"
-    UI_LINES=$(( UI_LINES + 1 ))
+
+    # The label goes *under* the bar rather than replacing it. Four call sites
+    # have always passed one and it was silently dropped, which is why the
+    # footer read as a bare divider with no hint on it. Keystroke help is the
+    # one thing a menu cannot do without — a user who does not know that q quits
+    # has to try it.
+    if [[ -n "${1:-}" ]]; then
+        printf '  %s%s%s\n' "$C_DIM" "$(ui_fit "$1" "$(( UI_WIDTH - 2 ))")" "$C_RESET"
+    fi
+
+    UI_LINES=$(( UI_LINES + 2 ))
 }
 
 ui_heading() {
@@ -1257,46 +1446,63 @@ interactive_template_screen() {
         ui_home
 
         ui_heading "Phue" "create a new project"
-        ui_line "  ${C_DIM}${#entries[@]} templates · enter selects · esc and q quit${C_RESET}"
+        ui_line "  ${C_DIM}$(ui_fit "${#entries[@]} templates · enter selects · esc and q quit" "$(( UI_WIDTH - 2 ))")${C_RESET}"
         ui_blank
 
-        for (( idx = 0; idx <= last; idx++ )); do
+        # Two lines per row, never three: the tags used to get a line of their
+        # own, which made every row cost three and put the list past the height
+        # of an ordinary terminal. The tags are on the description line now,
+        # where they are still readable and the list fits a 24-row window.
+        local rows_per_screen=$(( $(ui_body_rows) / 2 ))
+        ui_scroll_window "${#entries[@]}" "$rows_per_screen" "$cursor"
+
+        for (( idx = UI_VIEW_FROM; idx <= last && idx < UI_VIEW_FROM + rows_per_screen; idx++ )); do
             name="${entries[$idx]}"
-            local pointer marker title description tags
+            local pointer marker title detail
 
             # Custom is drawn like every other row — same marker, same pointer,
             # same cursor highlight. It is a choice like the rest, and an entry
             # that looks different is an entry people read as a separator and
             # scroll straight past.
+            local detail
             if [[ "$name" == "$CUSTOM_TEMPLATE" ]]; then
                 title="Custom"
-                description="Pick the modules yourself, one by one"
-                tags=""
+                detail="Pick the modules yourself, one by one"
             else
                 title="${TEMPLATE_TITLE[$name]}"
-                description="${TEMPLATE_DESC[$name]}"
-                tags="${TEMPLATE_TAGS[$name]}"
+                detail="${TEMPLATE_DESC[$name]}"
+                [[ -n "${TEMPLATE_TAGS[$name]}" ]] && detail+="  ${TEMPLATE_TAGS[$name]}"
             fi
 
             if (( idx == cursor )); then
                 pointer="${C_CYAN}❯${C_RESET}"
                 marker="${C_GREEN}●${C_RESET}"
-                title="${C_BOLD}${title}${C_RESET}"
+                title="${C_BOLD}$(ui_fit "$title" "$(( UI_WIDTH - 6 ))")${C_RESET}"
             else
                 pointer="  "
                 marker="${C_DIM}○${C_RESET}"
+                title="$(ui_fit "$title" "$(( UI_WIDTH - 6 ))")"
             fi
 
             ui_line "  ${pointer}${marker} ${title}"
-            ui_line "       ${C_DIM}${description}${C_RESET}"
-
-            if [[ -n "$tags" ]]; then
-                ui_line "       ${C_DIM}${tags}${C_RESET}"
-            fi
+            ui_line "       ${C_DIM}$(ui_fit "$detail" "$(( UI_WIDTH - 7 ))")${C_RESET}"
         done
 
         ui_blank
-        ui_rule "↑/↓ move · enter select · q quit"
+
+        # The position indicator lives in the footer rather than on a row of its
+        # own: a row that appears only when the list overflows changes the height
+        # of the frame depending on what is being shown, and a frame whose height
+        # changes is a frame the redraw math cannot keep up with.
+        local shown_first=$(( UI_VIEW_FROM + 1 ))
+        local shown_last=$(( UI_VIEW_FROM + rows_per_screen ))
+        (( shown_last > ${#entries[@]} )) && shown_last=${#entries[@]}
+
+        if (( ${#entries[@]} > rows_per_screen )); then
+            ui_rule "↑/↓ move · enter select · q quit · $shown_first–$shown_last of ${#entries[@]}"
+        else
+            ui_rule "↑/↓ move · enter select · q quit"
+        fi
 
         ui_read_key || die "Cancelled."
 
@@ -1327,7 +1533,11 @@ interactive_module_screen() {
 
     while IFS= read -r id; do
         all+=("$id")
-        flags+=(0)
+        # A mandatory module starts ticked and stays ticked. Ticking it here
+        # rather than at the end means the preview, the summary and the box in
+        # the list all agree from the first frame instead of the module
+        # appearing out of nowhere after the user presses enter.
+        is_mandatory "$id" && flags+=(1) || flags+=(0)
     done < <(module_ids)
 
     count=${#all[@]}
@@ -1337,24 +1547,37 @@ interactive_module_screen() {
         ui_home
 
         ui_heading "Modules" "pick what this project needs"
-        ui_line "  ${C_DIM}${count} available · space toggles · a all · n none${C_RESET}"
+        ui_line "  ${C_DIM}$(ui_fit "${count} available · space toggles · a all · n none" "$(( UI_WIDTH - 2 ))")${C_RESET}"
         ui_blank
 
+        # Same windowing as the template screen, and for the same reason: this
+        # list is two lines per module and there are more modules than a 24-row
+        # terminal has room for.
+        local rows_per_screen=$(( $(ui_body_rows) / 2 ))
+        ui_scroll_window "$count" "$rows_per_screen" "$cursor"
+
         picked=()
-        for (( idx = 0; idx < count; idx++ )); do
+        for (( idx = UI_VIEW_FROM; idx < count && idx < UI_VIEW_FROM + rows_per_screen; idx++ )); do
             (( ${flags[$idx]} )) && picked+=("${all[$idx]}")
 
             local mid="${all[$idx]}"
-            local pointer box label
+            local pointer box label locked=0
+
+            is_mandatory "$mid" && locked=1
 
             if (( idx == cursor )); then
-                pointer="${C_CYAN}❯${C_RESET}"; label="${C_BOLD}${mid}${C_RESET}"
+                pointer="${C_CYAN}❯${C_RESET}"; label="${C_BOLD}$(ui_fit "$mid" "$(( UI_WIDTH - 16 ))")${C_RESET}"
             else
-                pointer="  "; label="${mid}"
+                pointer="  "; label="$(ui_fit "$mid" "$(( UI_WIDTH - 16 ))")"
             fi
 
+            # A locked row is drawn as locked rather than as a normal row that
+            # happens to ignore the spacebar. A box that looks like every other
+            # box and does not respond is read as a broken menu; a lock says the
+            # choice is not on offer, which is the truth.
             if (( ${flags[$idx]} )); then
-                box="${C_GREEN}◼${C_RESET}"
+                (( locked )) && box="${C_GREEN}◼${C_RESET} ${C_DIM}always${C_RESET}" \
+                              || box="${C_GREEN}◼${C_RESET}"
             else
                 box="${C_DIM}◻${C_RESET}"
             fi
@@ -1368,9 +1591,9 @@ interactive_module_screen() {
             # file they have not read yet.
             local hint=""
             [[ -n "${MODULE_REQUIRES[$mid]:-}" ]] \
-                && hint="${C_DIM}  needs ${MODULE_REQUIRES[$mid]}${C_RESET}"
+                && hint="  needs ${MODULE_REQUIRES[$mid]}"
 
-            ui_line "       ${C_DIM}${MODULE_SUMMARY[$mid]}${C_RESET}${hint}"
+            ui_line "       ${C_DIM}$(ui_fit "${MODULE_SUMMARY[$mid]}$hint" "$(( UI_WIDTH - 7 ))")${C_RESET}"
         done
 
         # The preview resolves dependencies rather than showing the raw toggles,
@@ -1381,8 +1604,13 @@ interactive_module_screen() {
         preview="$(order_ids "$(expand_dependencies "$(join_comma ${picked[@]+"${picked[@]}"})")")"
 
         ui_blank
-        ui_line "  ${C_DIM}will install${C_RESET}  ${C_BOLD}$(describe_selection "$preview")${C_RESET}"
-        ui_rule "space toggle · a all · n none · esc back · q quit"
+        ui_line "  ${C_DIM}will install${C_RESET}  ${C_BOLD}$(ui_fit "$(describe_selection "$preview")" "$(( UI_WIDTH - 16 ))")${C_RESET}"
+
+        if (( count > rows_per_screen )); then
+            ui_rule "space toggle · esc back · q quit · $(( UI_VIEW_FROM + 1 ))–$(( UI_VIEW_FROM + rows_per_screen < count ? UI_VIEW_FROM + rows_per_screen : count )) of $count"
+        else
+            ui_rule "space toggle · a all · n none · esc back · q quit"
+        fi
 
         ui_read_key || die "Cancelled."
 
@@ -1393,12 +1621,25 @@ interactive_module_screen() {
             END)       cursor=$last ;;
             PAGEUP)    cursor=0 ;;
             PAGEDOWN)  cursor=$last ;;
-            SPACE)     flags[$cursor]=$(( 1 - ${flags[$cursor]} )) ;;
+            SPACE)
+                # Locked rows ignore the toggle, and say so rather than moving
+                # silently. `n none` below re-asserts the lock for the same
+                # reason: a shortcut must not be a way around it.
+                if is_mandatory "${all[$cursor]}"; then
+                    note "'${all[$cursor]}' is required by every Phue project and stays on."
+                else
+                    flags[$cursor]=$(( 1 - ${flags[$cursor]} ))
+                fi
+                ;;
             a|A)
-                for (( idx = 0; idx < count; idx++ )); do flags[$idx]=1; done
+                for (( idx = 0; idx < count; idx++ )); do
+                    is_mandatory "${all[$idx]}" || flags[$idx]=1
+                done
                 ;;
             n|N)
-                for (( idx = 0; idx < count; idx++ )); do flags[$idx]=0; done
+                for (( idx = 0; idx < count; idx++ )); do
+                    is_mandatory "${all[$idx]}" || flags[$idx]=0
+                done
                 ;;
             ESC|BACKSPACE) return 1 ;;
             INTERRUPT) die "Cancelled." ;;
@@ -1518,7 +1759,6 @@ build_plan() {
     # is not a Phue app.
     plan_dir "bin" "bin"
     plan_dir "public" "public"
-    plan_dir "config" "config"
     plan_dir "src/Core" "src/Core"
     plan_dir "docs" "docs"
     plan_dir "docker" "docker"
@@ -1531,6 +1771,53 @@ build_plan() {
     plan_file ".env.example" ".env.example"
     plan_file ".gitignore" ".gitignore"
 
+    # Config files are listed one by one rather than as a whole directory, and
+    # this is the invariant the whole thing protects: a project's config
+    # directory must describe the project it is in.
+    #
+    # Copying config/ wholesale gave every project every module's settings, so a
+    # project with no Websocket module still shipped config/websocket.php reading
+    # `enabled => env('APP_WEBSOCKET', false)` — and APP_WEBSOCKET=true is in
+    # .env.example, which is copied wholesale too. The config therefore said
+    # "realtime on" for a capability that was not installed, and nothing in the
+    # framework could tell the difference: the file existed, the env resolved,
+    # and the assertion was false. That is the same failure mode as asking the
+    # container whether a class is autowireable — a presence check that answers
+    # about the wrong thing.
+    #
+    # Module config files are added below, by the loop that walks the selected
+    # modules and already knows each one's config. What is left here are the
+    # files no module owns, which are core by definition: an application's own
+    # settings (app.php), its database, its RBAC seeding and its SSR. A new core
+    # config file is added here; a new module config file needs nothing.
+    plan_file "config/app.php" "config/app.php"
+    plan_file "config/database.php" "config/database.php"
+    plan_file "config/rbac_seeding.php" "config/rbac_seeding.php"
+    plan_file "config/ssr.php" "config/ssr.php"
+
+    # Asset bundles that ship with the application.
+    #
+    # These are committed in the framework on purpose — .gitignore ends with
+    #
+    #     /storage/assets/vendor/*
+    #     !/storage/assets/vendor/vue3/
+    #     !/storage/assets/vendor/bootstrap/
+    #     !/storage/assets/vendor/bootstrap-icons/
+    #
+    # so they are the exception to a rule that ignores everything else in that
+    # directory. Prism is the other way round: 3.9 MB, ignored, and fetched by
+    # `php phue npm:install`, which is why it is not listed here.
+    #
+    # Copying them is not cosmetic. Application.php registers
+    # storage/assets/vendor as the /assets/vendor source, so a scaffolded app
+    # that does not receive them serves 404s for the Bootstrap and Vue files
+    # that every PhUI component's markup depends on — an unstyled page and a
+    # console full of "Vue is not defined", with no error anywhere to explain it.
+    plan_dir "storage/assets/js" "storage/assets/js"
+    plan_dir "storage/assets/vendor/bootstrap" "storage/assets/vendor/bootstrap"
+    plan_dir "storage/assets/vendor/bootstrap-icons" "storage/assets/vendor/bootstrap-icons"
+    plan_dir "storage/assets/vendor/vue3" "storage/assets/vendor/vue3"
+
     # App skeleton.
     plan_dir "App/Errors" "App/Errors"
     plan_file "App/Frontend/AppLayout.phue" "App/Frontend/AppLayout.phue"
@@ -1538,6 +1825,14 @@ build_plan() {
     plan_file "App/Controllers/Controller.php" "App/Controllers/Controller.php"
     plan_file "App/Controllers/WebController.php" "App/Controllers/WebController.php"
     plan_file "App/Config/NavigationConfig.php" "App/Config/NavigationConfig.php"
+
+    # App/Assets is not optional and not decoration. SwooleServeCommand registers
+    # it as an asset source by path, and AssetRegistry throws when the directory
+    # is missing — so a project scaffolded without it starts the server, serves
+    # nothing, and dies with "Asset source directory does not exist" instead of
+    # serving a page. Shipping it empty-but-present is what lets the first run
+    # work; the directory is where the project's own CSS and JS go.
+    plan_dir "App/Assets" "App/Assets"
 
     # Selected modules, and everything that travels with one.
     for id in ${SELECTED_MODULES[@]+"${SELECTED_MODULES[@]}"}; do
@@ -1676,7 +1971,7 @@ gen_composer() {
 
     cat > "$target/composer.json" <<EOF
 {
-    "name": "${pkg_name}",
+    "name": "phue/${pkg_name}",
     "description": "A Phue application.",
     "type": "project",
     "license": "MIT",
@@ -1855,7 +2150,10 @@ normalize_selection_order
 # Resolve the target project directory.
 if [[ -z "$PROJECT_DIR" ]]; then
     if [[ -t 0 ]]; then
-        read -rp "  ${C_BOLD}Project name:${C_NC} " PROJECT_DIR
+        # C_RESET, not C_NC: the "no colour" name was never defined, and under
+        # "set -u" referencing it aborted the installer here — on the one prompt
+        # every interactive user is guaranteed to reach.
+        read -rp "  ${C_BOLD}Project name:${C_RESET} " PROJECT_DIR
         [[ -n "$PROJECT_DIR" ]] || die "Project name is required."
     else
         die "Missing project directory argument." "Usage: phue-create.sh <project-dir> [options]"
@@ -1918,6 +2216,11 @@ fi
 
 printf '\n  %sNext steps%s\n' "$C_BOLD" "$C_RESET"
 printf '    cd %s\n' "$TARGET"
-printf '    composer install\n'
-printf '    ./phue serve\n'
+printf '    ./phue build          %sbuilds the image — composer and bun deps included%s\n' \
+    "$C_DIM" "$C_RESET"
+printf '    ./phue start          %sstarts the container and the servers%s\n' \
+    "$C_DIM" "$C_RESET"
+printf '\n'
+printf '  %sThe dependencies are installed while the image is built, so there is no\n' "$C_DIM"
+printf '  composer install or bun install to run by hand afterwards.%s\n' "$C_RESET"
 printf '\n'
