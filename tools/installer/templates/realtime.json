@@ -1,9 +1,8 @@
 {
     "name": "realtime",
-    "description": "Real-time apps: Redis Streams events + SSE + auth + REST",
-    "modules": [
-        "auth",
-        "events",
-        "rest"
-    ]
+    "order": 40,
+    "title": "Realtime (SSE)",
+    "description": "One-way live updates over Server-Sent Events, pushed from the event bus.",
+    "tags": ["sse", "events", "streaming"],
+    "modules": ["auth", "rest", "events", "server", "devtools"]
 }

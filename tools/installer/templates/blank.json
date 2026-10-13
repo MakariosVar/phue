@@ -1,5 +1,8 @@
 {
     "name": "blank",
-    "description": "Core framework only, no modules, pure HTML-first start",
+    "order": 800,
+    "title": "From scratch",
+    "description": "No modules at all. Add them one at a time later with: php phue module:new.",
+    "tags": ["minimal", "manual"],
     "modules": []
 }

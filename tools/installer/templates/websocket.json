@@ -1,0 +1,8 @@
+{
+    "name": "websocket",
+    "order": 50,
+    "title": "WebSocket channels",
+    "description": "Bidirectional channels with per-endpoint auth, topics and replay.",
+    "tags": ["ws", "channels", "pub-sub"],
+    "modules": ["auth", "events", "websocket", "server", "devtools"]
+}

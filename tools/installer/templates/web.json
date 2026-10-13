@@ -1,8 +1,8 @@
 {
     "name": "web",
-    "description": "Classic full-stack web app: auth + Schii admin console",
-    "modules": [
-        "auth",
-        "schii"
-    ]
+    "order": 20,
+    "title": "Web app",
+    "description": "Server-rendered app with login, RBAC and the Schii admin console.",
+    "tags": ["html", "admin", "crud"],
+    "modules": ["auth", "schii", "devtools"]
 }

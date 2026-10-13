@@ -1,9 +1,8 @@
 {
     "name": "api",
-    "description": "REST-first API: auth + secured #[Rest] CRUD + Schii schema admin",
-    "modules": [
-        "auth",
-        "rest",
-        "schii"
-    ]
+    "order": 30,
+    "title": "REST API",
+    "description": "Secured #[Rest] endpoints with rate limiting and a schema admin console.",
+    "tags": ["api", "jwt", "rateLimit"],
+    "modules": ["auth", "rest", "rateLimit", "schii", "devtools"]
 }

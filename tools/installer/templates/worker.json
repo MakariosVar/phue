@@ -1,0 +1,8 @@
+{
+    "name": "worker",
+    "order": 60,
+    "title": "Background jobs",
+    "description": "Queued jobs and the event bus. Runs jobs inline until you point it at a driver.",
+    "tags": ["queue", "jobs", "worker"],
+    "modules": ["queue", "events", "devtools"]
+}

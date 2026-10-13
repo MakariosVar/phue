@@ -40,6 +40,7 @@ step for your views, Vue 3 powered, no-bundle by design.
   - [Interactive mode](#interactive-mode)
   - [Template mode](#template-mode)
   - [Custom module set](#custom-module-set-non-interactive)
+  - [Previewing before writing](#previewing-before-writing)
   - [From a URL](#from-a-url)
   - [Guardrails](#guardrails)
   - [What gets installed](#what-gets-installed)
@@ -150,31 +151,62 @@ Phue ships a self-contained installer script at `tools/installer/phue-create.sh`
 It scaffolds a complete new application from the framework source: core files,
 the modules you pick, their tests, and generated configuration.
 
+The module list is not written into the installer. It is discovered by scanning
+`src/Modules/` — reading each module's own `$id`, `$type` and `$requires` — so
+every module this framework ships is installable, including the ones added after
+this file was written.
+
+```bash
+bash tools/installer/phue-create.sh --list-modules
+```
+
 ### Interactive mode
 
-Run without any flags to get an interactive checklist — navigate with ↑/↓,
-toggle a module with <kbd>space</kbd>, confirm with <kbd>enter</kbd>, cancel with
-<kbd>q</kbd>:
+Run without any flags. You get two screens: first pick a starting point, and if
+you want something the presets don't cover, one more step down for the module
+checklist.
 
 ```bash
 bash /path/to/phue/tools/installer/phue-create.sh my-app
 ```
 
-If you omit the project name, the installer prompts for one:
+**Screen 1 — the starting point.** <kbd>↑</kbd>/<kbd>↓</kbd> to move,
+<kbd>enter</kbd> to select, <kbd>q</kbd> to quit:
 
 ```
-◆  Project name: my-app
-◆  Select the modules to install:
-❯ ◻ auth     —  Authentication: AuthManager, Bearer auth, RBAC
-  ◻ schii    —  Server-driven UI: admin console, zero-controller REST, Phii
-  ◻ rest     —  REST API: attribute-driven #[Rest] CRUD endpoints
-  ◻ server   —  Swoole persistent server adapter
-  ◻ events   —  Events: Redis Streams bus + SSE
-  ◻ devtools —  Dev tools: collapsible debug toolbar + request profiler (spans, SSR, components, SQL)
+  Phue create a new project
+  9 templates · enter selects · esc and q quit
+
+  ❯● Web app
+       Server-rendered app with login, RBAC and the Schii admin console.
+       #html #admin #crud
+    ○ REST API
+       Secured #[Rest] endpoints with rate limiting and a schema admin console.
+       #api #jwt #rateLimit
+  ...
+    ○ Custom
+       Pick the modules yourself, one by one
 ```
 
-> Dependencies are resolved automatically: selecting `rest` (which requires
-> `auth`) adds `auth` for you with a note in the output.
+**Screen 2 — the checklist**, reached by choosing *Custom*. <kbd>space</kbd>
+toggles, <kbd>a</kbd> selects all, <kbd>n</kbd> clears, <kbd>enter</kbd>
+confirms, <kbd>esc</kbd> goes back to the template screen:
+
+```
+  Modules pick what this project needs
+  10 available · space toggles · a all · n none
+
+  ❯◻ auth
+       Serves as the bootstrapping module for the authentication system.
+    ◻ devtools
+       Development-only profiling module for the Phue framework.
+  ...
+
+  will install  auth, rest
+```
+
+The `will install` line is the resolved outcome, not the toggles: picking `rest`
+alone lists `auth, rest`, because `rest` declares `auth` as a requirement.
 
 ### Template mode
 
@@ -188,11 +220,14 @@ Available templates (also listed with `--list-templates`):
 
 | Template | Modules | Use case |
 |---|---|---|
-| `blank` | *(none)* | Core framework only — pure HTML-first start |
-| `web` | `auth`, `schii` | Classic full-stack web app: admin console + auth |
-| `api` | `auth`, `rest`, `schii` | REST-first API with RBAC + schema admin |
-| `realtime` | `auth`, `events`, `rest` | SSE / Redis streaming apps |
-| `fullstack` | all 6 modules | Everything, like the framework demo repo |
+| `web` | `auth`, `schii`, `devtools` | Server-rendered app with login, RBAC and the Schii admin console |
+| `api` | `auth`, `rest`, `rateLimit`, `schii`, `devtools` | Secured `#[Rest]` endpoints with rate limiting and schema admin |
+| `realtime` | `auth`, `rest`, `events`, `server`, `devtools` | One-way live updates over SSE |
+| `websocket` | `auth`, `events`, `websocket`, `server`, `devtools` | Bidirectional channels with replay |
+| `worker` | `queue`, `events`, `devtools` | Background jobs; runs inline until you configure a driver |
+| `hardened` | `auth`, `rest`, `rateLimit`, `http-signing`, `devtools` | Public-facing API with auth, rate limits and signed responses |
+| `blank` | *(none)* | From scratch — add modules later with `php phue module:new` |
+| `fullstack` | *every module* | Everything this framework ships |
 
 ### Custom module set (non-interactive)
 
@@ -200,13 +235,27 @@ Available templates (also listed with `--list-templates`):
 bash tools/installer/phue-create.sh my-app --modules=auth,server
 ```
 
+Module ids are the ones each module declares — `rateLimit`, `http-signing` — and
+are accepted in any spelling: `ratelimit`, `rate_limit` and `rate-limit` all
+resolve to `rateLimit`.
+
+### Previewing before writing
+
+```bash
+bash tools/installer/phue-create.sh my-app --template=api --dry-run
+```
+
+Prints the exact list of paths that would be created and writes nothing.
+
 ### All flags
 
 | Flag | Purpose |
 |---|---|
 | `--template=<name>` | Use a predefined template |
 | `--modules=a,b,c` | Custom module selection (non-interactive) |
-| `--list-templates` | List available templates and exit |
+| `--list-templates` | List the available templates and exit |
+| `--list-modules` | List every module this framework ships, and exit |
+| `--dry-run` | Print what would be written, write nothing |
 | `--repo=<path>` | Path to the Phue framework source (default: the repo the script lives in) |
 | `--force` | Allow creating inside a non-empty directory |
 | `-h`, `--help` | Help |
@@ -220,7 +269,7 @@ source isn't found locally it clones it for you:
 bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app --template=web
 ```
 
-> With `bash <(curl ...)` the interactive checklist keeps working because your
+> With `bash <(curl ...)` the interactive menus keep working because your
 > terminal's stdin stays attached. A plain `curl | bash` pipe detaches stdin, so
 > use `--template` or `--modules` in that case.
 
@@ -231,6 +280,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/
 - **Empty existing directory** → reused.
 - If the terminal can't be made interactive and no selection flag was given, the
   installer stops with guidance instead of guessing.
+- Anything the installer decides not to copy is reported with the reason, e.g.
+  `- App/Controllers/AuthController.php (needs ratelimit)`.
 
 ### What gets installed
 
@@ -243,8 +294,9 @@ For every project, the installer copies:
   `App/Frontend/Pages/`, `App/Controllers/Controller.php` (abstract base),
   `App/Controllers/WebController.php`, `App/Config/NavigationConfig.php`
 - **Selected modules** — each `src/Modules/<Name>/` directory, its test suite
-  (`tests/<Name>/`), plus companion app files when relevant (e.g.
-  `App/Models/User.php` with `auth`, `App/Controllers/ApiController.php` with `rest`)
+  wherever the framework keeps it, its `config/<module>.php`, plus companion app
+  files when relevant (`App/Models/User.php` with `auth`,
+  `App/Controllers/ApiController.php` with `rest`)
 - **Generated** — `composer.json` (named after your project directory),
   `config/app.php` (only your modules), `phpunit.xml` (one testsuite per selected
   module + an `app` suite), `.env` from `.env.example`, and the `storage/` skeleton

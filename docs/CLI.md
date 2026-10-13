@@ -228,7 +228,7 @@ Clears **and warms** caches for production-ready performance.
 A self-contained bash installer at `tools/installer/phue-create.sh` that scaffolds a complete new Phue application. Full details live in [Getting Started](Getting-Started.md); quick reference:
 
 ```bash
-# Interactive (arrow keys + space checklist, like create-vite)
+# Interactive: pick a starting point, then modules
 bash tools/installer/phue-create.sh my-app
 
 # Predefined template
@@ -237,16 +237,24 @@ bash tools/installer/phue-create.sh my-app --template=web
 # Custom module set
 bash tools/installer/phue-create.sh my-app --modules=auth,server
 
-# List templates
+# See what this framework ships / what the presets contain
+bash tools/installer/phue-create.sh --list-modules
 bash tools/installer/phue-create.sh --list-templates
+
+# Print the install plan, write nothing
+bash tools/installer/phue-create.sh my-app --template=api --dry-run
 ```
 
-Flags: `--template=<name>`, `--modules=a,b,c`, `--list-templates`, `--repo=<path>`, `--force`, `-h/--help`.
+Flags: `--template=<name>`, `--modules=a,b,c`, `--list-templates`, `--list-modules`, `--dry-run`, `--repo=<path>`, `--force`, `-h/--help`.
 
 Behavior highlights:
-- Templates live in `tools/installer/templates/*.json` — one JSON file per template with a `modules` list (blank, web, api, realtime, fullstack, edge).
-- Dependency auto-resolution: selecting `rest` adds its `auth` requirement.
+- **The module list is scanned, not written down.** The installer reads `src/Modules/` — each module's `$id`, `$type`, `$requires`, and its docblock — so a module added to the framework is installable immediately and one that is renamed or deleted cannot leave a dead entry behind. Use `--list-modules` to see what the scan found.
+- Templates live in `tools/installer/templates/*.json`, one file each: `name`, `title`, `description`, `order`, `tags`, and a `modules` list. `fullstack` uses `"modules": ["*"]` so it cannot fall behind the framework.
+- Dependency auto-resolution: selecting `rest` adds its `auth` requirement, and says which module required it.
+- Module ids are accepted in any spelling (`ratelimit`, `rate_limit`, `rate-limit` → `rateLimit`); an unknown id is an error that lists the real ones.
 - Copies the framework core, the selected modules **and their test suites**, the App skeleton, and generates `composer.json`, `config/app.php`, `phpunit.xml`, `.env`.
+- `composer.json` gets a `suggest` section for the extensions the selection actually uses (`ext-redis`, `ext-swoole`).
+- Anything not copied is reported with a reason instead of being skipped silently.
 - Creates root `phue` symlink pointing to `bin/phue` automatically.
 - From a URL: if the Phue source isn't found locally it clones it (`PHUE_REPO_URL` env var overrides the default GitHub URL).
 
@@ -257,6 +265,10 @@ The installer has its own test framework — `tools/installer/tests/run-tests.sh
 ```bash
 bash tools/installer/tests/run-tests.sh
 ```
+
+It also drives the interactive menus through a pseudo-terminal (`tests/pty_run.py`) and asserts on the screen a user would see, because a full-screen menu rewrites itself on every keypress and the byte stream alone cannot tell a working menu from one that stacks a copy per keystroke. `tests/framework_probe.php` reads the framework's module classes directly, so discovery is checked against `src/Modules/` rather than against a list maintained next to the installer.
+
+Pass a substring to run part of the suite: `bash tools/installer/tests/run-tests.sh template`.
 
 ---
 

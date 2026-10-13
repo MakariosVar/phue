@@ -1,12 +1,8 @@
 {
     "name": "fullstack",
-    "description": "Everything: all 6 core modules, like the framework demo repo",
-    "modules": [
-        "auth",
-        "schii",
-        "rest",
-        "server",
-        "events",
-        "devtools"
-    ]
+    "order": 900,
+    "title": "Everything",
+    "description": "Every module this framework ships. Also the reference for what is available.",
+    "tags": ["all", "reference"],
+    "modules": ["*"]
 }

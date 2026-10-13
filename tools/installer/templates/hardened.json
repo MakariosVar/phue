@@ -1,0 +1,8 @@
+{
+    "name": "hardened",
+    "order": 70,
+    "title": "Hardened API",
+    "description": "Everything a public-facing endpoint wants: auth, rate limits, signed responses.",
+    "tags": ["api", "security", "signing"],
+    "modules": ["auth", "rest", "rateLimit", "http-signing", "devtools"]
+}
