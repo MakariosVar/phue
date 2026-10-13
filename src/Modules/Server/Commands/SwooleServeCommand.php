@@ -111,7 +111,34 @@ final class SwooleServeCommand implements CommandInterface
         $app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
 
 
-        $websocketEnabled = (bool) $app->getConfig()->get('websocket.enabled', false);
+        // Two independent questions, and both answers are needed.
+        //
+        // `websocket.enabled` says whether the project *asked* for realtime.
+        // `phue.websocket.active` says whether the capability is actually wired:
+        // the Websocket module binds that key, and nothing else does. Reading the
+        // config alone cannot answer it — config/websocket.php describes the
+        // module, and the env var behind it lives in .env.example, which every
+        // project receives whether or not the module is installed. So a project
+        // with APP_WEBSOCKET=true and no Websocket module reports "enabled" for
+        // something that does not exist, and that is what made this server start
+        // as a WebSocket server and die on Swoole's "require onMessage callback".
+        //
+        // The container key is used rather than Container::has(SomeClass::class):
+        // has() answers true for any autowireable class, which is a question
+        // about PHP's reflection and not about what this application installed.
+        // WebsocketModule registers this key for exactly this question.
+        $websocketWanted = (bool) $app->getConfig()->get('websocket.enabled', false);
+        $websocketPresent = $app->getContainer()->has('phue.websocket.active');
+
+        if ($websocketWanted && !$websocketPresent) {
+            fwrite(
+                $outputStream,
+                "  websocket is enabled in config but the Websocket module is not installed." .
+                " Serving HTTP only. Add it with: php phue module:new websocket" . PHP_EOL
+            );
+        }
+
+        $websocketEnabled = $websocketWanted && $websocketPresent;
 
         try {
             $server = $websocketEnabled
@@ -123,8 +150,11 @@ final class SwooleServeCommand implements CommandInterface
                 'enable_static_handler' => true
             ]);
 
-            // WebSocket server requires onMessage; provide no-op when disabled to satisfy Swoole
-            if (!$websocketEnabled) {
+            // Swoole\WebSocket\Server::start() throws "require onMessage callback"
+            // unless one is registered; Swoole\Http\Server needs none. The no-op
+            // is therefore registered for the WebSocket server only, and the
+            // Websocket module replaces it when it attaches its own handler.
+            if ($websocketEnabled) {
                 $server->on('message', static function (): void {
                 });
             }
