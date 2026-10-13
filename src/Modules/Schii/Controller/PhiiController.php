@@ -546,7 +546,8 @@ final class PhiiController
         }
 
         $studlyName = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $input)));
-        $fqcn = "App\\Models\\{$studlyName}";
+        $namespace = rtrim($this->config->entityNamespace ?? 'App\\Models', '\\');
+        $fqcn = "{$namespace}\\{$studlyName}";
 
         if (class_exists($fqcn)) {
             return $fqcn;

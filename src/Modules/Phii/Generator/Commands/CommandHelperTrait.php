@@ -32,7 +32,15 @@ trait CommandHelperTrait
         }
 
         $studlyName = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $input)));
-        $fqcn = "App\\Models\\{$studlyName}";
+        $entityNamespace = 'App\\Models';
+        if (class_exists(\Phue\Core\Console\PathResolver::class)) {
+            $basePath = \Phue\Core\Console\PathResolver::resolveBasePath();
+            if (is_file($basePath . '/config/schii.php')) {
+                $config = new \Phue\Core\Config($basePath . '/config');
+                $entityNamespace = (string) $config->get('schii.entityNamespace', 'App\\Models');
+            }
+        }
+        $fqcn = rtrim($entityNamespace, '\\') . "\\{$studlyName}";
 
         if (class_exists($fqcn)) {
             return $fqcn;

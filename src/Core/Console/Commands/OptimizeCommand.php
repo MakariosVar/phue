@@ -345,14 +345,17 @@ final class OptimizeCommand implements CommandInterface
         fwrite($outputStream, "  Warming schemas cache (generating for ActiveRecord models)...\n");
 
         try {
-            $registry = new \Phue\Modules\Schii\Schema\SchemaRegistry();
-            $modelsDir = PathResolver::resolveBasePath() . '/App/Models';
+            $basePath = PathResolver::resolveBasePath();
+            $config = new \Phue\Core\Config($basePath . '/config');
+            $entityNamespace = (string) $config->get('schii.entityNamespace', 'App\\Models');
+            $modelsDir = (string) $config->get('schii.modelsDir', $basePath . '/App/Models');
+            $registry = new \Phue\Modules\Schii\Schema\SchemaRegistry(defaultModelNamespace: $entityNamespace);
             $warmed = 0;
             
             if (is_dir($modelsDir)) {
-                $files = glob($modelsDir . '/*.php');
+                $files = glob($modelsDir . '/*.php') ?: [];
                 foreach ($files as $file) {
-                    $className = 'App\\Models\\' . basename($file, '.php');
+                    $className = rtrim($entityNamespace, '\\') . '\\' . basename($file, '.php');
                     if (class_exists($className) && is_subclass_of($className, \Phue\Core\Database\ActiveRecord\BaseActiveRecord::class)) {
                         try {
                             $registry->get($className);

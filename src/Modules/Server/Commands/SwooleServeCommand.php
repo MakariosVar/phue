@@ -104,11 +104,25 @@ final class SwooleServeCommand implements CommandInterface
         // 1. Setup Asset Registry
         /** @var \Phue\Core\Asset\AssetRegistry $registry */
         $registry = $app->getContainer()->get(\Phue\Core\Asset\AssetRegistry::class);
-        $registry->registerSource('/assets', $app->getBasePath() . '/App/Frontend');
-        $registry->registerSource('/assets/app', $app->getBasePath() . '/App/Assets');
+        $frontendPath = (string) $app->getConfig()->get('app.frontend_path', $app->getBasePath() . '/App/Frontend');
+        if (is_dir($frontendPath)) {
+            $registry->registerSource('/assets', $frontendPath);
+        }
+        $assetsPath = (string) $app->getConfig()->get('app.assets_path', $app->getBasePath() . '/App/Assets');
+        if (is_dir($assetsPath)) {
+            $registry->registerSource('/assets/app', $assetsPath);
+        }
+        $vendorAssetsPath = $app->getBasePath() . '/storage/assets/vendor';
+        if (is_dir($vendorAssetsPath)) {
+            $registry->registerSource('/assets/vendor', $vendorAssetsPath);
+        }
 
         // 2. Scan and Register Controllers
-        $app->getRouter()->scanControllers($app->getBasePath() . '/App/Controllers', 'App\\Controllers');
+        $controllersPath = (string) $app->getConfig()->get('app.controllers_path', $app->getBasePath() . '/App/Controllers');
+        $controllersNamespace = (string) $app->getConfig()->get('app.controllers_namespace', 'App\\Controllers');
+        if (is_dir($controllersPath)) {
+            $app->getRouter()->scanControllers($controllersPath, $controllersNamespace);
+        }
 
 
         // Two independent questions, and both answers are needed.

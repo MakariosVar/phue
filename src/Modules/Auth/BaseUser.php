@@ -13,8 +13,12 @@ use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
  *
  * @package Phue\Modules\Auth
  */
-abstract class BaseUser extends BaseActiveRecord implements IdentityInterface
+class BaseUser extends BaseActiveRecord implements IdentityInterface
 {
+    /**
+     * Database table name.
+     */
+    protected string $table = 'users';
     /**
      * Resolves user instance by primary key.
      *
