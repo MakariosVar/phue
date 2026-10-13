@@ -1,7 +1,7 @@
 vscode-phue/node_modules/
 vscode-phue/out/
 vscode-phue/*.vsix
-
+__pycache__/
 tracker/
 metrics/
 stress/
