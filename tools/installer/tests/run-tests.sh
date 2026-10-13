@@ -516,11 +516,110 @@ t_config_app_lists_installed_modules_and_nothing_else() {
 }
 
 t_config_app_without_modules_says_so() {
-    run_installer "$TARGET" --template=blank
+    # There is no CLI path to an empty selection any more, and that is the point:
+    # the Swoole adapter is mandatory, so a project with no modules is a project
+    # that cannot serve. This test used to assert the "No modules yet" placeholder
+    # by scaffolding --template=blank, which now installs ServerModule instead.
+    #
+    # The branch in gen_config_app stays. `phue new` run inside an existing
+    # application is a separate entry point that does not go through the
+    # installer's mandatory list, so the empty case is still reachable there —
+    # it is only unreachable from here.
+    local target="$TARGET-empty"
+
+    run_installer "$target" --template=blank
     assert_exit 0 "$INSTALLER_EXIT"
 
-    assert_valid_php "$TARGET/config/app.php"
-    assert_contains "$TARGET/config/app.php" "No modules yet"
+    assert_valid_php "$target/config/app.php"
+    assert_contains "$target/config/app.php" "ServerModule"
+}
+
+t_every_selection_keeps_the_mandatory_module() {
+    # The invariant behind the test above: there is no argument, template or
+    # module list that produces a project without the server adapter.
+    local arg target
+
+    for arg in "--template=blank" "--template=web" "--template=fullstack" "--modules=rest" "--modules=queue,events"; do
+        target="$TEST_TMP/mandatory-$RANDOM"
+
+        # shellcheck disable=SC2086
+        run_installer "$target" $arg --repo="$FRAMEWORK"
+        assert_exit 0 "$INSTALLER_EXIT"
+        assert_contains "$target/config/app.php" "ServerModule"
+    done
+}
+
+# Every project gets the Swoole adapter, so there is no longer any way to ask
+# for a project with no modules at all — which is exactly why this test cannot
+# use --template=blank any more. The empty-modules branch still exists in
+# gen_config_app and still has to be reachable by a framework that drops the
+# mandatory list, so it is exercised directly rather than through the CLI.
+t_blank_template_is_server_only() {
+    # "From scratch" used to install nothing at all, which produced a project
+    # with no way to serve. It now installs the Swoole adapter and nothing else,
+    # which is still the smallest project the installer will build.
+    local target="$TARGET-blank"
+
+    run_installer "$target" --template=blank
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    assert_contains "$target/config/app.php" "ServerModule"
+    assert_dir "$target/src/Modules/Server"
+    assert_not_contains "$target/config/app.php" "No modules yet"
+}
+
+t_asset_bundles_ship_with_the_project() {
+    # Bootstrap, Bootstrap Icons and Vue are committed in the framework on
+    # purpose — .gitignore ends by un-ignoring exactly those three directories
+    # under storage/assets/vendor. Everything else in that directory is ignored
+    # and fetched by `php phue npm:install`, which is why Prism is not here.
+    #
+    # They are not decoration. Application.php registers storage/assets/vendor as
+    # the /assets/vendor source, so a project without them answers 404 for the
+    # files every PhUI component's markup refers to: an unstyled page and a
+    # console full of "Vue is not defined", with no error to explain either.
+    local target="$TARGET-assets"
+
+    run_installer "$target" --template=web
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    assert_contains "$target/storage/assets/vendor/vue3/vue.runtime.esm-browser.js" "createApp"
+    assert_contains "$target/storage/assets/vendor/bootstrap/bootstrap.bundle.min.js" "bootstrap"
+    assert_contains "$target/storage/assets/vendor/bootstrap-icons/bootstrap-icons.min.css" "bi-"
+    assert_dir "$target/storage/assets/js"
+}
+
+t_prism_is_not_shipped_but_the_rest_is() {
+    # The other half of the rule above: 3.9 MB of Prism must not be copied into
+    # every new project. It is ignored in the framework and installed on demand,
+    # and an installer that copies the whole vendor directory would put it in
+    # every scaffold — slowing every create and every image build for a
+    # highlighter only the DevTool console uses.
+    local target="$TARGET-assets"
+
+    run_installer "$target" --template=web
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    assert_no_dir "$target/storage/assets/vendor/prismjs"
+}
+
+t_shipped_asset_bundles_are_not_gitignored_in_the_new_project() {
+    # Copying the files is only half the contract. The .gitignore that ships with
+    # a project ignores storage/assets/vendor/* and re-includes the three, so a
+    # project that copies the bundles without that rule would have them silently
+    # untracked — present on one machine, gone after a clone on the next.
+    local target="$TARGET-assets" path
+
+    run_installer "$target" --template=web
+    assert_exit 0 "$INSTALLER_EXIT"
+
+    for path in \
+        "storage/assets/vendor/vue3" \
+        "storage/assets/vendor/bootstrap" \
+        "storage/assets/vendor/bootstrap-icons"
+    do
+        assert_contains "$target/.gitignore" "!/$path/"
+    done
 }
 
 t_phpunit_suites_match_the_installed_modules() {
@@ -798,11 +897,20 @@ t_composer_json_is_named_after_the_project() {
 
     php -r '
         $d = json_decode(file_get_contents($argv[1]), true);
-        if (($d["name"] ?? "") !== "my-app") { fwrite(STDERR, "bad name\n"); exit(1); }
+        // Composer requires vendor/name. A bare "my-app" is rejected outright
+        // by composer validate, so the project directory alone cannot be the
+        // package name.
+        if (($d["name"] ?? "") !== "phue/my-app") { fwrite(STDERR, "bad name\n"); exit(1); }
         if (($d["autoload"]["psr-4"]["Phue\\"] ?? "") !== "src/") { fwrite(STDERR, "bad psr4\n"); exit(1); }
         if (($d["autoload"]["psr-4"]["App\\"] ?? "") !== "App/") { fwrite(STDERR, "bad app psr4\n"); exit(1); }
         if (($d["scripts"]["phue"] ?? "") !== "php phue") { fwrite(STDERR, "bad script\n"); exit(1); }
     ' "$TARGET/composer.json" || fail "composer.json validation failed"
+
+    # Asserted through composer itself rather than by reading the JSON back:
+    # the field the installer sets wrong is the one composer rejects, so the tool
+    # that rejects it is the honest oracle.
+    ( cd "$TARGET" && composer validate --no-check-all --no-check-publish --quiet ) \
+        || fail "composer itself rejected the generated composer.json"
 }
 
 # ---------------------------------------------------------------- source guards
@@ -978,9 +1086,15 @@ t_enter_installs_the_highlighted_template() {
 # row count comes from a menu that was really rendered, not from a number typed
 # here: adding a template shifts every row below it, and a keyboard test that
 # breaks when someone adds a preset is testing the wrong thing.
+#
+# It is counted from the template files rather than from the screen. Counting
+# the screen only counts the rows that *fit*: the menu scrolls when the terminal
+# is shorter than the list, so a nine-template menu on a 24-row terminal shows
+# seven rows and the sequence built from it stops two rows short of Custom. That
+# failure is silent — the test presses a plausible number of downs and then
+# asserts on the wrong screen.
 capture_menu() {
-    run_interactive '' "templates" "$TARGET"
-    MENU_ROWS="$(grep -cE '^ +[^ ]?[●○] ' <<< "$SCREEN")"
+    MENU_ROWS="$(( $(ls -1 "$FRAMEWORK"/tools/installer/templates/*.json | wc -l) + 1 ))"
 }
 
 custom_key_sequence() {
@@ -1068,6 +1182,10 @@ run_test "scaffold never references an absent module"   t_scaffolded_app_never_r
 
 run_test "config/app.php lists exactly what was chosen"  t_config_app_lists_installed_modules_and_nothing_else
 run_test "config/app.php without modules says so"       t_config_app_without_modules_says_so
+run_test "blank template is server-only"                t_blank_template_is_server_only
+run_test "asset bundles ship with the project"            t_asset_bundles_ship_with_the_project
+run_test "prism is not shipped but the rest is"          t_prism_is_not_shipped_but_the_rest_is
+run_test "shipped bundles are not gitignored"           t_shipped_asset_bundles_are_not_gitignored_in_the_new_project
 run_test "phpunit suites match installed modules"        t_phpunit_suites_match_the_installed_modules
 run_test "composer.json valid, suggests extensions"     t_composer_json_is_valid_and_suggests_what_is_needed
 run_test "composer.json without extensions is clean"    t_composer_json_without_ext_modules_has_no_suggestions
