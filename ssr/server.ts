@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync, existsSync, renameSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import vuePkg from "vue/package.json" with { type: "json" };
-import { installI18n } from "../vendor/makariosvar/phue/src/Core/UI/runtime/i18n.js";
+import { installI18n } from "../src/Core/UI/runtime/i18n.js";
 
 interface ComponentEntry {
     h: string;
@@ -30,7 +30,7 @@ const CACHE_DIR = join(import.meta.dir, ".cache");
 // Where the `phue` import-map specifier actually lives on disk. Resolved from
 // this file so a deployed app finds the runtime wherever the installer put
 // src/Core, rather than at a path hardcoded here.
-const RUNTIME_MODULE_PATH = join(import.meta.dir, "..", "vendor", "makariosvar", "phue", "src", "Core", "UI", "runtime", "createPhueApp.js");
+const RUNTIME_MODULE_PATH = join(import.meta.dir, "..", "src", "Core", "UI", "runtime", "createPhueApp.js");
 
 // In-memory cache: hash -> module namespace object
 const moduleCache = new Map<string, any>();
