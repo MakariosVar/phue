@@ -14,6 +14,7 @@ use Phue\Core\Config;
 use Phue\Core\Env;
 use Phue\Core\Module;
 use Phue\Core\Console\Commands\NewProjectCommand;
+use Phue\Core\Console\Commands\NewAppCommand;
 use Phue\Core\Console\Commands\DeployCommand;
 use Phue\Core\Console\Commands\ModuleListCommand;
 use Phue\Core\Console\Commands\ModuleNewCommand;
@@ -45,6 +46,7 @@ $app = new Application('1.0.0');
  */
 $app
     ->add(new NewProjectCommand())
+    ->add(new NewAppCommand())
     ->add(new ServeCommand())
     ->add(new MakeControllerCommand())
     ->add(new MakeModelCommand())

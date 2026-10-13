@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Phue\Core\UI;
 
-use App\Config\NavigationConfig;
 use Phue\Core\Asset\AssetRegistry;
 use Phue\Core\Asset\HtmlShellRenderer;
+use Phue\Core\Config;
+use Phue\Core\Container;
 use Phue\Core\Frontend\ComponentLoaderRegistry;
 use Phue\Core\I18n\Translator;
 use Phue\Core\ResettableInterface;
@@ -21,6 +22,17 @@ use Throwable;
  */
 class ComponentRenderer implements ResettableInterface
 {
+    /**
+     * Where an application's navigation class is looked for by default.
+     *
+     * A convention, not a dependency: the name is a string, so its absence is
+     * a normal answer rather than a fatal, and no `use` statement makes this
+     * file care whether the class exists.
+     *
+     * @var string
+     */
+    private const NAVIGATION_CONVENTION = 'App\\Config\\NavigationConfig';
+
     /**
      * Track rendered component styles to deduplicate per request.
      *
@@ -57,8 +69,71 @@ class ComponentRenderer implements ResettableInterface
         private array $themeConfig = [],
         private array $metaConfig = [],
         private ?LoggerInterface $logger = null,
-        private array $csrfConfig = []
+        private array $csrfConfig = [],
+        private ?string $navigationClass = null
     ) {}
+
+    /**
+     * The application's navigation provider, or null when it has none.
+     *
+     * Resolved as a string rather than imported, and that is the whole point of
+     * the change. `use App\Config\NavigationConfig` made this — a class in
+     * src/Core — depend on a class in the consuming application's namespace at
+     * compile time, so the framework could not be installed anywhere the
+     * application had not happened to put a navigation class at that exact
+     * FQCN. It was a `use` statement pretending to be a convenience.
+     *
+     * The convention is still tried first, so every existing application keeps
+     * the navigation it has today without changing a line. An application that
+     * wants a different class — or none at all — names it in `ui.navigation`,
+     * and naming nothing removes the dependency for good.
+     *
+     * Null is a supported answer rather than an error: an application with no
+     * navigation gets an empty one, which is what the `class_exists` guards
+     * around the old call sites already produced.
+     *
+     * @return class-string|null
+     */
+    private function navigationClass(): ?string
+    {
+        if ($this->navigationClass !== null) {
+            return class_exists($this->navigationClass) ? $this->navigationClass : null;
+        }
+
+        $configured = $this->configuredNavigationClass();
+
+        foreach ([$configured, self::NAVIGATION_CONVENTION] as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && class_exists($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Navigation class named by config, if the config is reachable from here.
+     *
+     * Optional by design: this renderer is constructed in unit tests and in
+     * tooling that has no Config bound, and requiring one would make the
+     * navigation lookup fail for a reason unrelated to navigation.
+     *
+     * @return mixed
+     */
+    private function configuredNavigationClass(): mixed
+    {
+        try {
+            $container = Container::getInstance();
+
+            if (!$container->has(Config::class)) {
+                return null;
+            }
+
+            return $container->get(Config::class)->get('ui.navigation');
+        } catch (Throwable) {
+            return null;
+        }
+    }
 
     /**
      * Clears per-response render bookkeeping.
@@ -288,11 +363,12 @@ class ComponentRenderer implements ResettableInterface
         $isSpaRequest = $request !== null && $request->getHeader('X-Phue-SPA') === 'true';
 
         $user = is_callable($this->userResolver) ? ($this->userResolver)() : null;
+        $navigation = $this->navigationClass();
         $navState = [
-            'items'       => class_exists(NavigationConfig::class) ? NavigationConfig::getAppItems($user) : [],
-            'actions'     => class_exists(NavigationConfig::class) ? NavigationConfig::getAppActions($user) : [],
+            'items'       => $navigation !== null ? $navigation::getAppItems($user) : [],
+            'actions'     => $navigation !== null ? $navigation::getAppActions($user) : [],
             'activeRoute' => $uri,
-            'orientation' => class_exists(NavigationConfig::class) ? NavigationConfig::getAppPlacement() : 'horizontal',
+            'orientation' => $navigation !== null ? $navigation::getAppPlacement() : 'horizontal',
             'themeConfig' => $this->themeConfig
         ];
 
@@ -435,13 +511,14 @@ JS,
             ? $loader->hasComponent('PhNavigation') 
             : true;
 
-        if ($navHtml === '' && $hasNavComponent && class_exists(NavigationConfig::class)) {
+        $navigation = $this->navigationClass();
+        if ($navHtml === '' && $hasNavComponent && $navigation !== null) {
             $navState = [
-                'items'       => NavigationConfig::getAppItems($user),
-                'actions'     => NavigationConfig::getAppActions($user),
+                'items'       => $navigation::getAppItems($user),
+                'actions'     => $navigation::getAppActions($user),
                 'activeRoute' => $uri,
-                'orientation' => NavigationConfig::getAppPlacement(),
-                'themeConfig' => $this->themeConfig,    
+                'orientation' => $navigation::getAppPlacement(),
+                'themeConfig' => $this->themeConfig,
             ];
 
             try {

@@ -232,6 +232,17 @@ case "$ACTION" in
 
     build)
         echo "🛠️ Rebuilding images and starting..."
+        # The dependency volumes are removed before the rebuild, not after.
+        #
+        # vendor/ and node_modules/ live in named volumes rather than in the
+        # image alone, because the bind mount would otherwise hide them. A named
+        # volume is created once and then reused, which is exactly what makes a
+        # stale one possible: add a dependency to composer.json, rebuild, and
+        # the container keeps serving the volume seeded from the image built
+        # before it existed. Removing them here means a rebuild always yields the
+        # dependencies the image just installed, so "rebuilt and still missing
+        # my package" cannot happen.
+        docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
         docker compose -f "$COMPOSE_FILE" build
         docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans
         echo "✅ Rebuild complete."

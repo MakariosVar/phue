@@ -11,6 +11,7 @@ use Phue\Core\Request;
 use Phue\Core\Security\CurrentUserInterface;
 use Phue\Modules\Auth\Authenticator\BearerTokenAuthenticator;
 use Phue\Modules\Auth\Authenticator\SessionAuthenticator;
+use Phue\Modules\Auth\BaseUser;
 use Phue\Modules\Auth\Persistence\LoginStoreInterface;
 use Phue\Modules\Auth\Persistence\SessionLoginStore;
 use Phue\Modules\Auth\Jwt\JwtAuthenticator;
@@ -97,8 +98,20 @@ class AuthModule extends Module
                 );
 
                 // SessionAuthenticator now relies on LoginStoreInterface instead of a hardcoded session key
+                //
+                // The identity class is read from config for the same reason
+                // authResolver is: it belongs to the application, not to the
+                // framework. Naming \App\Models\User here made this module
+                // unusable outside the framework's own demo app — a library that
+                // references the consuming application's namespace is not a
+                // library, and every install that did not have that exact class
+                // fataled here instead of at the point of use.
+                //
+                // BaseUser is the fallback because it is already this module's
+                // default identity (see authResolver above). An application that
+                // wants a real table points identityClass at its own model.
                 $sessionAuth = new SessionAuthenticator(
-                    identityClass: \App\Models\User::class,
+                    identityClass: $authConfig['identityClass'] ?? BaseUser::class,
                     loginStore: $c->get(LoginStoreInterface::class)
                 );
 

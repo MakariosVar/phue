@@ -7,6 +7,7 @@ namespace Phue\Tests\Server;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Application;
 use Phue\Modules\Server\Commands\SwooleServeCommand;
+use Phue\Tests\Support\RestoresActiveRecordConnection;
 
 /**
  * Tests for the websocket decision the serve command makes before it boots.
@@ -26,6 +27,10 @@ use Phue\Modules\Server\Commands\SwooleServeCommand;
  */
 class SwooleServeWebsocketDecisionTest extends TestCase
 {
+    // Every test here constructs an Application, and the constructor rewires the
+    // process-wide Active Record connection. Without the guard, this file hands
+    // the real application's database to whatever runs after it.
+    use RestoresActiveRecordConnection;
     /**
      * A scratch application whose module list this test controls.
      *
@@ -57,7 +62,14 @@ class SwooleServeWebsocketDecisionTest extends TestCase
 
         self::$bases[] = $base;
 
-        return new Application($base);
+        $application = new Application($base);
+
+        // Immediately, not in teardown: between the constructor returning and
+        // the test ending, Active Record hands out the application's own
+        // connection to anything else running in this process.
+        $this->isolateApplicationDatabase($application);
+
+        return $application;
     }
 
     /** @var array<int, string> */
