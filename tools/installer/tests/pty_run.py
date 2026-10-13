@@ -122,25 +122,37 @@ class Screen:
         return "\n".join(lines)
 
 
-def run(argv, keys=(), marker=None, settle=0.4, timeout=25.0):
+ROWS = 40
+COLUMNS = 100
+
+
+def run(argv, keys=(), marker=None, settle=0.4, timeout=25.0, rows=ROWS, columns=COLUMNS):
     """Run argv on a pty, send keys, and return the raw bytes and the screen.
 
     Keys are sent when the output goes quiet rather than on a timer. The menu
     redraws before it waits for the next key, so "quiet for a moment" means the
     program has finished reacting to the previous one — the only signal that
     says another key will not be dropped mid-sequence.
+
+    The geometry defaults to a terminal a person actually has. It used to be
+    200x200, which was large enough that every menu fitted and the harness could
+    not tell the difference between a menu that fits and one that has been
+    truncated to fit. The cost was silent: a test counting menu rows to build a
+    key sequence counted the rows that survived, not the rows that exist, and
+    pressed a number of downs that stopped short of the row it meant to reach.
     """
     pid, fd = pty.fork()
     if pid == 0:
         os.environ["TERM"] = "xterm-256color"
-        os.environ["COLUMNS"] = "100"
+        os.environ["COLUMNS"] = str(columns)
+        os.environ["LINES"] = str(rows)
         os.execvp(argv[0], argv)
 
     out = bytearray()
     pending = list(keys)
     deadline = time.time() + timeout
     armed = marker is None
-    screen = Screen()
+    screen = Screen(rows=rows, columns=columns)
     last_output = time.time()
     next_send = time.time() + settle
 
