@@ -318,7 +318,7 @@ class Application
         // PhUI Core Component Library Loader Singleton (/src/Core/UI/Phui)
         $this->container->singleton('phui.loader', function ($c) use ($viewsCacheDir): PhueComponentLoader {
             return new PhueComponentLoader(
-                componentsDir: $this->basePath . '/src/Core/UI/Phui',
+                componentsDir: __DIR__ . '/UI/Phui',
                 parser: null,
                 persistentCache: $c->get(CacheInterface::class),
                 viewsCacheDir: $viewsCacheDir,

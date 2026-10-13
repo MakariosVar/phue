@@ -94,7 +94,7 @@ final class OptimizeCommand implements CommandInterface
         $viewsDir = $cacheDir . '/views';
         $schemasDir = $basePath . '/storage/generated/schemas';
         $componentsDir = $basePath . '/App/Frontend';
-        $phuiDir = $basePath . '/src/Core/UI/Phui';
+        $phuiDir = dirname(__DIR__, 2) . '/UI/Phui';
 
         if ($dryRun) {
             fwrite($outputStream, "DRY RUN - would optimize: " . implode(', ', self::TYPES[$type]) . "\n");
