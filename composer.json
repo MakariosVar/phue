@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "makarios-var/phue",
+    "name": "MakariosVar/phue",
     "description": "Almost a web development framework.",
     "type": "library",
     "license": "Apache-2.0",
