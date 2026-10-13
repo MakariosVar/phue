@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "MakariosVar/phue",
+    "name": "makariosvar/phue",
     "description": "Almost a web development framework.",
     "type": "library",
     "license": "Apache-2.0",
@@ -27,8 +27,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Phue\\": "src/",
-            "App\\": "App/"
+            "Phue\\": "src/"
         },
         "files": [
             "src/Core/functions.php",
@@ -40,8 +39,14 @@
             "Phue\\Tests\\": "tests/"
         }
     },
+    "bin": ["bin/phue"],
     "config": {
         "optimize-autoloader": true,
         "sort-packages": true
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0.x-dev"
+        }
     }
 }

@@ -7,9 +7,31 @@ declare(strict_types=1);
  * Phue Framework CLI Launcher
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+];
+$autoloadPath = null;
+if (isset($_composer_autoload_path) && file_exists($_composer_autoload_path)) {
+    $autoloadPath = $_composer_autoload_path;
+} else {
+    foreach ($autoloadCandidates as $candidate) {
+        if (file_exists($candidate)) {
+            $autoloadPath = $candidate;
+            break;
+        }
+    }
+}
+
+if ($autoloadPath === null) {
+    fwrite(STDERR, "Unable to find composer autoloader." . PHP_EOL);
+    exit(1);
+}
+
+require $autoloadPath;
 
 use Phue\Core\Console\Application;
+use Phue\Core\Console\PathResolver;
 use Phue\Core\Config;
 use Phue\Core\Env;
 use Phue\Core\Module;
@@ -34,8 +56,10 @@ use Phue\Core\Console\Commands\RouteCacheCommand;
 use Phue\Core\Console\Commands\RouteClearCommand;
 use Phue\Core\Console\CommandInterface;
 
-$basePath = dirname(__DIR__);
-Env::load($basePath);
+$basePath = PathResolver::resolveBasePath();
+if (file_exists($basePath . '/.env')) {
+    Env::load($basePath);
+}
 $config = new Config($basePath . '/config');
 $modules = (array) $config->get('app.modules', []);
 
@@ -76,11 +100,12 @@ foreach ($modules as $moduleClass) {
     $module->registerCommands($app);
 }
 
-// Auto-discover user commands from App/Commands/
-$commandsDir = $basePath . '/App/Commands';
+// Auto-discover user commands from configured commands directory or App/Commands/
+$commandsDir = (string) $config->get('app.commands_path', $basePath . '/App/Commands');
 if (is_dir($commandsDir)) {
-    foreach (glob($commandsDir . '/*.php') as $file) {
-        $className = 'App\\Commands\\' . basename($file, '.php');
+    $commandsNamespace = (string) $config->get('app.commands_namespace', 'App\\Commands');
+    foreach (glob($commandsDir . '/*.php') ?: [] as $file) {
+        $className = rtrim($commandsNamespace, '\\') . '\\' . basename($file, '.php');
         if (class_exists($className) && is_subclass_of($className, CommandInterface::class)) {
             $app->add(new $className());
         }
