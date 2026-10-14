@@ -25,7 +25,12 @@ class ApplicationErrorHandlingTest extends TestCase
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
-        $this->app = new Application($basePath);
+        // debug: false because this file pins what the error pages say in production, and
+        // Env::load() below reads the repository's own .env — where APP_DEBUG is true. Left
+        // to the environment, the suite asserts against a verbose page on a developer
+        // machine and a safe one in CI, which is the ambient-state trap this argument
+        // exists to close (see FailClosedDefaultsTest).
+        $this->app = new Application($basePath, debug: false);
         $this->isolateApplicationDatabase($this->app);
     }
 
@@ -38,9 +43,18 @@ class ApplicationErrorHandlingTest extends TestCase
 
         $this->assertSame(500, $response->getStatusCode());
         $content = $response->getContent();
-        // Should return HTML error page, not raw error message
+
+        // A branded page, not a raw error dump. The assertions that matter are the ones
+        // about what must NOT be in it — the message, the class and the source location are
+        // exactly what a production error page exists to withhold, and the wording of the
+        // page itself is free to change. Asserting one particular sentence instead would
+        // make this test fail the day the copy is edited, and pass the day a real leak is
+        // introduced elsewhere in the template.
         $this->assertStringContainsString('<!DOCTYPE html>', $content);
-        $this->assertStringContainsString('An uncaught exception occurred while processing your request.', $content);
+        $this->assertStringContainsString('<h1>', $content);
+        $this->assertStringNotContainsString('Boom!', $content);
+        $this->assertStringNotContainsString('RuntimeException', $content);
+        $this->assertStringNotContainsString('ApplicationErrorHandlingTest.php', $content);
     }
 
     public function testApplicationReturnsJsonErrorForApiException(): void

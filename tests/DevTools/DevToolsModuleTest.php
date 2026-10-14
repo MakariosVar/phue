@@ -26,6 +26,7 @@ use Phue\Modules\DevTool\ProfilingSsrClient;
 use Phue\Modules\DevTool\RequestProfiler;
 use Phue\Modules\DevTool\Stopwatch;
 use Phue\Tests\Support\RestoresActiveRecordConnection;
+use RuntimeException;
 
 /**
  * Contract of the DevTools module as the kernel sees it: what gets installed, what stays
@@ -430,6 +431,30 @@ class DevToolsModuleTest extends TestCase
     public function testMissingComponentDirectoryIsReportedNotSwallowed(): void
     {
         $app = $this->app(true, true);
+        $container = $app->getContainer();
+
+        // A loader that cannot be built at all — the shape a broken component directory
+        // takes. This used to be provoked by pointing the app at a root without a PhUI
+        // tree, which stopped working when the framework's own PhUI loader was repointed
+        // from `{basePath}/src/Core/UI/Phui` to its own source directory: the directory can
+        // no longer be missing, so that scenario no longer produced a skip, and the test
+        // went red for a behaviour nobody had decided to change. Failing the binding
+        // instead reproduces the same failure from inside the module, which is where the
+        // contract lives: whatever went wrong, it must be visible in the report.
+        $container->singleton(
+            'phui.loader',
+            static function (): never {
+                throw new RuntimeException('component directory is unreadable');
+            }
+        );
+
+        // The module instruments at boot, so the broken binding has to be in place before
+        // it runs. Re-running init() is how the other tests here exercise module wiring
+        // after a rebind.
+        $module = new DevToolsModule();
+        $module->setDependencies($app->getRouter(), $container, $app->getEvents());
+        $module->init();
+
         $app->getRouter()->get('/page', static fn (): string => '<html><body>hi</body></html>');
 
         // Diagnostics are process-scoped, so a note recorded at boot must survive the
@@ -437,8 +462,6 @@ class DevToolsModuleTest extends TestCase
         $app->handle(new Request('GET', '/page'));
         $response = $app->handle(new Request('GET', '/page'));
 
-        // The PhUI loader points into the framework's own source tree, which a throwaway
-        // application root does not have. Its absence must be reported, not hidden.
         $content = (string) $response->getContent();
 
         $this->assertStringContainsString('phui.loader', $content);
