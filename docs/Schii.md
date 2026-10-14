@@ -185,7 +185,7 @@ test suite — changing any of them is a breaking change:
 | Required fields → `422` | Fields declared `required: true` must be present and non-empty on `store()`. |
 | Type rules → `422` | `number`/`numeric` fields reject non-numeric input, `email` fields require a valid e-mail. Additional rules are declared directly on the attribute: `#[Field(type: 'select', rules: ['email'])]`. |
 | Mass-assignment protection | The primary key and non-schema fields are stripped from the payload before `fill()` — clients can never forge their own `id`. |
-| Escaped `LIKE` search | The wildcard characters `%` and `_` in `q` are escaped (the underlying `QueryBuilder` appends an `ESCAPE '\'` clause), so a bare `q=%` matches nothing instead of returning the whole table. |
+| Escaped `LIKE` search | The wildcard characters `%` and `_` in `q` are escaped (the underlying `QueryBuilder` appends an `ESCAPE '!'` clause), so a bare `q=%` matches nothing instead of returning the whole table. |
 | Unregistered entities → `404` | Requesting `/api/schii/unknown` returns `404 Not Found` instead of throwing. |
 | Pagination clamps | `limit` is clamped to `[1, 100]` and `page` to `>= 1`; garbage values fall back to defaults. |
 

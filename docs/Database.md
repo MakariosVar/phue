@@ -167,8 +167,13 @@ $deletedRows = $db->table('users')->where('status', 'expired')->delete();
 - **Parameter binding**: all `where()`, `orWhere()`, `insert()`, and `update()`
   values use positional `?` placeholders.
 - **LIKE wildcard escaping**: `where('name', 'LIKE', '...')` automatically
-  appends an `ESCAPE '\'` clause, so backslash-escaped wildcards (`\%`, `\_`)
-  are treated as literals instead of scanning the whole table.
+  appends an `ESCAPE '!'` clause, so escaped wildcards (`!%`, `!_`) are treated
+  as literals instead of scanning the whole table. The escape character is `!`
+  and not a backslash on purpose: a backslash is an escape character inside a
+  MySQL/MariaDB string literal, so `ESCAPE '\'` is an unterminated literal to
+  those drivers and breaks every LIKE query there. Run user input through
+  `QueryBuilder::escapeLikePattern($value)` — it escapes `%`, `_` and `!` with
+  the same character the clause declares, so the two cannot drift apart.
 - **Operator whitelist**: `addWhereClause()` only accepts a strict whitelist of
   SQL operators (`=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `LIKE`, `NOT LIKE`,
   `ILIKE`, `NOT ILIKE`, `IS`, `IS NOT`). Any operator outside this list throws

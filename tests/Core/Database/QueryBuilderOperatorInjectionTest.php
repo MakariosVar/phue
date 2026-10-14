@@ -309,11 +309,58 @@ final class QueryBuilderOperatorInjectionTest extends TestCase
                 ->toSql();
 
             $this->assertStringContainsString(
-                "ESCAPE '\\'",
+                "ESCAPE '" . QueryBuilder::LIKE_ESCAPE_CHAR . "'",
                 $sql,
                 "ESCAPE clause lost for operator [{$operator}]:\n" . $sql
             );
         }
+    }
+
+    /**
+     * The escape character must not be a backslash.
+     *
+     * MySQL and MariaDB treat a backslash as an escape character inside a
+     * string literal, so `ESCAPE '\'` is an unterminated literal to them and the
+     * whole query dies with a syntax error on the text that follows it. SQLite
+     * accepts it, which is exactly why a SQLite-only suite cannot catch this.
+     * The clause has to be valid for every driver the framework claims to support.
+     */
+    #[Group('p0')]
+    public function testEscapeCharacterIsDriverIndependent(): void
+    {
+        self::assertNotSame(
+            '\\',
+            QueryBuilder::LIKE_ESCAPE_CHAR,
+            'A backslash escape character produces invalid SQL on MySQL/MariaDB.'
+        );
+
+        $sql = $this->connection->table('users')
+            ->where('name', 'LIKE', '%a%')
+            ->toSql();
+
+        self::assertStringNotContainsString("ESCAPE '\\'", $sql);
+    }
+
+    /**
+     * escapeLikePattern() and the ESCAPE clause have to agree on the character,
+     * or a pattern escaped for one is reinterpreted as a wildcard by the other.
+     */
+    #[Group('p0')]
+    public function testEscapeHelperAgreesWithTheEscapeClause(): void
+    {
+        self::assertSame('!%', QueryBuilder::escapeLikePattern('%'), 'a wildcard must be escaped');
+        self::assertSame('!_', QueryBuilder::escapeLikePattern('_'), 'the single-char wildcard must be escaped');
+        self::assertSame('!!', QueryBuilder::escapeLikePattern('!'), 'the escape char must escape itself');
+        self::assertSame('abc', QueryBuilder::escapeLikePattern('abc'), 'plain text must be untouched');
+
+        // A single pass, not sequential replacement: escaping '!' first and '%'
+        // second would turn the '!' just inserted into '!!' and corrupt the pattern.
+        self::assertSame('!!!%', QueryBuilder::escapeLikePattern('!%'));
+        self::assertSame('!%!_!!', QueryBuilder::escapeLikePattern('%_!'));
+
+        // The point of the whole change: no backslash may reach the pattern, or it
+        // would be a literal character under a clause that declares '!'.
+        self::assertStringNotContainsString('\\', QueryBuilder::escapeLikePattern('a%b_c\\d'));
     }
 
     /**

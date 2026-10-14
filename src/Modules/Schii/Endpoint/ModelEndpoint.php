@@ -6,6 +6,7 @@ namespace Phue\Modules\Schii\Endpoint;
 
 use Phue\Core\Database\ActiveRecord\ActiveQuery;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\QueryBuilder;
 use Phue\Core\Request;
 use Phue\Core\Response;
 use Phue\Core\Validation\RuleEngine;
@@ -173,7 +174,7 @@ final class ModelEndpoint
         /** @var string|null $searchQuery */
         $searchQuery = $request->input("q") ?? $request->getQuery("q");
         if ($searchable && is_string($searchQuery) && $searchQuery !== '') {
-            $escaped = addcslashes($searchQuery, "%_\\");
+            $escaped = QueryBuilder::escapeLikePattern($searchQuery);
             $query->where($labelField, 'LIKE', "%{$escaped}%");
         }
 
@@ -814,7 +815,7 @@ final class ModelEndpoint
         /** @var string|null $searchQuery */
         $searchQuery = $request->input("q") ?? $request->getQuery("q");
         if (!empty($searchQuery)) {
-            $escapedQuery = addcslashes((string) $searchQuery, "%_\\");
+            $escapedQuery = QueryBuilder::escapeLikePattern((string) $searchQuery);
             $searchableFields = array_values(
                 array_filter(
                     $schema->fields,

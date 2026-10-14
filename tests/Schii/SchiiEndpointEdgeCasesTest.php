@@ -116,7 +116,7 @@ final class SchiiEndpointEdgeCasesTest extends TestCase
 
     // ------------------------------------------------------------------
     // LIKE wildcard injection — FIXED.
-    // Enforced by LIKE escaping in QueryBuilder (addcslashes + ESCAPE '\'),
+    // Enforced by LIKE escaping in QueryBuilder (escapeLikePattern + ESCAPE '!'),
     // not by the endpoint. Regression guard.
     // ------------------------------------------------------------------
 

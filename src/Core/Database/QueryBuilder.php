@@ -16,6 +16,42 @@ use Phue\Core\Debug\AsyncDumper;
 class QueryBuilder
 {
     /**
+     * The character that escapes wildcards inside a LIKE pattern.
+     *
+     * Deliberately NOT a backslash. A backslash is an ordinary character in
+     * SQLite string literals but an escape character in MySQL/MariaDB ones, so
+     * `ESCAPE '\'` is an unterminated string literal to those drivers and every
+     * LIKE query fails with a syntax error against the text after it. '!' carries
+     * no special meaning in any of the supported drivers, so one clause is valid
+     * everywhere. Pair it with escapeLikePattern().
+     */
+    public const LIKE_ESCAPE_CHAR = '!';
+
+    /**
+     * Escape a user-supplied string so it matches literally inside a LIKE pattern.
+     *
+     * The wildcard characters and the escape character itself are prefixed; any
+     * caller that embeds user input in a LIKE must run it through here, or a
+     * search for "%" returns the whole table.
+     *
+     * Written with strtr rather than addcslashes because addcslashes always emits
+     * a backslash and offers no way to choose the escape character — which is the
+     * very thing this method exists to control. strtr replaces in a single pass,
+     * so an escaped '!' is not re-escaped by a later rule.
+     *
+     * @param string $value Raw user input.
+     * @return string The value with LIKE metacharacters neutralised.
+     */
+    public static function escapeLikePattern(string $value): string
+    {
+        return strtr($value, [
+            self::LIKE_ESCAPE_CHAR => self::LIKE_ESCAPE_CHAR . self::LIKE_ESCAPE_CHAR,
+            '%'                       => self::LIKE_ESCAPE_CHAR . '%',
+            '_'                       => self::LIKE_ESCAPE_CHAR . '_',
+        ]);
+    }
+
+    /**
      * Target database table name quoted for SQL execution.
      */
     protected string $fromTable = '';
@@ -239,7 +275,7 @@ class QueryBuilder
         // Append ESCAPE clause when doing LIKE queries to correctly handle escaped wildcards
         $sqlClause = "{$quotedColumn} {$cleanOperator} ?";
         if ($cleanOperator === 'LIKE' || $cleanOperator === 'NOT LIKE') {
-            $sqlClause .= " ESCAPE '\\'";
+            $sqlClause .= " ESCAPE '" . self::LIKE_ESCAPE_CHAR . "'";
         }
 
         $this->whereClauses[] = [
