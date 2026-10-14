@@ -15,14 +15,14 @@ return [
 <div class="schii-console p-4" v-cloak>
     <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
     
-    <div class="page-header mb-4">
+    <div class="page-header mb-1">
         <ph-heading :level="1" class="mb-1">Schii Console</ph-heading>
         <ph-text color="muted">Zero-Controller Dynamic REST Management Interface</ph-text>
     </div>
 
     <ph-row gutter="3">
         <ph-col span="12" md="4" lg="3">
-            <ph-card :title="`Entities (${entities.length})`" :bordered="false">
+            <ph-card :title="`Entities (${entities.length})`">
                 <div class="mb-2">
                     <ph-input
                         v-model="entitySearch"
@@ -44,7 +44,7 @@ return [
                             :aria-current="currentEntity === slug ? 'page' : undefined"
                         >
                             <span class="d-flex align-items-center gap-2">
-                                <span v-if="entityMeta[slug]?.icon" aria-hidden="true">{{ entityMeta[slug].icon }}</span>
+                                <ph-icon v-if="entityMeta[slug]?.icon" :name="entityMeta[slug].icon" />
                                 <span class="flex-grow-1">{{ entityMeta[slug]?.label || slug }}</span>
                             </span>
                         </ph-button>
@@ -58,19 +58,18 @@ return [
         <ph-col span="12" md="8" lg="9">
             <ph-card>
                 <template #header>
-                    <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="md">
-                        <div>
-                            <ph-text weight="semibold" size="lg" class="mb-0">
-                                {{ currentLabel || currentEntity || 'Data Browser' }}
+                    <ph-flex direction="column" justify="space-between" wrap="wrap" >
+                        <ph-text weight="semibold" size="lg" class="mb-0">
+                            {{ currentLabel || currentEntity || 'Data Browser' }}
+                        </ph-text>
+                        <ph-flex direction="row" justify="space-between" align="center" wrap="wrap" gap="md">
+                            <ph-text v-if="currentEntity && entityMeta[currentEntity]?.description" size="sm" color="muted" class="mb-0">
+                                {{ entityMeta[currentEntity].description }}
                             </ph-text>
                             <ph-text v-if="currentEntity" size="sm" color="muted" class="mb-0">
                                 {{ total }} record(s) &middot; page {{ page }} of {{ lastPage }}
                             </ph-text>
-                            <ph-text v-if="currentEntity && entityMeta[currentEntity]?.description" size="sm" color="muted" class="mb-0 mt-1">
-                                {{ entityMeta[currentEntity].description }}
-                            </ph-text>
-                        </div>
-                        <ph-badge v-if="currentEntity" :label="currentEntity" variant="info" pill />
+                        </ph-flex>
                     </ph-flex>
                 </template>
 
