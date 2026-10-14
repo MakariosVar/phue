@@ -15,6 +15,7 @@ node_modules
 
 composer.lock
 *.sqlite
+bun.lock
 
 /database/migrations/*
 /storage/cache
