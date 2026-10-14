@@ -72,15 +72,23 @@ class CommandsTest extends TestCase
     {
         $cmd = new MakeControllerCommand();
 
-        ob_start();
-        $cmd->execute(['Test']);
-        ob_end_clean();
+        // Streams, not the STDOUT/STDERR defaults: fwrite() to those bypasses
+        // ob_start()/ob_end_clean(), so the command's "already exists" error
+        // used to leak to the console and land after the runner's summary on
+        // every full-suite run — noise that taught readers to ignore the tail.
+        $out = fopen('php://memory', 'w+');
+        $err = fopen('php://memory', 'w+');
 
-        ob_start();
-        $code = $cmd->execute(['Test']);
-        ob_end_clean();
+        $cmd->execute(['Test'], $out, $err);          // first call creates the file
+        $code = $cmd->execute(['Test'], $out, $err);  // second must refuse
+
+        rewind($err);
+        $errorOutput = stream_get_contents($err);
+        fclose($out);
+        fclose($err);
 
         $this->assertSame(1, $code);
+        $this->assertStringContainsString('Controller TestController already exists', $errorOutput);
     }
 
     public function testMakeModelGeneratesFile(): void

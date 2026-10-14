@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phue\Modules\Schii\Endpoint;
 
+use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\ActiveQuery;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
 use Phue\Core\Database\QueryBuilder;
@@ -941,6 +942,15 @@ final class ModelEndpoint
         $tempModel = new $modelClass();
         $pk = $tempModel->getPrimaryKey();
 
+        // The model's own rules() declarations, read before the field loop so
+        // the required decision below sees them too. rules() used to be dead
+        // API — this endpoint built its rule set exclusively from #[Field]
+        // attributes, so an author who wrote min:3 in rules() got a 201 and a
+        // row that violated it, with nothing reporting the drop. The field
+        // attributes stay the base and a model rule only ever adds to them
+        // (see mergeModelRules), so no previously enforced contract changes.
+        $modelRules = $this->modelRules($tempModel, $modelClass);
+
         // 1. Strict Check for Unknown Fields
         foreach (array_keys($data) as $field) {
             if ($field === $pk) {
@@ -955,11 +965,19 @@ final class ModelEndpoint
         foreach ($schema->fields as $fieldName => $fieldSchema) {
             $value = $data[$fieldName] ?? null;
 
+            // Field attributes first: a model rule only adds what the field
+            // does not already say, so the attribute stays the final word.
             // A value that is absent has no type to validate against, so
             // presence is settled first and the rest of the rules are skipped.
             // `required` reaches the same conclusion as the field's own flag:
             // a partial update must not be asked for every column.
-            $required = $fieldSchema->required || RuleEngine::isRequired($fieldSchema->rules);
+            $rules = $this->mergeModelRules(
+                $modelRules[$fieldName] ?? [],
+                $fieldSchema->rules,
+                $modelClass
+            );
+
+            $required = $fieldSchema->required || RuleEngine::isRequired($rules);
 
             if (!$isUpdate && $required && ($value === null || $value === "")) {
                 $errors[$fieldName] = "Field '{$fieldName}' is required";
@@ -969,8 +987,6 @@ final class ModelEndpoint
             if ($value === null || $value === "") {
                 continue;
             }
-
-            $rules = $fieldSchema->rules;
 
             // A numeric column holds a number or it is corrupt, whether or not
             // the author restated it. The type is normalised by the schema
@@ -988,6 +1004,116 @@ final class ModelEndpoint
         }
 
         return $errors;
+    }
+
+    /**
+     * The rules a model declares for itself, keyed by field like the schema.
+     *
+     * rules() is the only model-level validation hook the framework offers,
+     * and it is optional: a model without it has no model-level rules and
+     * behaves exactly as before. A model that declares it must declare it
+     * publicly and return an array of arrays — anything else is a rule that
+     * would silently protect nothing, which is the exact failure mode the
+     * RuleEngine vocabulary exists to prevent, so it fails loudly instead.
+     *
+     * @param BaseActiveRecord $model     Model instance to read the declaration from.
+     * @param string           $modelClass Class name, used verbatim in the error.
+     *
+     * @return array<string, array<int, string>> Field name to declared rules.
+     *
+     * @throws InvalidArgumentException When the declaration cannot be enforced.
+     */
+    private function modelRules(BaseActiveRecord $model, string $modelClass): array
+    {
+        if (!method_exists($modelClass, 'rules')) {
+            return [];
+        }
+
+        if (!is_callable([$model, 'rules'])) {
+            throw new InvalidArgumentException(sprintf(
+                '%s::rules() is not publicly callable. A rule nobody can read protects nothing.',
+                $modelClass
+            ));
+        }
+
+        $declared = $model->rules();
+
+        if (!is_array($declared)) {
+            throw new InvalidArgumentException(sprintf(
+                '%s::rules() must return an array of field => rules, %s given.',
+                $modelClass,
+                get_debug_type($declared)
+            ));
+        }
+
+        $rules = [];
+
+        foreach ($declared as $field => $fieldRules) {
+            if (!is_array($fieldRules)) {
+                throw new InvalidArgumentException(sprintf(
+                    "%s::rules()['%s'] must be an array of rules, %s given.",
+                    $modelClass,
+                    (string) $field,
+                    get_debug_type($fieldRules)
+                ));
+            }
+
+            $rules[(string) $field] = $fieldRules;
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Merge a model's rules() declarations into the attribute-derived rules.
+     *
+     * The attribute rules are the base and a model rule is appended only when
+     * the field already declares no rule answering the same question — the
+     * name before the colon. So #[Field(rules: ['min:3'])] is not overridden
+     * by min:10 from rules(): the declaration closest to the column wins, and
+     * a model can only tighten what the attributes left open, never contradict
+     * it. 'required' from rules() alone is honoured: it reaches the same
+     * presence check the field flag reaches.
+     *
+     * The declared rules are still pushed through assertKnownRules() — an
+     * unknown rule from rules() must fail at the same loud point an unknown
+     * attribute rule fails, naming the model, rather than be ignored by the
+     * engine while the author believes it was enforced.
+     *
+     * @param array<int, string> $declared   Rules rules() declares for one field.
+     * @param array<int, string> $fieldRules Attribute-derived rules for the field.
+     * @param string             $modelClass Model, used verbatim in the error.
+     *
+     * @return array<int, string> The effective rules for the field.
+     *
+     * @throws InvalidArgumentException When a declared rule is unknown.
+     */
+    private function mergeModelRules(array $declared, array $fieldRules, string $modelClass): array
+    {
+        if ($declared === []) {
+            return $fieldRules;
+        }
+
+        RuleEngine::assertKnownRules($declared, $modelClass . '::rules()');
+
+        $covered = [];
+
+        foreach ($fieldRules as $rule) {
+            $covered[] = explode(':', trim((string) $rule), 2)[0];
+        }
+
+        $merged = $fieldRules;
+
+        foreach ($declared as $rule) {
+            $name = explode(':', trim((string) $rule), 2)[0];
+
+            if (!in_array($name, $covered, true)) {
+                $merged[] = $rule;
+                $covered[] = $name;
+            }
+        }
+
+        return array_values(array_unique($merged));
     }
 
     /**

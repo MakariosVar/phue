@@ -113,21 +113,37 @@ final class RateLimitMiddleware
 
     /**
      * Get client IP from request (handles proxies).
+     *
+     * X-Forwarded-For is honoured ONLY when the connecting peer is itself a
+     * trusted proxy — the same trust gate SecurityMiddleware::isTrustedProxy
+     * applies and the same contract docs/Core.md states for
+     * app.trustedProxies (empty list trusts nothing, '*' trusts every peer,
+     * otherwise the list must contain REMOTE_ADDR verbatim). Trusting the
+     * header merely because the list is non-empty would let any client mint
+     * a fresh rate-limit bucket per request by rotating X-Forwarded-For, and
+     * the per-IP limit would never bind. A peer that fails the gate falls
+     * back to REMOTE_ADDR — fail closed, never fail open.
      */
     private function getClientIp(Request $request): ?string
     {
-        // Trust proxy headers if configured
+        $serverParams = $request->getServerParams();
+
         $trustedProxies = $this->config->get('app.trustedProxies', []);
+
         if (!empty($trustedProxies)) {
-            $forwarded = $request->getHeader('X-Forwarded-For');
-            if ($forwarded !== null) {
-                $ips = array_map('trim', explode(',', $forwarded));
-                return $ips[0] ?? null;
+            $remoteAddr = (string) ($serverParams['REMOTE_ADDR'] ?? '');
+            $trusted = in_array('*', $trustedProxies, true)
+                || in_array($remoteAddr, $trustedProxies, true);
+
+            if ($trusted) {
+                $forwarded = $request->getHeader('X-Forwarded-For');
+                if ($forwarded !== null) {
+                    $ips = array_map('trim', explode(',', $forwarded));
+                    return $ips[0] ?? null;
+                }
             }
         }
 
-        // Get from server params (REMOTE_ADDR)
-        $serverParams = $request->getServerParams();
         return $serverParams['REMOTE_ADDR'] ?? null;
     }
 
@@ -276,9 +292,15 @@ final class RateLimitMiddleware
     }
 
     /**
-     * Resolve custom key resolver (callable string).
+     * Resolve custom key resolver (callable).
+     *
+     * The policy declares the resolver as a name ('ip', 'user', 'api_key' —
+     * answered by the match() above), a Closure, or a callable name; the
+     * callable receives the Request and returns the bucket key. A resolver
+     * that throws or returns a non-string is treated as "cannot identify
+     * the client", never as a 500.
      */
-    private function resolveCustomKey(Request $request, string $resolver): ?string
+    private function resolveCustomKey(Request $request, mixed $resolver): ?string
     {
         if (!is_callable($resolver)) {
             return null;

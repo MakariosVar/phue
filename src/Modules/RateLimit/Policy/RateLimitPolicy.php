@@ -16,7 +16,9 @@ final readonly class RateLimitPolicy
      * @param int          $requests     Maximum requests allowed in the window
      * @param string       $window       Window size: 'second', 'minute', 'hour', 'day', or custom seconds (e.g., '90')
      * @param string       $algorithm    Algorithm: 'sliding_window' or 'token_bucket'
-     * @param string       $keyResolver  Key resolver: 'ip', 'user', 'api_key', or callable string
+     * @param string|callable $keyResolver Key resolver: 'ip', 'user', 'api_key', a callable, or a callable name.
+     *                                     Typed mixed because PHP forbids `callable` as a property type;
+     *                                     the middleware decides which shape it holds.
      * @param string|null  $scope        Scope: 'route', 'controller', 'global', 'group'
      * @param array<string, mixed> $meta Additional metadata
      */
@@ -25,7 +27,7 @@ final readonly class RateLimitPolicy
         public int $requests,
         public string $window,
         public string $algorithm = 'sliding_window',
-        public string $keyResolver = 'ip',
+        public mixed $keyResolver = 'ip',
         public ?string $scope = null,
         public array $meta = []
     ) {}
