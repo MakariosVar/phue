@@ -156,6 +156,9 @@ class SchiiModule extends Module
                     basePath: $c->get(Application::class)->getBasePath(),
                     cache: $cache,
                     cachePrefix: $schiiConfig->cachePrefix ?? 'schii_schema_',
+                    // Gates relation inference; omitted here means "off", which keeps
+                    // schemas byte-identical to what they were before the capability.
+                    config: $schiiConfig,
                 );
             }
         );
@@ -506,6 +509,10 @@ class SchiiModule extends Module
             // Public Schema Metadata Endpoints (always non-authorized - metadata is public)
             $this->router->addRoute('GET', "{$apiPrefix}/schema", [ModelEndpoint::class, 'listSchemas'], middleware: $middleware);
             $this->router->addRoute('GET', "{$apiPrefix}/schema/{entity}", [ModelEndpoint::class, 'schema'], middleware: $middleware);
+
+            // Relation Option Endpoints - populate foreign key dropdowns. Registered
+            // before the CRUD routes so "{entity}" can never shadow the literal.
+            $this->router->addRoute('GET', "{$apiPrefix}/relation/{entity}/options", [$crudHandler, 'relationOptions'], middleware: $middleware);
 
             // Audit Log Routes
             $this->router->addRoute('GET', "{$apiPrefix}/audit", [$auditHandler, 'index'], middleware: $middleware);

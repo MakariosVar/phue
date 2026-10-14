@@ -6,14 +6,21 @@ namespace Phue\Modules\Schii\Schema;
 
 use InvalidArgumentException;
 use Phue\Core\Database\ActiveRecord\BaseActiveRecord;
+use Phue\Core\Database\ActiveRecord\Relations\BelongsTo;
+use Phue\Core\Database\ActiveRecord\Relations\HasMany;
+use Phue\Core\Database\ActiveRecord\Relations\HasOne;
+use Phue\Core\Database\ActiveRecord\Relations\Relation;
 use Phue\Core\Database\Attributes\Field;
 use Phue\Core\Database\Attributes\SoftDelete;
 use Phue\Core\Validation\RuleEngine;
 use Phue\Modules\Schii\Attribute\Column;
 use Phue\Modules\Schii\Attribute\UI;
+use Phue\Modules\Schii\Config\SchiiConfig;
 use Phue\Modules\Schii\Generator\PhiiExportSchema;
 use Psr\SimpleCache\CacheInterface;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionNamedType;
 use ReflectionProperty;
 
 final class SchemaRegistry
@@ -35,8 +42,23 @@ final class SchemaRegistry
         private readonly ?string $basePath = null,
         private readonly ?CacheInterface $cache = null,
         private readonly string $cachePrefix = 'schii_schema_',
-        private readonly string $defaultModelNamespace = 'App\\Models'
+        private readonly string $defaultModelNamespace = 'App\\Models',
+        private readonly ?SchiiConfig $config = null
     ) {}
+
+    /**
+     * Determine whether relation metadata should be inferred from the model's relation methods.
+     *
+     * The switch is read from the Schii configuration rather than hard-coded, so an
+     * application that has not opted in keeps receiving exactly the schema it received
+     * before this capability existed.
+     *
+     * @return bool
+     */
+    private function relationsAutoInfer(): bool
+    {
+        return (bool) ($this->config?->relations['autoInfer'] ?? false);
+    }
 
     /**
      * Discover all valid ActiveRecord entity slugs within a target PHP namespace.
@@ -385,6 +407,10 @@ final class SchemaRegistry
             }
         }
 
+        if ($this->relationsAutoInfer()) {
+            $fields = $this->applyRelationMetadata($modelClass, $reflection, $fields);
+        }
+
         return new ModelSchema(
             entity: $entityName,
             className: $modelClass,
@@ -399,6 +425,172 @@ final class SchemaRegistry
                 'update' => strtolower("admin.{$entityName}.update"),
                 'delete' => strtolower("admin.{$entityName}.delete"),
             ]
+        );
+    }
+
+    /**
+     * Annotate fields that are backed by a model relation with relation metadata.
+     *
+     * A relation is recognised exactly the way BaseActiveRecord recognises one at
+     * runtime: a public, non-static, zero-argument method whose declared return type
+     * is a Relation subclass. Invoking such a method here is safe - every relation
+     * factory only records its keys, and the query is built lazily on first use.
+     *
+     * @param string $modelClass Fully qualified model class name.
+     * @param ReflectionClass $reflection Model reflection.
+     * @param array<string, FieldSchema> $fields Fields collected from #[Field]/#[Column].
+     * @return array<string, FieldSchema>
+     */
+    private function applyRelationMetadata(string $modelClass, ReflectionClass $reflection, array $fields): array
+    {
+        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            if ($method->isStatic() || $method->getNumberOfRequiredParameters() > 0) {
+                continue;
+            }
+
+            $returnType = $method->getReturnType();
+            if (!$returnType instanceof ReflectionNamedType || $returnType->isBuiltin()) {
+                continue;
+            }
+
+            $declaredType = $returnType->getName();
+            if (!is_a($declaredType, Relation::class, true)) {
+                continue;
+            }
+
+            $relation = $this->resolveRelation($modelClass, $method);
+            if ($relation === null) {
+                continue;
+            }
+
+            // Only BelongsTo puts its foreign key on the model being described.
+            // HasOne/HasMany store theirs on the related table, so there is no
+            // local column to hang an editor off.
+            if (!is_a($declaredType, BelongsTo::class, true)) {
+                continue;
+            }
+
+            $fieldName = $relation->getForeignKey();
+            if (!isset($fields[$fieldName])) {
+                continue;
+            }
+
+            $fields[$fieldName] = $this->withRelation(
+                $fields[$fieldName],
+                'belongsTo',
+                $relation->getRelatedClass(),
+                $this->relationLabelFor($relation->getRelatedClass())
+            );
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Instantiate the model and invoke a relation method to read its definition.
+     *
+     * @param string $modelClass Fully qualified model class name.
+     * @param ReflectionMethod $method Relation method.
+     * @return Relation|null Null when the method cannot be invoked or does not return a relation.
+     */
+    private function resolveRelation(string $modelClass, ReflectionMethod $method): ?Relation
+    {
+        try {
+            /** @var BaseActiveRecord $instance */
+            $instance = new $modelClass();
+            $relation = $method->invoke($instance);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $relation instanceof Relation ? $relation : null;
+    }
+
+    /**
+     * Choose the related model property used as the human-readable option label.
+     *
+     * Attributes are read directly rather than through parse() so that two models
+     * referencing each other cannot drive this method into unbounded recursion.
+     *
+     * Public because the relation options endpoint has to resolve the very same
+     * column the schema advertised - if the two disagreed, the dropdown would be
+     * labelled with a different column than the one it filtered on.
+     *
+     * @param string $relatedClass Related model class FQCN.
+     * @return string Property name, or an empty string when no suitable field exists.
+     */
+    public function relationLabelFor(string $relatedClass): string
+    {
+        if (!class_exists($relatedClass)) {
+            return '';
+        }
+
+        $reflection = new ReflectionClass($relatedClass);
+        $fallback = null;
+
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
+            $fieldAttrs = $property->getAttributes(Field::class);
+            $columnAttrs = $property->getAttributes(Column::class);
+
+            // A property with neither attribute is not part of the entity.
+            if (empty($fieldAttrs) && empty($columnAttrs)) {
+                continue;
+            }
+
+            /** @var Field|null $field */
+            $field = empty($fieldAttrs) ? null : $fieldAttrs[0]->newInstance();
+
+            // The primary key identifies the row; it never describes it.
+            if ($field !== null && $field->primaryKey) {
+                continue;
+            }
+
+            if (!empty($columnAttrs) && $columnAttrs[0]->newInstance()->searchable) {
+                return $property->getName();
+            }
+
+            if ($fallback === null && $field !== null
+                && in_array($this->normalizeType($field->type), ['varchar', 'text'], true)) {
+                $fallback = $property->getName();
+            }
+        }
+
+        return $fallback ?? '';
+    }
+
+    /**
+     * Clone a field schema carrying relation metadata.
+     *
+     * @param FieldSchema $field Original field schema.
+     * @param string $type Relation kind.
+     * @param string $model Related model class FQCN.
+     * @param string $label Related model property used as the option label.
+     * @return FieldSchema
+     */
+    private function withRelation(FieldSchema $field, string $type, string $model, string $label): FieldSchema
+    {
+        return new FieldSchema(
+            name: $field->name,
+            type: $field->type,
+            label: $field->label,
+            widget: $field->widget,
+            column: $field->column,
+            required: $field->required,
+            searchable: $field->searchable,
+            filterable: $field->filterable,
+            sortable: $field->sortable,
+            options: $field->options,
+            rules: $field->rules,
+            writable: $field->writable,
+            readonly: $field->readonly,
+            primaryKey: $field->primaryKey,
+            indexed: $field->indexed,
+            length: $field->length,
+            relation: [
+                'model' => $model,
+                'label' => $label,
+                'type' => $type,
+            ],
         );
     }
 

@@ -134,6 +134,22 @@ class AuthorizedModelEndpoint
     }
 
     /**
+     * Handles relation option list requests with an RBAC read permission check.
+     *
+     * Reading another table's rows to populate a dropdown is a read of that
+     * entity, so it is guarded by the target entity's read permission rather
+     * than the permission of whatever entity happens to embed the dropdown.
+     *
+     * @param Request $request Framework Request instance.
+     * @param array<string, mixed> $params Route parameters containing related entity name.
+     * @return Response HTTP Response from delegate or access error response.
+     */
+    public function relationOptions(Request $request, array $params): Response
+    {
+        return $this->authorizeAndDelegate($request, $params, 'list', fn() => $this->delegate->relationOptions($request, $params));
+    }
+
+    /**
      * Evaluates 401/403 authorization logic before invoking target delegate callback.
      *
      * @param Request $request Framework Request instance.

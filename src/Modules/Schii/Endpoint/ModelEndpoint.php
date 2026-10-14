@@ -124,6 +124,87 @@ final class ModelEndpoint
     }
 
     /**
+     * List selectable option values for a related model, used to populate relation dropdowns.
+     *
+     * Answers with the model's primary key as the stored value and the column the
+     * schema registry nominated as the display label as the text. Both column names
+     * come from the model's own schema - never from the request - so a caller cannot
+     * use this to read a column that is not part of the entity.
+     *
+     * @route GET /api/schii/relation/{entity}/options
+     *
+     * @param Request      $request The incoming HTTP request instance.
+     * @param array|string $params  Route parameters containing the related entity slug.
+     *
+     * @return Response JSON response containing option rows, or a 404 error.
+     */
+    public function relationOptions(Request $request, array|string $params): Response
+    {
+        /** @var string $entity */
+        $entity = is_array($params)
+            ? $params["entity"] ?? (reset($params) ?: "")
+            : $params;
+        $modelClass = $this->resolveModelClass((string) $entity);
+
+        if ($modelClass === null) {
+            return Response::json(["error" => t('Resource not found')], 404);
+        }
+
+        $schema = $this->schemaRegistry->get($modelClass);
+
+        $valueField = null;
+        foreach ($schema->fields as $field) {
+            if ($field->primaryKey) {
+                $valueField = $field->name;
+                break;
+            }
+        }
+
+        if ($valueField === null) {
+            return Response::json(["error" => t('Resource not found')], 404);
+        }
+
+        $labelField = $this->schemaRegistry->relationLabelFor($modelClass);
+        $searchable = $labelField !== '' && isset($schema->fields[$labelField]);
+
+        /** @var ActiveQuery $query */
+        $query = $modelClass::query();
+
+        /** @var string|null $searchQuery */
+        $searchQuery = $request->input("q") ?? $request->getQuery("q");
+        if ($searchable && is_string($searchQuery) && $searchQuery !== '') {
+            $escaped = addcslashes($searchQuery, "%_\\");
+            $query->where($labelField, 'LIKE', "%{$escaped}%");
+        }
+
+        // The caller may narrow the list but never widen it past the ceiling.
+        $requestedLimit = (int) ($request->input("limit") ?? ($request->getQuery("limit") ?? 50));
+        $limit = max(1, min($requestedLimit, 200));
+
+        $query->limit($limit);
+
+        $rows = [];
+        foreach ($query->get() as $model) {
+            $value = $model->getAttribute($valueField);
+            $rows[] = [
+                'value' => $value,
+                'label' => $searchable
+                    ? (string) $model->getAttribute($labelField)
+                    : (string) $value,
+            ];
+        }
+
+        return Response::json([
+            'data' => $rows,
+            'meta' => [
+                'label' => $searchable ? $labelField : $valueField,
+                'value' => $valueField,
+                'limit' => $limit,
+            ],
+        ]);
+    }
+
+    /**
      * List entity records with support for searching, filtering, sorting, and pagination.
      *
      * @route GET /api/schii/{entity}

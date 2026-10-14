@@ -139,8 +139,19 @@ return [
         <form id="schii-record-form" novalidate @submit.prevent="submitForm">
             <ph-row gutter="3">
                 <ph-col v-for="field in writableFields" :key="field.name" span="12" md="6">
+                    <ph-select3
+                        v-if="relationModel(field)"
+                        v-model="form[field.name]"
+                        :label="field.label || field.name"
+                        :options="relationOptions(field.name)"
+                        :placeholder="field.required ? 'Select…' : 'None'"
+                        :clearable="!field.required"
+                        :error="fieldErrors[field.name]"
+                        @search="term => onRelationSearch(field, term)"
+                        @update:model-value="clearServerError(field.name)"
+                    />
                     <ph-input
-                        v-if="isTextWidget(field)"
+                        v-else-if="isTextWidget(field)"
                         v-model="form[field.name]"
                         :type="inputType(field)"
                         :step="inputStep(field)"
@@ -326,6 +337,12 @@ export default function mountApp() {
             const rowsError = ref(null);
             const toast = ref(null);
 
+            // Loaded option lists per relation field name, plus the bookkeeping that
+            // keeps a slow response from overwriting a newer one.
+            const relationOptionCache = ref({});
+            const relationRequestSeq = {};
+            const relationSearchTimers = {};
+
             const page = ref(parseInt(queryParams.page) || 1);
             const lastPage = ref(1);
             const total = ref(0);
@@ -500,6 +517,7 @@ export default function mountApp() {
                         const data = await res.json();
                         fields.value = data.fields || [];
                         layout.value = data.layout === 'list' ? 'list' : 'grid';
+                        preloadRelationOptions(fields.value);
                         visibleFields.value = (data.fields || [])
                             .filter(f => f.column !== false && f.column !== 0)
                             .map(f => f.name);
@@ -567,6 +585,7 @@ export default function mountApp() {
                 Object.keys(filters).forEach(k => delete filters[k]);
                 rows.value = [];
                 fields.value = [];
+                relationOptionCache.value = {};
                 selected.value = [];
                 await Promise.all([loadSchema(), loadRows()]);
             };
@@ -958,6 +977,73 @@ export default function mountApp() {
             const openAudit = () => {
                 auditOpen.value = true;
                 loadAudit();
+            };
+
+            // Turn a model class name into the entity slug the Schii API resolves,
+            // so the browser asks for the same entity the server-side resolver will
+            // find: App\Models\OrderItem becomes "order-item", which resolves back
+            // to OrderItem through the same plural/singular and studly rules.
+            const entitySlug = (model) => {
+                const short = String(model || '').split('\\').pop() || '';
+                return short
+                    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+                    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+                    .toLowerCase();
+            };
+
+            const relationModel = (field) => (field && field.relation ? field.relation.model : null);
+
+            // PhSelect3 filters what it is given locally and reports the typed term
+            // through its search event, so the fetch belongs here rather than inside
+            // the component: the option list is per-field server state, and the
+            // console owns every other request already.
+            const relationOptions = (fieldName) => relationOptionCache.value[fieldName] || [];
+
+            const loadRelationOptions = async (field, term) => {
+                const model = relationModel(field);
+                const slug = entitySlug(model);
+                if (!slug) {
+                    return;
+                }
+
+                const seq = ++relationRequestSeq[field.name];
+
+                try {
+                    const query = new URLSearchParams();
+                    if (term) {
+                        query.set('q', term);
+                    }
+                    const suffix = query.toString();
+                    const res = await api(`${apiPrefix}/relation/${encodeURIComponent(slug)}/options${suffix ? `?${suffix}` : ''}`);
+
+                    // A slow earlier response must not overwrite a newer one, and a
+                    // failed request must not blank a control the user is reading.
+                    if (seq !== relationRequestSeq[field.name] || !res.ok) {
+                        return;
+                    }
+                    const payload = await res.json();
+                    const data = payload && Array.isArray(payload.data) ? payload.data : [];
+                    relationOptionCache.value = { ...relationOptionCache.value, [field.name]: data };
+                } catch (error) {
+                    // Leave the previously loaded options in place.
+                }
+            };
+
+            const onRelationSearch = (field, term) => {
+                if (relationSearchTimers[field.name]) {
+                    clearTimeout(relationSearchTimers[field.name]);
+                }
+                relationSearchTimers[field.name] = setTimeout(() => loadRelationOptions(field, term), 250);
+            };
+
+            // Populate each relation field once so the list is populated before the
+            // user types, rather than staying empty until the first keystroke.
+            const preloadRelationOptions = (list) => {
+                list.forEach(field => {
+                    if (relationModel(field) && !relationOptionCache.value[field.name]) {
+                        loadRelationOptions(field, '');
+                    }
+                });
             };
 
             const isTextWidget = (f) => !(f.type === 'select' || f.widget === 'select' || f.type === 'boolean' || f.type === 'bool' || f.widget === 'checkbox' || f.widget === 'textarea' || f.widget === 'radio' || f.type === 'json');

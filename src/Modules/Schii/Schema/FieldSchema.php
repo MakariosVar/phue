@@ -30,6 +30,11 @@ final readonly class FieldSchema
      * @param bool                 $primaryKey Whether the field is a primary key.
      * @param bool                 $indexed    Whether the field is indexed.
      * @param int                  $length     The maximum length of the field.
+     * @param array{model: string, label: string, type: string}|null $relation
+     *        Inferred relation metadata for this field, or null when the field is not a relation.
+     *        The 'model' key holds the related model class name, 'label' the related model
+     *        property used as the human-readable option label, and 'type' the relation kind
+     *        ('belongsTo', 'hasOne' or 'hasMany').
      */
     public function __construct(
         public string $name,
@@ -47,7 +52,8 @@ final readonly class FieldSchema
         public bool $readonly = false,
         public bool $primaryKey = false,
         public bool $indexed = false,
-        public int $length = 0
+        public int $length = 0,
+        public ?array $relation = null
     ) {}
 
     /**
@@ -75,7 +81,14 @@ final readonly class FieldSchema
             readonly: (bool) ($data['readonly'] ?? false),
             primaryKey: (bool) ($data['primaryKey'] ?? false),
             indexed: (bool) ($data['indexed'] ?? false),
-            length: (int) ($data['length'] ?? 0)
+            length: (int) ($data['length'] ?? 0),
+            relation: isset($data['relation']) && is_array($data['relation'])
+                ? [
+                    'model' => (string) ($data['relation']['model'] ?? ''),
+                    'label' => (string) ($data['relation']['label'] ?? ''),
+                    'type' => (string) ($data['relation']['type'] ?? ''),
+                ]
+                : null
         );
     }
 
@@ -103,6 +116,10 @@ final readonly class FieldSchema
             'primaryKey' => $this->primaryKey,
             'indexed' => $this->indexed,
             'length' => $this->length,
+            // Relation metadata is part of the serialized contract: SchemaRegistry
+            // persists schemas through this array, so omitting the key here would
+            // strip relations from every schema read back out of the cache.
+            'relation' => $this->relation,
         ];
     }
 }
