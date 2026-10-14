@@ -183,7 +183,7 @@ test suite — changing any of them is a breaking change:
 |---|---|
 | Unknown fields → `422` | Any property not declared via `#[Field]` is rejected with `"Unknown field 'X' is not allowed"`. Since query strings and body are merged, this also covers stray URL parameters on `POST`/`PUT` — keep request URLs clean. |
 | Required fields → `422` | Fields declared `required: true` must be present and non-empty on `store()`. |
-| Type rules → `422` | `number`/`numeric` fields reject non-numeric input, `email` fields require a valid e-mail. Additional rules are declared directly on the attribute: `#[Field(type: 'select', rules: ['email'])]`. |
+| Type rules → `422` | `number`/`numeric` fields reject non-numeric input, `email` fields require a valid e-mail. Additional rules are declared directly on the attribute: `#[Field(type: 'select', rules: ['email'])]`, or on the model's own `rules()` method (below). |
 | Mass-assignment protection | The primary key and non-schema fields are stripped from the payload before `fill()` — clients can never forge their own `id`. |
 | Escaped `LIKE` search | The wildcard characters `%` and `_` in `q` are escaped (the underlying `QueryBuilder` appends an `ESCAPE '!'` clause), so a bare `q=%` matches nothing instead of returning the whole table. |
 | Unregistered entities → `404` | Requesting `/api/schii/unknown` returns `404 Not Found` instead of throwing. |
@@ -191,9 +191,10 @@ test suite — changing any of them is a breaking change:
 
 ### The rule vocabulary
 
-`rules` on `#[Field]` is a **closed vocabulary**, defined by
-`Phue\Core\Validation\RuleEngine`. Anything outside it stops the schema from
-being built rather than being skipped, because a constraint that is neither
+`rules` — on `#[Field]` or on the model's `rules()` method — is a **closed
+vocabulary**, defined by `Phue\Core\Validation\RuleEngine`. Anything outside it
+stops the schema from being built (attribute) or the request from validating
+(model method) rather than being skipped, because a constraint that is neither
 enforced nor reported is worse than no constraint — the author believes the
 field is protected and it is not:
 
@@ -215,6 +216,61 @@ field is protected and it is not:
 `min`/`max` follow the **declared type**, not the shape of the incoming value:
 `#[Field(type: 'float', rules: ['min:1000'])]` means the number must be at least
 1000, whether the client sends `1200` or `"1200"`.
+
+### The model-level `rules()` method
+
+A model may also declare validation **on itself**, next to the code that owns
+the business meaning, with a `rules()` method returning `field => rules` — the
+same vocabulary, the same position, for constraints that are not naturally
+expressed per attribute:
+
+```php
+#[UI(label: 'Products', icon: 'box', layout: 'grid')]
+class Product extends BaseActiveRecord
+{
+    #[Field(type: 'text', required: true)]
+    #[Column(searchable: true)]
+    public string $name;
+
+    #[Field(type: 'number')]
+    public float $price;
+
+    /**
+     * min:3 is not on any attribute; price must be present even though the
+     * attribute does not say required. Both are enforced from here.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public function rules(): array
+    {
+        return [
+            'name'  => ['required', 'min:3'],
+            'price' => ['required', 'numeric'],
+        ];
+    }
+}
+```
+
+How the two merge, precisely:
+
+- **Attribute rules are the base.** A `rules()` entry is added only when the
+  field declares no rule answering the same question — the name before the
+  colon. So `#[Field(rules: ['min:3'])]` is not overridden by `min:10` in
+  `rules()`: the declaration closest to the column wins, and the model can only
+  tighten what the attribute left open, never contradict it.
+- **`required` from `rules()` reaches the same presence check** as
+  `required: true` — enforced on create, skipped on partial update, so a `PUT`
+  that omits the field is still legal.
+- **The same closed vocabulary applies.** An unknown rule declared in
+  `rules()` throws an `InvalidArgumentException` naming
+  `App\Models\Product::rules()` at validation time — exactly like an unknown
+  attribute rule at schema-build time. A rule that is neither enforced nor
+  reported is the failure the vocabulary exists to prevent.
+- **Optional, and optional-looking.** A model without `rules()` is unaffected.
+  A non-array return, or a declared-but-not-public method, is a programming
+  error and fails loudly rather than silently validating nothing.
+
+`rules()` covers store, update, bulk and import — everywhere validation runs.
 
 Validation runs on the **server only**. The admin form shows the rules as a
 hint (`Rules: min:3, email`) and lets the browser apply its own native

@@ -88,9 +88,14 @@ class ExampleModule extends Module
 
    > `Module 'rest' requires 'auth', which is not loaded. Add it to config/app.modules.`
 
-Because all modules mount **before** dependencies are verified, the order of
-entries in `config/app.php` does not matter — a module can safely check
-`$this->container->has('module.auth')` inside `init()`.
+Because all modules mount **before** dependencies are verified, a missing
+`requires` is always a boot-time error. That is the whole guarantee, though —
+**resolution during `init()` still follows config order**: each module is
+registered under `module.{id}` as it is mounted, so a module that consumes
+another module's bindings during its own `init()` must be listed **after** the
+provider. Pass 2 cannot catch that; by the time it runs the too-early
+resolution has already happened. The templates list providers first
+(Auth → Schii → Rest).
 
 > **`$id` vs class name:** the module *id* (e.g. `'devtools'`) and the class
 > name (`DevToolsModule` in the `DevTool` directory) do not have to match. The
@@ -137,7 +142,7 @@ Notes worth knowing:
   collector as a singleton and installs decorators over the SSR transport, the
   component loaders and the database driver. Panel toggles, theme mode and SQL
   redaction live in `config/devtool.php`; see
-  [Server Adapters §5](Server-Adapters.md#5-devtools-phuemodulesdevtool).
+  [Server Adapters §3](Server-Adapters.md#3-devtools-phuemodulesdevtool).
 - **WebSocket endpoints**: the module takes a `websockets` map rather than one
   set of settings, because authentication and transport do not change together —
   an application's realtime traffic is user data and must never be reachable
@@ -220,9 +225,11 @@ module registers `schii:migrate`, `schii:export`, `schii:serve`.
 ### Per-module tests
 
 The test suite is organized **one testsuite per module** (`phpunit.xml`):
-`core`, `schii`, `rest`, `phii`, `auth`, `server`, `events`, `compiler`,
-`devtools`, plus a `kit` suite for cross-module tests. Run a single module's
-suite:
+`core`, `schii`, `rest`, `phii`, `auth`, `server`, `events`, `devtools`,
+`queue`, `websocket`, `ratelimit`, `httpsigning`, plus a `kit` suite for
+cross-module tests (`App`, `Benchmark`, `Cache`, `ErrorPages`, `Production`)
+and a `suite` suite for framework-wide guards (independence, known-vulnerability
+ratchet, test layout). Run a single module's suite:
 
 ```bash
 vendor/bin/phpunit --testsuite auth

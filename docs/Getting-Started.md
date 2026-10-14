@@ -17,13 +17,13 @@ Everything you need to create a new Phue application and run it locally.
 
 ## 2. Creating a project with `phue-create`
 
-Phue ships a self-contained installer script at `tools/installer/phue-create.sh`. It scaffolds a complete new application from the framework source: core files, the modules you pick, their tests, and generated configuration.
+Phue ships a self-contained installer script at `tools/installer(deprecated)/phue-create.sh` (the directory is marked deprecated in-tree — the tool still works, the framework just no longer evolves it). It scaffolds a complete new application from the framework source: core files, the modules you pick, their tests, and generated configuration.
 
 The module list is not written into the installer. It is discovered by scanning `src/Modules/`, reading each module's own `$id`, `$type` and `$requires`, so every module this framework ships is installable — including the ones added after this page was written.
 
 ```bash
 # See what this framework actually ships, right now
-bash tools/installer/phue-create.sh --list-modules
+bash tools/installer(deprecated)/phue-create.sh --list-modules
 ```
 
 ### Interactive mode
@@ -31,14 +31,14 @@ bash tools/installer/phue-create.sh --list-modules
 Run without any flags. You get two screens: first pick a starting point, and if you want something the presets don't cover, one more step down for the module checklist.
 
 ```bash
-bash /path/to/phue/tools/installer/phue-create.sh my-app
+bash /path/to/phue/tools/installer(deprecated)/phue-create.sh my-app
 ```
 
 **Screen 1 — the starting point.** <kbd>↑</kbd>/<kbd>↓</kbd> to move, <kbd>enter</kbd> to select, <kbd>q</kbd> to quit:
 
 ```
-  Phue create a new project
-  9 templates · enter selects · esc and q quit
+   Phue create a new project
+   8 templates · enter selects · esc and q quit
 
   ❯● Web app
        Server-rendered app with login, RBAC and the Schii admin console.
@@ -82,7 +82,7 @@ If you omit the project name, the installer prompts for one after the selection.
 Prefer a curated module set? Use `--template`:
 
 ```bash
-bash tools/installer/phue-create.sh my-app --template=web
+bash tools/installer(deprecated)/phue-create.sh my-app --template=web
 ```
 
 Available templates (also listed with `--list-templates`):
@@ -103,7 +103,7 @@ Available templates (also listed with `--list-templates`):
 ### Custom module set (non-interactive)
 
 ```bash
-bash tools/installer/phue-create.sh my-app --modules=auth,server
+bash tools/installer(deprecated)/phue-create.sh my-app --modules=auth,server
 ```
 
 Module ids are the ones each module declares — `rateLimit`, `http-signing` — and are accepted in any spelling: `ratelimit`, `rate_limit` and `rate-limit` all resolve to `rateLimit`. An unknown id is still an error, and the message lists what is available.
@@ -111,7 +111,7 @@ Module ids are the ones each module declares — `rateLimit`, `http-signing` —
 ### Previewing before writing
 
 ```bash
-bash tools/installer/phue-create.sh my-app --template=api --dry-run
+bash tools/installer(deprecated)/phue-create.sh my-app --template=api --dry-run
 ```
 
 Prints the exact list of paths that would be created and writes nothing. The preview is built from the same plan the real run executes, so it cannot describe an install that differs from the one you get.
@@ -134,7 +134,7 @@ Prints the exact list of paths that would be created and writes nothing. The pre
 The script is designed to be run straight from the repository — if the Phue source isn't found locally it clones it for you:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app --template=web
+bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer(deprecated)/phue-create.sh) my-app --template=web
 ```
 
 > With `bash <(curl ...)` the interactive menus keep working because your terminal's stdin stays attached. A plain `curl | bash` pipe detaches stdin, so use `--template` or `--modules` in that case.
@@ -251,7 +251,7 @@ DB_PASSWORD=
 |---|---|
 | `APP_NAME` | Brand label (`NavigationConfig::getAppBrand()`) |
 | `APP_ENV`, `APP_DEBUG` | Environment + error verbosity |
-| `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §5](Server-Adapters.md) |
+| `APP_DEV_TOOL` | DevTools debug toolbar + profiler (needs `APP_DEBUG=true` too) — see [Server Adapters §3](Server-Adapters.md) |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
 | `QUEUE_DRIVER` | Active queue driver (`sync`, `database`) |

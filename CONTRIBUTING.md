@@ -49,19 +49,29 @@ composer install
 
 ### Running the tests
 
+The canonical harness is `bin/phue_test` (a selector in front of PHPUnit) —
+**not** `vendor/bin/phpunit` directly:
+
 ```bash
-# Inside the container (canonical)
-docker exec phue_app ./bin/phue_test
+# Inside the container: only what your working tree can affect
+docker exec phue_app php bin/phue_test --changed
 
-# A single test file / directory
-docker exec phue_app ./bin/phue_test tests/Schii
+# Everything, at the close of a task (a few minutes)
+docker exec phue_app php bin/phue_test
 
-# Locally
-./bin/phue_test
+# Re-run last run's failures
+docker exec phue_app php bin/phue_test --only-failed
+
+# What would run, without running it
+docker exec phue_app php bin/phue_test --changed --list
+
+# Locally, same modes
+./bin/phue_test --changed
 ```
 
-> Passing a path is recommended over `--testsuite`; the PHPUnit path form is the
-> reliable way to run one area.
+The runner never runs the suite concurrently — the MariaDB-backed tests share a
+server and the DevTool's PDO wrapper resolves its callback by method name, so
+sharding loses races. Full suite output is large; redirect it and search.
 
 ---
 

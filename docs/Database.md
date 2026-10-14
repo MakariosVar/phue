@@ -178,8 +178,10 @@ $deletedRows = $db->table('users')->where('status', 'expired')->delete();
   SQL operators (`=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `LIKE`, `NOT LIKE`,
   `ILIKE`, `NOT ILIKE`, `IS`, `IS NOT`). Any operator outside this list throws
   `InvalidArgumentException`. The operator is sanitized and the cleaned version
-  is used in the SQL string; for `LIKE`/`NOT LIKE`/`ILIKE`/`NOT ILIKE` the
-  `ESCAPE` clause is preserved.
+  is used in the SQL string; the `ESCAPE '!'` clause is appended for `LIKE` and
+  `NOT LIKE` **only** — `ILIKE`/`NOT ILIKE` are passed through without it (a
+  dialect extension with no uniform escape spelling), so an ILIKE pattern
+  treats `%` and `_` as wildcards unless the caller strips them itself.
 
 ---
 

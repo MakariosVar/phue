@@ -23,7 +23,7 @@ attribute-driven model broadcasting.
 | `Broadcastable` | `Modules/Events/Attribute/Broadcastable.php` | Attribute marking models for automatic broadcasting |
 
 > Historical note: this subsystem used to live in `Phue\Events`
-> (`src/Events/`). After the modulezied restructuring it is
+> (`src/Events/`). After the modular restructuring it is
 > `Phue\Modules\Events` (`src/Modules/Events/`).
 
 ---

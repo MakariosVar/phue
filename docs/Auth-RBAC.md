@@ -27,7 +27,7 @@ Related guides: [Core](Core.md), [Schii](Schii.md) (protected CRUD endpoints),
 | `AccessControlMiddleware` | `Modules/Auth/Middleware/AccessControlMiddleware.php` | Route middleware enforcing permission checks |
 
 > Historical note: this subsystem used to live in `Phue\Auth` (`src/Auth/`).
-> After the modulezied restructuring it is `Phue\Modules\Auth`
+> After the modular restructuring it is `Phue\Modules\Auth`
 > (`src/Modules/Auth/`).
 
 ---

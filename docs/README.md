@@ -41,10 +41,10 @@ This documentation is organized into focused guides. Pick the one that matches w
 
 ```bash
 # Create a new project (interactive module picker)
-bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app
+bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer(deprecated)/phue-create.sh) my-app
 
 # Or with a predefined template
-bash /path/to/phue/tools/installer/phue-create.sh my-app --template=web
+bash /path/to/phue/tools/installer(deprecated)/phue-create.sh my-app --template=web
 
 # Install dependencies and run
 cd my-app

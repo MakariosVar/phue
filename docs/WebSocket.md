@@ -432,7 +432,7 @@ and the connection is told.
   reconnects with backoff and replays its cursor.
 - **Resume by cursor.** No re-fetching, no double-delivery.
 - **Per-user topics.** `toUser` builds the name; the module does not have to be told what a "user" is.
-- **Graceful degradation.** If the realtime channel is not available, the DevTools toolbar falls back to polling — see [Server Adapters §6](Server-Adapters.md).
+- **Graceful degradation.** If the realtime channel is not available, the DevTools toolbar falls back to polling — see [Server Adapters §4](Server-Adapters.md).
 
 ---
 

@@ -135,11 +135,18 @@ which defeats connection pooling, loses any connection-level state (prepared
 statements, temporary tables, transaction context), and adds unnecessary
 overhead in persistent runtimes.
 
-Two global middlewares are registered by default, in this order:
+Three global middlewares are registered by default, in this order — the first
+registration is the outermost layer (the pipeline folds over the reversed list,
+so each one wraps the next):
 
-1. `ErrorHandlerMiddleware` — runs first (outermost), so exceptions anywhere in
-   the pipeline are rendered as proper error pages / JSON errors.
-2. `SecurityMiddleware` — defense-in-depth headers on every response.
+1. `SecurityMiddleware` — defense-in-depth headers on every response. It is
+   also re-applied on the final response inside `handle()` (see §2.4), so the
+   404/405/500 paths are covered too.
+2. `ErrorHandlerMiddleware` — runs inside the security layer, so exceptions
+   anywhere in the pipeline are rendered as proper error pages / JSON errors.
+3. `CsrfMiddleware` — registered last, therefore innermost, **on purpose**: it
+   sits inside the error handler so a rejected token is rendered as a proper
+   403 (JSON when the client asks for it) rather than escaping as a bare 500.
 
 ### 2.2.1 AssetRegistry: Request-Scoped Styles & Scripts
 
@@ -536,10 +543,19 @@ A **two-pass strategy** avoids dependency ordering bugs:
 
    > `Module 'rest' requires 'auth', which is not loaded. Add it to config/app.modules.`
 
-This means the **order of modules in `config/app.php` does not matter** — a
-module can call `$this->container->has('module.auth')` during `init()` and the
-answer is reliable, because all modules are mounted before dependencies are
-checked.
+Pass 2 is the whole of the ordering guarantee, and it is worth being precise
+about what it does and does not buy:
+
+- **A missing `requires` is always caught** — after all mounts, with an error
+  that names both modules.
+- **Resolution during `init()` still respects config order.** Each module is
+  registered under `module.{id}` **as it is mounted**, so a module that
+  consumes another module's bindings during its own `init()` must be listed
+  **after** the provider it consumes. Pass 2 cannot catch that: by the time it
+  runs, the too-early resolution has already happened, and `has()` has already
+  answered `false`. The templates in `config/app.php` and the `phue-create`
+  installer therefore list providers before consumers — e.g. Auth → Schii →
+  Rest.
 
 ```php
 // config/app.php
@@ -1102,13 +1118,27 @@ A request counts as secure when either:
 
 `app.trustedProxies` defaults to `[]` (trust no proxy) — a spoofed
 `X-Forwarded-Proto` from an untrusted source is ignored, so a plain-HTTP request
-can never be tricked into advertising HSTS. Use `'*'` when every connecting peer
-is a trusted reverse proxy:
+can never be tricked into advertising HSTS. The check itself is deliberately
+simple, and two of its properties matter: an **empty list trusts nothing**, and
+`'*'` trusts **every** connecting peer:
 
 ```php
 // config/app.php
-'trustedProxies' => ['10.0.0.0/8', '192.168.1.10'],  // or ['*'] behind a CDN
+'trustedProxies' => ['192.168.1.10', '10.0.0.5'],  // exact REMOTE_ADDR values
+// or
+'trustedProxies' => ['*'],                        // every peer is a trusted reverse proxy (CDN)
 ```
+
+Entries are matched against the connecting remote address (**REMOTE_ADDR**)
+**verbatim** — a CIDR entry such as `10.0.0.0/8` is not expanded and matches
+nothing, so it fails closed (the forwarded header is ignored), it does not fail
+open. If you need subnet matching, terminate the proxies you control into a
+known address, or list the addresses.
+
+The same gate guards the client-IP derivation of the rate limiter — it honours
+`X-Forwarded-For` only when the peer passes it, which is why a spoofed header
+from an untrusted peer buys a fresh rate-limit bucket nowhere. See
+[Rate Limits](Rate-Limits.md#proxy-trust-x-forwarded-for).
 
 ### CSRF Protection (`CsrfMiddleware`)
 
@@ -1234,4 +1264,4 @@ A collection of choices worth documenting so future readers understand the *why*
 - **`RouteMatch` as a value object.** Dispatch returns structured data (handler + params), not a bare tuple, keeping call sites readable.
 - **`Application` as composition root.** The app owns and wires the container, router, and event dispatcher; components never reach for globals or construct their own dependencies. This keeps wiring in one discoverable place and makes the pipeline ("onion") behavior explicit and testable.
 - **Explicit request scoping instead of implicit state.** The container exposes `singleton()` / `scoped()` and a single `flushScope()` that `Application::handle()` runs automatically in a `finally`. This trades a bit of coroutine-friendliness for a far simpler mental model — and it guarantees request cleanup even on exceptions.
-- **Modules boot in two passes.** All modules mount first (with infrastructure injected), *then* `requires` are verified — so module order in `config/app.php` never causes ordering bugs.
+- **Modules boot in two passes.** All modules mount first (with infrastructure injected), *then* `requires` are verified — so a missing dependency is a boot-time error naming both modules. Resolution *during* `init()` still follows config order (see §3.4).

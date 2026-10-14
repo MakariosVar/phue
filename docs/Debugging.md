@@ -97,7 +97,7 @@ $plan = $db->table('users')->where('active', 1)->explain();
 
 Use `Phue\Core\Debug\AsyncDumper` — it collects dumps during request execution and flushes them at the end via middleware.
 
-**Global helpers (via `src/Core/functions.php`):**
+**Global helpers (via `src/Core/Debug/helpers.php`):**
 ```php
 use Phue\Core\Debug\AsyncDumper;
 

@@ -117,10 +117,10 @@ modules a project needs — everything else stays out.
 
 ```bash
 # Create a new project (interactive module picker)
-bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app
+bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer(deprecated)/phue-create.sh) my-app
 
 # Or from a local clone of this repo
-bash tools/installer/phue-create.sh my-app --template=web
+bash tools/installer(deprecated)/phue-create.sh my-app --template=web
 
 ## DOCKER 
 ./phue-docker build
@@ -147,7 +147,7 @@ Open `http://localhost:8000` — you have a working Phue app with routing,
 
 ## Creating a project with `phue-create`
 
-Phue ships a self-contained installer script at `tools/installer/phue-create.sh`.
+Phue ships a self-contained installer script at `tools/installer(deprecated)/phue-create.sh`.
 It scaffolds a complete new application from the framework source: core files,
 the modules you pick, their tests, and generated configuration.
 
@@ -157,7 +157,7 @@ every module this framework ships is installable, including the ones added after
 this file was written.
 
 ```bash
-bash tools/installer/phue-create.sh --list-modules
+bash tools/installer(deprecated)/phue-create.sh --list-modules
 ```
 
 ### Interactive mode
@@ -167,7 +167,7 @@ you want something the presets don't cover, one more step down for the module
 checklist.
 
 ```bash
-bash /path/to/phue/tools/installer/phue-create.sh my-app
+bash /path/to/phue/tools/installer(deprecated)/phue-create.sh my-app
 ```
 
 **Screen 1 — the starting point.** <kbd>↑</kbd>/<kbd>↓</kbd> to move,
@@ -175,7 +175,7 @@ bash /path/to/phue/tools/installer/phue-create.sh my-app
 
 ```
   Phue create a new project
-  9 templates · enter selects · esc and q quit
+  8 templates · enter selects · esc and q quit
 
   ❯● Web app
        Server-rendered app with login, RBAC and the Schii admin console.
@@ -213,7 +213,7 @@ alone lists `auth, rest`, because `rest` declares `auth` as a requirement.
 Prefer a curated module set? Use `--template`:
 
 ```bash
-bash tools/installer/phue-create.sh my-app --template=web
+bash tools/installer(deprecated)/phue-create.sh my-app --template=web
 ```
 
 Available templates (also listed with `--list-templates`):
@@ -232,7 +232,7 @@ Available templates (also listed with `--list-templates`):
 ### Custom module set (non-interactive)
 
 ```bash
-bash tools/installer/phue-create.sh my-app --modules=auth,server
+bash tools/installer(deprecated)/phue-create.sh my-app --modules=auth,server
 ```
 
 Module ids are the ones each module declares — `rateLimit`, `http-signing` — and
@@ -242,7 +242,7 @@ resolve to `rateLimit`.
 ### Previewing before writing
 
 ```bash
-bash tools/installer/phue-create.sh my-app --template=api --dry-run
+bash tools/installer(deprecated)/phue-create.sh my-app --template=api --dry-run
 ```
 
 Prints the exact list of paths that would be created and writes nothing.
@@ -266,7 +266,7 @@ The script is designed to be run straight from the repository — if the Phue
 source isn't found locally it clones it for you:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer/phue-create.sh) my-app --template=web
+bash <(curl -fsSL https://raw.githubusercontent.com/MakariosVar/phue/main/tools/installer(deprecated)/phue-create.sh) my-app --template=web
 ```
 
 > With `bash <(curl ...)` the interactive menus keep working because your
@@ -321,7 +321,7 @@ my-app/
 │   └── Models/                       # #[UI]/#[Field] entities (when schii is on)
 ├── bin/
 │   ├── phue                          # Main CLI
-│   ├── phue_test                     # Generator CLI (Phii)
+│   ├── phue_test                     # Test runner (mode selector in front of PHPUnit)
 │   └── phii                          # Generator CLI alias
 ├── config/
 │   ├── app.php                       # App settings + modules list
@@ -387,7 +387,7 @@ DB_PASSWORD=
 |---|---|
 | `APP_NAME` | Brand label (`NavigationConfig::getAppBrand()`) |
 | `APP_ENV`, `APP_DEBUG` | Environment + error verbosity |
-| `APP_DEV_TOOL` | DevTools debug toolbar + profiler + live reload (needs `APP_DEBUG=true` too) — see [Server Adapters §5](docs/Server-Adapters.md) |
+| `APP_DEV_TOOL` | DevTools debug toolbar + profiler + live reload (needs `APP_DEBUG=true` too) — see [Server Adapters §3](docs/Server-Adapters.md) |
 | `APP_WEBSOCKET` | Turns the WebSocket module on. |
 | `SCHII_ENABLED` | Schii console + Phii nav items |
 | `DB_*` | The active database connection |
@@ -407,7 +407,7 @@ $name = env('APP_NAME', 'Phue App');
 ```bash
 cd my-app
 composer install
-./phue serve:       # http://localhost:8000, docroot public/
+./phue serve:php      # http://localhost:8000, docroot public/
 ```
 
 Then:

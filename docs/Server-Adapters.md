@@ -36,12 +36,14 @@ $adapter->run();
 
 ### Zero state leakage — the single flush point
 
-`Application::handle()` is the **single flush point**: its `finally` block calls
-`$container->flushScope()` exactly once per request (see [Core §4](Core.md)).
-Persistent worker adapters therefore perform *no* flushing of their own — they
-delegate request work to the app and rely on the app to purge request-scoped
-services between iterations. This is the framework's state-isolation guarantee,
-protected by the test suite (`tests/Server/PersistentServerAdapterTest.php`).
+`Application::handle()` is the **single flush point**: its `finally` block
+flushes the request scope, then the fallback bucket (state created outside any
+scope, e.g. boot-time migrations), and detaches the scope only if `handle()`
+created it (see [Core §4](Core.md)). Persistent worker adapters therefore
+perform *no* flushing of their own — they delegate request work to the app and
+rely on the app to purge request-scoped services between iterations. This is
+the framework's state-isolation guarantee, protected by the test suite
+(`tests/Server/PersistentServerAdapterTest.php`).
 
 ### The Swoole serve command
 
@@ -73,11 +75,11 @@ The `SsrEngine` binding (in `Application::registerCoreBindings()`) resolves:
 | Config key | Default | Meaning |
 |---|---|---|
 | `ssr.enabled` | `true` | Master switch (`config/ssr.php`) |
-| `ssr.socket` | `"\0phue-ssr"` | Unix socket name |
+| `ssr.socket` | `/tmp/phue-ssr.sock` | Unix socket path the sidecar listens on |
 | `ssr.connect_timeout_ms` | `200` | Connect timeout |
-| `ssr.timeout_ms` | `500` | Request timeout |
+| `ssr.timeout_ms` | `2000` | Request timeout |
 | `ssr.host_header` | `phue-ssr` | Host header sent to the sidecar |
-| `ssr.max_payload_kb` | `512` | Max payload size |
+| `ssr.max_payload_kb` | `2048` | Max payload size |
 
 ### Running the sidecar
 

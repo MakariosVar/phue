@@ -105,12 +105,13 @@ final class SendWelcomeEmail implements JobInterface
     public function handle(JobContext $ctx): void
     {
         // $this->userId, $this->template available
-        // $ctx->attempts()     — current attempt (1-based)
-        // $ctx->maxTries()     // from #[Job] or config
-        // $ctx->timeout()      // lease seconds remaining
-        // $ctx->release(30)    // requeue with delay
-        // $ctx->fail($e)       // dead-letter immediately
+        // $ctx->attempts     — current attempt (1-based, readonly property)
+        // $ctx->maxTries     // from #[Job] or config
+        // $ctx->timeout      // lease seconds remaining, readonly property
+        // $ctx->release(30)  // requeue with delay (throws)
+        // $ctx->fail($e)     // dead-letter immediately (throws)
         // $ctx->isFinalAttempt()  // true if next failure = dead letter
+        // $ctx->put('k', $v) / $ctx->get('k') — attempt-scoped bag
     }
 }
 ```

@@ -213,7 +213,7 @@ foreach ($headers as $name => $value) {
 }
 sort($headerLines);
 
-$payload = implode("\n", $headerLines) . "\n.\n" . $response->getBody();
+$payload = implode("\n", $headerLines) . "\n.\n" . $response->getContent();
 $signature = $response->getHeader('X-Response-Signature');
 
 if (verifyResponse($payload, $signature, $sharedSecret)) {
@@ -287,9 +287,11 @@ The middleware **skips signing** for:
 
 ## Testing
 
-Run the test suite:
+Run the test suite (no Redis, no OpenSSL required — RSA paths skip when the
+extension is absent):
+
 ```bash
-./bin/phue_test tests/Modules/HttpSigning/ResponseSigningMiddlewareTest.php
+docker exec phue_app php bin/phue_test --impact tests/Modules/HttpSigning
 ```
 
 ## Architecture

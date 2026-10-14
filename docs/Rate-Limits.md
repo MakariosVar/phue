@@ -99,8 +99,10 @@ return [
     'response' => [
         'status_code' => 429,
         'message'     => 'Too Many Requests',
-        'include_retry_after_header' => true,
         'json_format' => true,
+        // Not read by the middleware: Retry-After is always emitted with the
+        // X-RateLimit-* set. Listed here because older configs may carry it.
+        'include_retry_after_header' => true,
     ],
 
     // Storage driver
@@ -195,23 +197,30 @@ class ApiController extends Controller
 
 | Resolver | Description | Key Format |
 |----------|-------------|------------|
-| `ip` | Client IP address | `ip_192.168.1.1` |
+| `ip` | Client IP address | the bare IP, e.g. `203.0.113.7` |
 | `user` | Authenticated user ID | `user_123` |
 | `api_key` | X-API-Key or Bearer token | `apikey_<sha256>` |
-| `callable` | Custom function | Custom |
+| callable | Custom function | whatever it returns |
 
-### Custom Key Resolver
+A **callable** resolver cannot be written inside `#[RateLimit(...)]` — PHP
+attribute arguments are constant expressions, so a closure there is a compile
+error. Declare it where a closure *can* live: a named policy or the `default`
+policy in `config/rate-limit.php`:
 
 ```php
-#[RateLimit(
-    requests: 100,
-    window: 'minute',
-    key: fn(Request $req) => 'custom_' . $req->getHeader('X-Custom-ID')
-)]
-public function custom(): Response
-{
-    // ...
-}
+// config/rate-limit.php
+'policies' => [
+    'tenant' => [
+        'requests' => 60,
+        'window'   => 'minute',
+        'key'      => static fn (Request $r): string => 'tenant_' . ($r->getHeader('X-Tenant') ?? 'none'),
+    ],
+],
+```
+
+```php
+#[RateLimit(policy: 'tenant')]   // the callable key resolver comes from config
+public function index(): Response { /* ... */ }
 ```
 
 ## Algorithms
@@ -256,6 +265,14 @@ Policies are merged in order (later overrides earlier):
 // Method: #[RateLimit(policy: 'strict')]  // 10/min wins
 ```
 
+> **The group layer is currently dormant in the web pipeline.** The middleware
+> resolves the policy from the matched route's handler, and a route does not
+> record which middleware group registered it — `getMiddlewareGroup()` returns
+> `null`, so steps 1, 3 and 4 are what actually merge today. `groups` stays in
+> the config as the declaration a future route-metadata layer will feed; a
+> group policy is honoured when a caller resolves with a group name (e.g. a
+> custom pipeline you wire yourself).
+
 ## Response Headers
 
 Successful responses include:
@@ -298,6 +315,31 @@ IPs/CIDRs bypass rate limiting entirely:
 ],
 ```
 
+Unlike `app.trustedProxies` (exact match, see [Core §9](Core.md)), this list
+**does** speak CIDR for IPv4; an exact entry without `/` matches verbatim
+(`::1` works this way). IPv6 CIDR is not evaluated.
+
+## Proxy trust (X-Forwarded-For)
+
+Behind a reverse proxy the client identity is only as trustworthy as the hop
+that tells you so, and the middleware applies one gate — the same one
+`SecurityMiddleware` applies to `X-Forwarded-Proto` (see
+[Core §9](Core.md#security-headers-securitymiddleware)):
+
+| `app.trustedProxies` | Connecting peer (REMOTE_ADDR) | Header honoured |
+|---|---|---|
+| `[]` (default) | anything | **no** — the bucket binds to REMOTE_ADDR |
+| `['10.0.0.1']` | `10.0.0.1` | yes — first hop of `X-Forwarded-For` |
+| `['10.0.0.1']` | `203.0.113.9` | **no** — falls back to REMOTE_ADDR |
+| `['*']` | anything | yes — every peer is a trusted proxy |
+
+The rule: **a forwarded header is honoured only when the peer we can see is
+itself a trusted proxy.** An untrusted peer's `X-Forwarded-For` used to be
+honoured wholesale whenever the list was non-empty — one fake IP per request
+meant a fresh bucket per request, and the per-IP limit never bound. The failure
+mode is fail-closed by design: a peer that fails the gate is measured by its
+real address, not ignored.
+
 ## Console Command
 
 ```bash
@@ -337,11 +379,18 @@ $this->assertFalse($result->allowed);
 
 ### Integration Tests
 
-Requires Redis (`PHUE_TEST_REDIS_HOST`):
+Requires Redis (`PHUE_TEST_REDIS_HOST`). Run them through the canonical
+runner, the same way every other suite runs:
 
 ```bash
-PHUE_TEST_REDIS_HOST=127.0.0.1 php vendor/bin/phpunit tests/Modules/RateLimit/
+docker exec phue_app php bin/phue_test --impact tests/Modules/RateLimit
+# or the redis-tagged suite alone:
+docker exec phue_app php bin/phue_test --group=redis
 ```
+
+The middleware suite (`tests/Modules/RateLimit/RateLimitMiddlewareTest.php`)
+needs no Redis: it drives a scripted limiter, so the enforcement decisions —
+including the proxy-trust rows above — run in milliseconds anywhere.
 
 ## Architecture
 
@@ -399,7 +448,8 @@ All Redis operations use atomic Lua scripts (`EVALSHA`) for:
 
 ### Headers missing
 - Ensure middleware runs before response
-- Check `response.include_retry_after_header: true`
+- `Retry-After` is always emitted with the `X-RateLimit-*` set — it comes from
+  the result's own `toHeaders()`, not from a config toggle
 
 ### Performance
 - Use connection pooling (Redis singleton)
