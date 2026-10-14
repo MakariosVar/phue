@@ -320,4 +320,112 @@ final class SchiiPhueContractsTest extends TestCase
         $this->assertStringContainsString('listTitle(row)', $template);
         $this->assertStringContainsString('listDetail(row)', $template);
     }
+
+    // ── Relation dropdown contract ───────────────────────────────────────────
+
+    /**
+     * A relation field must render through PhSelect3, not PhSelect.
+     *
+     * PhSelect3 is the component that ships the search event the remote option
+     * fetch is built on; PhSelect has no such hook, so binding one here would
+     * mean either reimplementing search inside it or losing the feature.
+     */
+    public function testRelationFieldsRenderThroughPhSelect3(): void
+    {
+        $template = $this->template('Schii.phue');
+
+        $this->assertStringContainsString('<ph-select3', $template);
+        $this->assertStringContainsString('v-if="relationModel(field)"', $template);
+    }
+
+    /**
+     * The relation branch has to come before the text-input branch, and the
+     * text branch has to have become v-else-if. Otherwise a foreign key declared
+     * as an integer still paints as a number box and the dropdown never shows.
+     */
+    public function testRelationBranchPrecedesTheTextInputBranch(): void
+    {
+        $template = $this->template('Schii.phue');
+
+        $select3 = strpos($template, '<ph-select3');
+        $textInput = strpos($template, 'v-else-if="isTextWidget(field)"');
+
+        $this->assertNotFalse($select3, 'the relation select must exist');
+        $this->assertNotFalse($textInput, 'the text input must still be guarded by an else-if');
+        $this->assertLessThan(
+            $textInput,
+            $select3,
+            'a relation field would render as a plain text input if its branch came second'
+        );
+    }
+
+    /**
+     * The console owns the fetch: PhSelect3 filters locally and reports the typed
+     * term, so the request has to be driven from the parent through @search.
+     */
+    public function testRelationSearchIsWiredToTheOptionsEndpoint(): void
+    {
+        $template = $this->template('Schii.phue');
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('@search="term => onRelationSearch(field, term)"', $template);
+        $this->assertStringContainsString(':options="relationOptions(field.name)"', $template);
+        $this->assertStringContainsString('/relation/${encodeURIComponent(slug)}/options', $script);
+    }
+
+    public function testRelationOptionsArePreloadedSoTheListIsNotEmptyOnOpen(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('preloadRelationOptions(fields.value)', $script);
+        $this->assertStringContainsString('const preloadRelationOptions = (list) =>', $script);
+    }
+
+    /**
+     * Switching entity must drop the previous entity's option lists, or a field
+     * that happens to share a name would show the old table's rows.
+     */
+    public function testRelationOptionCacheIsClearedOnEntityChange(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('relationOptionCache.value = {};', $script);
+    }
+
+    /**
+     * Typing fires search on every keystroke; without debouncing that is one
+     * request per character against the options endpoint.
+     */
+    public function testRelationSearchIsDebounced(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('const onRelationSearch = (field, term) =>', $script);
+        $this->assertStringContainsString('clearTimeout(relationSearchTimers[field.name])', $script);
+    }
+
+    /**
+     * A slow earlier response must not overwrite a newer one, and a failed
+     * request must not blank a control the user is currently reading.
+     */
+    public function testRelationFetchGuardsStaleAndFailedResponses(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('if (seq !== relationRequestSeq[field.name] || !res.ok)', $script);
+    }
+
+    /**
+     * The model class reaches the API as a studly slug; the resolver on the other
+     * side turns "order-item" back into OrderItem, and this locks both halves
+     * of that round trip.
+     */
+    public function testEntitySlugDerivationMatchesTheServerResolver(): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $this->assertStringContainsString('.split(\'\\\\\').pop()', $script);
+        $this->assertStringContainsString("replace(/([a-z0-9])([A-Z])/g, '$1-$2')", $script);
+        $this->assertStringContainsString('.toLowerCase()', $script);
+    }
 }

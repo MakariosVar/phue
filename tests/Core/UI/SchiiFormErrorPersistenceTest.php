@@ -181,7 +181,7 @@ final class SchiiFormErrorPersistenceTest extends TestCase
 
         $this->assertNotEmpty($matches[0], 'No field controls found in the template; the guard would pass vacuously.');
 
-        foreach (['ph-input', 'ph-select', 'ph-textarea', 'ph-checkbox'] as $control) {
+        foreach (['ph-input', 'ph-select', 'ph-select3', 'ph-textarea', 'ph-checkbox'] as $control) {
             $this->assertStringContainsString(
                 $control,
                 $template,
@@ -190,9 +190,9 @@ final class SchiiFormErrorPersistenceTest extends TestCase
         }
 
         $this->assertSame(
-            5,
+            6,
             preg_match_all('/@update:model-value="clearServerError\(field\.name\)"/', $template),
-            'Every field control that receives an edit must retire that field\'s server verdict. Count is: input, select, textarea, radio, checkbox.',
+            'Every field control that receives an edit must retire that field\'s server verdict. Count is: input, select, select3, textarea, radio, checkbox.',
         );
     }
 
