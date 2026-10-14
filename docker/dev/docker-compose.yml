@@ -13,29 +13,12 @@ services:
         network_mode: host
         volumes:
             - ../..:/app
-            # The bind mount above replaces the whole of /app, which would hide
-            # the vendor/ and node_modules/ baked into the image. These two
-            # volumes are seeded from the image on first use and then shadow the
-            # bind mount for those paths only, so dependencies installed at build
-            # time survive the mount while application source stays
-            # live-mounted for hot reload.
-            #
-            # Named rather than anonymous so that `phue-docker build` can remove
-            # them by name. An anonymous volume has no name to refer to, which
-            # made the only way to refresh a stale dependency set `down -v` by
-            # hand — a step nobody remembers, and the result is a container
-            # quietly serving the composer.json from three edits ago.
-            - phue_vendor:/app/vendor
-            - phue_node_modules:/app/ssr/node_modules
         working_dir: /app
         stdin_open: true # keeping interactive terminal alive
-        tty: true        # keeping interactive terminal alive
+        tty: true # keeping interactive terminal alive
     redis:
         image: redis:7-alpine
         container_name: phue_redis
         ports:
             - "6379:6379"
 
-volumes:
-    phue_vendor:
-    phue_node_modules:

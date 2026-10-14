@@ -22,7 +22,7 @@ usage() {
     echo "  logs    : Stream container logs (tail 100)"
     echo "  watcher : Stream Phue HTTP & Bun SSR server logs (tail 100)"
     echo "  status  : View current container states"
-    echo "  clean   : Stop containers AND purge associated volumes (destructive)"
+    echo "  clean   : Stop containers AND purge associated volumes (never your vendor/)"
     echo ""
     echo "Options (for start/restart):"
     echo "  -d, --detach         Run servers in detached mode (background)"
@@ -232,19 +232,24 @@ case "$ACTION" in
 
     build)
         echo "🛠️ Rebuilding images and starting..."
-        # The dependency volumes are removed before the rebuild, not after.
+        # Dependencies are not in a volume any more: /app is the host's working
+        # tree, so vendor/ and ssr/node_modules/ are the host's own directories
+        # and the IDE indexes exactly what the container runs. Nothing to purge
+        # before a rebuild, and nothing here may delete them — `down -v` would be
+        # aimed at a directory the developer works in, not at scratch state.
         #
-        # vendor/ and node_modules/ live in named volumes rather than in the
-        # image alone, because the bind mount would otherwise hide them. A named
-        # volume is created once and then reused, which is exactly what makes a
-        # stale one possible: add a dependency to composer.json, rebuild, and
-        # the container keeps serving the volume seeded from the image built
-        # before it existed. Removing them here means a rebuild always yields the
-        # dependencies the image just installed, so "rebuilt and still missing
-        # my package" cannot happen.
-        docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+        # What the volumes used to guarantee is kept by installing after the
+        # build instead: add a dependency to composer.json, rebuild, and the
+        # container serves the tree the build just wrote. That write lands on the
+        # host tree through the bind mount, which is the point — one copy.
+        docker compose -f "$COMPOSE_FILE" down --remove-orphans
         docker compose -f "$COMPOSE_FILE" build
         docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans
+        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c '
+            set -e
+            composer install --no-interaction --no-progress
+            cd /app/ssr && bun install
+        '
         echo "✅ Rebuild complete."
         # Reload completions on host and in container after rebuild
         if [[ -f "$(dirname "${BASH_SOURCE[0]}")/phue-source" ]]; then
@@ -298,8 +303,12 @@ case "$ACTION" in
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo "🧹 Cleaning up containers, networks, and volumes..."
+            # `down -v` still runs: it clears any volume left behind by an older
+            # checkout. It cannot reach vendor/ or node_modules/ — those are the
+            # working tree now, mounted from the host, and no volume in this
+            # project is mounted over them.
             docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
-            echo "✅ Cleanup complete."
+            echo "✅ Cleanup complete. Your vendor/ and node_modules/ are untouched."
         else
             echo "❌ Action cancelled."
         fi
