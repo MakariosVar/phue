@@ -344,6 +344,14 @@ final class QueryBuilderOperatorInjectionTest extends TestCase
     /**
      * escapeLikePattern() and the ESCAPE clause have to agree on the character,
      * or a pattern escaped for one is reinterpreted as a wildcard by the other.
+     *
+     * The helper owns exactly the metacharacters of the clause the compiler
+     * emits: '!', '%' and '_'. A backslash is NOT one of them: MySQL/MariaDB
+     * treat only the *declared* escape char as special ("If you do not specify
+     * the ESCAPE character, \ is assumed" — MySQL 8.4 manual), the pattern is
+     * bound as a parameter and never interpolated into SQL text, so a backslash
+     * the user typed must survive as data and match a literal backslash. The
+     * behaviour is asserted end-to-end below.
      */
     #[Group('p0')]
     public function testEscapeHelperAgreesWithTheEscapeClause(): void
@@ -358,9 +366,39 @@ final class QueryBuilderOperatorInjectionTest extends TestCase
         self::assertSame('!!!%', QueryBuilder::escapeLikePattern('!%'));
         self::assertSame('!%!_!!', QueryBuilder::escapeLikePattern('%_!'));
 
-        // The point of the whole change: no backslash may reach the pattern, or it
-        // would be a literal character under a clause that declares '!'.
-        self::assertStringNotContainsString('\\', QueryBuilder::escapeLikePattern('a%b_c\\d'));
+        // A backslash is data under the declared ESCAPE clause, not a
+        // metacharacter, so it passes through untouched. Escaping it would
+        // consume a character of the pattern, and on MySQL — whose ESCAPE
+        // grammar only defines the escape char followed by %, _, or itself —
+        // 'a!\d' is undefined behaviour rather than an escape.
+        self::assertSame('a!%b!_c\d', QueryBuilder::escapeLikePattern('a%b_c\d'));
+    }
+
+    /**
+     * End-to-end for the semantics the ESCAPE clause buys: every character the
+     * helper treats as data — backslash included — must behave literally.
+     *
+     * Verified semantics of the project's MariaDB with ESCAPE '!' declared:
+     * the pattern '%a!%b!_c\d%' matches the literal string 'a%b_c\d' and does
+     * not treat the backslash as an escape char. SQLite agrees: only the
+     * ESCAPE-declared character is special inside a LIKE pattern.
+     */
+    #[Group('p0')]
+    public function testEscapedLikePatternMatchesLiteralDataEndToEnd(): void
+    {
+        $this->connection->execute(
+            "INSERT INTO users (name, email, age, status) VALUES ('a%b_c\\d', 'literal@example.com', 1, 'active')"
+        );
+
+        $rows = $this->connection->table('users')
+            ->where('name', 'LIKE', '%' . QueryBuilder::escapeLikePattern('a%b_c\d') . '%')
+            ->get();
+
+        $this->assertCount(
+            1,
+            $rows,
+            "a user search for a%b_c\\d must match the literal row — the backslash is data under ESCAPE '!'"
+        );
     }
 
     /**
