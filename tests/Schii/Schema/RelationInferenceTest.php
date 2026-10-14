@@ -24,12 +24,12 @@ use Psr\SimpleCache\CacheInterface;
  * A related model whose display column is declared searchable, which is the
  * strongest signal the resolver looks for.
  */
-class User extends BaseActiveRecord
+class Author extends BaseActiveRecord
 {
-    // Deliberately named User: belongsTo() derives its default foreign key from
+    // Deliberately named Author: belongsTo() derives its default foreign key from
     // the related model's short name, so this stub is what proves that a plain
-    // `belongsTo(User::class)` lands on a column called user_id.
-    protected string $table = 'users';
+    // `belongsTo(Author::class)` lands on a column called author_id.
+    protected string $table = 'authors';
 
     #[Field(type: 'integer', primaryKey: true, readonly: true)]
     public int $id = 0;
@@ -39,7 +39,7 @@ class User extends BaseActiveRecord
     public int $legacy_score = 0;
 
     #[Field(type: 'string', required: true)]
-    #[Column(label: 'Username', searchable: true)]
+    #[Column(label: 'Authorname', searchable: true)]
     public string $username = '';
 
     #[Field(type: 'string')]
@@ -51,7 +51,7 @@ class User extends BaseActiveRecord
  * Same shape, but nothing is searchable, so resolution must fall back to the
  * first textual non-primary-key column.
  */
-class BlindUser extends BaseActiveRecord
+class BlindAuthor extends BaseActiveRecord
 {
     protected string $table = 'relation_blind_authors';
 
@@ -69,7 +69,7 @@ class BlindUser extends BaseActiveRecord
  * Only a primary key and a boolean: nothing readable can be derived, so the
  * resolver must report an empty label instead of inventing one.
  */
-class OpaqueUser extends BaseActiveRecord
+class OpaqueAuthor extends BaseActiveRecord
 {
     protected string $table = 'relation_opaque_authors';
 
@@ -98,12 +98,12 @@ class RelationPostStub extends BaseActiveRecord
     public string $title = '';
 
     #[Field(type: 'integer', required: true)]
-    #[Column(label: 'User ID', filterable: true)]
-    public int $user_id = 0;
+    #[Column(label: 'Author ID', filterable: true)]
+    public int $author_id = 0;
 
-    public function user(): BelongsTo
+    public function author(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Author::class);
     }
 }
 
@@ -122,7 +122,7 @@ class RelationCustomKeyStub extends BaseActiveRecord
 
     public function writer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'writer_id');
+        return $this->belongsTo(Author::class, 'writer_id');
     }
 }
 
@@ -139,7 +139,7 @@ class RelationDanglingKeyStub extends BaseActiveRecord
 
     public function owner(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Author::class);
     }
 }
 
@@ -159,7 +159,7 @@ class RelationParentStub extends BaseActiveRecord
     public string $name = '';
 
     #[Field(type: 'integer')]
-    public int $user_id = 0;
+    public int $author_id = 0;
 
     public function children(): HasMany
     {
@@ -228,24 +228,24 @@ class RelationNoiseStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'integer')]
-    public int $user_id = 0;
+    public int $author_id = 0;
 
-    public static function user(): BelongsTo
+    public static function author(): BelongsTo
     {
-        return new User()->belongsTo(User::class);
+        return new Author()->belongsTo(Author::class);
     }
 
-    public function userWithArgument(string $scope): BelongsTo
+    public function authorWithArgument(string $scope): BelongsTo
     {
-        return $this->belongsTo(User::class, $scope);
+        return $this->belongsTo(Author::class, $scope);
     }
 
-    public function userThatThrows(): BelongsTo
+    public function authorThatThrows(): BelongsTo
     {
         throw new \RuntimeException('relation exploded');
     }
 
-    public function userThatLies(): BelongsTo
+    public function authorThatLies(): BelongsTo
     {
         return 'not a relation at all';
     }
@@ -272,18 +272,18 @@ class RelationAmbiguousStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'integer')]
-    public int $user_id = 0;
+    public int $author_id = 0;
 
-    public function user(): Relation
+    public function author(): Relation
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Author::class);
     }
 }
 
 /**
  * The declared #[Field] type and widget of an annotated field must survive
  * untouched - relation metadata is additive, and the SQL layer still has to
- * see an int column named user_id.
+ * see an int column named author_id.
  */
 class RelationUntypedPostStub extends BaseActiveRecord
 {
@@ -293,12 +293,12 @@ class RelationUntypedPostStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'integer', required: true, indexed: true, rules: ['required', 'integer'])]
-    #[Column(label: 'User ID', searchable: true, filterable: true, sortable: true)]
-    public int $user_id = 0;
+    #[Column(label: 'Author ID', searchable: true, filterable: true, sortable: true)]
+    public int $author_id = 0;
 
-    public function user(): BelongsTo
+    public function author(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Author::class);
     }
 }
 
@@ -314,12 +314,12 @@ class RelationPresetOptionsStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'select')]
-    #[Column(label: 'User ID', options: ['legacy-a', 'legacy-b'])]
-    public string $user_id = '';
+    #[Column(label: 'Author ID', options: ['legacy-a', 'legacy-b'])]
+    public string $author_id = '';
 
-    public function user(): BelongsTo
+    public function author(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Author::class);
     }
 }
 
@@ -404,7 +404,7 @@ final class RelationInferenceTest extends TestCase
         $schema = $this->registry(false)->get(RelationPostStub::class);
 
         self::assertNull(
-            $schema->fields['user_id']->relation,
+            $schema->fields['author_id']->relation,
             'autoInfer=false must leave the schema exactly as it was before relations existed'
         );
     }
@@ -415,24 +415,24 @@ final class RelationInferenceTest extends TestCase
         // generator command; it must not start inferring.
         $schema = (new SchemaRegistry())->get(RelationPostStub::class);
 
-        self::assertNull($schema->fields['user_id']->relation);
+        self::assertNull($schema->fields['author_id']->relation);
     }
 
     public function testBelongsToAnnotatesTheForeignKeyField(): void
     {
-        $relation = $this->registry(true)->get(RelationPostStub::class)->fields['user_id']->relation;
+        $relation = $this->registry(true)->get(RelationPostStub::class)->fields['author_id']->relation;
 
         self::assertIsArray($relation);
-        self::assertSame(User::class, $relation['model']);
+        self::assertSame(Author::class, $relation['model']);
         self::assertSame('username', $relation['label']);
         self::assertSame('belongsTo', $relation['type']);
     }
 
     public function testSearchableColumnWinsAsTheDisplayLabel(): void
     {
-        // User declares legacy_score before username, so a naive
+        // Author declares legacy_score before username, so a naive
         // "first column" rule would pick the integer.
-        $relation = $this->registry(true)->get(RelationPostStub::class)->fields['user_id']->relation;
+        $relation = $this->registry(true)->get(RelationPostStub::class)->fields['author_id']->relation;
 
         self::assertSame('username', $relation['label']);
     }
@@ -456,7 +456,7 @@ final class RelationInferenceTest extends TestCase
         $relation = $this->registry(true)->get(RelationCustomKeyStub::class)->fields['writer_id']->relation;
 
         self::assertIsArray($relation);
-        self::assertSame(User::class, $relation['model']);
+        self::assertSame(Author::class, $relation['model']);
     }
 
     public function testMissingForeignKeyColumnIsIgnoredQuietly(): void
@@ -471,8 +471,8 @@ final class RelationInferenceTest extends TestCase
     {
         $schema = $this->registry(true)->get(RelationParentStub::class);
 
-        // user_id exists on this model but is owned by no relation here.
-        self::assertNull($schema->fields['user_id']->relation);
+        // author_id exists on this model but is owned by no relation here.
+        self::assertNull($schema->fields['author_id']->relation);
     }
 
     public function testMutuallyReferencingModelsDoNotRecurseForever(): void
@@ -488,7 +488,7 @@ final class RelationInferenceTest extends TestCase
         $schema = $this->registry(true)->get(RelationNoiseStub::class);
 
         self::assertNull(
-            $schema->fields['user_id']->relation,
+            $schema->fields['author_id']->relation,
             'static, parameterised, throwing and lying methods must all leave the field alone'
         );
     }
@@ -497,13 +497,13 @@ final class RelationInferenceTest extends TestCase
     {
         $schema = $this->registry(true)->get(RelationAmbiguousStub::class);
 
-        self::assertNull($schema->fields['user_id']->relation);
+        self::assertNull($schema->fields['author_id']->relation);
     }
 
     public function testAnnotatedFieldKeepsItsTypeWidgetRulesAndLabels(): void
     {
-        $before = $this->registry(false)->get(RelationUntypedPostStub::class)->fields['user_id'];
-        $after = $this->registry(true)->get(RelationUntypedPostStub::class)->fields['user_id'];
+        $before = $this->registry(false)->get(RelationUntypedPostStub::class)->fields['author_id'];
+        $after = $this->registry(true)->get(RelationUntypedPostStub::class)->fields['author_id'];
 
         self::assertSame($before->type, $after->type);
         self::assertSame($before->widget, $after->widget);
@@ -519,7 +519,7 @@ final class RelationInferenceTest extends TestCase
 
     public function testAuthorSuppliedOptionsSurviveInference(): void
     {
-        $field = $this->registry(true)->get(RelationPresetOptionsStub::class)->fields['user_id'];
+        $field = $this->registry(true)->get(RelationPresetOptionsStub::class)->fields['author_id'];
 
         self::assertSame(['legacy-a', 'legacy-b'], $field->options);
     }
@@ -529,20 +529,20 @@ final class RelationInferenceTest extends TestCase
         $cache = new ArraySimpleRelationCache();
 
         $warm = $this->registry(true, $cache)->get(RelationPostStub::class);
-        self::assertIsArray($warm->fields['user_id']->relation);
+        self::assertIsArray($warm->fields['author_id']->relation);
 
         // A second registry over the same cache must serve the identical schema.
         $cold = $this->registry(true, $cache)->get(RelationPostStub::class);
         self::assertSame(
-            $warm->fields['user_id']->relation,
-            $cold->fields['user_id']->relation,
+            $warm->fields['author_id']->relation,
+            $cold->fields['author_id']->relation,
             'relation metadata is dropped by the cache unless FieldSchema serialises it'
         );
     }
 
     public function testFieldSchemaSerialisationIsLosslessForRelations(): void
     {
-        $field = $this->registry(true)->get(RelationPostStub::class)->fields['user_id'];
+        $field = $this->registry(true)->get(RelationPostStub::class)->fields['author_id'];
 
         $restored = FieldSchema::fromArray($field->toArray());
 
@@ -551,7 +551,7 @@ final class RelationInferenceTest extends TestCase
 
     public function testFieldSchemaFromArrayWithoutRelationKeyYieldsNull(): void
     {
-        $field = $this->registry(false)->get(RelationPostStub::class)->fields['user_id'];
+        $field = $this->registry(false)->get(RelationPostStub::class)->fields['author_id'];
 
         $payload = $field->toArray();
         unset($payload['relation']);
@@ -561,11 +561,11 @@ final class RelationInferenceTest extends TestCase
 
     public function testRelationAccessorsExposeTheDefinition(): void
     {
-        $relation = (new RelationPostStub())->user();
+        $relation = (new RelationPostStub())->author();
 
         self::assertInstanceOf(BelongsTo::class, $relation);
-        self::assertSame(User::class, $relation->getRelatedClass());
-        self::assertSame('user_id', $relation->getForeignKey());
+        self::assertSame(Author::class, $relation->getRelatedClass());
+        self::assertSame('author_id', $relation->getForeignKey());
         self::assertSame('id', $relation->getLocalKey());
     }
 
@@ -585,7 +585,7 @@ final class RelationInferenceTest extends TestCase
      */
     private function labelFor(array $fields): string
     {
-        $relation = $fields['user_id']->relation;
+        $relation = $fields['author_id']->relation;
         self::assertIsArray($relation);
 
         return $relation['label'];
@@ -600,13 +600,13 @@ class RelationBlindRelationPostStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'integer')]
-    public int $user_id = 0;
+    public int $author_id = 0;
 
-    public function user(): BelongsTo
+    public function author(): BelongsTo
     {
-        // Explicit foreign key: the class name is BlindUser, so the derived
-        // default would be blindsightblinduser_id rather than user_id.
-        return $this->belongsTo(BlindUser::class, 'user_id');
+        // Explicit foreign key: the class name is BlindAuthor, so the derived
+        // default would be blindsightblindauthor_id rather than author_id.
+        return $this->belongsTo(BlindAuthor::class, 'author_id');
     }
 }
 
@@ -618,10 +618,10 @@ class RelationOpaqueRelationPostStub extends BaseActiveRecord
     public int $id = 0;
 
     #[Field(type: 'integer')]
-    public int $user_id = 0;
+    public int $author_id = 0;
 
-    public function user(): BelongsTo
+    public function author(): BelongsTo
     {
-        return $this->belongsTo(OpaqueUser::class, 'user_id');
+        return $this->belongsTo(OpaqueAuthor::class, 'author_id');
     }
 }
