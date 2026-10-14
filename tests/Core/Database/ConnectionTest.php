@@ -2,6 +2,7 @@
 
 namespace Phue\Tests\Core\Database;
 
+use BadMethodCallException;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Phue\Core\Database\Connection;
@@ -67,5 +68,44 @@ class ConnectionTest extends TestCase
 
         $this->assertIsArray($row);
         $this->assertSame('Phue Framework', $row['title']);
+    }
+
+    /**
+     * Tests that a method the driver does not have fails naming the driver, not the proxy.
+     */
+    public function testUnsupportedMethodNamesTheDriverAndTheMethod(): void
+    {
+        $connection = new Connection([
+            'driver'   => 'sqlite',
+            'database' => ':memory:',
+        ]);
+
+        try {
+            /** @phpstan-ignore-next-line intentional contract violation */
+            $connection->getPdoThatDoesNotExist();
+            $this->fail('Expected the proxy to refuse a method the driver does not have');
+        } catch (BadMethodCallException $e) {
+            // The driver identity is what makes the message diagnosable; the internal
+            // callback name that used to surface here identifies nothing.
+            $this->assertSame(
+                'Driver [sqlite] does not implement [getPdoThatDoesNotExist()].',
+                $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * Tests that driver-specific capabilities still proxy on an undecorated connection.
+     */
+    public function testProxiesDriverCapabilitiesOutsideTheBaseContract(): void
+    {
+        $connection = new Connection([
+            'driver'   => 'sqlite',
+            'database' => ':memory:',
+        ]);
+
+        // getPdo() is not part of DriverInterface, which is exactly why it can go missing
+        // behind a decorator without anything in the base contract noticing.
+        $this->assertInstanceOf(\PDO::class, $connection->getPdo());
     }
 }

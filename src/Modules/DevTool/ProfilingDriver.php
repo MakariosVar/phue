@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Phue\Modules\DevTool;
 
+use PDO;
 use Phue\Core\Database\Drivers\Abstract\DriverInterface;
+use Phue\Core\Database\Drivers\Abstract\PdoDriverInterface;
 use Phue\Core\Database\Drivers\Abstract\StatementInterface;
 
 /**
@@ -29,6 +31,13 @@ use Phue\Core\Database\Drivers\Abstract\StatementInterface;
  *  - Transaction control is measured. A slow commit is otherwise charged to whichever
  *    statement happened to run last.
  *
+ * A fourth one is about what the decorator must NOT change. Instrumentation is a
+ * transparent layer: callers branch on the optional driver interfaces (PdoDriverInterface)
+ * to reach a raw PDO handle, and a decorator that implements only the base contract makes
+ * every one of those branches take the "no handle here" path while it is switched on.
+ * Use {@see self::wrap()} rather than the constructor, so the decorator keeps whatever the
+ * real driver could do.
+ *
  * @package Phue\Modules\DevTool
  */
 class ProfilingDriver implements DriverInterface
@@ -40,10 +49,53 @@ class ProfilingDriver implements DriverInterface
      *        recorded SQL. See {@see self::redact()} for why this is the default.
      */
     public function __construct(
-        private DriverInterface $inner,
+        protected DriverInterface $inner,
         private RequestProfiler $profiler,
         private bool $redactLiterals = true
     ) {}
+
+    /**
+     * Decorates a driver, keeping every capability the real driver had.
+     *
+     * PHP settles an object's interfaces when its class is declared, so a decorator
+     * cannot hand back an instance that implements PdoDriverInterface only when the
+     * driver behind it does — hence one of two types rather than one type with a switch
+     * inside. The alternative, a decorator implementing every optional interface and
+     * throwing from the ones it cannot honour, advertises handles it does not have:
+     * `instanceof PdoDriverInterface` answers true, the caller asks for the handle, and
+     * the failure moves one layer further from its cause.
+     *
+     * @param DriverInterface $inner Real driver performing the work.
+     * @param RequestProfiler $profiler Collector receiving the spans.
+     * @param bool $redactLiterals Whether quoted literals are redacted.
+     * @return DriverInterface Decorator implementing the optional interfaces $inner has.
+     */
+    public static function wrap(
+        DriverInterface $inner,
+        RequestProfiler $profiler,
+        bool $redactLiterals = true
+    ): DriverInterface {
+        if (!$inner instanceof PdoDriverInterface) {
+            return new self($inner, $profiler, $redactLiterals);
+        }
+
+        return new class ($inner, $profiler, $redactLiterals) extends ProfilingDriver implements PdoDriverInterface {
+            /**
+             * The handle the real driver holds, not a second one.
+             *
+             * Two handles would mean two databases for an in-memory driver and two
+             * transaction scopes everywhere else: DDL run on this one while statements go
+             * through the other would apply to nothing. Not measured, either — reaching
+             * for the handle is not a query, and a span per access would bury the report.
+             *
+             * @return PDO
+             */
+            public function getPdo(): PDO
+            {
+                return $this->inner->getPdo();
+            }
+        };
+    }
 
     /**
      * Prepare and execute a statement, returning a profiling statement wrapper.

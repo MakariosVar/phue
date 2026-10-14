@@ -2,6 +2,7 @@
 
 namespace Phue\Core\Database;
 
+use BadMethodCallException;
 use InvalidArgumentException;
 use Phue\Core\ResettableInterface;
 use Phue\Core\Database\Drivers\Abstract\DriverInterface;
@@ -54,10 +55,37 @@ class Connection implements ResettableInterface
 
     /**
      * Proxies calls directly to the active database driver.
+     *
+     * Anything the driver contract defines can be called through the connection, which is
+     * what makes `$connection->query(...)` and `$connection->getDriver()->query(...)` the
+     * same statement.
+     *
+     * The guard exists because the proxy is where a wrong call used to surface as a
+     * TypeError from call_user_func_array naming an internal callback instead of the
+     * driver that could not serve it. A driver reached through a decorator may not carry
+     * every method the undecorated one had, and the reader of the message needs the
+     * driver's own identity for that to be diagnosable — getName() rather than the class,
+     * because a decorator may be an anonymous class and "ProfilingDriver@anonymous
+     * /app/src/Modules/DevTool/ProfilingDriver.php:82" tells nobody which database was
+     * being asked.
+     *
+     * @param string $method Method requested on the driver.
+     * @param array<int, mixed> $arguments Arguments to forward.
+     * @return mixed
+     *
+     * @throws BadMethodCallException If the active driver does not implement the method.
      */
     public function __call(string $method, array $arguments): mixed
     {
-        return call_user_func_array([$this->driver, $method], $arguments);
+        if (!method_exists($this->driver, $method)) {
+            throw new BadMethodCallException(sprintf(
+                'Driver [%s] does not implement [%s()].',
+                $this->driver->getName(),
+                $method
+            ));
+        }
+
+        return $this->driver->{$method}(...$arguments);
     }
 
     /**

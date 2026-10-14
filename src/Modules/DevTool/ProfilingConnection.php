@@ -19,7 +19,10 @@ use Phue\Core\Database\Connection;
  * table() query builder — is instrumented without being restated.
  *
  * The connection itself is untouched: same configuration, same driver, same semantics.
- * Only the reporting is new.
+ * Only the reporting is new. The decorator is built through ProfilingDriver::wrap() so a
+ * PDO-capable driver stays PDO-capable behind it — SchemaInspector, the health check and
+ * the migrator all ask the connection for a raw handle, and an instrumentation layer that
+ * swallowed that capability would break them for as long as the toolbar is on.
  *
  * @package Phue\Modules\DevTool
  */
@@ -37,7 +40,7 @@ class ProfilingConnection extends Connection
     ) {
         parent::__construct($config);
 
-        $this->driver = new ProfilingDriver($this->driver, $profiler, $redactLiterals);
+        $this->driver = ProfilingDriver::wrap($this->driver, $profiler, $redactLiterals);
     }
 
     /**
