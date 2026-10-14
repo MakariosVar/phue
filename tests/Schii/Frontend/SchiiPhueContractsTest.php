@@ -428,4 +428,40 @@ final class SchiiPhueContractsTest extends TestCase
         $this->assertStringContainsString("replace(/([a-z0-9])([A-Z])/g, '$1-$2')", $script);
         $this->assertStringContainsString('.toLowerCase()', $script);
     }
+
+    /**
+     * A template may only reference bindings setup() actually returned.
+     *
+     * Everything declared inside setup() is in scope there and absent from the
+     * component, so a helper that is used in the template but missing from the
+     * returned object fails at render time with
+     * "_ctx.<name> is not a function" rather than at build time.
+     */
+    #[DataProvider('relationTemplateBindingProvider')]
+    public function testRelationTemplateBindingsAreReturnedFromSetup(string $binding): void
+    {
+        $script = $this->script('Schii.phue');
+
+        $start = strrpos($script, 'return {');
+        $this->assertNotFalse($start, 'Schii.phue must return bindings from setup()');
+
+        $returned = substr($script, $start);
+
+        $this->assertMatchesRegularExpression(
+            "/\b{$binding}\s*,/",
+            $returned,
+            "The template calls {$binding}(), so setup() must return it — otherwise Vue "
+            . "renders \"_ctx.{$binding} is not a function\" and the record form dies."
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function relationTemplateBindingProvider(): iterable
+    {
+        yield 'relationModel' => ['relationModel'];
+        yield 'relationOptions' => ['relationOptions'];
+        yield 'onRelationSearch' => ['onRelationSearch'];
+    }
 }

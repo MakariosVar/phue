@@ -1162,6 +1162,9 @@ export default function mountApp() {
                 inputType,
                 inputStep,
                 selectOptions,
+                relationModel,
+                relationOptions,
+                onRelationSearch,
             };
         }
     });
