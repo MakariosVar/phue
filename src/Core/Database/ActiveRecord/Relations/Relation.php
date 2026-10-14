@@ -61,6 +61,39 @@ abstract class Relation
     }
 
     /**
+     * Get the target ActiveRecord class FQCN this relation points at.
+     *
+     * Exposed so consumers (schema tooling, inspectors) can describe a relation
+     * without reaching into protected state or guessing from the method name.
+     *
+     * @return string
+     */
+    public function getRelatedClass(): string
+    {
+        return $this->relatedClass;
+    }
+
+    /**
+     * Get the foreign key column name backing this relation.
+     *
+     * @return string
+     */
+    public function getForeignKey(): string
+    {
+        return $this->foreignKey;
+    }
+
+    /**
+     * Get the local key column name on the related model this relation joins against.
+     *
+     * @return string
+     */
+    public function getLocalKey(): string
+    {
+        return $this->localKey;
+    }
+
+    /**
      * Get or initialize the relation query instance with base parent constraints applied.
      *
      * @return ActiveQuery
