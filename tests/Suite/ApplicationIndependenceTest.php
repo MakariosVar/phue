@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Phue\Tests\Suite;
 
+use FilesystemIterator;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 
 /**
  * The suite must not read the application's own source tree.
@@ -158,6 +162,56 @@ final class ApplicationIndependenceTest extends TestCase
                 );
             }
         }
+    }
+
+    /**
+     * The repository itself must not grow an application again.
+     *
+     * Every rule above is about the suite reaching into App/. This one is about App/ having
+     * anything to reach into: the framework binds its component loader to
+     * `{basePath}/App/Frontend` and its Schii explorer to the app's models, so the shape is
+     * still part of the contract — but the files under it are not, and they were removed
+     * deliberately.
+     *
+     * Without this, the removal is a one-way ratchet nobody enforces. A page or a model
+     * added back for convenience resurrects exactly the coupling the rest of this file
+     * bans, and the first symptom is a test in this repository going quietly green because
+     * the app next to it happens to supply a file.
+     *
+     * Empty directories are expected and ignored: they cost nothing and the bindings above
+     * resolve against them whether or not they exist.
+     */
+    public function testTheFrameworkRepositoryShipsNoApplicationSource(): void
+    {
+        $appDir = dirname(__DIR__, 2) . '/App';
+
+        $this->assertDirectoryExists(
+            $appDir,
+            'The App/ tree is part of the published shape; removing it changes where Core binds to.'
+        );
+
+        $offenders = [];
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($appDir, FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            /** @var SplFileInfo $file */
+            if ($file->isFile()) {
+                $offenders[] = self::relative($file->getPathname());
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "This repository is the framework; it ships no application.\n"
+            . "App/ is where an application's controllers, models and .phue pages belong, and "
+            . "the suite is forbidden from reading it (see the rules in this file). A file here "
+            . "is a page or a model that belongs in the application, not here.\n\n"
+            . "Offenders:\n - " . implode("\n - ", $offenders)
+        );
     }
 
     /**

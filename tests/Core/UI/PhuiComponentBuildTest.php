@@ -22,25 +22,46 @@ use PHPUnit\Framework\TestCase;
  * page that quietly stops being interactive: no clicks, no scroll spy, no Prism,
  * no hydration, and no message saying why.
  *
- * So the build is asserted for every component, and again for the showcase page
- * with the full loader chain, which is the only place a cross-directory
- * dependency (App component → core component) actually resolves.
+ * So the build is asserted for every component, and again for a page assembled in a
+ * temporary directory, which is the only place a cross-directory dependency (a page
+ * component → a core component) actually resolves.
+ *
+ * The page is a fixture rather than this repository's own showcase page on purpose. The
+ * framework ships no application, so there is no showcase here to build: a test that
+ * reached for one would be asserting the shape of an app that happens to sit next to
+ * this checkout, and would go red — or worse, stay green — for reasons that have
+ * nothing to do with the loader.
  */
 #[\PHPUnit\Framework\Attributes\Group('unit')]
 final class PhuiComponentBuildTest extends TestCase
 {
     private ComponentLoaderRegistry $registry;
 
+    /** @var list<string> */
+    private array $written = [];
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->registry = new ComponentLoaderRegistry();
-        foreach (['src/Core/UI/Phui', 'App/Frontend'] as $dir) {
+        foreach (['src/Core/UI/Phui'] as $dir) {
             $loader = new PhueComponentLoader(__DIR__ . '/../../..' . '/' . $dir, null, null, null, new TemplateCompilerBridge());
             $this->registry->addLoader($loader);
             $loader->setRegistry($this->registry);
         }
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        foreach ($this->written as $path) {
+            @unlink($path);
+        }
+
+        @rmdir($this->fixtureDir());
+        @rmdir(dirname($this->fixtureDir()));
     }
 
     /** @return array<string, array{string}> */
@@ -62,15 +83,33 @@ final class PhuiComponentBuildTest extends TestCase
         );
     }
 
-    public function testShowcasePageBuildsWithEveryDependency(): void
+    public function testPageDependingOnShippedComponentsBuildsAcrossTheLoaderChain(): void
     {
-        $page = 'Pages/PhUI';
-        $this->assertTrue($this->registry->hasComponent($page), 'the showcase page is missing');
+        $page = 'Pages/Fixture';
+        $file = $this->fixtureDir() . '/Fixture.phue';
+
+        file_put_contents($file, "<php>\nreturn ['title' => 'Fixture'];\n</php>\n<template>\n"
+            . "<div class=\"fixture\">\n"
+            . "    <ph-button>Ship</ph-button>\n"
+            . "    <ph-alert tone=\"info\">Shipped</ph-alert>\n"
+            . "</div>\n"
+            . "</template>\n"
+            . "<script>\n"
+            . "export default { name: 'FixturePage' };\n"
+            . "</script>\n");
+        $this->written[] = $file;
+
+        // The loader is pointed at the directory ABOVE Pages/, because that is what makes
+        // the page's name "Pages/Fixture" — the same shape the App/Frontend loader had,
+        // which is the whole point: the cross-directory resolution is what is under test.
+        $loader = new PhueComponentLoader(dirname($this->fixtureDir()), null, null, null, new TemplateCompilerBridge());
+        $this->registry->addLoader($loader);
+        $loader->setRegistry($this->registry);
+
+        $this->assertTrue($this->registry->hasComponent($page), 'the fixture page is missing');
 
         $discoverer = new ComponentDiscoverer($this->registry);
-        $source = (string) file_get_contents(
-            __DIR__ . '/../../../App/Frontend/Pages/PhUI.phue'
-        );
+        $source = (string) file_get_contents($file);
         $this->assertSame(1, preg_match('/<template>(.*?)\n<\/template>/s', $source, $match));
 
         $unresolvable = [];
@@ -81,7 +120,7 @@ final class PhuiComponentBuildTest extends TestCase
         }
 
         $this->assertSame([], $unresolvable, sprintf(
-            'The showcase page references component(s) with no module: %s. Because the '
+            'The page references component(s) with no module: %s. Because the '
             . 'loader is fail-loud, that silently removes the whole page script — the page '
             . 'stops being interactive with nothing logged.',
             implode(', ', $unresolvable)
@@ -89,7 +128,7 @@ final class PhuiComponentBuildTest extends TestCase
 
         $this->assertNotNull(
             $this->moduleSource($page),
-            'the showcase page module does not build'
+            'the page module does not build'
         );
     }
 
@@ -98,5 +137,17 @@ final class PhuiComponentBuildTest extends TestCase
     {
         $hash = $this->registry->moduleHash($name);
         return $hash === null ? null : $this->registry->moduleFor($name, $hash);
+    }
+
+    /** Temporary Pages/ directory holding the page fixture. */
+    private function fixtureDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/phue_page_fixture_' . substr(md5(static::class), 0, 12) . '/Pages';
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        return $dir;
     }
 }

@@ -15,6 +15,55 @@ use Phue\Modules\Auth\IdentityInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
+ * A navigation provider the test owns, standing in for the one an application ships.
+ *
+ * The renderer resolves `App\Config\NavigationConfig` by convention (ComponentRenderer
+ * ::NAVIGATION_CONVENTION) — an optional hook the framework deliberately does not
+ * implement itself. That hook is what makes this file dangerous to write naively: a test
+ * that constructs a renderer and expects a "Login" action in the payload is asserting
+ * whatever application happens to sit next to this checkout, and in a framework repository
+ * there is none. It fails as a missing label, and it would equally pass for an app whose
+ * nav says something else entirely.
+ *
+ * So the provider is injected, and it records the identity it was handed. The assertions
+ * that matter are then about the renderer: that it resolves the user once, passes that
+ * user to the provider, and puts the provider's answer in the SPA payload.
+ *
+ * @package Phue\Tests\Core\UI
+ */
+final class RecordingNavigationConfig
+{
+    public static ?IdentityInterface $seenUser = null;
+
+    public static int $calls = 0;
+
+    /** @return list<array<string, mixed>> */
+    public static function getAppItems(?IdentityInterface $user): array
+    {
+        self::$seenUser = $user;
+        self::$calls++;
+
+        return [];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function getAppActions(?IdentityInterface $user): array
+    {
+        self::$seenUser = $user;
+        self::$calls++;
+
+        return $user === null
+            ? [['label' => 'Sign in']]
+            : [['label' => 'Sign out']];
+    }
+
+    public static function getAppPlacement(): string
+    {
+        return 'horizontal';
+    }
+}
+
+/**
  * Unit tests for ComponentRenderer: shell assembly, template inlining into the
  * mount container, initial state serialization and ESM script enqueuing.
  *
@@ -174,13 +223,17 @@ final class ComponentRendererTest extends TestCase
     {
         $labels = static fn (array $actions): array => array_column($actions, 'label');
 
+        RecordingNavigationConfig::$seenUser = null;
+        RecordingNavigationConfig::$calls = 0;
+
         // Guest: SPA payload must carry navState so the client can refresh #nav.
         $guestRequest = new Request('GET', '/login', headers: ['X-Phue-SPA' => 'true']);
         $guestRenderer = new ComponentRenderer(
             new HtmlShellRenderer(new AssetRegistry()),
             new AssetRegistry(),
             requestResolver: fn (): Request => $guestRequest,
-            userResolver: fn (): ?IdentityInterface => null
+            userResolver: fn (): ?IdentityInterface => null,
+            navigationClass: RecordingNavigationConfig::class
         );
 
         $guestPayload = json_decode(
@@ -191,8 +244,8 @@ final class ComponentRendererTest extends TestCase
         );
 
         $this->assertArrayHasKey('navState', $guestPayload, 'SPA payload must expose navState for #nav refresh');
-        $this->assertContains('Login', $labels($guestPayload['navState']['actions']));
-        $this->assertNotContains('Logout', $labels($guestPayload['navState']['actions']));
+        $this->assertContains('Sign in', $labels($guestPayload['navState']['actions']));
+        $this->assertNull(RecordingNavigationConfig::$seenUser, 'the provider must be asked as a guest');
 
         // Authenticated: same render must flip the right-slot actions.
         $userRequest = new Request('GET', '/schii', headers: ['X-Phue-SPA' => 'true']);
@@ -200,7 +253,8 @@ final class ComponentRendererTest extends TestCase
             new HtmlShellRenderer(new AssetRegistry()),
             new AssetRegistry(),
             requestResolver: fn (): Request => $userRequest,
-            userResolver: fn (): ?IdentityInterface => $this->identity('admin')
+            userResolver: fn (): ?IdentityInterface => $this->identity('admin'),
+            navigationClass: RecordingNavigationConfig::class
         );
 
         $userPayload = json_decode(
@@ -211,8 +265,13 @@ final class ComponentRendererTest extends TestCase
         );
 
         $this->assertArrayHasKey('navState', $userPayload);
-        $this->assertContains('Logout', $labels($userPayload['navState']['actions']));
-        $this->assertNotContains('Login', $labels($userPayload['navState']['actions']));
+        $this->assertContains('Sign out', $labels($userPayload['navState']['actions']));
+        $this->assertNotContains('Sign in', $labels($userPayload['navState']['actions']));
+
+        // The wiring, which is the part the framework owns: the resolved identity reaches
+        // the provider, so a provider can render a different nav per visitor.
+        $this->assertNotNull(RecordingNavigationConfig::$seenUser);
+        $this->assertSame('admin', RecordingNavigationConfig::$seenUser->getAuthKey());
     }
 
     private function identity(string $authKey): IdentityInterface
