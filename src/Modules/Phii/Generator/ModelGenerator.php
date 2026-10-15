@@ -104,11 +104,33 @@ final class ModelGenerator
         foreach ($fields as $field) {
             $name = $field->name ?? 'column';
             $type = $field->type ?? 'string';
-            $phpType = match ($type) {
-                'int', 'integer' => 'int',
-                'bool', 'boolean' => 'bool',
-                'float' => 'float',
-                default => 'string',
+
+            /**
+             * The declaration is [PHP type, initialiser]. The initialiser is null
+             * for the scalars, which are emitted exactly as they always were.
+             *
+             * json and datetime carry one because a generator that emits a
+             * declaration its own ORM cannot honour is not generating a model:
+             *
+             *   - 'json' used to fall through to 'string'. BaseActiveRecord casts
+             *     that field to an array, so hydrating the generated model raised
+             *     "Cannot assign array to property ... of type string".
+             *   - 'datetime' used to fall through to 'string' the same way, for
+             *     the same reason with a DateTimeImmutable.
+             *
+             * Both are initialised as well as typed. A typed property with no
+             * default is uninitialised, and a nullable DATETIME column is the
+             * normal case, so an uninitialised property would trade one fatal for
+             * another ("must not be accessed before initialization") the first
+             * time anything read it before it had been filled.
+             */
+            [$phpType, $initialiser] = match ($type) {
+                'int', 'integer' => ['int', null],
+                'bool', 'boolean' => ['bool', null],
+                'float' => ['float', null],
+                'json' => ['array', '[]'],
+                'datetime', 'timestamp' => ['?\DateTimeImmutable', 'null'],
+                default => ['string', null],
             };
 
             // Persistence and presentation are separate attributes now:
@@ -119,14 +141,15 @@ final class ModelGenerator
             $lines[] = sprintf(
                 "    #[Field(type: '%s', required: %s)]\n"
                 . "    #[Column(searchable: %s, filterable: %s, sortable: %s)]\n"
-                . "    public %s \$%s;",
+                . "    public %s \$%s%s;",
                 $type,
                 ($field->required ?? false) ? 'true' : 'false',
                 ($field->searchable ?? false) ? 'true' : 'false',
                 ($field->filterable ?? false) ? 'true' : 'false',
                 ($field->sortable ?? false) ? 'true' : 'false',
                 $phpType,
-                $name
+                $name,
+                $initialiser === null ? '' : ' = ' . $initialiser
             );
         }
 

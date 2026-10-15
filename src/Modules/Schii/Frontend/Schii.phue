@@ -150,6 +150,12 @@ return [
                         @search="term => onRelationSearch(field, term)"
                         @update:model-value="clearServerError(field.name)"
                     />
+                    <ph-date-picker
+                        v-else-if="field.type === 'datetime' || field.type === 'date'"
+                        v-model="form[field.name]"
+                        :mode="field.type"
+                        :label="field.label || field.name"
+                    />
                     <ph-input
                         v-else-if="isTextWidget(field)"
                         v-model="form[field.name]"
@@ -1055,7 +1061,7 @@ export default function mountApp() {
                     ? 'password'
                     : (f.type === 'int' || f.type === 'float' || f.type === 'integer' || f.type === 'number' || f.type === 'numeric'
                         ? 'number'
-                        : (f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text')));
+                        : ((f.type === 'datetime' || f.type === 'date') ? f.type : (f.type === 'email' ? 'email' : 'text')));
 
             const inputStep = (f) => (f.type === 'float' ? 'any' : undefined);
 

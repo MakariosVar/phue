@@ -167,6 +167,145 @@ final class PhiiGeneratorsTest extends TestCase
         $this->assertStringContainsString('public float $weight;', $content);
     }
 
+    /**
+     * The generator must not mint a model its own ORM cannot hydrate.
+     *
+     * The defect
+     * ----------
+     * baseBuildProperties() mapped the PHP type with
+     *
+     *     'int' => 'int', 'bool' => 'bool', 'float' => 'float', default => 'string'
+     *
+     * and 'json' and 'datetime' both fell into that default. BaseActiveRecord
+     * casts those two to an array and a DateTimeImmutable respectively, so every
+     * generated model carrying a json or a datetime column was born broken:
+     *
+     *     TypeError: Cannot assign DateTimeImmutable to property
+     *     App\Models\Comment::$created_at of type string
+     *
+     * raised by reflection, from a file nobody had edited, naming nothing about
+     * where the declaration came from.
+     *
+     * Why the initialiser is part of the assertion
+     * --------------------------------------------
+     * A typed property with no default is UNINITIALISED, and a nullable DATETIME
+     * column is the ordinary case. Emitting `public \DateTimeImmutable $at;`
+     * would only have traded the TypeError for "must not be accessed before
+     * initialization" the first time anything read the model before filling it.
+     * The scalars are left exactly as they were; only the two declarations that
+     * are new carry an initialiser.
+     */
+    public function testModelGeneratorEmitsDeclarationsTheOrmCanHydrate(): void
+    {
+        $fields = [
+            PhiiExportField::fromFieldSchema(new FieldSchema(
+                name: 'happened_at',
+                type: 'datetime',
+                label: 'Happened At',
+                widget: 'datetime',
+                column: true,
+                required: false,
+                searchable: true,
+                filterable: true,
+                sortable: true,
+            )),
+            PhiiExportField::fromFieldSchema(new FieldSchema(
+                name: 'meta',
+                type: 'json',
+                label: 'Meta',
+                widget: 'input',
+                column: true,
+                required: false,
+                searchable: false,
+                filterable: false,
+                sortable: false,
+            )),
+            PhiiExportField::fromFieldSchema(new FieldSchema(
+                name: 'born_on',
+                type: 'date',
+                label: 'Born On',
+                widget: 'date',
+                column: true,
+                required: false,
+                searchable: false,
+                filterable: false,
+                sortable: false,
+            )),
+        ];
+
+        [$mutation] = (new ModelGenerator())->generateFromFields(
+            $fields,
+            'Event',
+            'events',
+            'App\\Models',
+            $this->dump
+        );
+
+        $this->assertMutation($mutation, $this->dump . '/Event.php');
+        $this->assertTrue($mutation->write());
+        $this->assertPhpIsValid($mutation->path);
+
+        $content = $mutation->content;
+
+        $this->assertStringContainsString(
+            "#[Field(type: 'datetime', required: false)]",
+            $content,
+            'The #[Field] type describes the COLUMN and must stay datetime — that is what the migrator and the schema diff read.',
+        );
+        $this->assertStringContainsString(
+            'public ?\DateTimeImmutable $happened_at = null;',
+            $content,
+            'A public string property here is exactly the declaration that crashed hydration.',
+        );
+        $this->assertStringContainsString(
+            'public array $meta = [];',
+            $content,
+            'json casts to an array; a public string property is the same fatal with a different class.',
+        );
+        $this->assertStringContainsString(
+            'public string $born_on;',
+            $content,
+            "'date' has no cast in getFieldMeta(), so it is genuinely a string and must stay one.",
+        );
+    }
+
+    /**
+     * The scalars must not have moved.
+     *
+     * The fix above adds two branches. This pins that it did not quietly widen:
+     * a generated `public int $id;` that became `public ?int $id = null;` would
+     * be a silent change to every model the generator has ever produced.
+     */
+    public function testModelGeneratorLeavesScalarDeclarationsUntouched(): void
+    {
+        [$mutation] = (new ModelGenerator())->generateFromSchema($this->schema(), 'active-record', $this->dump);
+
+        $content = $mutation->content;
+
+        foreach (['public int $id;', 'public string $full_name;', 'public bool $active;'] as $declaration) {
+            $this->assertStringContainsString(
+                $declaration,
+                $content,
+                $declaration . ' is existing output. Changing it is a separate decision, not a side effect of fixing json and datetime.',
+            );
+        }
+
+        $this->assertStringNotContainsString(' = ', $this->scalarLines($content));
+    }
+
+    /**
+     * Every `public <scalar> $x;` line in a generated model.
+     *
+     * @param string $content
+     * @return string
+     */
+    private function scalarLines(string $content): string
+    {
+        preg_match_all('/^\s*public (?:int|string|bool|float) \$[^;]+;$/m', $content, $matches);
+
+        return implode("\n", $matches[0]);
+    }
+
     public function testControllerGeneratorProducesRoutableControllerWithCorrectHttpVerbs(): void
     {
         [$mutation] = (new ControllerGenerator())->generate('admin', 'Profile', $this->dump, ['index', 'store', 'show', 'update', 'delete']);

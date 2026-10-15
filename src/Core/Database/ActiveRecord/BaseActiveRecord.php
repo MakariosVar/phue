@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Phue\Core\Database\ActiveRecord;
 
+use InvalidArgumentException;
 use JsonSerializable;
 use ReflectionClass;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
 use ReflectionObject;
 use ReflectionProperty;
+use ReflectionType;
+use ReflectionUnionType;
 use RuntimeException;
 use Phue\Core\Database\Connection;
 use Phue\Core\Database\ActiveRecord\ActiveQuery;
@@ -264,21 +269,32 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Get attributes in database-ready format (reverse cast).
      *
+     * getAutoCast() — not getAutoCasts(). The per-key accessor is what consults
+     * $casts before the attribute, and hydration goes through it, so the write
+     * path has to ask the same question the same way. It used to ask a different
+     * one and answer it from the attribute map alone, which left every cast
+     * declared only in $casts — the form docs/Database.md documents — applied on
+     * the way in and absent on the way out: a json array reached the driver as
+     * the literal string "Array", a bool as 0/1, and the corruption was silent
+     * because the INSERT succeeded.
+     *
      * @return array<string, mixed>
      */
     protected function getDatabaseAttributes(): array
     {
         $attributes = $this->attributes;
 
-        // Use reflection to get auto-casts
-        $autoCasts = static::getAutoCasts();
-
         foreach ($attributes as $key => $value) {
-            if (!isset($autoCasts[$key]) || $value === null) {
+            if ($value === null) {
                 continue;
             }
 
-            $cast = $autoCasts[$key];
+            $cast = $this->getAutoCast($key);
+
+            if ($cast === null) {
+                continue;
+            }
+
             $attributes[$key] = $this->reverseCast($value, $cast);
         }
 
@@ -764,6 +780,9 @@ abstract class BaseActiveRecord implements JsonSerializable
      * same attribute are two things that can disagree about it. getAutoCasts()
      * and validate() are both answers to "what did this property declare?".
      *
+     * The walk also refuses a declaration that cannot be honoured. See
+     * assertCastIsHoldable() for why that happens here and not later.
+     *
      * @return array<string, array{type: string, cast: ?string, rules: array<string>, required: bool}>
      */
     protected static function getFieldMeta(): array
@@ -777,6 +796,12 @@ abstract class BaseActiveRecord implements JsonSerializable
         $meta = [];
         $refClass = new ReflectionClass($class);
 
+        // $casts is a declaration in exactly the same sense #[Field] is, and an
+        // entry there overrides the attribute for that key. Reading the declared
+        // default is therefore what makes the refusal below skip a pairing the
+        // model author has already resolved deliberately.
+        $declaredCasts = $refClass->getDefaultProperties()['casts'] ?? [];
+
         foreach ($refClass->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
             $fieldAttrs = $property->getAttributes(\Phue\Core\Database\Attributes\Field::class);
             if (empty($fieldAttrs)) {
@@ -787,22 +812,204 @@ abstract class BaseActiveRecord implements JsonSerializable
             $field = $fieldAttrs[0]->newInstance();
             $type = strtolower($field->type);
 
+            $cast = match ($type) {
+                'json' => 'json',
+                'boolean', 'bool' => 'bool',
+                'integer', 'int' => 'int',
+                'float', 'number', 'decimal', 'numeric' => 'float',
+                'datetime', 'timestamp' => 'datetime',
+                default => null,
+            };
+
+            if ($cast !== null && !isset($declaredCasts[$property->getName()])) {
+                self::assertCastIsHoldable($class, $property, $cast);
+            }
+
             $meta[$property->getName()] = [
                 'type' => $type,
-                'cast' => match ($type) {
-                    'json' => 'json',
-                    'boolean', 'bool' => 'bool',
-                    'integer', 'int' => 'int',
-                    'float', 'number', 'decimal', 'numeric' => 'float',
-                    'datetime', 'timestamp' => 'datetime',
-                    default => null,
-                },
+                'cast' => $cast,
                 'rules' => $field->rules,
                 'required' => $field->required,
             ];
         }
 
         return self::$fieldMetaCache[$class] = $meta;
+    }
+
+    /**
+     * Refuse a #[Field] whose cast cannot land on the property it was declared on.
+     *
+     * Why this is checked at all
+     * --------------------------
+     * applyCast() turns #[Field(type: 'datetime')] into a DateTimeImmutable and
+     * hydration hands that to ReflectionProperty::setValue(). Every other cast
+     * in the map yields a scalar, and PHP coerces a scalar onto a mismatched
+     * scalar property without a sound, so a wrong pairing there is quiet. An
+     * object does not coerce. It raises
+     *
+     *     TypeError: Cannot assign DateTimeImmutable to property
+     *     App\Models\Comment::$created_at of type string
+     *
+     * from one layer below the thing that is actually wrong: no cast, no
+     * attribute, no model, and no hint at either of the two ways out. The same
+     * request that read the row dies before it can say anything.
+     *
+     * Why here
+     * --------
+     * This walk is the earliest point at which the declaration can be attributed
+     * to the model that made it, which is the same argument RuleEngine's
+     * assertKnownRules() makes one layer up in SchemaRegistry::parse(). It runs
+     * once per class and is cached, and it runs BEFORE any value is cast, so a
+     * broken model is refused before a row is touched rather than halfway
+     * through hydrating one.
+     *
+     * Why $casts suppresses it
+     * ------------------------
+     * $casts is checked before the attribute in getAutoCast(), so an author who
+     * writes
+     *
+     *     #[Field(type: 'datetime')]                              // the column
+     *     protected array $casts = ['happened_at' => 'string'];   // the property
+     *
+     * has said something coherent and has said it in the framework's own
+     * vocabulary. getFieldMeta() cannot see $this, so it reads the declared
+     * default; a model that mutated $casts at runtime has opted out of the
+     * declaration contract by doing so, and getAutoCast() will honour the
+     * override on both the read and the write path regardless.
+     *
+     * @param class-string $modelClass Model that declares the field.
+     * @param ReflectionProperty $property Property the cast lands on.
+     * @param string $cast Cast the attribute implies.
+     * @return void
+     * @throws InvalidArgumentException If the cast produces a value the property cannot hold.
+     */
+    private static function assertCastIsHoldable(
+        string $modelClass,
+        ReflectionProperty $property,
+        string $cast
+    ): void {
+        $produced = self::castProduces($cast);
+
+        // Scalars are PHP's coercion business and stay that way: refusing
+        // #[Field(type: 'integer')] public string $code would break every model
+        // that keeps a zero-padded code in a string, which is a legitimate
+        // choice, not a mistake.
+        if ($produced === null) {
+            return;
+        }
+
+        $type = $property->getType();
+
+        if ($type === null || self::typeHolds($type, $produced)) {
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            '#[Field(type: \'%s\')] on %s::$%s casts to %s, which the property cannot hold (declared %s). '
+            . 'Type the property %s, or keep the column and say so explicitly: '
+            . 'protected array $casts = [\'%s\' => \'string\'].',
+            $cast,
+            $modelClass,
+            $property->getName(),
+            self::describeType($produced),
+            self::describeType($type),
+            $produced,
+            $property->getName(),
+        ));
+    }
+
+    /**
+     * The PHP type a cast produces, or null when it produces a scalar.
+     *
+     * Only the two casts that build a value out of thin air are listed. Every
+     * other entry in applyCast() returns something PHP can coerce onto a
+     * mismatched property, which is a different (and much quieter) failure that
+     * this deliberately does not take on.
+     *
+     * @param string $cast
+     * @return string|null
+     */
+    private static function castProduces(string $cast): ?string
+    {
+        return match ($cast) {
+            'array', 'json' => 'array',
+            'datetime', 'timestamp' => \DateTimeImmutable::class,
+            default => null,
+        };
+    }
+
+    /**
+     * Whether a declared property type can receive a value of the given type.
+     *
+     * @param ReflectionType $type Declared property type.
+     * @param string $produced Type name the cast produces ('array' or a class name).
+     * @return bool
+     */
+    private static function typeHolds(ReflectionType $type, string $produced): bool
+    {
+        if ($type instanceof ReflectionUnionType) {
+            foreach ($type->getTypes() as $member) {
+                if (self::typeHolds($member, $produced)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if ($type instanceof ReflectionIntersectionType) {
+            foreach ($type->getTypes() as $member) {
+                if (!self::typeHolds($member, $produced)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (!$type instanceof ReflectionNamedType) {
+            return true;
+        }
+
+        return match ($type->getName()) {
+            'mixed' => true,
+            'object' => $produced !== 'array',
+            'iterable', 'callable', 'array', 'string', 'int', 'float', 'bool' => $type->getName() === $produced,
+            default => is_a($produced, $type->getName(), true),
+        };
+    }
+
+    /**
+     * Render a reflection type the way it was written, for an error message.
+     *
+     * @param ReflectionType|string $type
+     * @return string
+     */
+    private static function describeType(ReflectionType|string $type): string
+    {
+        if (is_string($type)) {
+            return $type;
+        }
+
+        if ($type instanceof ReflectionUnionType) {
+            return implode('|', array_map(
+                static fn(ReflectionType $member): string => self::describeType($member),
+                $type->getTypes(),
+            ));
+        }
+
+        if ($type instanceof ReflectionIntersectionType) {
+            return implode('&', array_map(
+                static fn(ReflectionType $member): string => self::describeType($member),
+                $type->getTypes(),
+            ));
+        }
+
+        if (!$type instanceof ReflectionNamedType) {
+            return (string) $type;
+        }
+
+        return ($type->allowsNull() && $type->getName() !== 'mixed' && $type->getName() !== 'null' ? '?' : '') . $type->getName();
     }
 
     /**
@@ -1016,13 +1223,21 @@ public function save(): bool
             foreach ($dirty as $key => $value) {
                 $dbDirty[$key] = $value;
             }
-            // Apply reverse cast to dirty attributes
-            $autoCasts = static::getAutoCasts();
+            // Apply reverse cast to dirty attributes. getAutoCast() for the same
+            // reason getDatabaseAttributes() uses it: an UPDATE must not encode
+            // a value differently from the INSERT that created the row.
             foreach ($dbDirty as $key => $value) {
-                if (isset($autoCasts[$key]) && $value !== null) {
-                    $cast = $autoCasts[$key];
-                    $dbDirty[$key] = $this->reverseCast($value, $cast);
+                if ($value === null) {
+                    continue;
                 }
+
+                $cast = $this->getAutoCast($key);
+
+                if ($cast === null) {
+                    continue;
+                }
+
+                $dbDirty[$key] = $this->reverseCast($value, $cast);
             }
 
             $affected = $builder
