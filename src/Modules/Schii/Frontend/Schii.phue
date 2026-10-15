@@ -13,7 +13,7 @@ return [
 
 <template>
 <div class="schii-console p-4" v-cloak>
-    <ph-toast ref="toast" position="top-right" :max="5" :duration="5000" />
+    <ph-toast position="top-right" :max="5" :duration="5000" />
     
     <div class="page-header mb-1">
         <ph-heading :level="1" class="mb-1">Schii Console</ph-heading>
@@ -335,7 +335,6 @@ export default function mountApp() {
             const rows = ref([]);
             const loading = ref(false);
             const rowsError = ref(null);
-            const toast = ref(null);
 
             // Loaded option lists per relation field name, plus the bookkeeping that
             // keeps a slow response from overwriting a newer one.
@@ -446,7 +445,7 @@ export default function mountApp() {
             });
 
             const notify = (message, variant = 'info') => {
-                toast.value?.push({ message, variant });
+                window.toast.push({ message, variant });
             };
 
             const fetchEntities = async () => {
@@ -1005,6 +1004,9 @@ export default function mountApp() {
                 if (!slug) {
                     return;
                 }
+                if (!relationRequestSeq[field.name]) {
+                    relationRequestSeq[field.name] = 0;
+                }
 
                 const seq = ++relationRequestSeq[field.name];
 
@@ -1093,7 +1095,6 @@ export default function mountApp() {
                 rows,
                 loading,
                 rowsError,
-                toast,
                 page,
                 lastPage,
                 total,
