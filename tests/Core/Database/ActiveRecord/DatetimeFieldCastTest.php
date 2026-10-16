@@ -130,6 +130,53 @@ class DeclaredCastBag extends BaseActiveRecord
 }
 
 /**
+ * The same model, the entry pointing AT the property type instead of away from
+ * it. The cast is trusted, obeyed, and lands a string on a DateTimeImmutable.
+ */
+class OverridingCastWidget extends BaseActiveRecord
+{
+    protected string $table = 'overriding_cast_widgets';
+
+    protected array $casts = [
+        'happened_at' => 'string',
+    ];
+
+    #[Field(type: 'datetime')]
+    public ?DateTimeImmutable $happened_at = null;
+}
+
+/**
+ * No #[Field] anywhere: the cast lives only in $casts, on a property that cannot
+ * hold what it produces.
+ */
+class JsonIntoStringBag extends BaseActiveRecord
+{
+    protected string $table = 'bag';
+
+    protected array $casts = [
+        'items' => 'json',
+    ];
+
+    public ?string $items = null;
+}
+
+/**
+ * The negative control for the refusal: a scalar cast override, where the
+ * property type and the cast agree.
+ */
+class ScalarOverriddenWidget extends BaseActiveRecord
+{
+    protected string $table = 'scalar_overridden_widgets';
+
+    protected array $casts = [
+        'quantity' => 'string',
+    ];
+
+    #[Field(type: 'integer')]
+    public string $quantity = '';
+}
+
+/**
  * The negative control: no $casts, no #[Field].
  */
 class UncastBag extends BaseActiveRecord
@@ -470,6 +517,135 @@ final class DatetimeFieldCastTest extends TestCase
             $widget->validate(),
             'A $casts entry that resolves the pairing must survive validate(), which reads the same declaration walk that refuses the unresolvable one.',
         );
+    }
+
+    /**
+     * The hole this test was written for.
+     *
+     * OverriddenCastWidget and OverridingCastWidget are the same model with the
+     * $casts entry pointing at the property type instead of away from it, and
+     * only the second one used to explode:
+     *
+     *     protected array $casts = ['created_at' => 'string'];
+     *     #[Field(type: 'datetime')] public ?\DateTimeImmutable $created_at = null;
+     *
+     * -> "Cannot assign string to property ... of type ?\DateTimeImmutable"
+     *
+     * A first version of the declaration check treated $casts as an override
+     * and therefore as trustworthy, so the attribute was never examined once
+     * $casts had an entry for that key. Trusting it unconditionally is not a
+     * stricter rule — it is the same failure arriving through the other door,
+     * and getAutoCast() resolves the two vocabularies with a precedence rather
+     * than a merge, so there is only ever ONE effective cast to check.
+     */
+    public function testACastOverrideThatContradictsThePropertyIsRefusedToo(): void
+    {
+        $this->db->execute('DROP TABLE IF EXISTS overriding_cast_widgets');
+        $this->db->execute('
+            CREATE TABLE overriding_cast_widgets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                happened_at TEXT NULL
+            );
+        ');
+        $this->db->execute(
+            "INSERT INTO overriding_cast_widgets (happened_at) VALUES ('2026-03-04 05:06:07')"
+        );
+
+        try {
+            OverridingCastWidget::find(1);
+            $this->fail('A $casts entry that contradicts the property type must be refused like any other.');
+        } catch (Throwable $e) {
+            $this->assertNotInstanceOf(
+                \TypeError::class,
+                $e,
+                'The inverted fatal is the same defect wearing the other mask.',
+            );
+            $this->assertInstanceOf(InvalidArgumentException::class, $e);
+
+            $message = $e->getMessage();
+
+            $this->assertStringContainsString(
+                '$casts[\'happened_at\'] = \'string\'',
+                $message,
+                'The error must quote the declaration that is actually in force. $casts wins over #[Field], so attributing this to #[Field] would send the author to the wrong line.',
+            );
+            $this->assertStringContainsString(
+                'Remove that $casts entry',
+                $message,
+                'The remedy has to be the inverse here: $casts is already present, so advising it again would be nonsense.',
+            );
+            $this->assertStringNotContainsString(
+                "protected array \$casts = ['happened_at' => 'string']",
+                $message,
+                'Never advise a $casts entry that is already there — that is the contradiction this class of author writes by accident.',
+            );
+        }
+    }
+
+    /**
+     * A $casts entry on a property that declares no #[Field] at all.
+     *
+     * The third door. The check originally lived inside the #[Field] branch of
+     * the declaration walk, so a model whose casts live entirely in $casts was
+     * never examined — and getAutoCast() returns $casts before it reaches that
+     * walk at all, so the one place that could have caught it was skipped too.
+     * That model is exactly the shape docs/Database.md documents.
+     */
+    public function testACastOnAPropertyWithNoFieldAttributeIsRefused(): void
+    {
+        $this->db->execute('DROP TABLE IF EXISTS bag');
+        $this->db->execute('
+            CREATE TABLE bag (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                items TEXT NULL
+            );
+        ');
+        $this->db->execute('INSERT INTO bag (items) VALUES (\'["a"]\')');
+
+        try {
+            JsonIntoStringBag::find(1);
+            $this->fail('$casts casts this property just as hard as #[Field] does.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString(
+                JsonIntoStringBag::class,
+                $e->getMessage(),
+                'A model with no #[Field] anywhere must still be attributed by name.',
+            );
+            $this->assertStringContainsString('items', $e->getMessage());
+        }
+    }
+
+    /**
+     * The negative control for both of the above.
+     *
+     * A $casts entry naming a SCALAR cast can never produce a non-scalar, so it
+     * is outside the refusal no matter what the property says. Without this, a
+     * fix that simply refused every $casts entry would pass the two tests above
+     * while breaking the feature they are protecting.
+     */
+    public function testScalarCastOverridesAreUntouchedByTheRefusal(): void
+    {
+        $this->db->execute('DROP TABLE IF EXISTS scalar_overridden_widgets');
+        $this->db->execute('
+            CREATE TABLE scalar_overridden_widgets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                quantity TEXT NULL
+            );
+        ');
+
+        $widget = new ScalarOverriddenWidget();
+        $widget->fill(['quantity' => '0042']);
+        $this->assertTrue($widget->save());
+
+        $this->assertSame(
+            '0042',
+            $widget->quantity,
+            "#[Field(type: 'integer')] with a \$casts entry of 'string' on a string property is a coherent, legitimate declaration.",
+        );
+
+        $reloaded = ScalarOverriddenWidget::find((int) $widget->getAttribute('id'));
+        $this->assertNotNull($reloaded);
+        $this->assertSame('0042', $reloaded->quantity);
     }
 
     /**

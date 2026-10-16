@@ -759,17 +759,20 @@ abstract class BaseActiveRecord implements JsonSerializable
     /**
      * Get auto-cast type from Field attribute.
      *
+     * One walk, whichever vocabulary ends up answering. getFieldMeta() is where a
+     * declaration that cannot be honoured is refused, so it has to run even when
+     * $casts short-circuits the lookup — otherwise the only models the check would
+     * ever miss are precisely the ones that declare every cast in $casts and carry
+     * no #[Field] at all, which is the shape docs/Database.md documents.
+     *
      * @param string $key
      * @return string|null
      */
     protected function getAutoCast(string $key): ?string
     {
-        if (isset($this->casts[$key])) {
-            return $this->casts[$key];
-        }
-
         $autoCasts = static::getAutoCasts();
-        return $autoCasts[$key] ?? null;
+
+        return $this->casts[$key] ?? $autoCasts[$key] ?? null;
     }
 
     /**
@@ -796,13 +799,23 @@ abstract class BaseActiveRecord implements JsonSerializable
         $meta = [];
         $refClass = new ReflectionClass($class);
 
-        // $casts is a declaration in exactly the same sense #[Field] is, and an
-        // entry there overrides the attribute for that key. Reading the declared
-        // default is therefore what makes the refusal below skip a pairing the
-        // model author has already resolved deliberately.
+        // $casts is a declaration in exactly the same sense #[Field] is, and
+        // getAutoCast() consults it FIRST, so an entry there is not a fallback —
+        // it is the effective cast for that key. Reading the declared default is
+        // what lets one rule cover both vocabularies.
         $declaredCasts = $refClass->getDefaultProperties()['casts'] ?? [];
+        $declaredCasts = is_array($declaredCasts) ? $declaredCasts : [];
 
         foreach ($refClass->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED) as $property) {
+            $name = $property->getName();
+            $castInCasts = $declaredCasts[$name] ?? null;
+
+            // A property with no #[Field] is still bound: $casts casts it just the
+            // same, and the value lands on the property just the same.
+            if (is_string($castInCasts)) {
+                self::assertCastIsHoldable($class, $property, $castInCasts, 'casts');
+            }
+
             $fieldAttrs = $property->getAttributes(\Phue\Core\Database\Attributes\Field::class);
             if (empty($fieldAttrs)) {
                 continue;
@@ -821,11 +834,12 @@ abstract class BaseActiveRecord implements JsonSerializable
                 default => null,
             };
 
-            if ($cast !== null && !isset($declaredCasts[$property->getName()])) {
-                self::assertCastIsHoldable($class, $property, $cast);
+            // Shadowed by $casts, so what the attribute asks for never happens.
+            if ($cast !== null && $castInCasts === null) {
+                self::assertCastIsHoldable($class, $property, $cast, 'Field');
             }
 
-            $meta[$property->getName()] = [
+            $meta[$name] = [
                 'type' => $type,
                 'cast' => $cast,
                 'rules' => $field->rules,
@@ -837,15 +851,14 @@ abstract class BaseActiveRecord implements JsonSerializable
     }
 
     /**
-     * Refuse a #[Field] whose cast cannot land on the property it was declared on.
+     * Refuse a cast declaration that cannot land on the property it was declared on.
      *
      * Why this is checked at all
      * --------------------------
-     * applyCast() turns #[Field(type: 'datetime')] into a DateTimeImmutable and
-     * hydration hands that to ReflectionProperty::setValue(). Every other cast
-     * in the map yields a scalar, and PHP coerces a scalar onto a mismatched
-     * scalar property without a sound, so a wrong pairing there is quiet. An
-     * object does not coerce. It raises
+     * applyCast() returns a value of one exact PHP type, and hydration hands it
+     * to ReflectionProperty::setValue(), which under declare(strict_types=1)
+     * accepts a narrower set of pairings than the word "cast" suggests. A cast
+     * that does not line up with the declared property raises
      *
      *     TypeError: Cannot assign DateTimeImmutable to property
      *     App\Models\Comment::$created_at of type string
@@ -853,6 +866,27 @@ abstract class BaseActiveRecord implements JsonSerializable
      * from one layer below the thing that is actually wrong: no cast, no
      * attribute, no model, and no hint at either of the two ways out. The same
      * request that read the row dies before it can say anything.
+     *
+     * Note that "scalars are fine" is not true in either direction — see
+     * typeHolds(). int lands in a string property because PHP widens it there,
+     * and nowhere else does a scalar land on the wrong scalar.
+     *
+     * Why one rule and not two
+     * ------------------------
+     * There are two vocabularies for the same declaration — #[Field(type: ...)]
+     * and $casts — and getAutoCast() resolves them with a precedence rather than
+     * a merge: $casts wins. So the thing that has to be checked is the EFFECTIVE
+     * cast, and there is exactly one of those per property. Checking only the
+     * attribute while trusting $casts unconditionally is not a stricter rule, it
+     * is a hole with a sign on it:
+     *
+     *     protected array $casts = ['created_at' => 'string'];
+     *     #[Field(type: 'datetime')] public ?\DateTimeImmutable $created_at = null;
+     *
+     * makes the same mistake the attribute would have, in the other direction —
+     * "Cannot assign string to property ... of type ?\DateTimeImmutable". The
+     * error names $casts as the remedy precisely so that this combination looks
+     * like a contradiction; it is, and it has to be caught by the same check.
      *
      * Why here
      * --------
@@ -863,37 +897,33 @@ abstract class BaseActiveRecord implements JsonSerializable
      * broken model is refused before a row is touched rather than halfway
      * through hydrating one.
      *
-     * Why $casts suppresses it
-     * ------------------------
-     * $casts is checked before the attribute in getAutoCast(), so an author who
-     * writes
-     *
-     *     #[Field(type: 'datetime')]                              // the column
-     *     protected array $casts = ['happened_at' => 'string'];   // the property
-     *
-     * has said something coherent and has said it in the framework's own
-     * vocabulary. getFieldMeta() cannot see $this, so it reads the declared
-     * default; a model that mutated $casts at runtime has opted out of the
-     * declaration contract by doing so, and getAutoCast() will honour the
-     * override on both the read and the write path regardless.
+     * Why the declared default and not $this->casts
+     * ---------------------------------------------
+     * getFieldMeta() is static and cannot see the instance, so it reads
+     * $casts' declared value. That is the right thing to check anyway: $casts is
+     * a declaration in the same sense #[Field] is. A model that MUTATED $casts at
+     * runtime has opted out of the declaration contract by doing so, and
+     * getAutoCast() will honour the mutation on both the read and the write path
+     * regardless.
      *
      * @param class-string $modelClass Model that declares the field.
      * @param ReflectionProperty $property Property the cast lands on.
-     * @param string $cast Cast the attribute implies.
+     * @param string $cast Effective cast for the property.
+     * @param string $declaredIn Which vocabulary declared it: 'Field' or 'casts'.
      * @return void
      * @throws InvalidArgumentException If the cast produces a value the property cannot hold.
      */
     private static function assertCastIsHoldable(
         string $modelClass,
         ReflectionProperty $property,
-        string $cast
+        string $cast,
+        string $declaredIn
     ): void {
         $produced = self::castProduces($cast);
 
-        // Scalars are PHP's coercion business and stay that way: refusing
-        // #[Field(type: 'integer')] public string $code would break every model
-        // that keeps a zero-padded code in a string, which is a legitimate
-        // choice, not a mistake.
+        // A cast Core does not recognise is a declaration it cannot reason about.
+        // applyCast() passes such a value through untouched, exactly as it always
+        // has, and refusing it here would be the framework guessing.
         if ($produced === null) {
             return;
         }
@@ -904,45 +934,82 @@ abstract class BaseActiveRecord implements JsonSerializable
             return;
         }
 
+        // The remedy differs by vocabulary, so the message has to say which one
+        // asked. Telling an author to add a $casts entry that is already there
+        // would be worse than saying nothing.
+        $producedLabel = $produced === 'datetime' ? \DateTimeImmutable::class : $produced;
+
+        $declared = $declaredIn === 'casts'
+            ? sprintf('$casts[\'%s\'] = \'%s\'', $property->getName(), $cast)
+            : sprintf('#[Field(type: \'%s\')]', $cast);
+
+        $remedy = $declaredIn === 'casts'
+            ? sprintf('Remove that $casts entry, or type the property %s.', $producedLabel)
+            : sprintf(
+                'Type the property %s, or keep the column and say so explicitly: '
+                . 'protected array $casts = [\'%s\' => \'string\'].',
+                $producedLabel,
+                $property->getName(),
+            );
+
         throw new InvalidArgumentException(sprintf(
-            '#[Field(type: \'%s\')] on %s::$%s casts to %s, which the property cannot hold (declared %s). '
-            . 'Type the property %s, or keep the column and say so explicitly: '
-            . 'protected array $casts = [\'%s\' => \'string\'].',
-            $cast,
+            '%s on %s::$%s casts to %s, which the property cannot hold (declared %s). %s',
+            $declared,
             $modelClass,
             $property->getName(),
-            self::describeType($produced),
+            $producedLabel,
             self::describeType($type),
-            $produced,
-            $property->getName(),
+            $remedy,
         ));
     }
 
     /**
-     * The PHP type a cast produces, or null when it produces a scalar.
+     * The PHP type a cast produces, or null when the cast is not one Core knows.
      *
-     * Only the two casts that build a value out of thin air are listed. Every
-     * other entry in applyCast() returns something PHP can coerce onto a
-     * mismatched property, which is a different (and much quieter) failure that
-     * this deliberately does not take on.
+     * applyCast() already returns a value of exactly this type, so the question
+     * this answers is never "what does the cast produce" but "what did the model
+     * author promise the property would hold".
      *
      * @param string $cast
-     * @return string|null
+     * @return string|null One of 'array', 'datetime', 'int', 'float', 'bool', 'string'.
      */
     private static function castProduces(string $cast): ?string
     {
         return match ($cast) {
             'array', 'json' => 'array',
-            'datetime', 'timestamp' => \DateTimeImmutable::class,
+            'datetime', 'timestamp' => 'datetime',
+            'int', 'integer' => 'int',
+            'float', 'double', 'real', 'number', 'decimal', 'numeric' => 'float',
+            'bool', 'boolean' => 'bool',
+            'string' => 'string',
             default => null,
         };
     }
 
     /**
-     * Whether a declared property type can receive a value of the given type.
+     * Whether a declared property type can receive what the cast produces.
+     *
+     * This mirrors what ReflectionProperty::setValue() accepts, which under
+     * declare(strict_types=1) is narrower than it first looks and is not the
+     * same in every direction:
+     *
+     *   int|float|bool -> string   ACCEPTED — the one widening PHP keeps
+     *   string          -> int      TypeError
+     *   anything        -> array    TypeError
+     *   anything        -> a class  TypeError
+     *
+     * The asymmetry is the whole reason this exists. A rule of "scalars are fine"
+     * passes #[Field(type: 'integer')] public string $code — correctly, since PHP
+     * widens an int into it — and then misses
+     *
+     *     protected array $casts = ['created_at' => 'string'];
+     *     public ?\DateTimeImmutable $created_at = null;
+     *
+     * which is the identical mistake pointed the other way, and which is exactly
+     * the shape an author reaches for when told to add a $casts entry.
      *
      * @param ReflectionType $type Declared property type.
-     * @param string $produced Type name the cast produces ('array' or a class name).
+     * @param string $produced Type the cast produces.
      * @return bool
      */
     private static function typeHolds(ReflectionType $type, string $produced): bool
@@ -973,9 +1040,13 @@ abstract class BaseActiveRecord implements JsonSerializable
 
         return match ($type->getName()) {
             'mixed' => true,
-            'object' => $produced !== 'array',
-            'iterable', 'callable', 'array', 'string', 'int', 'float', 'bool' => $type->getName() === $produced,
-            default => is_a($produced, $type->getName(), true),
+            'object' => $produced === 'datetime',
+            'array', 'iterable', 'callable' => $produced === 'array',
+            'string' => $produced !== 'datetime' && $produced !== 'array',
+            'int' => $produced === 'int',
+            'float' => $produced === 'float' || $produced === 'int',
+            'bool' => $produced === 'bool',
+            default => $produced === 'datetime' && is_a(\DateTimeImmutable::class, $type->getName(), true),
         };
     }
 
